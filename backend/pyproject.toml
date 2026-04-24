@@ -1,5 +1,5 @@
 [project]
-name = "backend"
+name = "kosmo"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -29,9 +29,6 @@ dependencies = [
     "structlog>=25.5.0",
     "uvicorn[standard]>=0.46.0",
 ]
-
-[project.scripts]
-backend = "backend:main"
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
