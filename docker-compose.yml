@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   frontend:
     build:
@@ -14,7 +12,7 @@ services:
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
-    command: npm run dev
+    command: sh -c "bun install --frozen-lockfile; bun run dev"
     depends_on:
       - backend
 
@@ -28,5 +26,16 @@ services:
     volumes:
       - ./backend:/app
     environment:
+      - ENV=development
+      - LOG_LEVEL=INFO
+      - JWT_PRIVATE_KEY_PATH=./.secrets/jwt_private.pem
+      - JWT_PUBLIC_KEY_PATH=./.secrets/jwt_public.pem
+      - FERNET_MASTER_KEY=gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
+      - DATABASE_URL=postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_dev
+      - MONGO_URL=mongodb://localhost:27017/kosmo_agent_memory
+      - REDIS_URL=redis://localhost:6379/0
+      - LLM_PROVIDER=noop
+      - LLM_MODEL=noop
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
       - PYTHONUNBUFFERED=1
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python -m uvicorn kosmo.adapters.api.main:app --host 0.0.0.0 --port 8000 --reload
