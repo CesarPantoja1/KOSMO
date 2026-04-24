@@ -14,4 +14,4 @@ RUN uv pip install --system -e .
 
 EXPOSE 8000
 
-CMD ["python", "-m", "uvicorn", "kosmo.adapters.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["python", "-m", "uvicorn", "kosmo.infrastructure.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
