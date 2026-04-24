@@ -5,7 +5,7 @@ root_package = kosmo
 name = Layered architecture
 type = layers
 layers =
-    kosmo.adapters
+    kosmo.infrastructure
     kosmo.application
     kosmo.domain
     kosmo.contracts

@@ -38,4 +38,4 @@ services:
       - LLM_MODEL=noop
       - CORS_ALLOWED_ORIGINS=http://localhost:3000
       - PYTHONUNBUFFERED=1
-    command: python -m uvicorn kosmo.adapters.api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python -m uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port 8000 --reload

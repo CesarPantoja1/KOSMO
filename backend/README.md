@@ -1,6 +1,6 @@
 # KOSMO — Backend
 
-API del proyecto KOSMO construida con **FastAPI** sobre Python 3.13, arquitectura por capas (`adapters → application → domain → contracts`) y `uv` como gestor de dependencias.
+API del proyecto KOSMO construida con **FastAPI** sobre Python 3.13, arquitectura hexagonal por capas (`infrastructure → application → domain → contracts`) y `uv` como gestor de dependencias.
 
 ---
 
@@ -127,7 +127,7 @@ uv run alembic revision -m "descripcion_del_cambio"
 ## 7. Ejecutar el servidor
 
 ```bash
-uv run uvicorn kosmo.adapters.api.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Endpoints disponibles una vez arriba:
@@ -170,7 +170,7 @@ Los tests están organizados en `tests/unit`, `tests/integration`, `tests/contra
 backend/
 ├── alembic/                  # Migraciones de PostgreSQL
 ├── src/kosmo/
-│   ├── adapters/             # FastAPI, persistencia, LLM, seguridad, etc.
+│   ├── infrastructure/       # FastAPI, persistencia, LLM, seguridad, etc.
 │   │   └── api/main.py       # Punto de entrada de la app
 │   ├── application/          # Casos de uso
 │   ├── domain/               # Modelo de dominio puro
