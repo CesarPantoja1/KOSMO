@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     jwt_public_key_path: str  # ¡Corregido para coincidir con el .env!
     fernet_master_key: SecretStr
 
+    # JWT
+    jwt_algorithm: Literal["RS256"] = "RS256"
+    jwt_issuer: str = "kosmo"
+    jwt_audience: str = "kosmo-api"
+    jwt_access_ttl_seconds: int = 900
+    jwt_refresh_ttl_seconds: int = 604800
+
     # Argon2id (OWASP 2025)
     argon2_memory_kib: int = 65536
     argon2_time_cost: int = 3
