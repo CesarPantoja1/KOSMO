@@ -186,7 +186,125 @@ backend/
 
 ---
 
-## 10. Problemas comunes
+## 10. Autenticación JWT
+
+El backend protege rutas mediante JSON Web Tokens firmados con **RS256** (clave asimétrica). El estado de sesión vive en **Redis**: una *allowlist* de refresh tokens y una *denylist* de access tokens revocados. Toda la lógica respeta la arquitectura hexagonal: los puertos viven en `contracts/auth`, los casos de uso en `application/auth`, y los adaptadores de jose y Redis en `infrastructure/`.
+
+### 10.1. Modelo de tokens
+
+| Token | Vida útil por defecto | Uso |
+|---|---|---|
+| **Access** | 15 minutos | Se envía en `Authorization: Bearer <token>` en cada request a una ruta protegida. |
+| **Refresh** | 7 días | Solo se envía a `POST /api/v1/auth/demo/refresh` para obtener un nuevo par. Se rota en cada uso. |
+
+Ambos llevan los claims estándar (`sub`, `iss`, `aud`, `iat`, `exp`, `jti`) más `type` (access/refresh) y `scopes[]`.
+
+### 10.2. Estado en Redis
+
+| Clave | Significado |
+|---|---|
+| `auth:refresh:{jti}` | Refresh token vigente. Se borra al usarse o al hacer logout. Si no existe, el refresh es rechazado (defensa contra replay). |
+| `auth:revoked:{jti}` | Access token revocado antes de su `exp`. `get_principal` lo consulta en cada request. |
+
+La rotación de refresh (lectura + borrado del JTI viejo) se ejecuta en una transacción Redis (`MULTI/EXEC`) para evitar carreras entre clientes concurrentes.
+
+### 10.3. Variables de entorno
+
+Las claves PEM ya se generan en el paso 5.1. El resto tiene valores por defecto y son opcionales en `.env`:
+
+```env
+JWT_PRIVATE_KEY_PATH=./.secrets/jwt_private.pem
+JWT_PUBLIC_KEY_PATH=./.secrets/jwt_public.pem
+JWT_ALGORITHM=RS256
+JWT_ISSUER=kosmo
+JWT_AUDIENCE=kosmo-api
+JWT_ACCESS_TTL_SECONDS=900
+JWT_REFRESH_TTL_SECONDS=604800
+```
+
+### 10.4. Proteger una ruta
+
+Importa las dependencias y aplícalas con `Depends`:
+
+```python
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+
+from kosmo.contracts.auth import Principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, require_scopes
+
+router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
+
+
+# Requiere token válido. Inyecta el Principal autenticado.
+@router.get("/me")
+async def me(principal: Annotated[Principal, Depends(get_principal)]) -> dict[str, str]:
+    return {"subject": principal.subject}
+
+
+# Requiere token válido + scope "projects:write".
+@router.post("", dependencies=[Depends(require_scopes("projects:write"))])
+async def create_project() -> dict[str, str]:
+    return {"status": "created"}
+```
+
+Para proteger un router completo de una sola vez:
+
+```python
+admin_router = APIRouter(
+    prefix="/api/v1/admin",
+    dependencies=[Depends(require_scopes("admin"))],
+)
+```
+
+`get_principal` valida la firma, `iss`, `aud`, `exp`, el tipo de token y la lista de revocación. `require_scopes(*scopes)` añade comprobación de permisos sobre lo que ya hizo `get_principal`.
+
+### 10.5. Endpoints de prueba
+
+Pensados para verificar el flujo de extremo a extremo. **No son el login real**: el endpoint de emisión es público y se reemplazará por un caso de uso que valide credenciales con Argon2.
+
+| Método | Ruta | Auth requerida | Descripción |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/demo/token` | — | Emite un par para un `subject` y `scopes` arbitrarios. |
+| `POST` | `/api/v1/auth/demo/refresh` | Refresh token en el body | Rota el par. El refresh anterior queda invalidado. |
+| `GET`  | `/api/v1/auth/demo/me` | Bearer access | Devuelve el `Principal` decodificado. |
+| `GET`  | `/api/v1/auth/demo/admin` | Bearer access + scope `admin` | Devuelve 403 si falta el scope. |
+| `POST` | `/api/v1/auth/demo/logout` | Bearer access | Revoca el access actual y, si se envía, también el refresh. |
+
+Smoke manual con `curl` (servidor en `:8000`):
+
+```bash
+PAIR=$(curl -sX POST http://localhost:8000/api/v1/auth/demo/token \
+  -H "Content-Type: application/json" \
+  -d '{"subject":"alice","scopes":["read","admin"]}')
+
+ACCESS=$(echo "$PAIR" | python -c "import json,sys;print(json.load(sys.stdin)['access']['token'])")
+
+curl -H "Authorization: Bearer $ACCESS" http://localhost:8000/api/v1/auth/demo/me
+```
+
+### 10.6. Códigos de respuesta
+
+| Caso | Status | Cabecera `WWW-Authenticate` |
+|---|---|---|
+| Falta cabecera `Authorization` | `401` | `Bearer realm="kosmo"` |
+| Firma inválida o token mal formado | `401` | `Bearer error="invalid_token"` |
+| Token expirado | `401` | `Bearer error="invalid_token"` (`detail: Token expired`) |
+| Token revocado | `401` | `Bearer error="invalid_token"` (`detail: Token revoked`) |
+| Scope insuficiente | `403` | — |
+
+### 10.7. Pruebas
+
+```bash
+uv run pytest tests/unit/test_auth_use_cases.py tests/integration/test_auth_demo_router.py
+```
+
+Los tests usan un store en memoria que implementa el mismo puerto que el adaptador de Redis, así que no requieren contenedores levantados.
+
+---
+
+## 11. Problemas comunes
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
@@ -194,3 +312,5 @@ backend/
 | `connection refused` a Postgres/Mongo/Redis | Contenedores no levantados | `docker ps` y vuelve al paso 4 |
 | `ModuleNotFoundError: kosmo` | Ejecutaste fuera del venv | Usa `uv run <comando>` o activa `.venv` |
 | `alembic: command not found` | Dependencias dev no instaladas | `uv sync --all-groups` |
+| `FileNotFoundError: .secrets/jwt_*.pem` al arrancar | Claves JWT no generadas | Ejecuta el paso 5.1 |
+| `401 Token revoked` tras reiniciar Redis | Allowlist y denylist son volátiles; tokens emitidos antes ya no se reconocen | Pide un par nuevo en `/api/v1/auth/demo/token` |
