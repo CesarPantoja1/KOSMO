@@ -50,6 +50,53 @@ KOSMO está diseñado sobre una arquitectura distribuida en múltiples capas:
 * Automatización: GitHub Actions.
 * Gestión del proyecto: Azure DevOps.
 
+## Infraestructura de Contenedores
+
+La plataforma se orquesta mediante Docker Compose con cinco servicios coordinados que cubren el frontend, el backend y las tres bases de datos del sistema. Cada servicio cuenta con verificaciones de estado reales y dependencias declarativas, de modo que el orden de arranque queda garantizado por la propia herramienta sin requerir scripts auxiliares.
+
+### Servicios definidos
+
+| Servicio | Imagen | Función |
+|----------|--------|---------|
+| frontend | Build local desde `frontend/` | Interfaz Next.js servida con Bun |
+| backend | Build local desde `backend/` | API FastAPI bajo arquitectura hexagonal |
+| postgres | `pgvector/pgvector:pg17` | Base relacional con la extensión `vector` activa |
+| mongodb | `mongo:7` | Almacén documental para la memoria de agentes |
+| redis | `redis:7-alpine` | Caché y persistencia de sesiones JWT |
+
+### Imagen del backend
+
+El `Dockerfile` del backend está diseñado en dos etapas separadas para distinguir la construcción de la ejecución. La etapa builder parte de la imagen oficial de `uv` sobre Debian slim e instala las dependencias declaradas en `pyproject.toml` y `uv.lock` dentro de un entorno virtual aislado en `/opt/venv`. La etapa runtime, en cambio, utiliza `python:3.13-slim-bookworm`, copia únicamente el entorno virtual ya construido y ejecuta el proceso bajo un usuario no privilegiado denominado `kosmo`. Esta separación reduce el tamaño del artefacto desplegable y descarta el toolchain de compilación de la imagen final.
+
+### Inicialización y migraciones
+
+Cada arranque del contenedor del backend invoca el script `entrypoint.sh`, el cual aplica las migraciones de Alembic antes de iniciar Uvicorn. Para los escenarios donde no resulte deseable correr migraciones, como tareas en background o ejecución de pruebas, basta con definir la variable `RUN_MIGRATIONS=0` en el entorno. Por su parte, `alembic/env.py` lee la variable `DATABASE_URL` directamente desde el entorno, lo que permite reutilizar la misma configuración en local y en producción sin modificar archivos.
+
+### Gestión de secretos
+
+Las claves RS256 utilizadas para firmar y verificar los tokens JWT nunca quedan dentro de la imagen. En su lugar, `docker-compose.yml` monta el directorio `backend/.secrets/` como volumen de solo lectura sobre `/app/.secrets`, y la aplicación lee los archivos `jwt_private.pem` y `jwt_public.pem` desde esa ruta en tiempo de ejecución. De esta forma, las claves se mantienen completamente fuera de las capas del artefacto y pueden rotarse sin reconstruir la imagen.
+
+### Verificaciones de estado
+
+Las cuatro piezas críticas de la infraestructura cuentan con healthchecks integrados en la definición de Compose:
+
+* Postgres utiliza `pg_isready` contra el usuario y la base configurados.
+* MongoDB ejecuta `db.adminCommand({ping:1})` a través de `mongosh` autenticado.
+* Redis responde al ping interno con `redis-cli ping`.
+* El backend valida su propio endpoint `/health` mediante la librería estándar de Python, sin necesidad de instalar herramientas adicionales en la imagen.
+
+El servicio del backend declara `depends_on` con la condición `service_healthy` sobre las tres bases. Por lo tanto, Compose espera a que cada una reporte estado saludable antes de iniciar la API.
+
+### Arranque del entorno
+
+Tras clonar el repositorio y copiar `.env.example` como `.env`, un único comando levanta el stack completo:
+
+```bash
+docker compose up -d --build
+```
+
+Compose construye las imágenes locales, descarga las imágenes oficiales necesarias, espera a que las bases queden saludables, e inicia primero el backend y luego el frontend. La API queda disponible en `http://localhost:8000` mientras que la interfaz web se sirve en `http://localhost:3000`.
+
 ## Objetivo del Release 1.0
 
 Validar el flujo completo:

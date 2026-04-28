@@ -1,3 +1,14 @@
+# =============================================================================
+# KOSMO — docker-compose.yml
+# -----------------------------------------------------------------------------
+# Servicios:
+#   - frontend  (Next.js / Bun)
+#   - backend   (FastAPI + uv)
+#   - postgres  (pgvector/pgvector:pg17)
+#   - mongodb   (mongo:7)
+#   - redis     (redis:7-alpine)
+# =============================================================================
+
 services:
   frontend:
     build:
@@ -20,22 +31,108 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: kosmo-backend:dev
     container_name: kosmo-backend
+    init: true
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
+    env_file:
+      - ./backend/.env
     environment:
-      - ENV=development
-      - LOG_LEVEL=INFO
-      - JWT_PRIVATE_KEY_PATH=./.secrets/jwt_private.pem
-      - JWT_PUBLIC_KEY_PATH=./.secrets/jwt_public.pem
-      - FERNET_MASTER_KEY=gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
-      - DATABASE_URL=postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_dev
-      - MONGO_URL=mongodb://localhost:27017/kosmo_agent_memory
-      - REDIS_URL=redis://localhost:6379/0
-      - LLM_PROVIDER=noop
-      - LLM_MODEL=noop
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000
-      - PYTHONUNBUFFERED=1
-    command: python -m uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port 8000 --reload
+      # Overrides para resolución por nombre de servicio dentro de la red de compose
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}
+      MONGO_URL: mongodb://${MONGO_USER:-kosmo}:${MONGO_PASSWORD:-kosmo}@mongodb:27017/${MONGO_DB:-kosmo_agent_memory}?authSource=admin
+      REDIS_URL: redis://redis:6379/0
+      JWT_PRIVATE_KEY_PATH: /app/.secrets/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /app/.secrets/jwt_public.pem
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # Claves RS256 SOLO LECTURA — nunca dentro de la imagen
+      - ./backend/.secrets:/app/.secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3); sys.exit(0 if r.status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: kosmo-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kosmo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kosmo}
+      POSTGRES_DB: ${POSTGRES_DB:-kosmo_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - kosmo_postgres_data:/var/lib/postgresql/data
+      - ./backend/docker/postgres/init-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kosmo} -d ${POSTGRES_DB:-kosmo_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: kosmo-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-kosmo}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-kosmo}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - kosmo_mongodb_data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          -u "$$MONGO_INITDB_ROOT_USERNAME"
+          -p "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin
+          --eval "db.adminCommand({ ping: 1 }).ok" | grep -q 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: kosmo-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - kosmo_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  kosmo_postgres_data:
+    name: kosmo_postgres_data
+  kosmo_mongodb_data:
+    name: kosmo_mongodb_data
+  kosmo_redis_data:
+    name: kosmo_redis_data
