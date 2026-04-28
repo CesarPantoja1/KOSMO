@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False,  # ¡Cambio clave: ahora acepta mayúsculas del .env!
+        case_sensitive=False,  
         extra="forbid",
     )
 
@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # Secretos criptográficos
-    jwt_private_key_path: str  # ¡Corregido para coincidir con el .env!
-    jwt_public_key_path: str  # ¡Corregido para coincidir con el .env!
+    jwt_private_key_path: str  
+    jwt_public_key_path: str  
     fernet_master_key: SecretStr
 
     # JWT
