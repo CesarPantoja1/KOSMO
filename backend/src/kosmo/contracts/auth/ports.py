@@ -1,6 +1,13 @@
 from typing import Protocol
 
-from kosmo.contracts.auth.tokens import IssuedToken, TokenClaims, TokenType
+from kosmo.contracts.auth.pkce import AuthorizationCode
+from kosmo.contracts.auth.tokens import (
+    IssuedToken,
+    RefreshConsumeResult,
+    TokenClaims,
+    TokenType,
+)
+from kosmo.contracts.auth.users import User
 
 
 class TokenIssuer(Protocol):
@@ -10,6 +17,7 @@ class TokenIssuer(Protocol):
         subject: str,
         scopes: frozenset[str],
         token_type: TokenType,
+        family_id: str | None = None,
     ) -> IssuedToken: ...
 
 
@@ -18,12 +26,47 @@ class TokenVerifier(Protocol):
 
 
 class TokenRevocationStore(Protocol):
-    async def register_refresh(self, *, jti: str, subject: str, ttl_seconds: int) -> None: ...
+    async def register_refresh(
+        self,
+        *,
+        jti: str,
+        subject: str,
+        ttl_seconds: int,
+        family_id: str | None = None,
+    ) -> None: ...
 
-    async def consume_refresh(self, *, jti: str) -> str | None: ...
+    async def consume_refresh(self, *, jti: str) -> RefreshConsumeResult | None: ...
 
     async def revoke_access(self, *, jti: str, ttl_seconds: int) -> None: ...
 
     async def is_access_revoked(self, *, jti: str) -> bool: ...
 
     async def revoke_refresh(self, *, jti: str) -> None: ...
+
+    async def is_family_alive(self, *, family_id: str) -> bool: ...
+
+    async def revoke_family(self, *, family_id: str) -> None: ...
+
+
+class PasswordHasher(Protocol):
+    def hash(self, plain: str) -> str: ...
+
+    def verify(self, hashed: str, plain: str) -> bool: ...
+
+    def needs_rehash(self, hashed: str) -> bool: ...
+
+
+class UserRepository(Protocol):
+    async def by_email(self, email: str) -> User | None: ...
+
+    async def by_id(self, user_id: str) -> User | None: ...
+
+    async def create(self, user: User) -> None: ...
+
+    async def update_password(self, *, user_id: str, hashed_password: str) -> None: ...
+
+
+class AuthorizationCodeStore(Protocol):
+    async def store(self, entry: AuthorizationCode) -> None: ...
+
+    async def consume(self, code: str) -> AuthorizationCode | None: ...

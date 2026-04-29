@@ -14,6 +14,7 @@ class IssuedToken:
     jti: str
     expires_at: datetime
     token_type: TokenType
+    family_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,3 +31,10 @@ class TokenClaims:
     expires_at: datetime
     token_type: TokenType
     scopes: frozenset[str] = field(default_factory=lambda: frozenset[str]())
+    family_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RefreshConsumeResult:
+    subject: str
+    family_id: str | None = None

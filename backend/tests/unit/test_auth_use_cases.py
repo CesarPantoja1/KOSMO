@@ -19,9 +19,11 @@ from kosmo.contracts.auth import (  # noqa: E402
     InvalidTokenError,
     IssuedToken,
     Principal,
+    RefreshConsumeResult,
     TokenClaims,
     TokenExpiredError,
     TokenPair,
+    TokenReusedError,
     TokenRevokedError,
     TokenType,
 )
@@ -38,27 +40,50 @@ _PUBLIC_PEM = Path(__file__).resolve().parents[2] / ".secrets" / "jwt_public.pem
 
 class InMemoryStore:
     def __init__(self) -> None:
-        self.refresh: dict[str, str] = {}
-        self.revoked: set[str] = set()
+        self.refresh: dict[str, tuple[str, str | None]] = {}
+        self.revoked_access: set[str] = set()
+        self.families: set[str] = set()
 
-    async def register_refresh(self, *, jti: str, subject: str, ttl_seconds: int) -> None:
+    async def register_refresh(
+        self,
+        *,
+        jti: str,
+        subject: str,
+        ttl_seconds: int,
+        family_id: str | None = None,
+    ) -> None:
         if ttl_seconds <= 0:
             return
-        self.refresh[jti] = subject
+        self.refresh[jti] = (subject, family_id)
+        if family_id is not None:
+            self.families.add(family_id)
 
-    async def consume_refresh(self, *, jti: str) -> str | None:
-        return self.refresh.pop(jti, None)
+    async def consume_refresh(self, *, jti: str) -> RefreshConsumeResult | None:
+        entry = self.refresh.pop(jti, None)
+        if entry is None:
+            return None
+        subject, family_id = entry
+        return RefreshConsumeResult(subject=subject, family_id=family_id)
 
     async def revoke_access(self, *, jti: str, ttl_seconds: int) -> None:
         if ttl_seconds <= 0:
             return
-        self.revoked.add(jti)
+        self.revoked_access.add(jti)
 
     async def is_access_revoked(self, *, jti: str) -> bool:
-        return jti in self.revoked
+        return jti in self.revoked_access
 
     async def revoke_refresh(self, *, jti: str) -> None:
         self.refresh.pop(jti, None)
+
+    async def is_family_alive(self, *, family_id: str) -> bool:
+        return family_id in self.families
+
+    async def revoke_family(self, *, family_id: str) -> None:
+        self.families.discard(family_id)
+        for jti in list(self.refresh):
+            if self.refresh[jti][1] == family_id:
+                del self.refresh[jti]
 
 
 def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
@@ -121,7 +146,7 @@ async def test_refresh_rotates_pair() -> None:
     assert original.refresh.jti not in store.refresh
     assert rotated.refresh.jti in store.refresh
 
-    with pytest.raises(InvalidTokenError):
+    with pytest.raises(TokenReusedError):
         await refresh_uc.execute(original.refresh.token, scopes=frozenset({"read"}))
 
 
