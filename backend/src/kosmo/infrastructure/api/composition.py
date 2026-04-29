@@ -1,16 +1,28 @@
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from kosmo.application.auth import (
+    AuthorizeWithPkce,
+    ExchangeAuthorizationCode,
     IssueTokenPair,
     RefreshTokenPair,
+    RegisterUser,
     RevokeSession,
     VerifyAccessToken,
 )
 from kosmo.config import Settings
-from kosmo.infrastructure.persistence.redis import RedisTokenRevocationStore
+from kosmo.contracts.auth import PasswordHasher, SecretCipher, UserRepository
+from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyUserRepository
+from kosmo.infrastructure.persistence.redis import (
+    RedisAuthorizationCodeStore,
+    RedisTokenRevocationStore,
+)
 from kosmo.infrastructure.security import (
+    Argon2idParameters,
+    Argon2idPasswordHasher,
+    FernetSecretCipher,
     JoseJwtIssuer,
     JoseJwtVerifier,
     JwtSettings,
@@ -21,6 +33,13 @@ from kosmo.infrastructure.security import (
 @dataclass(frozen=True, slots=True)
 class AuthComponents:
     redis: Redis
+    db_engine: AsyncEngine
+    password_hasher: PasswordHasher
+    secret_cipher: SecretCipher
+    user_repository: UserRepository
+    register_user: RegisterUser
+    authorize_with_pkce: AuthorizeWithPkce
+    exchange_authorization_code: ExchangeAuthorizationCode
     issue_token_pair: IssueTokenPair
     verify_access_token: VerifyAccessToken
     refresh_token_pair: RefreshTokenPair
@@ -41,17 +60,54 @@ def build_auth_components(settings: Settings) -> AuthComponents:
     )
     issuer = JoseJwtIssuer(private_key_pem=keys.private_pem, settings=jwt_settings)
     verifier = JoseJwtVerifier(public_key_pem=keys.public_pem, settings=jwt_settings)
+
     redis: Redis = Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
         settings.redis_url.get_secret_value()
     )
-    store = RedisTokenRevocationStore(redis)
+    token_store = RedisTokenRevocationStore(redis)
+    authorization_code_store = RedisAuthorizationCodeStore(redis)
+
+    db_engine = create_async_engine(
+        settings.database_url.get_secret_value(),
+        pool_pre_ping=True,
+    )
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    user_repository = SqlAlchemyUserRepository(session_factory)
+
+    password_hasher = Argon2idPasswordHasher(
+        Argon2idParameters(
+            memory_kib=settings.argon2_memory_kib,
+            time_cost=settings.argon2_time_cost,
+            parallelism=settings.argon2_parallelism,
+        )
+    )
+    secret_cipher = FernetSecretCipher(settings.fernet_master_key.get_secret_value())
+
+    issue_token_pair = IssueTokenPair(issuer=issuer, revocation_store=token_store)
 
     return AuthComponents(
         redis=redis,
-        issue_token_pair=IssueTokenPair(issuer=issuer, revocation_store=store),
-        verify_access_token=VerifyAccessToken(verifier=verifier, revocation_store=store),
-        refresh_token_pair=RefreshTokenPair(
-            issuer=issuer, verifier=verifier, revocation_store=store
+        db_engine=db_engine,
+        password_hasher=password_hasher,
+        secret_cipher=secret_cipher,
+        user_repository=user_repository,
+        register_user=RegisterUser(
+            user_repository=user_repository,
+            password_hasher=password_hasher,
         ),
-        revoke_session=RevokeSession(verifier=verifier, revocation_store=store),
+        authorize_with_pkce=AuthorizeWithPkce(
+            user_repository=user_repository,
+            password_hasher=password_hasher,
+            authorization_code_store=authorization_code_store,
+        ),
+        exchange_authorization_code=ExchangeAuthorizationCode(
+            authorization_code_store=authorization_code_store,
+            issue_token_pair=issue_token_pair,
+        ),
+        issue_token_pair=issue_token_pair,
+        verify_access_token=VerifyAccessToken(verifier=verifier, revocation_store=token_store),
+        refresh_token_pair=RefreshTokenPair(
+            issuer=issuer, verifier=verifier, revocation_store=token_store
+        ),
+        revoke_session=RevokeSession(verifier=verifier, revocation_store=token_store),
     )

@@ -1,12 +1,18 @@
 import asyncio
 import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+
+sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
+
+from kosmo.infrastructure.persistence.postgres import Base  # noqa: E402
 
 config = context.config
 
@@ -17,7 +23,7 @@ _db_url_env = os.getenv("DATABASE_URL")
 if _db_url_env:
     config.set_main_option("sqlalchemy.url", _db_url_env)
 
-target_metadata = None
+target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.

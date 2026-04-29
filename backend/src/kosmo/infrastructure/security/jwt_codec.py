@@ -49,7 +49,12 @@ class JoseJwtIssuer:
         self._settings = settings
 
     def issue(
-        self, *, subject: str, scopes: frozenset[str], token_type: TokenType
+        self,
+        *,
+        subject: str,
+        scopes: frozenset[str],
+        token_type: TokenType,
+        family_id: str | None = None,
     ) -> IssuedToken:
         now = datetime.now(UTC)
         ttl = _ttl_for(token_type, self._settings)
@@ -65,8 +70,16 @@ class JoseJwtIssuer:
             "type": token_type.value,
             "scopes": sorted(scopes),
         }
+        if family_id is not None:
+            claims["fam"] = family_id
         token = jwt.encode(claims, self._private_key, algorithm=self._settings.algorithm)
-        return IssuedToken(token=token, jti=jti, expires_at=expires_at, token_type=token_type)
+        return IssuedToken(
+            token=token,
+            jti=jti,
+            expires_at=expires_at,
+            token_type=token_type,
+            family_id=family_id,
+        )
 
 
 class JoseJwtVerifier:
@@ -95,6 +108,7 @@ class JoseJwtVerifier:
             )
 
         try:
+            family_raw = payload.get("fam")
             return TokenClaims(
                 subject=str(payload["sub"]),
                 jti=str(payload["jti"]),
@@ -102,6 +116,7 @@ class JoseJwtVerifier:
                 expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
                 token_type=TokenType(token_type_raw),
                 scopes=frozenset(payload.get("scopes") or []),
+                family_id=str(family_raw) if family_raw is not None else None,
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise InvalidTokenError(f"Malformed claims: {exc}") from exc
