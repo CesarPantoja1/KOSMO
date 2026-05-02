@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
@@ -34,8 +36,23 @@ JoseJwtVerifier = security.JoseJwtVerifier
 JwtSettings = security.JwtSettings
 
 
-_PRIVATE_PEM = Path(__file__).resolve().parents[2] / ".secrets" / "jwt_private.pem"
-_PUBLIC_PEM = Path(__file__).resolve().parents[2] / ".secrets" / "jwt_public.pem"
+# Genera un par de llaves RSA efímero una vez para toda la sesión de prueba.
+_RSA_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+_PRIVATE_PEM: str = _RSA_PRIVATE_KEY.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.TraditionalOpenSSL,
+    encryption_algorithm=serialization.NoEncryption(),
+).decode()
+
+_PUBLIC_PEM: str = (
+    _RSA_PRIVATE_KEY.public_key()
+    .public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    .decode()
+)
 
 
 class InMemoryStore:
@@ -94,10 +111,8 @@ def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
         access_ttl_seconds=60,
         refresh_ttl_seconds=300,
     )
-    private = _PRIVATE_PEM.read_text(encoding="utf-8")
-    public = _PUBLIC_PEM.read_text(encoding="utf-8")
-    return JoseJwtIssuer(private_key_pem=private, settings=settings), JoseJwtVerifier(
-        public_key_pem=public, settings=settings
+    return JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=settings), JoseJwtVerifier(
+        public_key_pem=_PUBLIC_PEM, settings=settings
     )
 
 
@@ -175,9 +190,7 @@ def test_expired_token_raises() -> None:
         access_ttl_seconds=-10,
         refresh_ttl_seconds=-10,
     )
-    expired_issuer = JoseJwtIssuer(
-        private_key_pem=_PRIVATE_PEM.read_text(encoding="utf-8"), settings=expired_settings
-    )
+    expired_issuer = JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=expired_settings)
     expired_token = expired_issuer.issue(
         subject="user-1", scopes=frozenset(), token_type=TokenType.ACCESS
     )
