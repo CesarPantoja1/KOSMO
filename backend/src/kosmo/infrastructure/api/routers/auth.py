@@ -28,7 +28,6 @@ from kosmo.infrastructure.api.dependencies.rate_limit import IpRateLimiter
 from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
     AuthorizeRequest,
-    HttpErrorResponse,
     LogoutRequest,
     OAuthErrorResponse,
     PrincipalView,
@@ -72,7 +71,9 @@ def _oauth_error(*, status_code: int, error: str, description: str) -> JSONRespo
     body = OAuthErrorResponse(error=error, error_description=description)
     return JSONResponse(status_code=status_code, content=body.model_dump())
 
+
 # POST /register
+
 
 @router.post(
     "/register",
@@ -137,7 +138,9 @@ async def register(
         ) from exc
     return UserPublic(id=user.id, email=user.email, created_at=user.created_at)
 
+
 # POST /authorize
+
 
 @router.post(
     "/authorize",
@@ -158,7 +161,9 @@ async def register(
             "content": {
                 "application/json": {
                     "example": {
-                        "authorization_code": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+                        "authorization_code": (
+                            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                        ),
                         "expires_in": 300,
                     }
                 }
@@ -228,7 +233,9 @@ async def authorize(
     )
     return AuthorizationCodeResponse(authorization_code=entry.code, expires_in=expires_in)
 
+
 # POST /token
+
 
 @router.post(
     "/token",
@@ -248,12 +255,18 @@ async def authorize(
                 "application/json": {
                     "example": {
                         "access": {
-                            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AifQ.SIGNATURE",
+                            "token": (
+                                "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9."
+                                "eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AifQ.SIGNATURE"
+                            ),
                             "jti": "ati-01HXYAZABCDEFGHIJKLMNOP",
                             "expires_at": "2025-12-31T00:15:00Z",
                         },
                         "refresh": {
-                            "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AifQ.SIGNATURE",
+                            "token": (
+                                "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9."
+                                "eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AifQ.SIGNATURE"
+                            ),
                             "jti": "rti-01HXYAZABCDEFGHIJKLMNOP",
                             "expires_at": "2026-01-07T00:00:00Z",
                         },
@@ -304,7 +317,9 @@ async def token(
         )
     return TokenPairResponse.from_pair(pair)
 
+
 # POST /refresh
+
 
 @router.post(
     "/refresh",
@@ -407,6 +422,7 @@ async def refresh(
 
 # GET /me
 
+
 @router.get(
     "/me",
     summary="Obtener identidad del usuario autenticado",
@@ -430,9 +446,7 @@ async def refresh(
             },
         },
         status.HTTP_401_UNAUTHORIZED: {
-            "description": (
-                "Token ausente, mal formado, con firma inválida, expirado o revocado."
-            ),
+            "description": ("Token ausente, mal formado, con firma inválida, expirado o revocado."),
             "model": OAuthErrorResponse,
             "content": {
                 "application/json": {
@@ -441,7 +455,9 @@ async def refresh(
                             "summary": "Header Authorization ausente",
                             "value": {
                                 "error": "missing_token",
-                                "error_description": "Se requiere el header Authorization: Bearer <token>",
+                                "error_description": (
+                                    "Se requiere el header Authorization: Bearer <token>"
+                                ),
                             },
                         },
                         "token_expirado": {
@@ -467,7 +483,9 @@ async def refresh(
 async def me(principal: Annotated[Principal, Depends(get_principal)]) -> PrincipalView:
     return PrincipalView(subject=principal.subject, scopes=sorted(principal.scopes))
 
+
 # POST /logout
+
 
 @router.post(
     "/logout",

@@ -14,6 +14,7 @@ from kosmo.contracts.auth import TokenPair
 
 # Enumeraciones de negocio
 
+
 class CodeChallengeMethod(StrEnum):
     """Método de transformación PKCE permitido por el servidor.
 
@@ -54,7 +55,8 @@ KNOWN_SCOPES: list[str] = [
 """Scopes reconocidos por el sistema.
 
 El servidor no rechaza scopes desconocidos para permitir extensibilidad, pero
-el Frontend debe presentar únicamente los de esta lista al usuario (se puede extender, no está definido ni cerrado al cambio).
+el Frontend debe presentar únicamente los de esta lista al usuario (se puede
+extender, no está definido ni cerrado al cambio).
 """
 
 # Requests
@@ -209,6 +211,7 @@ class LogoutRequest(BaseModel):
 
 
 # Responses
+
 
 class AuthorizationCodeResponse(BaseModel):
     """Resultado exitoso de ``POST /authorize``.
