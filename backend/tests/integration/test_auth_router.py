@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -34,8 +36,23 @@ from kosmo.infrastructure.security import (  # noqa: E402
     JwtSettings,
 )
 
-_PRIVATE_PEM = Path(__file__).resolve().parents[2] / ".secrets" / "jwt_private.pem"
-_PUBLIC_PEM = Path(__file__).resolve().parents[2] / ".secrets" / "jwt_public.pem"
+# Par de llaves RSA efímero — generado una vez para toda la sesión de pruebas
+_RSA_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+_PRIVATE_PEM: str = _RSA_KEY.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.TraditionalOpenSSL,
+    encryption_algorithm=serialization.NoEncryption(),
+).decode()
+
+_PUBLIC_PEM: str = (
+    _RSA_KEY.public_key()
+    .public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    .decode()
+)
 
 
 class InMemoryUserRepository:
@@ -133,12 +150,8 @@ def client() -> TestClient:
         access_ttl_seconds=120,
         refresh_ttl_seconds=600,
     )
-    issuer = JoseJwtIssuer(
-        private_key_pem=_PRIVATE_PEM.read_text(encoding="utf-8"), settings=settings
-    )
-    verifier = JoseJwtVerifier(
-        public_key_pem=_PUBLIC_PEM.read_text(encoding="utf-8"), settings=settings
-    )
+    issuer = JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=settings)
+    verifier = JoseJwtVerifier(public_key_pem=_PUBLIC_PEM, settings=settings)
     hasher = Argon2idPasswordHasher(
         Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4)
     )

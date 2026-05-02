@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -23,18 +22,6 @@ class JwtSettings:
     audience: str
     access_ttl_seconds: int
     refresh_ttl_seconds: int
-
-
-@dataclass(frozen=True, slots=True)
-class _SigningKeys:
-    private_pem: str
-    public_pem: str
-
-
-def load_signing_keys(*, private_key_path: str, public_key_path: str) -> _SigningKeys:
-    private_pem = Path(private_key_path).read_text(encoding="utf-8")
-    public_pem = Path(public_key_path).read_text(encoding="utf-8")
-    return _SigningKeys(private_pem=private_pem, public_pem=public_pem)
 
 
 def _ttl_for(token_type: TokenType, settings: JwtSettings) -> int:
