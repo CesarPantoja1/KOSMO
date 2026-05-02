@@ -1,3 +1,5 @@
+import type { Node } from '@xyflow/react';
+
 export type Visibility = '+' | '-' | '#';
 
 export interface UmlItem {
@@ -9,7 +11,7 @@ export interface UmlItem {
 	isStatic?: boolean;
 }
 
-export interface UmlNodeData {
+export interface UmlNodeData extends Record<string, unknown> {
 	name: string;
 	stereotype?: string; // ej. "<<interface>>" o "<<enum>>"
 	isAbstract?: boolean;
@@ -20,6 +22,8 @@ export interface UmlNodeData {
 	// Opcional para Enums
 	values?: string[];
 }
+
+export type UmlNode = Node<UmlNodeData>;
 
 export type UmlRelationType =
 	| 'association'
