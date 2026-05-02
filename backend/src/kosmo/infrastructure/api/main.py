@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -105,9 +106,7 @@ _GLOBAL_RESPONSES = {
         "content": {
             "application/json": {
                 "schema": {"$ref": "#/components/schemas/HttpErrorResponse"},
-                "example": {
-                    "detail": "No tienes permisos suficientes para realizar esta acción."
-                },
+                "example": {"detail": "No tienes permisos suficientes para realizar esta acción."},
             }
         },
     },
@@ -120,9 +119,7 @@ _GLOBAL_RESPONSES = {
         "content": {
             "application/json": {
                 "schema": {"$ref": "#/components/schemas/HttpErrorResponse"},
-                "example": {
-                    "detail": "Error interno del servidor. Por favor contacte al soporte."
-                },
+                "example": {"detail": "Error interno del servidor. Por favor contacte al soporte."},
             }
         },
     },
@@ -196,7 +193,7 @@ async def health() -> dict[str, str]:
 # Especificación OpenAPI customizada
 
 
-def _custom_openapi() -> dict:  # type: ignore[type-arg]
+def _custom_openapi() -> dict[str, Any]:
     """Genera la especificación OpenAPI enriquecida con respuestas globales.
 
     Se inyectan las respuestas 403 y 500 en cada operación para que el
@@ -205,7 +202,7 @@ def _custom_openapi() -> dict:  # type: ignore[type-arg]
     if app.openapi_schema:
         return app.openapi_schema
 
-    schema = get_openapi(
+    schema: dict[str, Any] = get_openapi(
         title=app.title,
         version=app.version,
         description=_DESCRIPTION,
@@ -218,16 +215,24 @@ def _custom_openapi() -> dict:  # type: ignore[type-arg]
 
     # Registrar HttpErrorResponse en components/schemas
     http_error_schema = HttpErrorResponse.model_json_schema()
-    schema.setdefault("components", {}).setdefault("schemas", {})["HttpErrorResponse"] = (
-        http_error_schema
-    )
+    
+    components: dict[str, Any] = schema.setdefault("components", {})
+    schemas: dict[str, Any] = components.setdefault("schemas", {})
+    schemas["HttpErrorResponse"] = http_error_schema
 
     # Inyectar respuestas globales (403, 500) en todos los paths
-    for path_item in schema.get("paths", {}).values():
-        for operation in path_item.values():
-            if isinstance(operation, dict) and "responses" in operation:
-                for status_code, response_def in _GLOBAL_RESPONSES.items():
-                    operation["responses"].setdefault(str(status_code), response_def)
+    paths = cast(dict[str, Any], schema.get("paths", {}))
+    for path_item in paths.values():
+        if isinstance(path_item, dict):
+            path_item_dict = cast(dict[str, Any], path_item)
+            for operation in path_item_dict.values():
+                if isinstance(operation, dict):
+                    operation_dict = cast(dict[str, Any], operation)
+                    responses = operation_dict.get("responses")
+                    if isinstance(responses, dict):
+                        responses_dict = cast(dict[str, Any], responses)
+                        for status_code, response_def in _GLOBAL_RESPONSES.items():
+                            responses_dict.setdefault(str(status_code), response_def)
 
     app.openapi_schema = schema
     return schema
