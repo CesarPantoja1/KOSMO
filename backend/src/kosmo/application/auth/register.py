@@ -8,6 +8,7 @@ from kosmo.contracts.auth import (
     UserAlreadyExistsError,
     UserRepository,
 )
+from kosmo.contracts.telemetry import record_auth_event, traced
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +16,7 @@ class RegisterUser:
     user_repository: UserRepository
     password_hasher: PasswordHasher
 
+    @traced("auth.register")
     async def execute(self, *, email: str, password: str) -> User:
         normalized_email = email.strip().lower()
         existing = await self.user_repository.by_email(normalized_email)
@@ -27,4 +29,5 @@ class RegisterUser:
             created_at=datetime.now(UTC),
         )
         await self.user_repository.create(user)
+        record_auth_event("register_success", user_id=user.id)
         return user

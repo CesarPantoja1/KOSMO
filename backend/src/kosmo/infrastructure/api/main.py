@@ -6,12 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from kosmo.config import settings
 from kosmo.infrastructure.api.composition import build_auth_components
+from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
+from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    configure_telemetry(settings)
     components = build_auth_components(settings)
     app.state.register_user = components.register_user
     app.state.authorize_with_pkce = components.authorize_with_pkce
@@ -25,6 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.user_repository = components.user_repository
     app.state.redis = components.redis
     app.state.db_engine = components.db_engine
+    instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
         yield
     finally:
@@ -48,6 +52,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(auth_router)
 app.include_router(schemas_router)

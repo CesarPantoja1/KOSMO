@@ -165,9 +165,7 @@ async def test_access_token_used_as_refresh_is_rejected() -> None:
 
 def test_expired_token_raises() -> None:
     issuer, verifier = _build_codec()
-    issued = issuer.issue(
-        subject="user-1", scopes=frozenset(), token_type=TokenType.ACCESS
-    )
+    issued = issuer.issue(subject="user-1", scopes=frozenset(), token_type=TokenType.ACCESS)
     _ = cast(IssuedToken, issued)
 
     expired_settings = JwtSettings(

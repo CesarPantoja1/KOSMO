@@ -149,9 +149,7 @@ def client() -> TestClient:
     issue_token_pair = IssueTokenPair(issuer=issuer, revocation_store=token_store)
 
     app = FastAPI()
-    app.state.register_user = RegisterUser(
-        user_repository=user_repository, password_hasher=hasher
-    )
+    app.state.register_user = RegisterUser(user_repository=user_repository, password_hasher=hasher)
     app.state.authorize_with_pkce = AuthorizeWithPkce(
         user_repository=user_repository,
         password_hasher=hasher,

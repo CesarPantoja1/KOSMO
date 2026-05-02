@@ -1,3 +1,10 @@
+"""Algoritmos puros de PKCE (RFC 7636).
+
+Pertenecen al dominio porque codifican una regla criptográfica sin
+dependencias de infraestructura: dado un ``code_verifier``, calculan o
+verifican el ``code_challenge`` correspondiente con ``S256``.
+"""
+
 import base64
 import hashlib
 import hmac

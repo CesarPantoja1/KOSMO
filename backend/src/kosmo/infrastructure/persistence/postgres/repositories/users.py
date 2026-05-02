@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.auth import User, UserAlreadyExistsError
 from kosmo.infrastructure.persistence.postgres.models import UserModel
@@ -20,7 +20,7 @@ def _to_entity(row: UserModel) -> User:
 
 
 class SqlAlchemyUserRepository:
-    def __init__(self, session_factory: async_sessionmaker) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     async def by_email(self, email: str) -> User | None:

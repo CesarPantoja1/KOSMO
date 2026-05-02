@@ -121,9 +121,7 @@ class InMemoryStore:
 
 
 def _hasher() -> Argon2idPasswordHasher:
-    return Argon2idPasswordHasher(
-        Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4)
-    )
+    return Argon2idPasswordHasher(Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4))
 
 
 def _issuer_pair() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:

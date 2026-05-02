@@ -13,6 +13,7 @@ from kosmo.contracts.auth import (
     TokenType,
     TokenVerifier,
 )
+from kosmo.contracts.telemetry import record_auth_event, traced
 
 
 def _seconds_until(expires_at: datetime) -> int:
@@ -70,6 +71,7 @@ class RefreshTokenPair:
     verifier: TokenVerifier
     revocation_store: TokenRevocationStore
 
+    @traced("auth.token_refresh")
     async def execute(self, refresh_token: str, *, scopes: frozenset[str]) -> TokenPair:
         claims = self.verifier.verify(refresh_token, expected_type=TokenType.REFRESH)
         consumed = await self.revocation_store.consume_refresh(jti=claims.jti)
@@ -86,9 +88,7 @@ class RefreshTokenPair:
             raise InvalidTokenError("Refresh token subject mismatch")
 
         family = consumed.family_id or claims.family_id
-        if family is not None and not await self.revocation_store.is_family_alive(
-            family_id=family
-        ):
+        if family is not None and not await self.revocation_store.is_family_alive(family_id=family):
             raise TokenRevokedError("Sesión revocada")
         access = self.issuer.issue(
             subject=claims.subject,
@@ -108,6 +108,7 @@ class RefreshTokenPair:
             ttl_seconds=_seconds_until(new_refresh.expires_at),
             family_id=family,
         )
+        record_auth_event("token_refresh", user_id=claims.subject)
         return TokenPair(access=access, refresh=new_refresh)
 
 
@@ -116,6 +117,7 @@ class RevokeSession:
     verifier: TokenVerifier
     revocation_store: TokenRevocationStore
 
+    @traced("auth.logout")
     async def execute(self, *, access_token: str, refresh_token: str | None = None) -> None:
         access_claims = self.verifier.verify(access_token, expected_type=TokenType.ACCESS)
         await self.revocation_store.revoke_access(
@@ -124,9 +126,9 @@ class RevokeSession:
         )
         if access_claims.family_id is not None:
             await self.revocation_store.revoke_family(family_id=access_claims.family_id)
-        if refresh_token is None:
-            return
-        refresh_claims = self.verifier.verify(refresh_token, expected_type=TokenType.REFRESH)
-        await self.revocation_store.revoke_refresh(jti=refresh_claims.jti)
-        if refresh_claims.family_id is not None:
-            await self.revocation_store.revoke_family(family_id=refresh_claims.family_id)
+        if refresh_token is not None:
+            refresh_claims = self.verifier.verify(refresh_token, expected_type=TokenType.REFRESH)
+            await self.revocation_store.revoke_refresh(jti=refresh_claims.jti)
+            if refresh_claims.family_id is not None:
+                await self.revocation_store.revoke_family(family_id=refresh_claims.family_id)
+        record_auth_event("logout", user_id=access_claims.subject)
