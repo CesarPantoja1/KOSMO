@@ -6,6 +6,7 @@ estable del sistema (``contracts`` está en el nivel inferior del contrato de
 """
 
 from kosmo.contracts.auth.errors import (
+    AccountLockedError,
     AuthError,
     AuthorizationCodeError,
     InvalidCredentialsError,
@@ -20,6 +21,7 @@ from kosmo.contracts.auth.errors import (
 from kosmo.contracts.auth.pkce import AuthorizationCode, PkceMethod
 from kosmo.contracts.auth.ports import (
     AuthorizationCodeStore,
+    LoginAttemptStore,
     PasswordHasher,
     TokenIssuer,
     TokenRevocationStore,
@@ -38,6 +40,7 @@ from kosmo.contracts.auth.tokens import (
 from kosmo.contracts.auth.users import User
 
 __all__ = [
+    "AccountLockedError",
     "AuthError",
     "AuthorizationCode",
     "AuthorizationCodeError",
@@ -46,6 +49,7 @@ __all__ = [
     "InvalidCredentialsError",
     "InvalidTokenError",
     "IssuedToken",
+    "LoginAttemptStore",
     "MissingTokenError",
     "PasswordHasher",
     "PkceMethod",

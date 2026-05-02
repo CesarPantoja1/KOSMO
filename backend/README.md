@@ -175,10 +175,10 @@ backend/
 │   │   │   ├── main.py               # Punto de entrada de la app
 │   │   │   ├── schemas.py            # DTOs Pydantic expuestos por la API HTTP
 │   │   │   ├── composition.py        # Composition root (wiring de puertos y adaptadores)
-│   │   │   ├── dependencies/         # FastAPI Depends (auth, scopes)
+│   │   │   ├── dependencies/         # FastAPI Depends (auth, scopes, rate limiting)
 │   │   │   ├── middlewares/          # Middlewares HTTP (request logging, trace context)
 │   │   │   └── routers/              # Endpoints REST
-│   │   ├── persistence/              # Postgres (SQLAlchemy), Redis (token store, authcode store)
+│   │   ├── persistence/              # Postgres (SQLAlchemy), Redis (token store, authcode store, login attempts)
 │   │   ├── security/                 # Argon2id, JOSE/JWT, Fernet
 │   │   └── telemetry/                # Bootstrap de structlog + Logfire/OpenTelemetry
 │   ├── application/                  # Casos de uso (orquestación) — depende de contracts y domain
@@ -208,7 +208,7 @@ El sistema de autenticación implementa el flujo **Authorization Code + PKCE** s
 | Caso de uso | Archivo | Descripción |
 |---|---|---|
 | `RegisterUser` | `application/auth/register.py` | Crea un usuario con contraseña hasheada en Argon2. |
-| `AuthorizeWithPkce` | `application/auth/authorize.py` | Valida credenciales y emite un código de autorización ligado al `code_challenge`. |
+| `AuthorizeWithPkce` | `application/auth/authorize.py` | Verifica bloqueo de cuenta, valida credenciales, registra intentos fallidos, emite código de autorización. |
 | `ExchangeAuthorizationCode` | `application/auth/exchange.py` | Intercambia el código + `code_verifier` por un par de tokens. Verifica PKCE. |
 | `IssueTokenPair` | `application/auth/use_cases.py` | Emite un access + refresh token y registra el refresh en Redis. |
 | `VerifyAccessToken` | `application/auth/use_cases.py` | Valida firma, tipo y estado de revocación del access token. |
@@ -237,24 +237,26 @@ Ambos llevan los claims estándar (`sub`, `iss`, `aud`, `iat`, `exp`, `jti`) má
 
 ### 10.4. Estado en Redis
 
-| Clave | Significado |
-|---|---|
-| `auth:refresh:{jti}` | Refresh token vigente. Se borra al usarse o al hacer logout. Si no existe, el refresh es rechazado (defensa contra replay). |
-| `auth:revoked:{jti}` | Access token revocado antes de su `exp`. `get_principal` lo consulta en cada request. |
-| `auth:family:{family_id}` | Familia de sesión activa. Al detectar reuso de refresh, se revoca la familia completa. |
+| Clave | TTL | Significado |
+|---|---|---|
+| `auth:refresh:{jti}` | TTL del refresh token | Refresh token vigente. Se borra al usarse o al hacer logout. Si no existe, el refresh es rechazado (defensa contra replay). |
+| `auth:revoked:{jti}` | TTL residual del access | Access token revocado antes de su `exp`. `get_principal` lo consulta en cada request. |
+| `auth:family:{family_id}` | TTL del refresh token | Familia de sesión activa. Al detectar reuso de refresh, se revoca la familia completa. |
+| `auth:login_attempts:{email}` | 15 minutos desde el primer fallo | Contador de intentos fallidos por cuenta. Al llegar a 10, los siguientes intentos reciben 429 hasta que expira la clave. Se borra en un login exitoso. |
+| `auth:ip_rate:{ruta}:{ip}` | 60 segundos | Contador de requests por IP y endpoint. Se resetea cada minuto. |
 
 La rotación de refresh (lectura + borrado del JTI viejo) se ejecuta en una transacción Redis (`MULTI/EXEC`) para evitar carreras entre clientes concurrentes.
 
 ### 10.5. Endpoints
 
-| Método | Ruta | Auth requerida | Descripción |
-|---|---|---|---|
-| `POST` | `/api/v1/auth/register` | — | Registra un usuario nuevo. Devuelve `UserPublic`. |
-| `POST` | `/api/v1/auth/authorize` | — | Valida credenciales + `code_challenge`. Devuelve `authorization_code`. |
-| `POST` | `/api/v1/auth/token` | — | Intercambia `code` + `code_verifier` por un par de tokens. |
-| `POST` | `/api/v1/auth/refresh` | Refresh token en el body | Rota el par. El refresh anterior queda invalidado. |
-| `GET`  | `/api/v1/auth/me` | Bearer access | Devuelve el `Principal` autenticado (`subject`, `scopes`). |
-| `POST` | `/api/v1/auth/logout` | Bearer access | Revoca el access y, si se envía, también el refresh. |
+| Método | Ruta | Auth requerida | Límite IP | Descripción |
+|---|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | — | 3/min | Registra un usuario nuevo. Devuelve `UserPublic`. |
+| `POST` | `/api/v1/auth/authorize` | — | 10/min | Valida credenciales + `code_challenge`. Devuelve `authorization_code`. |
+| `POST` | `/api/v1/auth/token` | — | 5/min | Intercambia `code` + `code_verifier` por un par de tokens. |
+| `POST` | `/api/v1/auth/refresh` | Refresh token en el body | 30/min | Rota el par. El refresh anterior queda invalidado. |
+| `GET`  | `/api/v1/auth/me` | Bearer access | — | Devuelve el `Principal` autenticado (`subject`, `scopes`). |
+| `POST` | `/api/v1/auth/logout` | Bearer access | 20/min | Revoca el access y, si se envía, también el refresh. |
 
 ### 10.6. Variables de entorno
 
@@ -307,14 +309,48 @@ async def create_project() -> dict[str, str]:
 | Código de autorización inválido o PKCE fallido | `400` | `error: invalid_grant` |
 | Email ya registrado | `409` | — |
 | Scope insuficiente | `403` | — |
+| Rate limit por IP excedido | `429` | `detail: Demasiadas solicitudes...` + header `Retry-After` |
+| Cuenta bloqueada por intentos fallidos | `429` | `error: account_locked` + header `Retry-After` |
 
 ### 10.9. Pruebas
 
 ```bash
-uv run pytest tests/unit/test_auth_use_cases.py tests/integration/test_auth_router.py
+uv run pytest tests/unit/test_auth_use_cases.py \
+              tests/unit/test_identity_use_cases.py \
+              tests/unit/test_rate_limiter.py \
+              tests/integration/test_auth_router.py
 ```
 
-Los tests usan un store en memoria que implementa el mismo puerto que el adaptador de Redis, así que no requieren contenedores levantados.
+Los tests usan stores en memoria que implementan los mismos puertos que los adaptadores de Redis, así que no requieren contenedores levantados.
+
+---
+
+### 10.10. Protección contra abuso
+
+El sistema implementa dos mecanismos de protección independientes que se complementan.
+
+#### Rate limiting por IP
+
+`IpRateLimiter` (en `infrastructure/api/dependencies/rate_limit.py`) es una dependencia FastAPI que aplica una ventana fija de 60 segundos por IP y por ruta. Se inyecta con `dependencies=[Depends(...)]` en el decorador del endpoint sin contaminar la lógica de negocio.
+
+Cuando la IP supera el límite, la respuesta incluye el header `Retry-After` con los segundos restantes de la ventana. Si Redis no está disponible (por ejemplo, en tests unitarios), el limiter se omite sin error.
+
+#### Bloqueo de cuenta
+
+`LoginAttemptStore` es un puerto definido en `contracts/auth/ports.py` e implementado por `RedisLoginAttemptStore` en `infrastructure/persistence/redis/`. El caso de uso `AuthorizeWithPkce` lo consume de la siguiente manera:
+
+1. Al inicio de cada intento de login consulta `lockout_seconds(email)`. Si la cuenta está bloqueada lanza `AccountLockedError` con el tiempo restante.
+2. Ante credenciales inválidas llama a `record_failure(email)`.
+3. Ante un login exitoso llama a `clear(email)` para reiniciar el contador.
+
+| Parámetro | Valor |
+|---|---|
+| Máximo de intentos fallidos | 10 |
+| Duración del bloqueo | 15 minutos |
+| Ventana de conteo | 15 minutos desde el primer fallo |
+| Reseteo | Automático en login exitoso o al expirar la clave Redis |
+
+El error `AccountLockedError` se mapea a HTTP 429 en el router con el header `Retry-After` y un mensaje descriptivo en español.
 
 ---
 

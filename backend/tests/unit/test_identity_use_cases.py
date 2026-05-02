@@ -15,6 +15,7 @@ from kosmo.application.auth import (  # noqa: E402
     RegisterUser,
 )
 from kosmo.contracts.auth import (  # noqa: E402
+    AccountLockedError,
     AuthorizationCode,
     AuthorizationCodeError,
     InvalidCredentialsError,
@@ -49,6 +50,9 @@ _PUBLIC_PEM: str = (
     )
     .decode()
 )
+
+_MAX_FAILURES = 10
+_LOCKOUT_SECONDS = 900
 
 
 class InMemoryUserRepository:
@@ -137,6 +141,21 @@ class InMemoryStore:
         self.families.discard(family_id)
 
 
+class InMemoryLoginAttemptStore:
+    def __init__(self) -> None:
+        self._counts: dict[str, int] = {}
+
+    async def record_failure(self, identifier: str) -> None:
+        self._counts[identifier] = self._counts.get(identifier, 0) + 1
+
+    async def clear(self, identifier: str) -> None:
+        self._counts.pop(identifier, None)
+
+    async def lockout_seconds(self, identifier: str) -> int | None:
+        count = self._counts.get(identifier, 0)
+        return _LOCKOUT_SECONDS if count >= _MAX_FAILURES else None
+
+
 def _hasher() -> Argon2idPasswordHasher:
     return Argon2idPasswordHasher(Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4))
 
@@ -188,6 +207,7 @@ async def test_authorize_with_valid_credentials_emits_code() -> None:
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
+        login_attempt_store=InMemoryLoginAttemptStore(),
     )
 
     await register.execute(email="bob@example.com", password="password-12345")
@@ -215,6 +235,7 @@ async def test_authorize_with_wrong_password_raises() -> None:
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
+        login_attempt_store=InMemoryLoginAttemptStore(),
     )
     await register.execute(email="bob@example.com", password="password-12345")
 
@@ -225,6 +246,103 @@ async def test_authorize_with_wrong_password_raises() -> None:
             code_challenge=s256_challenge("verifier" * 8),
             scopes=frozenset(),
         )
+
+
+@pytest.mark.asyncio
+async def test_authorize_records_failure_on_bad_credentials() -> None:
+    repo = InMemoryUserRepository()
+    hasher = _hasher()
+    attempt_store = InMemoryLoginAttemptStore()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    authorize = AuthorizeWithPkce(
+        user_repository=repo,
+        password_hasher=hasher,
+        authorization_code_store=InMemoryAuthorizationCodeStore(),
+        login_attempt_store=attempt_store,
+    )
+    await register.execute(email="dave@example.com", password="password-12345")
+
+    for _ in range(3):
+        with pytest.raises(InvalidCredentialsError):
+            await authorize.execute(
+                email="dave@example.com",
+                password="wrong",
+                code_challenge=s256_challenge("verifier" * 8),
+                scopes=frozenset(),
+            )
+
+    assert attempt_store._counts.get("dave@example.com") == 3
+
+
+@pytest.mark.asyncio
+async def test_authorize_locks_account_after_max_failures() -> None:
+    repo = InMemoryUserRepository()
+    hasher = _hasher()
+    attempt_store = InMemoryLoginAttemptStore()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    authorize = AuthorizeWithPkce(
+        user_repository=repo,
+        password_hasher=hasher,
+        authorization_code_store=InMemoryAuthorizationCodeStore(),
+        login_attempt_store=attempt_store,
+    )
+    await register.execute(email="eve@example.com", password="password-12345")
+    challenge = s256_challenge("verifier" * 8)
+
+    for _ in range(_MAX_FAILURES):
+        with pytest.raises(InvalidCredentialsError):
+            await authorize.execute(
+                email="eve@example.com",
+                password="wrong",
+                code_challenge=challenge,
+                scopes=frozenset(),
+            )
+
+    with pytest.raises(AccountLockedError) as exc_info:
+        await authorize.execute(
+            email="eve@example.com",
+            password="wrong",
+            code_challenge=challenge,
+            scopes=frozenset(),
+        )
+    assert exc_info.value.seconds_remaining == _LOCKOUT_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_authorize_clears_attempts_on_successful_login() -> None:
+    repo = InMemoryUserRepository()
+    hasher = _hasher()
+    attempt_store = InMemoryLoginAttemptStore()
+    code_store = InMemoryAuthorizationCodeStore()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    authorize = AuthorizeWithPkce(
+        user_repository=repo,
+        password_hasher=hasher,
+        authorization_code_store=code_store,
+        login_attempt_store=attempt_store,
+    )
+    await register.execute(email="frank@example.com", password="password-12345")
+    challenge = s256_challenge("verifier" * 8)
+
+    for _ in range(5):
+        with pytest.raises(InvalidCredentialsError):
+            await authorize.execute(
+                email="frank@example.com",
+                password="wrong",
+                code_challenge=challenge,
+                scopes=frozenset(),
+            )
+
+    assert attempt_store._counts.get("frank@example.com") == 5
+
+    await authorize.execute(
+        email="frank@example.com",
+        password="password-12345",
+        code_challenge=challenge,
+        scopes=frozenset(),
+    )
+
+    assert attempt_store._counts.get("frank@example.com") is None
 
 
 @pytest.mark.asyncio
@@ -240,6 +358,7 @@ async def test_exchange_consumes_code_and_emits_pair() -> None:
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
+        login_attempt_store=InMemoryLoginAttemptStore(),
     )
     issue = IssueTokenPair(issuer=issuer, revocation_store=token_store)
     exchange = ExchangeAuthorizationCode(
@@ -280,6 +399,7 @@ async def test_exchange_rejects_mismatched_verifier() -> None:
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
+        login_attempt_store=InMemoryLoginAttemptStore(),
     )
     exchange = ExchangeAuthorizationCode(
         authorization_code_store=code_store,

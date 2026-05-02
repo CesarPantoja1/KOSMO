@@ -12,6 +12,7 @@ from kosmo.application.auth import (
     RevokeSession,
 )
 from kosmo.contracts.auth import (
+    AccountLockedError,
     AuthorizationCodeError,
     InvalidCredentialsError,
     InvalidTokenError,
@@ -23,6 +24,7 @@ from kosmo.contracts.auth import (
     UserAlreadyExistsError,
 )
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.rate_limit import IpRateLimiter
 from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
     AuthorizeRequest,
@@ -37,6 +39,12 @@ from kosmo.infrastructure.api.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+_register_limiter = IpRateLimiter(3)
+_authorize_limiter = IpRateLimiter(10)
+_token_limiter = IpRateLimiter(5)
+_refresh_limiter = IpRateLimiter(30)
+_logout_limiter = IpRateLimiter(20)
 
 
 def _register(request: Request) -> RegisterUser:
@@ -68,7 +76,11 @@ def _oauth_error(*, status_code: int, error: str, description: str) -> JSONRespo
     "/register",
     response_model=UserPublic,
     status_code=status.HTTP_201_CREATED,
-    responses={status.HTTP_409_CONFLICT: {"model": OAuthErrorResponse}},
+    responses={
+        status.HTTP_409_CONFLICT: {"model": OAuthErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Rate limit excedido"},
+    },
+    dependencies=[Depends(_register_limiter)],
 )
 async def register(
     payload: Annotated[RegisterRequest, Body(...)],
@@ -88,7 +100,11 @@ async def register(
     "/authorize",
     response_model=AuthorizationCodeResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={status.HTTP_401_UNAUTHORIZED: {"model": OAuthErrorResponse}},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": OAuthErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": OAuthErrorResponse},
+    },
+    dependencies=[Depends(_authorize_limiter)],
 )
 async def authorize(
     payload: Annotated[AuthorizeRequest, Body(...)],
@@ -100,6 +116,17 @@ async def authorize(
             password=payload.password,
             code_challenge=payload.code_challenge,
             scopes=frozenset(payload.scopes),
+        )
+    except AccountLockedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=OAuthErrorResponse(
+                error="account_locked",
+                error_description=(
+                    f"Cuenta bloqueada. Intente de nuevo en {exc.seconds_remaining} segundos."
+                ),
+            ).model_dump(),
+            headers={"Retry-After": str(exc.seconds_remaining)},
         )
     except InvalidCredentialsError:
         return _oauth_error(
@@ -117,7 +144,11 @@ async def authorize(
 @router.post(
     "/token",
     response_model=TokenPairResponse,
-    responses={status.HTTP_400_BAD_REQUEST: {"model": OAuthErrorResponse}},
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": OAuthErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Rate limit excedido"},
+    },
+    dependencies=[Depends(_token_limiter)],
 )
 async def token(
     payload: Annotated[TokenExchangeRequest, Body(...)],
@@ -143,7 +174,11 @@ async def token(
 @router.post(
     "/refresh",
     response_model=TokenPairResponse,
-    responses={status.HTTP_401_UNAUTHORIZED: {"model": OAuthErrorResponse}},
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": OAuthErrorResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Rate limit excedido"},
+    },
+    dependencies=[Depends(_refresh_limiter)],
 )
 async def refresh(
     payload: Annotated[TokenRefreshRequest, Body(...)],
@@ -177,7 +212,13 @@ async def me(principal: Annotated[Principal, Depends(get_principal)]) -> Princip
     return PrincipalView(subject=principal.subject, scopes=sorted(principal.scopes))
 
 
-@router.post("/logout")
+@router.post(
+    "/logout",
+    responses={
+        status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Rate limit excedido"},
+    },
+    dependencies=[Depends(_logout_limiter)],
+)
 async def logout(
     payload: Annotated[LogoutRequest, Body(...)],
     principal: Annotated[Principal, Depends(get_principal)],

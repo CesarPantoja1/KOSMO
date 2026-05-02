@@ -3,9 +3,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from kosmo.contracts.auth import (
+    AccountLockedError,
     AuthorizationCode,
     AuthorizationCodeStore,
     InvalidCredentialsError,
+    LoginAttemptStore,
     PasswordHasher,
     PkceMethod,
     UserRepository,
@@ -20,6 +22,7 @@ class AuthorizeWithPkce:
     user_repository: UserRepository
     password_hasher: PasswordHasher
     authorization_code_store: AuthorizationCodeStore
+    login_attempt_store: LoginAttemptStore
     code_ttl_seconds: int = _AUTHORIZATION_CODE_TTL_SECONDS
 
     @traced("auth.login")
@@ -32,6 +35,11 @@ class AuthorizeWithPkce:
         scopes: frozenset[str],
     ) -> AuthorizationCode:
         normalized_email = email.strip().lower()
+
+        remaining = await self.login_attempt_store.lockout_seconds(normalized_email)
+        if remaining is not None:
+            raise AccountLockedError(remaining)
+
         try:
             user = await self.user_repository.by_email(normalized_email)
             if user is None or not user.is_active:
@@ -53,8 +61,10 @@ class AuthorizeWithPkce:
                 scopes=scopes,
             )
             await self.authorization_code_store.store(entry)
+            await self.login_attempt_store.clear(normalized_email)
             record_auth_event("login_success", user_id=user.id)
             return entry
         except InvalidCredentialsError:
+            await self.login_attempt_store.record_failure(normalized_email)
             record_auth_event("login_failure")
             raise
