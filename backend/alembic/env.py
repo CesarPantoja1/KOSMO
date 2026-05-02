@@ -25,6 +25,7 @@ if _db_url_env:
 
 target_metadata = Base.metadata
 
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 

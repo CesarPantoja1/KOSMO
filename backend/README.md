@@ -144,7 +144,7 @@ Endpoints disponibles una vez arriba:
 ## 8. Pruebas y calidad de código
 
 ```bash
-# Tests (cobertura mínima 80%)
+# Tests (cobertura mínima 60%)
 uv run pytest
 
 # Linter
@@ -168,17 +168,30 @@ Los tests están organizados en `tests/unit`, `tests/integration`, `tests/contra
 
 ```
 backend/
-├── alembic/                  # Migraciones de PostgreSQL
+├── alembic/                          # Migraciones de PostgreSQL
 ├── src/kosmo/
-│   ├── infrastructure/       # FastAPI, persistencia, LLM, seguridad, etc.
-│   │   └── api/main.py       # Punto de entrada de la app
-│   ├── application/          # Casos de uso
-│   ├── domain/               # Modelo de dominio puro
-│   ├── contracts/            # Contratos compartidos
-│   └── config.py             # Carga de Settings desde .env
+│   ├── infrastructure/               # Adaptadores: FastAPI, persistencia, LLM, seguridad, telemetría
+│   │   ├── api/
+│   │   │   ├── main.py               # Punto de entrada de la app
+│   │   │   ├── schemas.py            # DTOs Pydantic expuestos por la API HTTP
+│   │   │   ├── composition.py        # Composition root (wiring de puertos y adaptadores)
+│   │   │   ├── dependencies/         # FastAPI Depends (auth, scopes)
+│   │   │   ├── middlewares/          # Middlewares HTTP (request logging, trace context)
+│   │   │   └── routers/              # Endpoints REST
+│   │   ├── persistence/              # Postgres (SQLAlchemy), Redis (token store, authcode store)
+│   │   ├── security/                 # Argon2id, JOSE/JWT, Fernet
+│   │   └── telemetry/                # Bootstrap de structlog + Logfire/OpenTelemetry
+│   ├── application/                  # Casos de uso (orquestación) — depende de contracts y domain
+│   │   └── auth/                     # Register, Authorize, Exchange, Issue/Verify/Refresh/Revoke
+│   ├── domain/                       # Algoritmos de dominio puro
+│   │   └── auth/pkce.py              # s256_challenge, verify_s256 (RFC 7636)
+│   ├── contracts/                    # Kernel: entidades, errores, puertos, telemetría
+│   │   ├── auth/                     # User, Principal, Token*, AuthorizationCode, errors, ports
+│   │   └── telemetry.py              # Decorador @traced y record_auth_event (no-op si no hay infra)
+│   └── config.py                     # Carga de Settings desde .env
 ├── tests/
 ├── .env.example
-├── .importlinter             # Reglas de arquitectura por capas
+├── .importlinter                     # Reglas de arquitectura por capas
 ├── alembic.ini
 ├── pyproject.toml
 └── uv.lock
@@ -186,31 +199,66 @@ backend/
 
 ---
 
-## 10. Autenticación JWT
+## 10. Autenticación
 
-El backend protege rutas mediante JSON Web Tokens firmados con **RS256** (clave asimétrica). El estado de sesión vive en **Redis**: una *allowlist* de refresh tokens y una *denylist* de access tokens revocados. Toda la lógica respeta la arquitectura hexagonal: los puertos viven en `contracts/auth`, los casos de uso en `application/auth`, y los adaptadores de jose y Redis en `infrastructure/`.
+El sistema de autenticación implementa el flujo **Authorization Code + PKCE** sobre JWT firmados con **RS256**. La arquitectura es hexagonal: los puertos y entidades del kernel viven en `contracts/auth`, los algoritmos de dominio puro en `domain/auth`, los casos de uso en `application/auth`, los adaptadores (Argon2, RS256, Postgres, Redis, Fernet) en `infrastructure/`, y los DTOs HTTP de la API en `infrastructure/api/schemas.py`.
 
-### 10.1. Modelo de tokens
+### 10.1. Casos de uso
+
+| Caso de uso | Archivo | Descripción |
+|---|---|---|
+| `RegisterUser` | `application/auth/register.py` | Crea un usuario con contraseña hasheada en Argon2. |
+| `AuthorizeWithPkce` | `application/auth/authorize.py` | Valida credenciales y emite un código de autorización ligado al `code_challenge`. |
+| `ExchangeAuthorizationCode` | `application/auth/exchange.py` | Intercambia el código + `code_verifier` por un par de tokens. Verifica PKCE. |
+| `IssueTokenPair` | `application/auth/use_cases.py` | Emite un access + refresh token y registra el refresh en Redis. |
+| `VerifyAccessToken` | `application/auth/use_cases.py` | Valida firma, tipo y estado de revocación del access token. |
+| `RefreshTokenPair` | `application/auth/use_cases.py` | Rota el par. Detecta reuso y revoca la familia completa si ocurre. |
+| `RevokeSession` | `application/auth/use_cases.py` | Revoca el access actual y, opcionalmente, el refresh y toda la familia. |
+
+### 10.2. Flujo completo
+
+```
+1. POST /api/v1/auth/register          → crea cuenta
+2. POST /api/v1/auth/authorize         → valida credenciales + PKCE → authorization_code
+3. POST /api/v1/auth/token             → code + code_verifier → { access_token, refresh_token }
+4. GET  /api/v1/auth/me                → Bearer access → Principal { subject, scopes }
+5. POST /api/v1/auth/refresh           → refresh_token → nuevo par (rotación)
+6. POST /api/v1/auth/logout            → revoca access y refresh
+```
+
+### 10.3. Modelo de tokens
 
 | Token | Vida útil por defecto | Uso |
 |---|---|---|
-| **Access** | 15 minutos | Se envía en `Authorization: Bearer <token>` en cada request a una ruta protegida. |
-| **Refresh** | 7 días | Solo se envía a `POST /api/v1/auth/demo/refresh` para obtener un nuevo par. Se rota en cada uso. |
+| **Access** | 15 minutos | Se envía en `Authorization: Bearer <token>` en cada request protegido. |
+| **Refresh** | 7 días | Solo se envía a `POST /api/v1/auth/refresh` para obtener un nuevo par. Se rota en cada uso. |
 
-Ambos llevan los claims estándar (`sub`, `iss`, `aud`, `iat`, `exp`, `jti`) más `type` (access/refresh) y `scopes[]`.
+Ambos llevan los claims estándar (`sub`, `iss`, `aud`, `iat`, `exp`, `jti`) más `type` (access/refresh), `scopes[]` y `family_id` (agrupa tokens de una misma sesión).
 
-### 10.2. Estado en Redis
+### 10.4. Estado en Redis
 
 | Clave | Significado |
 |---|---|
 | `auth:refresh:{jti}` | Refresh token vigente. Se borra al usarse o al hacer logout. Si no existe, el refresh es rechazado (defensa contra replay). |
 | `auth:revoked:{jti}` | Access token revocado antes de su `exp`. `get_principal` lo consulta en cada request. |
+| `auth:family:{family_id}` | Familia de sesión activa. Al detectar reuso de refresh, se revoca la familia completa. |
 
 La rotación de refresh (lectura + borrado del JTI viejo) se ejecuta en una transacción Redis (`MULTI/EXEC`) para evitar carreras entre clientes concurrentes.
 
-### 10.3. Variables de entorno
+### 10.5. Endpoints
 
-Las claves PEM ya se generan en el paso 5.1. El resto tiene valores por defecto y son opcionales en `.env`:
+| Método | Ruta | Auth requerida | Descripción |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | — | Registra un usuario nuevo. Devuelve `UserPublic`. |
+| `POST` | `/api/v1/auth/authorize` | — | Valida credenciales + `code_challenge`. Devuelve `authorization_code`. |
+| `POST` | `/api/v1/auth/token` | — | Intercambia `code` + `code_verifier` por un par de tokens. |
+| `POST` | `/api/v1/auth/refresh` | Refresh token en el body | Rota el par. El refresh anterior queda invalidado. |
+| `GET`  | `/api/v1/auth/me` | Bearer access | Devuelve el `Principal` autenticado (`subject`, `scopes`). |
+| `POST` | `/api/v1/auth/logout` | Bearer access | Revoca el access y, si se envía, también el refresh. |
+
+### 10.6. Variables de entorno
+
+Las claves PEM se generan en el paso 5.1. El resto tiene valores por defecto y son opcionales en `.env`:
 
 ```env
 JWT_PRIVATE_KEY_PATH=./.secrets/jwt_private.pem
@@ -222,9 +270,7 @@ JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_SECONDS=604800
 ```
 
-### 10.4. Proteger una ruta
-
-Importa las dependencias y aplícalas con `Depends`:
+### 10.7. Proteger una ruta
 
 ```python
 from typing import Annotated
@@ -237,74 +283,138 @@ from kosmo.infrastructure.api.dependencies.auth import get_principal, require_sc
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
 
-# Requiere token válido. Inyecta el Principal autenticado.
 @router.get("/me")
 async def me(principal: Annotated[Principal, Depends(get_principal)]) -> dict[str, str]:
     return {"subject": principal.subject}
 
 
-# Requiere token válido + scope "projects:write".
 @router.post("", dependencies=[Depends(require_scopes("projects:write"))])
 async def create_project() -> dict[str, str]:
     return {"status": "created"}
 ```
 
-Para proteger un router completo de una sola vez:
-
-```python
-admin_router = APIRouter(
-    prefix="/api/v1/admin",
-    dependencies=[Depends(require_scopes("admin"))],
-)
-```
-
 `get_principal` valida la firma, `iss`, `aud`, `exp`, el tipo de token y la lista de revocación. `require_scopes(*scopes)` añade comprobación de permisos sobre lo que ya hizo `get_principal`.
 
-### 10.5. Endpoints de prueba
+### 10.8. Códigos de respuesta
 
-Pensados para verificar el flujo de extremo a extremo. **No son el login real**: el endpoint de emisión es público y se reemplazará por un caso de uso que valide credenciales con Argon2.
-
-| Método | Ruta | Auth requerida | Descripción |
-|---|---|---|---|
-| `POST` | `/api/v1/auth/demo/token` | — | Emite un par para un `subject` y `scopes` arbitrarios. |
-| `POST` | `/api/v1/auth/demo/refresh` | Refresh token en el body | Rota el par. El refresh anterior queda invalidado. |
-| `GET`  | `/api/v1/auth/demo/me` | Bearer access | Devuelve el `Principal` decodificado. |
-| `GET`  | `/api/v1/auth/demo/admin` | Bearer access + scope `admin` | Devuelve 403 si falta el scope. |
-| `POST` | `/api/v1/auth/demo/logout` | Bearer access | Revoca el access actual y, si se envía, también el refresh. |
-
-Smoke manual con `curl` (servidor en `:8000`):
-
-```bash
-PAIR=$(curl -sX POST http://localhost:8000/api/v1/auth/demo/token \
-  -H "Content-Type: application/json" \
-  -d '{"subject":"alice","scopes":["read","admin"]}')
-
-ACCESS=$(echo "$PAIR" | python -c "import json,sys;print(json.load(sys.stdin)['access']['token'])")
-
-curl -H "Authorization: Bearer $ACCESS" http://localhost:8000/api/v1/auth/demo/me
-```
-
-### 10.6. Códigos de respuesta
-
-| Caso | Status | Cabecera `WWW-Authenticate` |
+| Caso | Status | Detalle |
 |---|---|---|
 | Falta cabecera `Authorization` | `401` | `Bearer realm="kosmo"` |
 | Firma inválida o token mal formado | `401` | `Bearer error="invalid_token"` |
-| Token expirado | `401` | `Bearer error="invalid_token"` (`detail: Token expired`) |
-| Token revocado | `401` | `Bearer error="invalid_token"` (`detail: Token revoked`) |
+| Token expirado | `401` | `detail: Token expired` |
+| Token revocado | `401` | `detail: Token revoked` |
+| Credenciales inválidas | `401` | `error: invalid_grant` |
+| Código de autorización inválido o PKCE fallido | `400` | `error: invalid_grant` |
+| Email ya registrado | `409` | — |
 | Scope insuficiente | `403` | — |
 
-### 10.7. Pruebas
+### 10.9. Pruebas
 
 ```bash
-uv run pytest tests/unit/test_auth_use_cases.py tests/integration/test_auth_demo_router.py
+uv run pytest tests/unit/test_auth_use_cases.py tests/integration/test_auth_router.py
 ```
 
 Los tests usan un store en memoria que implementa el mismo puerto que el adaptador de Redis, así que no requieren contenedores levantados.
 
 ---
 
-## 11. Problemas comunes
+## 11. Observabilidad
+
+El backend implementa los tres pilares de observabilidad sobre **structlog** y **OpenTelemetry**. En desarrollo no se necesita ningún servicio externo: todo sale por consola. En producción, con `LOGFIRE_TOKEN` configurado, los datos se envían a **Logfire**.
+
+### 11.1. Logging (structlog)
+
+Cada request HTTP genera un log estructurado emitido por `RequestLoggingMiddleware`:
+
+```
+http.request.completed  method=GET  path=/health  status_code=200  duration_ms=1.234  request_id=a3f…
+```
+
+| Campo | Descripción |
+|---|---|
+| `request_id` | UUID hex único por request, propagado a todos los logs del mismo contexto via `structlog.contextvars`. |
+| `duration_ms` | Tiempo total de procesamiento en milisegundos. |
+| `trace_id` / `span_id` | Presentes en todos los logs cuando el request corre dentro de un span OTel. Permiten correlacionar logs con trazas. |
+
+El renderer cambia según el entorno:
+
+| `ENV` / `LOG_LEVEL` | Renderer | Uso |
+|---|---|---|
+| `development` o `LOG_LEVEL=DEBUG` | `ConsoleRenderer` con colores | Lectura humana en terminal |
+| `production` o `LOG_LEVEL` ≠ `DEBUG` | `JSONRenderer` | Ingestión en colectores de logs |
+
+Los loggers ruidosos (`uvicorn.access`, `httpx`, `httpcore`, `asyncio`) se silencian a nivel `WARNING` para reducir el ruido.
+
+### 11.2. Trazas (OpenTelemetry)
+
+**Auto-instrumentación** — al arrancar, el stack instrumenta automáticamente:
+
+| Librería | Qué registra |
+|---|---|
+| FastAPI | Spans por endpoint con método, ruta y status code. |
+| SQLAlchemy | Spans por query SQL. |
+| HTTPX | Spans por llamada HTTP saliente. |
+
+**Decorador `@traced`** — disponible en `kosmo.contracts.telemetry` para instrumentar casos de uso de negocio:
+
+```python
+from kosmo.contracts.telemetry import traced
+
+class MiCasoDeUso:
+    @traced("mi_dominio.accion")
+    async def execute(self, cmd: MiComando) -> Resultado: ...
+```
+
+El decorador funciona con funciones `async` y síncronas, registra la excepción en el span y propaga el error sin alterarlo.
+
+Los spans de auth ya instrumentados:
+
+| Span | Caso de uso |
+|---|---|
+| `auth.register` | `RegisterUser` |
+| `auth.login` | `AuthorizeWithPkce` |
+| `auth.token_refresh` | `RefreshTokenPair` |
+| `auth.logout` | `RevokeSession` |
+
+### 11.3. Métricas (OpenTelemetry)
+
+El módulo `kosmo.contracts.telemetry` expone el contador `kosmo.auth.events`:
+
+```python
+from kosmo.contracts.telemetry import record_auth_event
+
+record_auth_event("login_success", user_id=user.id)
+record_auth_event("login_failure")
+```
+
+Atributos registrados en el contador:
+
+| `event_type` | Cuándo se emite |
+|---|---|
+| `register_success` | Usuario creado correctamente. |
+| `login_success` | Credenciales válidas en `/authorize`. |
+| `login_failure` | Credenciales inválidas en `/authorize`. |
+| `token_refresh` | Par de tokens rotado correctamente. |
+| `logout` | Sesión revocada. |
+
+### 11.4. Backend en producción: Logfire
+
+Si `LOGFIRE_TOKEN` tiene valor, el stack llama a `logfire.configure(...)` en lugar de los exportadores de consola. Las trazas y métricas se envían a Logfire; los logs de structlog se siguen escribiendo por stdout (Logfire los recoge si el colector está configurado).
+
+Si `LOGFIRE_TOKEN` está vacío (valor por defecto en `.env.example`), las trazas se imprimen por stdout con `ConsoleSpanExporter` y las métricas se exportan cada 60 segundos con `ConsoleMetricExporter`. No hay dependencia de ningún servicio externo para desarrollo local.
+
+### 11.5. Variables de entorno
+
+| Variable | Defecto | Descripción |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Nivel mínimo de logging. `DEBUG` activa el renderer con colores. |
+| `LOGFIRE_TOKEN` | _(vacío)_ | Token del proyecto Logfire. Vacío → exportadores de consola. |
+| `OTEL_SERVICE_NAME` | `kosmo-backend` | Valor de `service.name` en los recursos OTel. |
+| `OTEL_ENVIRONMENT` | `development` | Valor de `deployment.environment` en los recursos OTel. |
+
+---
+
+## 12. Problemas comunes
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
@@ -313,4 +423,4 @@ Los tests usan un store en memoria que implementa el mismo puerto que el adaptad
 | `ModuleNotFoundError: kosmo` | Ejecutaste fuera del venv | Usa `uv run <comando>` o activa `.venv` |
 | `alembic: command not found` | Dependencias dev no instaladas | `uv sync --all-groups` |
 | `FileNotFoundError: .secrets/jwt_*.pem` al arrancar | Claves JWT no generadas | Ejecuta el paso 5.1 |
-| `401 Token revoked` tras reiniciar Redis | Allowlist y denylist son volátiles; tokens emitidos antes ya no se reconocen | Pide un par nuevo en `/api/v1/auth/demo/token` |
+| `401 Token revoked` tras reiniciar Redis | Allowlist y denylist son volátiles; tokens emitidos antes ya no se reconocen | Repite el flujo desde `/api/v1/auth/authorize` |

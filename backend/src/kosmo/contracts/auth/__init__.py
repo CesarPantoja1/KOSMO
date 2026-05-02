@@ -1,3 +1,10 @@
+"""Kernel del dominio de autenticación.
+
+Define los tipos, errores y puertos compartidos entre las capas. Es la capa más
+estable del sistema (``contracts`` está en el nivel inferior del contrato de
+``import-linter``), por lo que cualquier capa puede consumirla.
+"""
+
 from kosmo.contracts.auth.errors import (
     AuthError,
     AuthorizationCodeError,

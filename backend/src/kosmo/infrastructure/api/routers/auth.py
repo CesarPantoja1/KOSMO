@@ -22,7 +22,8 @@ from kosmo.contracts.auth import (
     TokenRevokedError,
     UserAlreadyExistsError,
 )
-from kosmo.contracts.auth.schemas import (
+from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
     AuthorizeRequest,
     LogoutRequest,
@@ -34,7 +35,6 @@ from kosmo.contracts.auth.schemas import (
     TokenRefreshRequest,
     UserPublic,
 )
-from kosmo.infrastructure.api.dependencies.auth import get_principal
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 

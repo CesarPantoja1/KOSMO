@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False,  
+        case_sensitive=False,
         extra="forbid",
     )
 
@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # Secretos criptográficos
-    jwt_private_key_path: str  
-    jwt_public_key_path: str  
+    jwt_private_key_path: str
+    jwt_public_key_path: str
     fernet_master_key: SecretStr
 
     # JWT
@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     # Observabilidad
     logfire_token: SecretStr | None = None
+    otel_service_name: str = "kosmo-backend"
+    otel_environment: str = "development"
 
 
 settings = Settings()  # pyright: ignore[reportCallIssue]

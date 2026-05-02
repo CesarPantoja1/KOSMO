@@ -1,9 +1,15 @@
+"""DTOs Pydantic expuestos por la API HTTP.
+
+Pertenecen al adaptador de entrada (FastAPI), por lo que viven en infraestructura
+y pueden referenciar entidades de dominio para conversión I/O sin invertir capas.
+"""
+
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from kosmo.contracts.auth.tokens import TokenPair
+from kosmo.contracts.auth import TokenPair
 
 
 class RegisterRequest(BaseModel):

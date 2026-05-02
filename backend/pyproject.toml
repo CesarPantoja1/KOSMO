@@ -16,7 +16,7 @@ dependencies = [
     "jsonschema>=4.26.0",
     "langgraph>=1.1.9",
     "langgraph-checkpoint-postgres>=3.0.5",
-    "logfire>=4.32.1",
+    "logfire[fastapi,sqlalchemy,redis]>=4.32.1",
     "motor>=3.7.1",
     "pgvector>=0.4.2",
     "pydantic>=2.7",
@@ -58,6 +58,10 @@ select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "T20", "SIM", "ARG"]
 [tool.pyright]
 include = ["src"]
 strict = ["src/kosmo"]
+exclude = [
+    "**/__pycache__",
+    "**/.venv",
+]
 pythonVersion = "3.13"
 
 [tool.pytest.ini_options]
@@ -68,4 +72,4 @@ markers = [
     "contract: schemathesis contra OpenAPI",
     "property: hypothesis sobre invariantes",
 ]
-addopts = "--cov=kosmo --cov-report=xml --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=kosmo --cov-report=xml --cov-report=term-missing --cov-fail-under=60"

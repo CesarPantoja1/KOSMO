@@ -1,3 +1,11 @@
+"""Puertos del bounded context de autenticación.
+
+Definen la frontera entre los casos de uso (``application``) y los adaptadores
+de infraestructura (``infrastructure``). Viven en ``contracts`` porque también
+los consumen los routers y la composición de la aplicación, así como los tests
+que sustituyen las implementaciones reales por dobles en memoria.
+"""
+
 from typing import Protocol
 
 from kosmo.contracts.auth.pkce import AuthorizationCode

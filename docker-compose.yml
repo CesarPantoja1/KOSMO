@@ -45,6 +45,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_PRIVATE_KEY_PATH: /app/.secrets/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /app/.secrets/jwt_public.pem
+      OTEL_SERVICE_NAME: kosmo-backend
+      OTEL_ENVIRONMENT: ${ENVIRONMENT:-development}
       PYTHONUNBUFFERED: "1"
     volumes:
       # Claves RS256 SOLO LECTURA — nunca dentro de la imagen
