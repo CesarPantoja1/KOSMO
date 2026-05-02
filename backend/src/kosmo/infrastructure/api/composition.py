@@ -13,10 +13,11 @@ from kosmo.application.auth import (
     VerifyAccessToken,
 )
 from kosmo.config import Settings
-from kosmo.contracts.auth import PasswordHasher, SecretCipher, UserRepository
+from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyUserRepository
 from kosmo.infrastructure.persistence.redis import (
     RedisAuthorizationCodeStore,
+    RedisLoginAttemptStore,
     RedisTokenRevocationStore,
 )
 from kosmo.infrastructure.security import (
@@ -36,6 +37,7 @@ class AuthComponents:
     password_hasher: PasswordHasher
     secret_cipher: SecretCipher
     user_repository: UserRepository
+    login_attempt_store: LoginAttemptStore
     register_user: RegisterUser
     authorize_with_pkce: AuthorizeWithPkce
     exchange_authorization_code: ExchangeAuthorizationCode
@@ -70,6 +72,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
     )
     token_store = RedisTokenRevocationStore(redis)
     authorization_code_store = RedisAuthorizationCodeStore(redis)
+    login_attempt_store = RedisLoginAttemptStore(redis)
 
     db_engine = create_async_engine(
         settings.database_url.get_secret_value(),
@@ -95,6 +98,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         password_hasher=password_hasher,
         secret_cipher=secret_cipher,
         user_repository=user_repository,
+        login_attempt_store=login_attempt_store,
         register_user=RegisterUser(
             user_repository=user_repository,
             password_hasher=password_hasher,
@@ -103,6 +107,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
             user_repository=user_repository,
             password_hasher=password_hasher,
             authorization_code_store=authorization_code_store,
+            login_attempt_store=login_attempt_store,
         ),
         exchange_authorization_code=ExchangeAuthorizationCode(
             authorization_code_store=authorization_code_store,

@@ -36,3 +36,11 @@ class AuthorizationCodeError(AuthError):
 
 class PkceMismatchError(AuthError):
     """`code_verifier` no satisface el `code_challenge` registrado."""
+
+
+class AccountLockedError(AuthError):
+    """Cuenta bloqueada temporalmente por demasiados intentos fallidos de autenticación."""
+
+    def __init__(self, seconds_remaining: int) -> None:
+        self.seconds_remaining = seconds_remaining
+        super().__init__(f"Cuenta bloqueada. Intente de nuevo en {seconds_remaining} segundos.")

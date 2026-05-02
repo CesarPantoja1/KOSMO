@@ -54,6 +54,9 @@ _PUBLIC_PEM: str = (
     .decode()
 )
 
+_MAX_FAILURES = 10
+_LOCKOUT_SECONDS = 900
+
 
 class InMemoryUserRepository:
     def __init__(self) -> None:
@@ -141,6 +144,21 @@ class InMemoryStore:
         self.families.discard(family_id)
 
 
+class InMemoryLoginAttemptStore:
+    def __init__(self) -> None:
+        self._counts: dict[str, int] = {}
+
+    async def record_failure(self, identifier: str) -> None:
+        self._counts[identifier] = self._counts.get(identifier, 0) + 1
+
+    async def clear(self, identifier: str) -> None:
+        self._counts.pop(identifier, None)
+
+    async def lockout_seconds(self, identifier: str) -> int | None:
+        count = self._counts.get(identifier, 0)
+        return _LOCKOUT_SECONDS if count >= _MAX_FAILURES else None
+
+
 @pytest.fixture
 def client() -> TestClient:
     settings = JwtSettings(
@@ -158,6 +176,7 @@ def client() -> TestClient:
     user_repository = InMemoryUserRepository()
     code_store = InMemoryAuthorizationCodeStore()
     token_store = InMemoryStore()
+    attempt_store = InMemoryLoginAttemptStore()
 
     issue_token_pair = IssueTokenPair(issuer=issuer, revocation_store=token_store)
 
@@ -167,6 +186,7 @@ def client() -> TestClient:
         user_repository=user_repository,
         password_hasher=hasher,
         authorization_code_store=code_store,
+        login_attempt_store=attempt_store,
     )
     app.state.exchange_authorization_code = ExchangeAuthorizationCode(
         authorization_code_store=code_store,
@@ -383,3 +403,86 @@ def test_schemas_returns_json_schema(client: TestClient) -> None:
 def test_schemas_unknown_returns_404(client: TestClient) -> None:
     response = client.get("/api/v1/schemas/Unknown")
     assert response.status_code == 404
+
+
+def test_authorize_locks_account_after_max_failures(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "victim@example.com", "password": "password-12345"},
+    )
+    challenge = s256_challenge("verifier" * 8)
+    bad_payload = {
+        "email": "victim@example.com",
+        "password": "wrong-password",
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "scopes": [],
+    }
+    for _ in range(_MAX_FAILURES):
+        resp = client.post("/api/v1/auth/authorize", json=bad_payload)
+        assert resp.status_code == 401
+
+    locked = client.post("/api/v1/auth/authorize", json=bad_payload)
+    assert locked.status_code == 429
+    body = locked.json()
+    assert body["error"] == "account_locked"
+    assert "Retry-After" in locked.headers
+    assert int(locked.headers["Retry-After"]) == _LOCKOUT_SECONDS
+
+
+def test_authorize_lockout_message_is_in_spanish(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "bob@example.com", "password": "password-12345"},
+    )
+    challenge = s256_challenge("verifier" * 8)
+    bad_payload = {
+        "email": "bob@example.com",
+        "password": "wrong-password",
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "scopes": [],
+    }
+    for _ in range(_MAX_FAILURES):
+        client.post("/api/v1/auth/authorize", json=bad_payload)
+
+    locked = client.post("/api/v1/auth/authorize", json=bad_payload)
+    assert locked.status_code == 429
+    assert "Cuenta bloqueada" in locked.json()["error_description"]
+    assert "segundos" in locked.json()["error_description"]
+
+
+def test_authorize_clears_lockout_on_successful_login(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "carol@example.com", "password": "password-12345"},
+    )
+    challenge = s256_challenge("verifier" * 8)
+    bad_payload = {
+        "email": "carol@example.com",
+        "password": "wrong-password",
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "scopes": [],
+    }
+    for _ in range(5):
+        client.post("/api/v1/auth/authorize", json=bad_payload)
+
+    # Login exitoso limpia el contador
+    ok = client.post(
+        "/api/v1/auth/authorize",
+        json={
+            "email": "carol@example.com",
+            "password": "password-12345",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "scopes": [],
+        },
+    )
+    assert ok.status_code == 201
+
+    # Después del éxito, 5 intentos más no bloquean (el contador se reinició)
+    for _ in range(5):
+        client.post("/api/v1/auth/authorize", json=bad_payload)
+    not_yet_locked = client.post("/api/v1/auth/authorize", json=bad_payload)
+    assert not_yet_locked.status_code == 401

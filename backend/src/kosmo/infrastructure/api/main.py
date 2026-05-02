@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
     components = build_auth_components(settings)
     app.state.register_user = components.register_user
+    app.state.login_attempt_store = components.login_attempt_store
     app.state.authorize_with_pkce = components.authorize_with_pkce
     app.state.exchange_authorization_code = components.exchange_authorization_code
     app.state.issue_token_pair = components.issue_token_pair
