@@ -1,3 +1,1 @@
-import RequirementsPage from './ui/RequirementsPage';
-
-export default RequirementsPage;
+export { RequirementsPage, metadata } from './ui/RequirementsPage';

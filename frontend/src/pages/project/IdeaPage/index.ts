@@ -1,3 +1,1 @@
-import IdeaPage from './ui/IdeaPage';
-
-export default IdeaPage;
+export { IdeaPage, metadata } from './ui/IdeaPage';

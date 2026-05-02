@@ -1,3 +1,1 @@
-import ModelingPage from '../RequirementsPage';
-
-export default ModelingPage;
+export { ModelingPage, metadata } from './ui/ModelingPage';

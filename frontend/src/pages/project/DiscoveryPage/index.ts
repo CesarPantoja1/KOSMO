@@ -1,3 +1,1 @@
-import DiscoveryPage from './ui/DiscoveryPage';
-
-export default DiscoveryPage;
+export { DiscoveryPage, metadata } from './ui/DiscoveryPage';

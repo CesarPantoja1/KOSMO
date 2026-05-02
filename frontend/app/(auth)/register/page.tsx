@@ -1,3 +1,1 @@
-import RegisterPage from '@/pages/RegisterPage';
-
-export default RegisterPage;
+export { RegisterPage as default, metadata } from '@/pages/RegisterPage';

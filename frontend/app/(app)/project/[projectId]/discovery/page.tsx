@@ -1,3 +1,1 @@
-import DiscoveryPage from '@/pages/project/DiscoveryPage';
-
-export default DiscoveryPage;
+export { DiscoveryPage as default, metadata } from '@/pages/project/DiscoveryPage';

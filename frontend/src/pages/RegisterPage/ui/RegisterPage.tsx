@@ -1,7 +1,12 @@
-import React from 'react';
+import { Metadata } from 'next';
+
+const metadata: Metadata = {
+	title: 'Registro - KOSMO',
+	description: '',
+};
 
 const RegisterPage = () => {
 	return <div>RegisterPage</div>;
 };
 
-export default RegisterPage;
+export { RegisterPage, metadata };
