@@ -26,7 +26,6 @@ from kosmo.infrastructure.security import (
     JoseJwtIssuer,
     JoseJwtVerifier,
     JwtSettings,
-    load_signing_keys,
 )
 
 
@@ -47,10 +46,9 @@ class AuthComponents:
 
 
 def build_auth_components(settings: Settings) -> AuthComponents:
-    keys = load_signing_keys(
-        private_key_path=settings.jwt_private_key_path,
-        public_key_path=settings.jwt_public_key_path,
-    )
+    assert settings.jwt_private_key_pem is not None
+    assert settings.jwt_public_key_pem is not None
+
     jwt_settings = JwtSettings(
         algorithm=settings.jwt_algorithm,
         issuer=settings.jwt_issuer,
@@ -58,8 +56,14 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         access_ttl_seconds=settings.jwt_access_ttl_seconds,
         refresh_ttl_seconds=settings.jwt_refresh_ttl_seconds,
     )
-    issuer = JoseJwtIssuer(private_key_pem=keys.private_pem, settings=jwt_settings)
-    verifier = JoseJwtVerifier(public_key_pem=keys.public_pem, settings=jwt_settings)
+    issuer = JoseJwtIssuer(
+        private_key_pem=settings.jwt_private_key_pem.get_secret_value(),
+        settings=jwt_settings,
+    )
+    verifier = JoseJwtVerifier(
+        public_key_pem=settings.jwt_public_key_pem.get_secret_value(),
+        settings=jwt_settings,
+    )
 
     redis: Redis = Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
         settings.redis_url.get_secret_value()

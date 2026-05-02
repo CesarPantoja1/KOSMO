@@ -1,6 +1,7 @@
-from typing import Literal
+from pathlib import Path
+from typing import Literal, Self
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,9 +17,11 @@ class Settings(BaseSettings):
     env: Literal["development", "staging", "production"]
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
-    # Secretos criptográficos
-    jwt_private_key_path: str
-    jwt_public_key_path: str
+    # Secretos criptográficos — contenido PEM (prioridad) o rutas como fallback
+    jwt_private_key_pem: SecretStr | None = None
+    jwt_public_key_pem: SecretStr | None = None
+    jwt_private_key_path: str | None = None
+    jwt_public_key_path: str | None = None
     fernet_master_key: SecretStr
 
     # JWT
@@ -51,6 +54,23 @@ class Settings(BaseSettings):
     logfire_token: SecretStr | None = None
     otel_service_name: str = "kosmo-backend"
     otel_environment: str = "development"
+
+    @model_validator(mode="after")
+    def _resolve_signing_keys(self) -> Self:
+        """Resuelve el contenido PEM: variable de entorno → lectura de archivo."""
+        if self.jwt_private_key_pem is None:
+            if self.jwt_private_key_path is None:
+                raise ValueError("Debe configurar JWT_PRIVATE_KEY_PEM o JWT_PRIVATE_KEY_PATH")
+            pem = Path(self.jwt_private_key_path).read_text(encoding="utf-8")
+            self.jwt_private_key_pem = SecretStr(pem)
+
+        if self.jwt_public_key_pem is None:
+            if self.jwt_public_key_path is None:
+                raise ValueError("Debe configurar JWT_PUBLIC_KEY_PEM o JWT_PUBLIC_KEY_PATH")
+            pem = Path(self.jwt_public_key_path).read_text(encoding="utf-8")
+            self.jwt_public_key_pem = SecretStr(pem)
+
+        return self
 
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
