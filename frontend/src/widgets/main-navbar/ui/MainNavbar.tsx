@@ -157,17 +157,14 @@ export function MainNavbar({
 					{avatarOpen && (
 						<div className='anim-fade-in absolute right-0 top-[120%] z-50 min-w-44 overflow-hidden rounded-md border border-border-default bg-bg-base shadow-lg'>
 							<DropdownItem
-								icon='key'
 								label='Bóveda de API Keys'
 								onClick={handleOpenApiKeys}
 							/>
 							<DropdownItem
-								icon='settings'
 								label='Configuración'
 								onClick={() => setAvatarOpen(false)}
 							/>
 							<DropdownItem
-								icon='log-out'
 								label='Cerrar sesión'
 								onClick={() => setAvatarOpen(false)}
 							/>
@@ -180,12 +177,11 @@ export function MainNavbar({
 }
 
 interface DropdownItemProps {
-	icon: string;
 	label: string;
 	onClick: () => void;
 }
 
-function DropdownItem({ icon, label, onClick }: DropdownItemProps) {
+function DropdownItem({ label, onClick }: DropdownItemProps) {
 	return (
 		<button
 			className='btn btn-ghost'
@@ -201,7 +197,6 @@ function DropdownItem({ icon, label, onClick }: DropdownItemProps) {
 			}}
 			onClick={onClick}
 		>
-			{/* <Icon name={icon} size={13} color='var(--text-secondary)' /> */}
 			{label}
 		</button>
 	);

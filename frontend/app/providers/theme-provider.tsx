@@ -1,38 +1,99 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import {
+	createContext,
+	ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useSyncExternalStore,
+} from 'react';
+
+type Theme = 'light' | 'dark';
 
 interface ThemeContextType {
-	theme: 'light' | 'dark';
+	theme: Theme;
 	toggleTheme: () => void;
-	setTheme: (theme: 'light' | 'dark') => void;
+	setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const THEME_STORAGE_KEY = 'theme';
+const THEME_CHANGE_EVENT = 'kosmo-theme-change';
+
+function isTheme(value: string | null): value is Theme {
+	return value === 'light' || value === 'dark';
+}
+
+function getStoredTheme(): Theme | null {
+	if (typeof window === 'undefined') {
+		return null;
+	}
+
+	const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+	return isTheme(storedTheme) ? storedTheme : null;
+}
+
+function getSystemTheme(): Theme {
+	if (typeof window === 'undefined') {
+		return 'light';
+	}
+
+	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getThemeSnapshot(): Theme {
+	return getStoredTheme() ?? getSystemTheme();
+}
+
+function getServerThemeSnapshot(): Theme {
+	return 'light';
+}
+
+function subscribeToThemeChanges(onStoreChange: () => void) {
+	if (typeof window === 'undefined') {
+		return () => {};
+	}
+
+	const handleStorage = (event: StorageEvent) => {
+		if (event.key === THEME_STORAGE_KEY) {
+			onStoreChange();
+		}
+	};
+	const handleThemeChange = () => onStoreChange();
+	const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+	const handleSystemThemeChange = () => {
+		if (!getStoredTheme()) {
+			onStoreChange();
+		}
+	};
+
+	window.addEventListener('storage', handleStorage);
+	window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+	mediaQuery.addEventListener('change', handleSystemThemeChange);
+
+	return () => {
+		window.removeEventListener('storage', handleStorage);
+		window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+		mediaQuery.removeEventListener('change', handleSystemThemeChange);
+	};
+}
+
+function persistTheme(theme: Theme) {
+	localStorage.setItem(THEME_STORAGE_KEY, theme);
+	window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-	const [theme, setThemeState] = useState<'light' | 'dark'>('light');
-	const [mounted, setMounted] = useState(false);
-
-	// Initialize theme from localStorage or system preference
-	useEffect(() => {
-		const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-
-		if (storedTheme) {
-			setThemeState(storedTheme);
-		} else {
-			// Default to light theme or detect from system
-			const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-			setThemeState(prefersDark ? 'dark' : 'light');
-		}
-
-		setMounted(true);
-	}, []);
+	const theme = useSyncExternalStore(
+		subscribeToThemeChanges,
+		getThemeSnapshot,
+		getServerThemeSnapshot,
+	);
 
 	// Apply theme to DOM
 	useEffect(() => {
-		if (!mounted) return;
-
 		const html = document.documentElement;
 
 		if (theme === 'dark') {
@@ -42,28 +103,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 			html.removeAttribute('data-theme');
 			html.classList.remove('dark');
 		}
+	}, [theme]);
 
-		localStorage.setItem('theme', theme);
-	}, [theme, mounted]);
+	const toggleTheme = useCallback(() => {
+		persistTheme(theme === 'light' ? 'dark' : 'light');
+	}, [theme]);
 
-	const toggleTheme = () => {
-		setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
-	};
+	const setTheme = useCallback((newTheme: Theme) => {
+		persistTheme(newTheme);
+	}, []);
 
-	const setTheme = (newTheme: 'light' | 'dark') => {
-		setThemeState(newTheme);
-	};
+	const value = useMemo(() => ({ theme, toggleTheme, setTheme }), [theme, toggleTheme, setTheme]);
 
-	// Prevent hydration mismatch by not rendering until mounted
-	if (!mounted) {
-		return <>{children}</>;
-	}
-
-	return (
-		<ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-			{children}
-		</ThemeContext.Provider>
-	);
+	return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {
