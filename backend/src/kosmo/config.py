@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +54,21 @@ class Settings(BaseSettings):
     logfire_token: SecretStr | None = None
     otel_service_name: str = "kosmo-backend"
     otel_environment: str = "development"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_async_postgres_url(cls, value: object) -> object:
+        if isinstance(value, SecretStr):
+            raw_value = value.get_secret_value()
+        elif isinstance(value, str):
+            raw_value = value
+        else:
+            return value
+
+        if raw_value.startswith("postgresql://"):
+            return raw_value.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        return value
 
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:

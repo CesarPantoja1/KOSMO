@@ -1,8 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "bun run build",
   "installCommand": "bun install",
   "framework": "nextjs",
   "nodeVersion": "20.x",
+  "git": {
+    "deploymentEnabled": false
+  },
   "env": {
     "NEXT_PUBLIC_APP_NAME": "@NEXT_PUBLIC_APP_NAME",
     "NEXT_PUBLIC_APP_ENV": "@NEXT_PUBLIC_APP_ENV",
