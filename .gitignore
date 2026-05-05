@@ -40,3 +40,29 @@ yarn-error.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Virtualenv y caché
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Secretos y entorno local
+.env
+.env.local
+.secrets/
+
+# Node
+node_modules/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/

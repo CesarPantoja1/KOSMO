@@ -1,0 +1,11 @@
+[importlinter]
+root_package = kosmo
+
+[importlinter:contract:layers]
+name = Layered architecture
+type = layers
+layers =
+    kosmo.infrastructure
+    kosmo.application
+    kosmo.domain
+    kosmo.contracts

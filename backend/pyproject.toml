@@ -1,0 +1,75 @@
+[project]
+name = "kosmo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "gianf", email = "105449325+GianfrancoPupiales@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.18.4",
+    "argon2-cffi>=25.1.0",
+    "asyncpg>=0.31.0",
+    "cryptography>=46.0.7",
+    "fastapi>=0.136.1",
+    "jsonschema>=4.26.0",
+    "langgraph>=1.1.9",
+    "langgraph-checkpoint-postgres>=3.0.5",
+    "logfire[fastapi,sqlalchemy,redis]>=4.32.1",
+    "motor>=3.7.1",
+    "pgvector>=0.4.2",
+    "pydantic>=2.7",
+    "pydantic-ai>=1.86.1",
+    "pydantic-settings>=2.14.0",
+    "python-jose[cryptography]>=3.5.0",
+    "redis[hiredis]>=7.4.0",
+    "ruamel-yaml>=0.19.1",
+    "sqlalchemy[asyncio]>=2.0.49",
+    "structlog>=25.5.0",
+    "uvicorn[standard]>=0.46.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "hypothesis>=6.152.1",
+    "import-linter>=2.11",
+    "pre-commit>=4.6.0",
+    "pyright>=1.1.409",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.11",
+    "schemathesis>=4.15.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "T20", "SIM", "ARG"]
+
+[tool.pyright]
+include = ["src"]
+strict = ["src/kosmo"]
+exclude = [
+    "**/__pycache__",
+    "**/.venv",
+]
+pythonVersion = "3.13"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "unit: puras, sin IO",
+    "integration: testcontainers PG/Mongo/Redis",
+    "contract: schemathesis contra OpenAPI",
+    "property: hypothesis sobre invariantes",
+]
+addopts = "--cov=kosmo --cov-report=xml --cov-report=term-missing --cov-fail-under=60"

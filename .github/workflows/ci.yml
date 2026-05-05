@@ -11,12 +11,87 @@ on:
       - develop
 
 jobs:
-  ci:
+  backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      ENV: development
+      LOG_LEVEL: INFO
+      JWT_PRIVATE_KEY_PATH: ./tmp/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: ./tmp/jwt_public.pem
+      FERNET_MASTER_KEY: gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
+      DATABASE_URL: postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_dev
+      MONGO_URL: mongodb://localhost:27017/kosmo_agent_memory
+      REDIS_URL: redis://localhost:6379/0
+      LLM_PROVIDER: noop
+      LLM_MODEL: noop
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Placeholder for future setup
-        run: echo "CI pipeline initialized successfully."
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run Ruff
+        run: uv run ruff check src tests
+
+      - name: Run Pyright
+        run: uv run pyright
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit --cov=kosmo --cov-fail-under=0
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.10'
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/frontend/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/bun.lock') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx', 'frontend/**/*.css') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/bun.lock') }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run ESLint
+        run: bun run lint
+
+      - name: Run tests
+        run: bun run test -- --run --passWithNoTests
+
+      - name: Run build
+        run: bun run build

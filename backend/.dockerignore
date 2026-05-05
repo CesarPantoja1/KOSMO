@@ -1,0 +1,69 @@
+# ==========================================================================
+# .dockerignore — backend
+# ==========================================================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Entornos virtuales y caches de Python
+.venv/
+venv/
+env/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.python-version
+
+# Caches de herramientas
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.import_linter_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Tests (no se incluyen en imagen de producción)
+tests/
+
+# Secretos y entorno local — NUNCA en la imagen
+.env
+.env.*
+!.env.example
+.secrets/
+*.pem
+*.key
+
+# Artefactos de empaquetado
+build/
+dist/
+
+# IDE / editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker / compose (no se necesitan dentro de la imagen)
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Misc
+*.md
+!README.md

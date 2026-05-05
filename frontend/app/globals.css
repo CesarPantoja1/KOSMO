@@ -1,0 +1,287 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@import 'tailwindcss';
+
+@theme {
+	--color-bg-base: hsl(0 0% 100% / <alpha-value>);
+	--color-bg-subtle: hsl(210 40% 98% / <alpha-value>);
+	--color-bg-elevated: hsl(0 0% 100% / <alpha-value>);
+
+	--color-text-primary: hsl(217 33% 7% / <alpha-value>);
+	--color-text-secondary: hsl(213 13% 33% / <alpha-value>);
+	--color-text-tertiary: hsl(220 9% 66% / <alpha-value>);
+
+	--color-border-default: hsl(213 15% 91% / <alpha-value>);
+	--color-border-strong: hsl(213 14% 84% / <alpha-value>);
+
+	--color-accent-primary: hsl(217 98% 54% / <alpha-value>);
+	--color-accent-primary-hover: hsl(217 100% 42% / <alpha-value>);
+
+	--color-status-approved: hsl(142 72% 51% / <alpha-value>);
+	--color-status-approved-bg: hsl(142 71% 97% / <alpha-value>);
+	--color-status-stale: hsl(43 74% 51% / <alpha-value>);
+	--color-status-stale-bg: hsl(48 97% 99% / <alpha-value>);
+	--color-status-error: hsl(0 90% 56% / <alpha-value>);
+	--color-status-error-bg: hsl(0 93% 97% / <alpha-value>);
+	--color-status-info: hsl(187 92% 38% / <alpha-value>);
+	--color-status-info-bg: hsl(189 100% 97% / <alpha-value>);
+	--color-status-generating: hsl(259 94% 51% / <alpha-value>);
+	--color-status-generating-bg: hsl(264 100% 97% / <alpha-value>);
+
+	--radius-sm: 6px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+	--shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06);
+	--shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.14), 0 4px 8px rgba(0, 0, 0, 0.06);
+
+	--topbar-h: 56px;
+}
+
+:root {
+	--color-bg-base: hsl(0 0% 100%);
+	--color-bg-subtle: hsl(210 40% 98%);
+	--color-bg-elevated: hsl(0 0% 100%);
+
+	--color-text-primary: hsl(217 33% 7%);
+	--color-text-secondary: hsl(213 13% 33%);
+	--color-text-tertiary: hsl(220 9% 66%);
+
+	--color-border-default: hsl(213 15% 91%);
+	--color-border-strong: hsl(213 14% 84%);
+
+	--color-accent-primary: hsl(217 98% 54%);
+	--color-accent-primary-hover: hsl(217 100% 42%);
+
+	--color-status-approved: hsl(142 72% 51%);
+	--color-status-approved-bg: hsl(142 71% 97%);
+	--color-status-stale: hsl(43 74% 51%);
+	--color-status-stale-bg: hsl(48 97% 99%);
+	--color-status-error: hsl(0 90% 56%);
+	--color-status-error-bg: hsl(0 93% 97%);
+	--color-status-info: hsl(187 92% 38%);
+	--color-status-info-bg: hsl(189 100% 97%);
+	--color-status-generating: hsl(259 94% 51%);
+	--color-status-generating-bg: hsl(264 100% 97%);
+}
+
+[data-theme='dark'] {
+	--color-bg-base: hsl(217 33% 8%);
+	--color-bg-subtle: hsl(217 27% 14%);
+	--color-bg-elevated: hsl(217 33% 12%);
+
+	--color-text-primary: hsl(213 14% 97%);
+	--color-text-secondary: hsl(213 13% 84%);
+	--color-text-tertiary: hsl(220 9% 66%);
+
+	--color-border-default: hsl(217 18% 24%);
+	--color-border-strong: hsl(217 16% 32%);
+
+	--color-accent-primary: hsl(217 98% 54%);
+	--color-accent-primary-hover: hsl(217 100% 64%);
+
+	--color-status-approved: hsl(142 71% 45%);
+	--color-status-approved-bg: hsl(142 64% 16%);
+	--color-status-stale: hsl(43 74% 55%);
+	--color-status-stale-bg: hsl(43 80% 18%);
+	--color-status-error: hsl(0 84% 60%);
+	--color-status-error-bg: hsl(0 80% 22%);
+	--color-status-info: hsl(187 92% 48%);
+	--color-status-info-bg: hsl(187 80% 20%);
+	--color-status-generating: hsl(259 100% 60%);
+	--color-status-generating-bg: hsl(259 84% 20%);
+}
+
+body {
+	font-family:
+		'Inter',
+		system-ui,
+		-apple-system,
+		sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	color: hsl(var(--color-text-primary));
+	background: hsl(var(--color-bg-base));
+	-webkit-font-smoothing: antialiased;
+	background-color: red;
+}
+
+*:focus-visible {
+	outline: 2px solid hsl(var(--color-accent-primary));
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+/* Buttons */
+@layer components {
+	.btn {
+		@apply inline-flex items-center gap-1.5 text-sm font-medium rounded-md border border-transparent cursor-pointer transition-all whitespace-nowrap;
+	}
+
+	.btn-primary {
+		@apply h-10 px-4 text-white border;
+		background-color: hsl(var(--color-accent-primary));
+		border-color: hsl(var(--color-accent-primary));
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background-color: hsl(var(--color-accent-primary-hover));
+		border-color: hsl(var(--color-accent-primary-hover));
+	}
+
+	.btn-secondary {
+		@apply h-9 px-3.5 border transition-colors;
+		background-color: hsl(var(--color-bg-base));
+		color: hsl(var(--color-text-primary));
+		border-color: hsl(var(--color-border-default));
+	}
+
+	.btn-secondary:hover:not(:disabled) {
+		background-color: hsl(var(--color-bg-subtle));
+	}
+
+	.btn-ghost {
+		@apply h-8 px-2.5 border-transparent transition-colors;
+		background-color: transparent;
+		color: hsl(var(--color-text-secondary));
+	}
+
+	.btn-ghost:hover:not(:disabled) {
+		background-color: hsl(var(--color-bg-subtle));
+		color: hsl(var(--color-text-primary));
+	}
+
+	.btn-destructive {
+		@apply h-10 px-4 text-white border;
+		background-color: hsl(var(--color-status-error));
+		border-color: hsl(var(--color-status-error));
+	}
+
+	.btn-destructive:hover:not(:disabled) {
+		background-color: hsl(0 90% 46%);
+		border-color: hsl(0 90% 46%);
+	}
+
+	.btn:disabled {
+		@apply opacity-45 cursor-not-allowed;
+	}
+
+	/* Inputs */
+	.input {
+		@apply h-10 px-3 rounded-md text-sm w-full transition-colors;
+		border: 1px solid hsl(var(--color-border-default));
+		color: hsl(var(--color-text-primary));
+		background-color: hsl(var(--color-bg-base));
+		font-family: inherit;
+	}
+
+	.input::placeholder {
+		color: hsl(var(--color-text-tertiary));
+	}
+
+	.input:focus {
+		outline: none;
+		border-color: hsl(var(--color-accent-primary));
+		box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+	}
+
+	.input.error {
+		border-color: hsl(var(--color-status-error));
+	}
+
+	.textarea {
+		@apply px-3 py-2.5 rounded-md text-sm w-full transition-colors;
+		border: 1px solid hsl(var(--color-border-default));
+		color: hsl(var(--color-text-primary));
+		background-color: hsl(var(--color-bg-base));
+		font-family: inherit;
+		resize: vertical;
+	}
+
+	.textarea:focus {
+		outline: none;
+		border-color: hsl(var(--color-accent-primary));
+		box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+	}
+
+	/* Utilities */
+	.mono {
+		@apply font-mono;
+	}
+
+	.chip {
+		@apply inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium leading-5;
+	}
+
+	.shimmer-bg {
+		@apply rounded-md;
+		background: linear-gradient(
+			90deg,
+			hsl(var(--color-bg-subtle)) 25%,
+			#e8eaed 50%,
+			hsl(var(--color-bg-subtle)) 75%
+		);
+		background-size: 400px 100%;
+		animation: shimmer 1.4s infinite;
+	}
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+::-webkit-scrollbar-thumb {
+	background: hsl(var(--color-border-default));
+	border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: hsl(var(--color-border-strong));
+}
+
+/* Animations Layer */
+@layer utilities {
+	.anim-fade-in {
+		animation: fade-in 0.2s ease forwards;
+	}
+
+	.anim-slide-down {
+		animation: slide-down 0.15s ease forwards;
+	}
+
+	.anim-fade-scale {
+		animation: fade-scale-in 0.2s ease forwards;
+	}
+
+	.anim-node-appear {
+		animation: node-appear 0.3s ease forwards;
+	}
+
+	.anim-spin {
+		animation: spin 1s linear infinite;
+	}
+
+	.anim-wobble {
+		animation: wobble 0.5s ease-in-out;
+	}
+}
+
+/* Additional Keyframes for utilities */
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes draw-check {
+	from {
+		stroke-dashoffset: 24;
+	}
+	to {
+		stroke-dashoffset: 0;
+	}
+}
