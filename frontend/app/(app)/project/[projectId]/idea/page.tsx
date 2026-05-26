@@ -1,3 +1,1 @@
-import IdeaPage from '@/pages/project/IdeaPage';
-
-export default IdeaPage;
+export { IdeaPage as default, metadata } from '@/pages/project/IdeaPage';

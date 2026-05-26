@@ -1,17 +1,37 @@
 name: Continuous Deployment
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Continuous Integration
+    types:
+      - completed
     branches:
-      - main 
+      - main
       - develop
+
+concurrency:
+  group: cd-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   deploy-frontend:
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'
+      }}
     runs-on: ubuntu-latest
+    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'preview' }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -21,23 +41,63 @@ jobs:
       - name: Install Vercel CLI
         run: bun install -g vercel
 
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: ./frontend
+      - name: Validate Vercel secrets
+        run: |
+          test -n "$VERCEL_TOKEN" || (echo "::error::Missing VERCEL_TOKEN secret" && exit 1)
+          test -n "$VERCEL_ORG_ID" || (echo "::error::Missing VERCEL_ORG_ID secret" && exit 1)
+          test -n "$VERCEL_PROJECT_ID" || (echo "::error::Missing VERCEL_PROJECT_ID secret" && exit 1)
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Build Project Artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy frontend to Vercel
+        run: |
+          if [ "$DEPLOY_BRANCH" = "main" ]; then
+            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+            vercel build --prod --token="$VERCEL_TOKEN"
+            vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          else
+            vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+            vercel build --token="$VERCEL_TOKEN"
+            vercel deploy --prebuilt --token="$VERCEL_TOKEN"
+          fi
         working-directory: ./frontend
         env:
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: ./frontend
+  deploy-backend:
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'
+      }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'staging' }}
+
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            if [ "$DEPLOY_BRANCH" = "develop" ]; then
+              echo "::notice::Missing RENDER_STAGING_DEPLOY_HOOK_URL; skipping staging backend deploy."
+              exit 0
+            fi
+
+            echo "::error::Missing RENDER_DEPLOY_HOOK_URL secret"
+            exit 1
+          fi
+
+          separator="?"
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            *\?*) separator="&" ;;
+          esac
+
+          curl --fail --request POST "${RENDER_DEPLOY_HOOK_URL}${separator}ref=${DEPLOY_SHA}"
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          RENDER_DEPLOY_HOOK_URL: ${{ github.event.workflow_run.head_branch == 'main' && secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}

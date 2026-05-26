@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, KeyboardEvent } from 'react';
+import { useState, KeyboardEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import type { UmlNode as UmlFlowNode, UmlItem, Visibility } from '../model/types';
 
@@ -9,17 +9,17 @@ interface UmlRowProps {
 	nodeId: string;
 }
 
+function formatItemText(item: UmlItem, isMethod: boolean) {
+	return isMethod
+		? `${item.visibility} ${item.name}(${item.params || ''})${item.type ? `: ${item.type}` : ''}`
+		: `${item.visibility} ${item.name}${item.type ? `: ${item.type}` : ''}`;
+}
+
 export function ItemNode({ item, isMethod = false, nodeId }: UmlRowProps) {
 	const { setNodes } = useReactFlow<UmlFlowNode>();
 	const [isEditing, setIsEditing] = useState(false);
-	const [text, setText] = useState('');
-
-	useEffect(() => {
-		const displayText = isMethod
-			? `${item.visibility} ${item.name}(${item.params || ''})${item.type ? `: ${item.type}` : ''}`
-			: `${item.visibility} ${item.name}${item.type ? `: ${item.type}` : ''}`;
-		setText(displayText);
-	}, [item, isMethod]);
+	const [draftText, setDraftText] = useState('');
+	const displayText = formatItemText(item, isMethod);
 
 	const listKey = isMethod ? 'methods' : 'attributes';
 
@@ -43,13 +43,18 @@ export function ItemNode({ item, isMethod = false, nodeId }: UmlRowProps) {
 		);
 	};
 
+	const handleStartEditing = () => {
+		setDraftText(displayText);
+		setIsEditing(true);
+	};
+
 	const handleSave = () => {
 		setIsEditing(false);
 		let newVisibility = item.visibility;
 		let newName = item.name;
 		let newType = item.type;
 		let newParams = item.params;
-		let currentText = text.trim();
+		let currentText = draftText.trim();
 
 		if (['+', '-', '#'].includes(currentText[0])) {
 			newVisibility = currentText[0] as Visibility;
@@ -107,8 +112,8 @@ export function ItemNode({ item, isMethod = false, nodeId }: UmlRowProps) {
 				<input
 					autoFocus
 					className='w-full text-sm font-mono text-blue-900 bg-blue-50 border-2 border-dashed border-blue-400 outline-none rounded'
-					value={text}
-					onChange={(e) => setText(e.target.value)}
+					value={draftText}
+					onChange={(e) => setDraftText(e.target.value)}
 					onBlur={handleSave}
 					onKeyDown={handleKeyDown}
 				/>
@@ -118,10 +123,10 @@ export function ItemNode({ item, isMethod = false, nodeId }: UmlRowProps) {
 
 	return (
 		<div
-			onDoubleClick={() => setIsEditing(true)}
+			onDoubleClick={handleStartEditing}
 			className='group relative px-3 py-1 text-sm font-mono text-gray-800 hover:bg-gray-100 cursor-text transition-colors duration-150'
 		>
-			<span className={item.isStatic ? 'underline' : ''}>{text}</span>
+			<span className={item.isStatic ? 'underline' : ''}>{displayText}</span>
 
 			{/* 🗑️ BOTÓN DE ELIMINAR (Solo visible al hacer hover en la fila) */}
 			<button

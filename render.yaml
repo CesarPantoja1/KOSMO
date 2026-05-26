@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: kosmo-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: OTEL_SERVICE_NAME
+        value: kosmo-backend
+      - key: OTEL_ENVIRONMENT
+        value: production
+      - key: RUN_MIGRATIONS
+        value: "1"
+      - key: LLM_PROVIDER
+        value: noop
+      - key: LLM_MODEL
+        value: noop
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_PRIVATE_KEY_PEM
+        sync: false
+      - key: JWT_PUBLIC_KEY_PEM
+        sync: false
+      - key: FERNET_MASTER_KEY
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LOGFIRE_TOKEN
+        sync: false

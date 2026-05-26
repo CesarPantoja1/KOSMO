@@ -1,3 +1,1 @@
-import ModelingPage from '@/pages/project/ModelingPage';
-
-export default ModelingPage;
+export { ModelingPage as default, metadata } from '@/pages/project/ModelingPage';

@@ -1,5 +1,12 @@
-import React from 'react';
+import { Metadata } from 'next';
 
-export const LoginPage = () => {
+const metadata: Metadata = {
+	title: 'Iniciar sesión - KOSMO',
+	description: '',
+};
+
+const LoginPage = () => {
 	return <div>LoginPage</div>;
 };
+
+export { LoginPage, metadata };

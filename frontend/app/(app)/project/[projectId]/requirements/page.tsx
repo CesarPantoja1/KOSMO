@@ -1,3 +1,1 @@
-import RequirementsPage from '@/pages/project/RequirementsPage';
-
-export default RequirementsPage;
+export { RequirementsPage as default, metadata } from '@/pages/project/RequirementsPage';

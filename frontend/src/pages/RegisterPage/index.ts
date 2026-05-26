@@ -1,3 +1,1 @@
-import RegisterPage from './ui/RegisterPage';
-
-export default RegisterPage;
+export { RegisterPage, metadata } from './ui/RegisterPage';

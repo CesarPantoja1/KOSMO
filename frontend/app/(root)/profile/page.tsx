@@ -1,3 +1,1 @@
-import ProfilePage from '@/pages/ProfilePage';
-
-export default ProfilePage;
+export { ProfilePage as default, metadata } from '@/pages/ProfilePage';
