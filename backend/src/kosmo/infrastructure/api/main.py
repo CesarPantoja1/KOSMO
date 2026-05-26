@@ -215,7 +215,7 @@ def _custom_openapi() -> dict[str, Any]:
 
     # Registrar HttpErrorResponse en components/schemas
     http_error_schema = HttpErrorResponse.model_json_schema()
-    
+
     components: dict[str, Any] = schema.setdefault("components", {})
     schemas: dict[str, Any] = components.setdefault("schemas", {})
     schemas["HttpErrorResponse"] = http_error_schema

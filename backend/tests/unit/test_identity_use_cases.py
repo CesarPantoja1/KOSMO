@@ -14,6 +14,7 @@ from kosmo.application.auth import (  # noqa: E402
     IssueTokenPair,
     RegisterUser,
 )
+from kosmo.contracts.audit import AuditEvent  # noqa: E402
 from kosmo.contracts.auth import (  # noqa: E402
     AccountLockedError,
     AuthorizationCode,
@@ -156,6 +157,14 @@ class InMemoryLoginAttemptStore:
         return _LOCKOUT_SECONDS if count >= _MAX_FAILURES else None
 
 
+class InMemoryAuditEventSink:
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    async def record(self, event: AuditEvent) -> None:
+        self.events.append(event)
+
+
 def _hasher() -> Argon2idPasswordHasher:
     return Argon2idPasswordHasher(Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4))
 
@@ -178,7 +187,8 @@ def _issuer_pair() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
 async def test_register_creates_user_with_argon2_hash() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
 
     user = await register.execute(email="alice@example.com", password="password-12345")
 
@@ -190,7 +200,9 @@ async def test_register_creates_user_with_argon2_hash() -> None:
 @pytest.mark.asyncio
 async def test_register_rejects_duplicate_email() -> None:
     repo = InMemoryUserRepository()
-    register = RegisterUser(user_repository=repo, password_hasher=_hasher())
+    register = RegisterUser(
+        user_repository=repo, password_hasher=_hasher(), audit_sink=InMemoryAuditEventSink()
+    )
     await register.execute(email="alice@example.com", password="password-12345")
 
     with pytest.raises(UserAlreadyExistsError):
@@ -202,12 +214,14 @@ async def test_authorize_with_valid_credentials_emits_code() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
     code_store = InMemoryAuthorizationCodeStore()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
         login_attempt_store=InMemoryLoginAttemptStore(),
+        audit_sink=audit_sink,
     )
 
     await register.execute(email="bob@example.com", password="password-12345")
@@ -230,12 +244,14 @@ async def test_authorize_with_wrong_password_raises() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
     code_store = InMemoryAuthorizationCodeStore()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
         login_attempt_store=InMemoryLoginAttemptStore(),
+        audit_sink=audit_sink,
     )
     await register.execute(email="bob@example.com", password="password-12345")
 
@@ -253,12 +269,14 @@ async def test_authorize_records_failure_on_bad_credentials() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
     attempt_store = InMemoryLoginAttemptStore()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=InMemoryAuthorizationCodeStore(),
         login_attempt_store=attempt_store,
+        audit_sink=audit_sink,
     )
     await register.execute(email="dave@example.com", password="password-12345")
 
@@ -279,12 +297,14 @@ async def test_authorize_locks_account_after_max_failures() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
     attempt_store = InMemoryLoginAttemptStore()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=InMemoryAuthorizationCodeStore(),
         login_attempt_store=attempt_store,
+        audit_sink=audit_sink,
     )
     await register.execute(email="eve@example.com", password="password-12345")
     challenge = s256_challenge("verifier" * 8)
@@ -314,12 +334,14 @@ async def test_authorize_clears_attempts_on_successful_login() -> None:
     hasher = _hasher()
     attempt_store = InMemoryLoginAttemptStore()
     code_store = InMemoryAuthorizationCodeStore()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
         login_attempt_store=attempt_store,
+        audit_sink=audit_sink,
     )
     await register.execute(email="frank@example.com", password="password-12345")
     challenge = s256_challenge("verifier" * 8)
@@ -352,13 +374,15 @@ async def test_exchange_consumes_code_and_emits_pair() -> None:
     code_store = InMemoryAuthorizationCodeStore()
     token_store = InMemoryStore()
     issuer, _ = _issuer_pair()
+    audit_sink = InMemoryAuditEventSink()
 
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
         login_attempt_store=InMemoryLoginAttemptStore(),
+        audit_sink=audit_sink,
     )
     issue = IssueTokenPair(issuer=issuer, revocation_store=token_store)
     exchange = ExchangeAuthorizationCode(
@@ -394,12 +418,14 @@ async def test_exchange_rejects_mismatched_verifier() -> None:
     code_store = InMemoryAuthorizationCodeStore()
     token_store = InMemoryStore()
     issuer, _ = _issuer_pair()
-    register = RegisterUser(user_repository=repo, password_hasher=hasher)
+    audit_sink = InMemoryAuditEventSink()
+    register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
     authorize = AuthorizeWithPkce(
         user_repository=repo,
         password_hasher=hasher,
         authorization_code_store=code_store,
         login_attempt_store=InMemoryLoginAttemptStore(),
+        audit_sink=audit_sink,
     )
     exchange = ExchangeAuthorizationCode(
         authorization_code_store=code_store,
