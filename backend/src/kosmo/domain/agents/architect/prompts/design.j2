@@ -1,0 +1,53 @@
+Eres un arquitecto de software experto en diseño orientado a dominio.
+
+## Requisitos de entrada
+{% for req in requirements %}
+- **{{ req.id }}** ({{ req.pattern }}): {{ req.source_statement }}
+{% endfor %}
+
+{% if constitution %}
+## Constitución
+Producto: {{ constitution.product }}
+Tecnología: {{ constitution.tech }}
+Estructura: {{ constitution.structure }}
+{% endif %}
+
+## Instrucciones
+1. Analiza los requisitos y extrae las clases del dominio.
+2. Define atributos y operaciones para cada clase.
+3. Establece relaciones entre clases (association, aggregation, composition, inheritance).
+4. Define fronteras arquitectónicas (boundaries) agrupando clases relacionadas.
+5. Cada frontera debe tener un contrato (métodos públicos expuestos).
+
+## Formato de salida
+Responde con un JSON:
+```json
+{
+  "classes": [
+    {
+      "id": "cls-1",
+      "name": "UserService",
+      "attributes": [{"name": "repository", "type": "UserRepository"}],
+      "operations": [{"name": "register", "return_type": "User", "parameters": [{"name": "email", "type": "str"}]}]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel-1",
+      "source_class_id": "cls-1",
+      "target_class_id": "cls-2",
+      "relationship_type": "association",
+      "source_cardinality": "1",
+      "target_cardinality": "1",
+      "label": "uses"
+    }
+  ],
+  "boundaries": [
+    {
+      "name": "auth",
+      "owned_modules": ["auth.service", "auth.repository"],
+      "contract": {"name": "AuthBoundary", "methods": ["register", "authenticate"]}
+    }
+  ]
+}
+```

@@ -1,0 +1,1066 @@
+{
+  "info": {
+    "name": "KOSMO SDD - Pipeline Completo",
+    "description": "Flujo completo de Spec-Driven Development en KOSMO.\n\nIncluye: Auth PKCE, Proyectos, Descubrimiento (9 secciones), Features (sugerir desde idea del usuario + creacion unitaria + IA devuelve sugerencias sin persistir), Requisitos EARS (6 categorias, IDs secuenciales, Discovery completo en prompt) y pipeline SDD.\n\nReglas:\n- 4.1: El usuario escribe una idea. La IA devuelve titulo formal + descripcion (NO persiste). Usar 4.2 para confirmar.\n- Features solo se pueden editar/mejorar en estado Borrador (409 si estan Aprobadas)\n- Requisitos solo se generan para features Aprobadas (409 si estan en Borrador)\n- PUT de requisitos solo actualiza categorias enviadas; el resto se preserva.\n- POST /features/generate y /suggest-from-idea retornan sugerencias NO persistidas. Usar 4.2 para crear una a una.\n\nEjecutar las requests en orden estricto dentro de cada carpeta.\n\nPre-requisitos:\n- Base URL: http://localhost:8000\n- Servidor corriendo: uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- Docker con PostgreSQL y Redis corriendo\n- .env con LLM_PROVIDER=deepseek o noop",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "email", "value": "demo@kosmo.app", "type": "string" },
+    { "key": "password", "value": "Demo1234!Secure", "type": "string" },
+    { "key": "spec_id", "value": "", "type": "string" },
+    { "key": "project_id", "value": "", "type": "string" },
+    { "key": "feature_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth (PKCE)",
+      "description": "Flujo de autenticacion completo con PKCE. Ejecutar en orden: Register -> Authorize -> Token.",
+      "item": [
+        {
+          "name": "1.1 Registrar usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) {",
+                  "    pm.collectionVariables.set(key, value);",
+                  "    if (pm.environment && pm.environment.name) {",
+                  "        pm.environment.set(key, value);",
+                  "    }",
+                  "}",
+                  "pm.test('201 (creado) o 409 (ya existe)', function () {",
+                  "    pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    var body = pm.response.json();",
+                  "    setVar('user_id', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Autorizar (PKCE) - Obtener authorization_code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) {",
+                  "    pm.collectionVariables.set(key, value);",
+                  "    if (pm.environment && pm.environment.name) {",
+                  "        pm.environment.set(key, value);",
+                  "    }",
+                  "}",
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json();",
+                  "setVar('authorization_code', body.authorization_code);",
+                  "pm.test('authorization_code presente', function () {",
+                  "    pm.expect(body.authorization_code).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "function base64url(wordArray) {",
+                  "    return CryptoJS.enc.Base64.stringify(wordArray)",
+                  "        .replace(/\\+/g, '-')",
+                  "        .replace(/\\//g, '_')",
+                  "        .replace(/=+$/, '');",
+                  "}",
+                  "var verifier = base64url(CryptoJS.lib.WordArray.random(48));",
+                  "var challenge = base64url(CryptoJS.SHA256(verifier));",
+                  "pm.collectionVariables.set('code_verifier', verifier);",
+                  "pm.collectionVariables.set('code_challenge', challenge);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"code_challenge\": \"{{code_challenge}}\",\n  \"code_challenge_method\": \"S256\",\n  \"scopes\": [\"read\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/authorize",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "authorize"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Intercambiar codigo por tokens JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) {",
+                  "    pm.collectionVariables.set(key, value);",
+                  "    if (pm.environment && pm.environment.name) {",
+                  "        pm.environment.set(key, value);",
+                  "    }",
+                  "}",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "setVar('access_token', body.access.token);",
+                  "setVar('refresh_token', body.refresh.token);",
+                  "pm.test('token_type Bearer', function () { pm.expect(body.token_type).to.eql('Bearer'); });",
+                  "pm.test('access.token presente', function () {",
+                  "    pm.expect(body.access.token).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"authorization_code\",\n  \"code\": \"{{authorization_code}}\",\n  \"code_verifier\": \"{{code_verifier}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/token",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "token"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Proyectos",
+      "description": "Gestion de proyectos: crear, listar y obtener. Ejecutar en orden.",
+      "item": [
+        {
+          "name": "2.1 Crear Proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) {",
+                  "    pm.collectionVariables.set(key, value);",
+                  "    if (pm.environment && pm.environment.name) {",
+                  "        pm.environment.set(key, value);",
+                  "    }",
+                  "}",
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json();",
+                  "setVar('project_id', body.id);",
+                  "pm.test('project_id asignado', function () {",
+                  "    pm.expect(body.id).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('fase inicial = descubrimiento', function () {",
+                  "    pm.expect(body.current_phase).to.eql('descubrimiento');",
+                  "});",
+                  "console.log('[OK] Proyecto creado:', body.id, '-', body.name);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sistema de Gestion de Inventario\",\n  \"description\": \"Un sistema que permite a pequenas empresas gestionar su inventario en tiempo real, controlar stock, generar reportes y recibir alertas de bajo inventario.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Listar Proyectos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "pm.test('Array de proyectos', function () {",
+                  "    pm.expect(data).to.be.an('array');",
+                  "});",
+                  "console.log('[OK] Proyectos encontrados:', data.length);",
+                  "data.forEach(function(p) {",
+                  "    console.log('  -', p.name, '| fase:', p.current_phase, '| status:', p.status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Obtener Proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "console.log('[OK] Proyecto:', body.name);",
+                  "console.log('  Fase:', body.current_phase);",
+                  "console.log('  Estado:', body.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Descubrimiento (Fase 1)",
+      "description": "Fase de Descubrimiento: genera el documento de 9 secciones a partir de la descripcion del proyecto. Ejecutar en orden.",
+      "item": [
+        {
+          "name": "3.1 Generar Discovery con IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) {",
+                  "    pm.collectionVariables.set(key, value);",
+                  "    if (pm.environment && pm.environment.name) {",
+                  "        pm.environment.set(key, value);",
+                  "    }",
+                  "}",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "    var body = pm.response.json();",
+                  "    setVar('spec_id', body.id);",
+                  "    console.log('[OK] Discovery generado. Secciones:');",
+                  "    Object.keys(body).forEach(function(key) {",
+                  "        if (body[key] && body[key].length > 0) {",
+                  "            console.log('  -', key, ':', body[key].substring(0, 50) + '...');",
+                  "        }",
+                  "    });",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "generate"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Obtener Discovery",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "    var body = pm.response.json();",
+                  "    console.log('[OK] Discovery actual:');",
+                  "    console.log('  Vision:', body.vision ? body.vision.substring(0, 60) + '...' : 'vacio');",
+                  "    console.log('  Alcance:', body.scope ? body.scope.substring(0, 60) + '...' : 'vacio');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "discovery"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Actualizar Discovery (editor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "    var body = pm.response.json();",
+                  "    console.log('[OK] Discovery actualizado:');",
+                  "    console.log('  Vision:', body.vision ? body.vision.substring(0, 80) + '...' : 'vacio');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vision\": \"Plataforma web de gestion de inventario para pequenas y medianas empresas que necesitan controlar su stock en tiempo real.\",\n  \"scope\": \"Incluye gestion de productos, control de stock, alertas de inventario bajo y reportes basicos. No incluye integracion con ERP externos ni facturacion electronica.\",\n  \"business_rules\": \"Solo los administradores pueden modificar precios y eliminar productos. Los operadores pueden registrar entradas y salidas de inventario.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "discovery"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Caracteristicas (Fase 2)",
+      "description": "Gestion de caracteristicas del proyecto. Las features inician vacias. La creacion es estrictamente unitaria (una a una). La IA sugiere pero NO persiste. Mejoras IA solo disponibles en estado Borrador.\n\nFlujo recomendado (nuevo):\n1. 4.1 Sugerir desde idea — El usuario escribe una idea (ej: Alertas de stock bajo). La IA devuelve titulo formal + descripcion detallada (NO persiste)\n2. 4.2 Crear Feature — Confirmar la sugerencia de 4.1 enviando titulo y descripcion, o crear una manual (persiste)\n\nFlujo alternativo (legacy):\n3. 4.3 Generar sugerencias IA desde contexto (read-only, no persiste)\n4. 4.2 Crear una a una las features deseadas\n5. 4.7 Mejorar con IA (solo Borrador, 409 si Aprobada)\n6. 4.8 Aplicar mejora (solo Borrador)\n7. 4.6 Toggle a Aprobada para habilitar Fase 3 (Requisitos)",
+      "item": [
+        {
+          "name": "4.1 Sugerir Desde Idea del Usuario (NO persiste — usar 4.2 para confirmar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var body = pm.response.json();",
+                  "    console.log('[OK] Sugerencia generada desde idea:');",
+                  "    console.log('  Titulo:', body.title);",
+                  "    console.log('  Descripcion:', body.description.substring(0, 120) + '...');",
+                  "    console.log('  [Frontend debe decidir: Cancelar o Confirmar con 4.2]');",
+                  "    console.log('  [Para confirmar, copia title y description en el body de 4.2]');",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idea\": \"Alertas de stock bajo con notificaciones automaticas por email\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest-from-idea",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest-from-idea"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Crear Feature (Confirmar sugerencia o manual)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "if (pm.response.code === 201) {",
+                  "    var body = pm.response.json();",
+                  "    pm.collectionVariables.set('feature_id', body.id);",
+                  "    console.log('[OK] Feature creada:', body.id);",
+                  "    console.log('  Titulo:', body.title);",
+                  "    console.log('  Status:', body.status);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Gestion de alertas de stock bajo\",\n  \"description\": \"Permite a los administradores configurar umbrales minimos de stock por producto y recibir notificaciones automaticas por email cuando el inventario alcance niveles criticos, facilitando la reposicion oportuna y evitando quiebres de stock.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "features"]
+            }
+          }
+        },
+        {
+          "name": "4.3 Generar Sugerencias IA desde Discovery (NO persiste — read-only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Sugerencias generadas (NO persistidas):', data.total);",
+                  "    data.features.forEach(function(f) {",
+                  "        console.log('  - [Sugerencia]', f.title);",
+                  "    });",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "features", "generate"]
+            }
+          }
+        },
+        {
+          "name": "4.4 Listar Features",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "pm.test('total es numero', function () {",
+                  "    pm.expect(data.total).to.be.a('number');",
+                  "});",
+                  "console.log('[OK] Total features:', data.total);",
+                  "data.features.forEach(function(f) {",
+                  "    var icon = f.status === 'aprobada' ? '[OK]' : '[~]';",
+                  "    console.log(' ', icon, f.title);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "features"]
+            }
+          }
+        },
+        {
+          "name": "4.5 Sugerir Features Alternativas (IA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Sugerencias recibidas:', data.suggestions.length);",
+                  "    data.suggestions.forEach(function(s, i) {",
+                  "        console.log('  ' + (i+1) + '.', s.title);",
+                  "        console.log('     ', s.description.substring(0, 70) + '...');",
+                  "    });",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest"]
+            }
+          }
+        },
+        {
+          "name": "4.6 Toggle Status (Borrador <-> Aprobada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "console.log('[OK] Estado alternado; nuevo status:', body.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "4.7 Mejorar Feature con IA (SOLO Borrador — 409 si Aprobada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var body = pm.response.json();",
+                  "    console.log('[OK] Sugerencia de mejora:');",
+                  "    console.log('  Titulo:', body.title);",
+                  "    console.log('  Descripcion:', body.description.substring(0, 120) + '...');",
+                  "    console.log('  [Frontend debe decidir: Cancelar o Aplicar mejora (4.8)]');",
+                  "} else if (pm.response.code === 409) {",
+                  "    console.log('[409] Solo se pueden mejorar features en Borrador. Usa 4.6 Toggle Status para volver a Borrador.');",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}/improve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}", "improve"]
+            }
+          }
+        },
+        {
+          "name": "4.8 Aplicar Mejora (solo si Borrador, 409 si Aprobada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var body = pm.response.json();",
+                  "    console.log('[OK] Mejora aplicada:');",
+                  "    console.log('  Titulo:', body.title);",
+                  "    console.log('  Descripcion:', body.description.substring(0, 80) + '...');",
+                  "} else if (pm.response.code === 409) {",
+                  "    console.log('[409] Solo se editan features en Borrador. Usa 4.6 Toggle Status para volver a Borrador.');",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Gestion avanzada de inventario con alertas inteligentes\",\n  \"description\": \"Sistema de gestion de inventario que permite el control completo del stock en tiempo real con alertas predictivas de bajo inventario basadas en patrones historicos de consumo. Incluye dashboard visual con indicadores clave y sugerencias automaticas de reorden.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}/apply-improvement",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}", "apply-improvement"]
+            }
+          }
+        },
+        {
+          "name": "4.9 Eliminar Feature",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+                  "console.log('[OK] Feature eliminada:', pm.collectionVariables.get('feature_id'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Requisitos (Fase 3)",
+      "description": "Generacion y gestion de requisitos EARS por caracteristica. Solo para caracteristicas en estado Aprobada (409 si Borrador). IDs asignados secuencialmente (R-1, R-2...). PUT solo actualiza categorias enviadas; el resto se preserva. El prompt IA inyecta el Discovery COMPLETO (9 secciones) + Feature Aprobada para cohesion y sentido de negocio.",
+      "item": [
+        {
+          "name": "5.1 Obtener Requisitos (contexto + feature)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "console.log('[OK] Feature:', data.feature_title);",
+                  "console.log('[OK] Categorias con requisitos:');",
+                  "['ubiquitous','event','state','optional','unwanted','complex'].forEach(function(cat) {",
+                  "    var count = data.requirements[cat] ? data.requirements[cat].length : 0;",
+                  "    if (count > 0) console.log('  -', cat, ':', count, 'requisitos');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}", "requirements"]
+            }
+          }
+        },
+        {
+          "name": "5.2 Generar Requisitos con IA (IDs secuenciales R-1, R-2... requiere Aprobada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Feature:', data.feature_title);",
+                  "    console.log('[OK] Requisitos generados:');",
+                  "    ['ubiquitous','event','state','optional','unwanted','complex'].forEach(function(cat) {",
+                  "        var reqs = data.requirements[cat] || [];",
+                  "        console.log('  -', cat, ':', reqs.length, 'requisitos');",
+                  "        reqs.forEach(function(r) {",
+                  "            console.log('     ', r.id, '[' + r.pattern + ']:', r.source_statement.substring(0, 60) + '...');",
+                  "        });",
+                  "    });",
+                  "} else if (pm.response.code === 409) {",
+                  "    console.log('[ERROR] La caracteristica debe estar Aprobada (usa 4.5 Toggle Status)');",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/generate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}", "requirements", "generate"]
+            }
+          }
+        },
+        {
+          "name": "5.3 Actualizar Requisitos (solo categorias enviadas, resto se preserva)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "console.log('[OK] Requisitos actualizados para:', data.feature_title);",
+                  "console.log('[OK] Solo la categoria enviada (ubiquitous) fue modificada. El resto se preservo.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ubiquitous\": [\n    {\n      \"pattern\": \"ubiquitous\",\n      \"trigger\": null,\n      \"system\": \"El sistema\",\n      \"response\": \"permitira gestion completa de inventario con trazabilidad de cambios\",\n      \"acceptance_criteria\": [\n        {\"description\": \"Cada cambio en inventario queda registrado con timestamp y usuario\"}\n      ],\n      \"source_statement\": \"El sistema shall permitir gestion completa de inventario con trazabilidad de cambios.\",\n      \"traceability\": [\"feature: Gestion de inventario\"]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "features", "{{feature_id}}", "requirements"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. SDD Pipeline",
+      "description": "Pipeline Spec-Driven Development clasico. Ejecutar en orden: Discovery -> Requirements -> Design -> Tasks. Requiere spec_id generado en la fase de Descubrimiento.",
+      "item": [
+        {
+          "name": "6.1 Discovery - Crear Spec",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    pm.collectionVariables.set('spec_id', data.id);",
+                  "    console.log('[OK] Spec creado:', data.id);",
+                  "    console.log('[OK] Fase:', data.phase);",
+                  "    if (data.discovery) {",
+                  "        console.log('[OK] Vision:', data.discovery.vision ? data.discovery.vision.substring(0, 60) + '...' : 'vacio');",
+                  "    }",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Una API REST que permita a usuarios crear y gestionar tareas, con autenticacion JWT y asignacion de tareas a usuarios.\",\n  \"assumptions\": [\"Los usuarios existen en el sistema\"],\n  \"constraints\": [\"Debe usar PostgreSQL\", \"Debe seguir arquitectura hexagonal\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects/{{project_id}}/specs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects", "{{project_id}}", "specs"]
+            }
+          }
+        },
+        {
+          "name": "6.2 Avanzar a Requirements (EARS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Fase:', data.phase);",
+                  "    console.log('[OK] Requisitos:', data.requirements.length);",
+                  "    data.requirements.forEach(function(r) {",
+                  "        console.log('  ' + r.id + ' [' + r.pattern + ']: ' + r.source_statement.substring(0, 70));",
+                  "    });",
+                  "} else {",
+                  "    console.log('[ERROR]', JSON.stringify(pm.response.json()));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/specs/{{spec_id}}/advance/requirements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "specs", "{{spec_id}}", "advance", "requirements"]
+            }
+          }
+        },
+        {
+          "name": "6.3 Avanzar a Design (UML)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Fase:', data.phase);",
+                  "    if (data.design) {",
+                  "        console.log('[OK] Clases:', data.design.classes.length);",
+                  "        console.log('[OK] Relaciones:', data.design.relationships.length);",
+                  "        console.log('[OK] PlantUML:', data.design.plantuml.length, 'chars');",
+                  "        console.log('[OK] XMI:', data.design.xmi.length, 'chars');",
+                  "    }",
+                  "} else {",
+                  "    console.log('[ERROR]', JSON.stringify(pm.response.json()));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/specs/{{spec_id}}/advance/design",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "specs", "{{spec_id}}", "advance", "design"]
+            }
+          }
+        },
+        {
+          "name": "6.4 Avanzar a Tasks (Descomposicion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Fase:', data.phase);",
+                  "    console.log('[OK] Tareas:', data.tasks.length);",
+                  "    data.tasks.forEach(function(t) {",
+                  "        var deps = t.depends_on.length > 0 ? ' deps=[' + t.depends_on + ']' : '';",
+                  "        var par = t.parallelizable ? ' [P]' : '';",
+                  "        console.log('  ' + t.id + par + ': ' + t.title + deps);",
+                  "    });",
+                  "} else {",
+                  "    console.log('[ERROR]', JSON.stringify(pm.response.json()));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/specs/{{spec_id}}/advance/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "specs", "{{spec_id}}", "advance", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "6.5 Obtener Spec (estado completo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Fase final:', data.phase);",
+                  "    console.log('[OK] Requisitos:', data.requirements ? data.requirements.length : 0);",
+                  "    console.log('[OK] Tareas:', data.tasks ? data.tasks.length : 0);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/specs/{{spec_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "specs", "{{spec_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Canvas Sync (EP-3)",
+      "item": [
+        {
+          "name": "7.1 Sincronizar canvas (editar diseno)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var data = pm.response.json();",
+                  "    console.log('[OK] Delta:', JSON.stringify(data.delta));",
+                  "} else {",
+                  "    console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"change_type\": \"add_class\",\n  \"class_id\": null,\n  \"requirement_id\": null,\n  \"new_value\": {\"class_name\": \"NotificationService\"},\n  \"instruction\": \"Agregar un servicio de notificaciones al modelo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/specs/{{spec_id}}/canvas",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "specs", "{{spec_id}}", "canvas"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Health + Schemas",
+      "item": [
+        {
+          "name": "8.1 Health check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "8.2 Listar esquemas JSON Schema",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/schemas",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "schemas"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

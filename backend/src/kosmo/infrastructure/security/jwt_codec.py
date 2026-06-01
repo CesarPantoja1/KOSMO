@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
 
 from jose import jwt
 from jose.exceptions import ExpiredSignatureError, JWTClaimsError, JWTError
+from ulid import ULID
 
 from kosmo.contracts.auth import (
     InvalidTokenError,
@@ -46,7 +46,7 @@ class JoseJwtIssuer:
         now = datetime.now(UTC)
         ttl = _ttl_for(token_type, self._settings)
         expires_at = now + timedelta(seconds=ttl)
-        jti = uuid4().hex
+        jti = ULID().hex
         claims: dict[str, Any] = {
             "sub": subject,
             "iss": self._settings.issuer,

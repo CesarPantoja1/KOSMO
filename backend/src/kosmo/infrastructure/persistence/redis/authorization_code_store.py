@@ -18,7 +18,9 @@ class RedisAuthorizationCodeStore:
             "subject": entry.subject,
             "code_challenge": entry.code_challenge,
             "code_challenge_method": entry.code_challenge_method.value,
-            "expires_at": entry.expires_at.isoformat(),
+            "expires_at": (
+                entry.expires_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            ),
             "scopes": sorted(entry.scopes),
         }
         await self._client.set(

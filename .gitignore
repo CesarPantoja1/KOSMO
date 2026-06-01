@@ -67,3 +67,4 @@ build/
 .vscode/
 .idea/
 backend/CLAUDE.md
+AGENT.md

@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
@@ -30,18 +28,14 @@ class SqlAlchemyUserRepository:
             return _to_entity(row) if row is not None else None
 
     async def by_id(self, user_id: str) -> User | None:
-        try:
-            uid = UUID(user_id)
-        except ValueError:
-            return None
         async with self._session_factory() as session:
-            result = await session.execute(select(UserModel).where(UserModel.id == uid))
+            result = await session.execute(select(UserModel).where(UserModel.id == user_id))
             row = result.scalar_one_or_none()
             return _to_entity(row) if row is not None else None
 
     async def create(self, user: User) -> None:
         stmt = pg_insert(UserModel).values(
-            id=UUID(user.id),
+            id=user.id,
             email=user.email,
             hashed_password=user.hashed_password,
             created_at=user.created_at,
@@ -58,7 +52,7 @@ class SqlAlchemyUserRepository:
     async def update_password(self, *, user_id: str, hashed_password: str) -> None:
         async with self._session_factory() as session:
             result = await session.execute(
-                select(UserModel).where(UserModel.id == UUID(user_id)).with_for_update()
+                select(UserModel).where(UserModel.id == user_id).with_for_update()
             )
             row = result.scalar_one_or_none()
             if row is None:

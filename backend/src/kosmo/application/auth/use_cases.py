@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+
+from ulid import ULID
 
 from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
@@ -34,7 +35,7 @@ class IssueTokenPair:
         scopes: frozenset[str],
         family_id: str | None = None,
     ) -> TokenPair:
-        family = family_id or uuid4().hex
+        family = family_id or ULID().hex
         access = self.issuer.issue(
             subject=subject, scopes=scopes, token_type=TokenType.ACCESS, family_id=family
         )

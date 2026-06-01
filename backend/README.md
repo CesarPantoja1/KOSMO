@@ -1,6 +1,13 @@
 # KOSMO — Backend
 
-API del proyecto KOSMO construida con **FastAPI** sobre Python 3.13, arquitectura hexagonal por capas (`infrastructure → application → domain → contracts`) y `uv` como gestor de dependencias.
+API del proyecto KOSMO construida con **FastAPI** sobre Python 3.13, arquitectura hexagonal por capas (`contracts → domain → application → infrastructure`) y `uv` como gestor de dependencias.
+
+## OpenAPI / Swagger
+
+- **Puerto:** `8000`
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- OpenAPI JSON: http://localhost:8000/api/v1/openapi.json
 
 ---
 
@@ -169,27 +176,61 @@ Los tests están organizados en `tests/unit`, `tests/integration`, `tests/contra
 ```
 backend/
 ├── alembic/                          # Migraciones de PostgreSQL
+├── postman/                          # Colecciones Postman (Auth + SDD Pipeline)
 ├── src/kosmo/
-│   ├── infrastructure/               # Adaptadores: FastAPI, persistencia, LLM, seguridad, telemetría
-│   │   ├── api/
-│   │   │   ├── main.py               # Punto de entrada de la app
-│   │   │   ├── schemas.py            # DTOs Pydantic expuestos por la API HTTP
-│   │   │   ├── composition.py        # Composition root (wiring de puertos y adaptadores)
-│   │   │   ├── dependencies/         # FastAPI Depends (auth, scopes, rate limiting)
-│   │   │   ├── middlewares/          # Middlewares HTTP (request logging, trace context)
-│   │   │   └── routers/              # Endpoints REST
-│   │   ├── persistence/              # Postgres (SQLAlchemy), Redis (token store, authcode store, login attempts)
-│   │   ├── security/                 # Argon2id, JOSE/JWT, Fernet
-│   │   └── telemetry/                # Bootstrap de structlog + Logfire/OpenTelemetry
-│   ├── application/                  # Casos de uso (orquestación) — depende de contracts y domain
-│   │   └── auth/                     # Register, Authorize, Exchange, Issue/Verify/Refresh/Revoke
-│   ├── domain/                       # Algoritmos de dominio puro
-│   │   └── auth/pkce.py              # s256_challenge, verify_s256 (RFC 7636)
 │   ├── contracts/                    # Kernel: entidades, errores, puertos, telemetría
 │   │   ├── auth/                     # User, Principal, Token*, AuthorizationCode, errors, ports
-│   │   └── telemetry.py              # Decorador @traced y record_auth_event (no-op si no hay infra)
+│   │   ├── sdd/                      # SpecDocument, Feature, Project, DocumentNode, EARS, repos
+│   │   │   ├── document.py           # Árbol de documento enriquecido (ProseMirror/TipTap)
+│   │   │   └── ...
+│   │   ├── llm/                      # LLMClient, PromptTemplate, ApiKeyVault
+│   │   ├── storage/                  # BlobStorage port
+│   │   └── telemetry.py              # Decorador @traced y record_auth_event
+│   ├── domain/                       # Algoritmos de dominio puro (sin I/O)
+│   │   ├── agents/                   # Agentes de IA (spec_capture, discovery_writer, 
+│   │   │                              #   requirements_generator, feature_generator, analyzer, ...)
+│   │   ├── sdd/                      # Lógica SDD pura
+│   │   │   ├── document_converters.py # Markdown ↔ Document tree, slugify_spanish, validación
+│   │   │   ├── validators/           # EARS, DomainModel, TaskDAG, XMI
+│   │   │   └── serializers/          # PlantUML, XMI
+│   │   ├── auth/pkce.py              # s256_challenge, verify_s256 (RFC 7636)
+│   │   └── features/                 # Lógica de transiciones de estado
+│   ├── application/                  # Casos de uso (orquestación)
+│   │   ├── auth/                     # Register, Authorize, Exchange, Issue/Verify/Refresh/Revoke
+│   │   ├── sdd/                      # Capture, Regenerate, Save/Get Discovery, Design, Tasks
+│   │   │   ├── save_discovery_document.py   # Guarda edición manual del documento
+│   │   │   ├── get_discovery_document.py    # Retorna documento + índice
+│   │   │   ├── regenerate_discovery.py      # IA reescribe el discovery
+│   │   │   └── ...
+│   │   ├── features/                 # CRUD, Generate, Improve, Suggest, Requirements
+│   │   │   ├── save_requirements_document.py  # Guarda edición manual de requisitos
+│   │   │   ├── get_requirements_document.py   # Retorna documento + índice + header
+│   │   │   ├── regenerate_requirements.py     # IA reescribe requisitos
+│   │   │   └── ...
+│   │   ├── projects/                 # Create, List, Get Project
+│   │   └── orchestration/            # LangGraph SDD pipeline
+│   ├── infrastructure/               # Adaptadores concretos
+│   │   ├── api/
+│   │   │   ├── main.py               # FastAPI app, lifespan, CORS, OpenAPI tags
+│   │   │   ├── composition.py        # Composition root (wiring de puertos y adaptadores)
+│   │   │   ├── schemas*.py           # DTOs Pydantic (discovery doc, requirements doc, features, ...)
+│   │   │   ├── dependencies/         # FastAPI Depends (auth, scopes, rate limiting)
+│   │   │   ├── middlewares/          # RequestLoggingMiddleware
+│   │   │   └── routers/              # auth, projects, discovery, features, requirements, specs, schemas
+│   │   ├── persistence/              # PostgreSQL (SQLAlchemy async), Redis (token store, rate limit)
+│   │   ├── llm/                      # DeepSeek, LiteLLM, Noop adapters (LLMClient)
+│   │   ├── security/                 # Argon2id, JOSE/JWT, Fernet
+│   │   └── telemetry/                # Bootstrap de structlog + Logfire/OpenTelemetry
 │   └── config.py                     # Carga de Settings desde .env
 ├── tests/
+│   ├── unit/
+│   │   ├── test_document_converters.py  # 34 tests: slugify español, conversión doc↔md, validación
+│   │   ├── test_feature_use_cases.py
+│   │   ├── test_auth_use_cases.py
+│   │   └── ...
+│   ├── integration/
+│   ├── contract/
+│   └── properties/
 ├── .env.example
 ├── .importlinter                     # Reglas de arquitectura por capas
 ├── alembic.ini
@@ -450,7 +491,214 @@ Si `LOGFIRE_TOKEN` está vacío (valor por defecto en `.env.example`), las traza
 
 ---
 
-## 12. Problemas comunes
+## 12. Sistema de IDs y Slugs
+
+### 12.1. IDs con prefijo tipado (ULID)
+
+Todos los identificadores usan **ULID** (26 caracteres Base32 Crockford, ordenables por timestamp) con prefijo semántico:
+
+| Prefijo | Entidad | Ejemplo |
+|---|---|---|
+| `prj_` | Proyecto | `prj_01KT07HCKMM07BD30NP1PQBERD` |
+| `feat_` | Feature / Característica | `feat_01KT0CDV846118TW28496YAX0K` |
+| `spec_` | Spec / Especificación | `spec_01KT06W284WGSG7HBDBFW39K3W` |
+| `usr_` | Usuario | `usr_01KT05JRA7466PPYQXYTXXBMN4` |
+| `tsk_` | Tarea | `tsk_01KT08ABC0...` |
+| `apk_` | API Key | `apk_01KT05JRA7...` |
+| `aud_` | Auditoría | `aud_01KT05JRA7...` |
+
+Propiedades del ULID:
+- **Ordenable** por timestamp (milisegundos desde epoch)
+- **26 caracteres** sin guiones ni caracteres ambiguos (I, L, O, U excluidos)
+- **Timestamp extraíble** → `IdGenerator.extract_timestamp(id)` devuelve la fecha de creación
+- Generado por `IdGenerator.generate("entity")` desde `kosmo.domain.sdd.id_generator`
+
+### 12.2. Slugs (URLs amigables)
+
+Proyectos y features generan automáticamente un **slug legible** desde su nombre. El slug usa `slugify_spanish()` que:
+
+1. Normaliza tildes y diéresis (NFKD) → `gestión` → `gestion`
+2. Preserva la ñ → `diseño` → `diseno`
+3. Reemplaza espacios y puntuación por guiones
+4. **Nunca corta palabras** → truncado en el último guion antes del límite
+5. Límite: **80 chars** para proyectos, **60 chars** para features
+
+| Entidad | Slug | Ejemplo de URL |
+|---|---|---|
+| Proyecto | `sistema-gestion-inventario` | `/api/v1/projects/sistema-gestion-inventario` |
+| Feature | `alertas-stock-bajo` | `/api/v1/projects/sistema-gestion/features/alertas-stock-bajo` |
+
+### 12.3. Resolución dual (ID o slug)
+
+**Toda ruta** que contenga `{project_id}` o `{feature_identifier}` acepta **ambos formatos**:
+
+```
+/api/v1/projects/sistema-gestion-inventario                  ← slug
+/api/v1/projects/prj_01KT07HCKMM...                           ← ID (prefijo prj_)
+
+/api/v1/projects/mi-proyecto/features/alertas-stock           ← ambos slugs
+/api/v1/projects/prj_.../features/feat_...                    ← ambos IDs
+/api/v1/projects/prj_.../features/alertas-stock               ← mixto: ID + slug
+```
+
+**Excepción:** Las rutas standalone (`/features/{feature_id}/...`) solo aceptan ID porque no tienen contexto de proyecto para resolver slugs. Son llamadas internas de API — el usuario final nunca las ve en la URL del navegador.
+
+### 12.4. Colisiones de slug
+
+Si dos entidades generan el mismo slug, se agrega sufijo numérico:
+
+```
+"Gestión de inventario" → gestion-de-inventario
+"Gestión de inventario" (segunda) → gestion-de-inventario-2
+"Gestión de inventario" (tercera) → gestion-de-inventario-3
+```
+
+En features, la unicidad del slug es **dentro del mismo proyecto** (`get_by_slug(project_id, slug)`). Dos proyectos distintos pueden tener features con el mismo slug sin conflicto.
+
+---
+
+## 13. Referencia Completa de Endpoints
+
+> **Notación:** `{project_id}` acepta ID (`prj_...`) o slug. `{feature_identifier}` acepta ID (`feat_...`) o slug. `{id}` solo acepta ID.
+
+### 13.1. Auth
+
+| Método | Ruta | Auth | Rate Limit | Descripción |
+|---|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | — | 3/min | Registra usuario. Retorna `{ id, email, created_at }`. |
+| `POST` | `/api/v1/auth/authorize` | — | 10/min | Valida credenciales + PKCE S256. Retorna `authorization_code`. |
+| `POST` | `/api/v1/auth/token` | — | 5/min | Intercambia `code` + `code_verifier` por JWT pair. |
+| `POST` | `/api/v1/auth/refresh` | Refresh token | 30/min | Rota el par. Refresh anterior invalidado. |
+| `GET` | `/api/v1/auth/me` | Bearer | — | Retorna `Principal { subject, scopes }`. |
+| `POST` | `/api/v1/auth/logout` | Bearer | 20/min | Revoca access + refresh. |
+
+### 13.2. Proyectos
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/v1/projects` | Crea proyecto. Genera slug desde `name`. Fase inicial: `descubrimiento`. |
+| `GET` | `/api/v1/projects` | Lista todos los proyectos con `id`, `name`, `slug`, `phase`, `status`. |
+| `GET` | `/api/v1/projects/{project_id}` | Obtiene proyecto por ID o slug. |
+
+### 13.3. Discovery
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/v1/projects/{project_id}/discovery/generate` | IA genera documento de discovery (9 secciones). Retorna `{ document, sections, updated_at }`. |
+| `GET` | `/api/v1/projects/{project_id}/discovery` | Obtiene documento actual + índice de navegación. |
+| `PUT` | `/api/v1/projects/{project_id}/discovery` | Guarda edición manual. Body: `{ document: { type: "doc", content: [...] } }`. 422 si estructura inválida. |
+| `POST` | `/api/v1/projects/{project_id}/discovery/regenerate` | IA reescribe el documento desde el contenido actual + contexto del proyecto. |
+
+### 13.4. Features
+
+| Método | Ruta | Slug? | Descripción |
+|---|---|---|---|
+| `GET` | `/api/v1/projects/{project_id}/features` | ✅ | Lista features del proyecto. |
+| `POST` | `/api/v1/projects/{project_id}/features` | ✅ | Crea feature manual (slug desde título). Estado: `borrador`. |
+| `POST` | `/api/v1/projects/{project_id}/features/generate` | ✅ | **IA genera y persiste 5 features.** |
+| `POST` | `/api/v1/projects/{project_id}/features/suggest` | ✅ | IA sugiere 3 alternativas. **No persiste.** |
+| `POST` | `/api/v1/projects/{project_id}/features/suggest-from-idea` | ✅ | IA formaliza una idea en feature. **No persiste.** |
+| `DELETE` | `/api/v1/projects/{project_id}/features/{feature_identifier}` | ✅ | Elimina feature (ID o slug). |
+| `DELETE` | `/api/v1/features/{id}` | ❌ | Elimina feature (solo ID). |
+| `PATCH` | `/api/v1/projects/{project_id}/features/{feature_identifier}/status` | ✅ | Alterna Borrador ↔ Aprobada. |
+| `PATCH` | `/api/v1/features/{id}/status` | ❌ | Alterna Borrador ↔ Aprobada (solo ID). |
+| `POST` | `/api/v1/projects/{project_id}/features/{feature_identifier}/improve` | ✅ | IA mejora descripción. Solo Borrador (409 si Aprobada). |
+| `POST` | `/api/v1/features/{id}/improve` | ❌ | IA mejora descripción (solo ID). |
+| `POST` | `/api/v1/projects/{project_id}/features/{feature_identifier}/apply-improvement` | ✅ | Aplica mejora sugerida. Solo Borrador. |
+| `POST` | `/api/v1/features/{id}/apply-improvement` | ❌ | Aplica mejora sugerida (solo ID). |
+
+### 13.5. Requisitos
+
+| Método | Ruta | Slug? | Descripción |
+|---|---|---|---|
+| `GET` | `/api/v1/projects/{project_id}/features/{feature_identifier}/requirements` | ✅ | Obtiene documento de requisitos + índice + header. |
+| `GET` | `/api/v1/features/{id}/requirements` | ❌ | Obtiene documento (solo ID). |
+| `PUT` | `/api/v1/projects/{project_id}/features/{feature_identifier}/requirements` | ✅ | Guarda edición manual de requisitos. |
+| `PUT` | `/api/v1/features/{id}/requirements` | ❌ | Guarda edición manual (solo ID). |
+| `POST` | `/api/v1/projects/{project_id}/features/{feature_identifier}/requirements/generate` | ✅ | IA genera requisitos EARS. Feature debe estar Aprobada (409 si Borrador). |
+| `POST` | `/api/v1/features/{id}/requirements/generate` | ❌ | IA genera requisitos (solo ID). |
+| `POST` | `/api/v1/projects/{project_id}/features/{feature_identifier}/requirements/regenerate` | ✅ | IA reescribe todos los requisitos. |
+| `POST` | `/api/v1/features/{id}/requirements/regenerate` | ❌ | IA reescribe requisitos (solo ID). |
+
+### 13.6. SDD Pipeline (Specs)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/v1/projects/{project_id}/specs` | Crea spec desde RawIdea. `{project_id}` acepta slug. |
+| `POST` | `/api/v1/specs/{spec_id}/advance/requirements` | Avanza a fase Requirements (EARS). |
+| `POST` | `/api/v1/specs/{spec_id}/advance/design` | Avanza a fase Design (UML). |
+| `POST` | `/api/v1/specs/{spec_id}/advance/tasks` | Avanza a fase Tasks. |
+| `GET` | `/api/v1/specs/{spec_id}` | Obtiene spec completo. |
+| `POST` | `/api/v1/specs/{spec_id}/canvas` | Sincroniza canvas de diseño. |
+
+### 13.7. Utilidades
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/health` | Health check. |
+| `GET` | `/api/v1/schemas` | Lista DTOs disponibles. |
+| `GET` | `/api/v1/schemas/{name}` | JSON Schema del DTO. |
+| `GET` | `/api/v1/openapi.json` | Especificación OpenAPI completa. |
+
+---
+
+## 14. SDD — Documentos Enriquecidos
+
+### 14.1. Formato del documento
+
+El backend persiste documentos como **árbol JSON tipado** compatible con editores WYSIWYG (ProseMirror, TipTap, Milkdown). Cada nodo tiene `type`, `attrs`, `content`, `marks` y `text`.
+
+```json
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2, "id": "vision-del-producto" },
+      "content": [{ "type": "text", "text": "Visión del producto" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Una plataforma " },
+        { "type": "text", "marks": [{ "type": "bold" }], "text": "web" },
+        { "type": "text", "text": " de gestión." }
+      ]
+    }
+  ]
+}
+```
+
+**Tipos de nodo:** `heading`, `paragraph`, `bulletList`, `orderedList`, `listItem`, `blockquote`, `codeBlock`, `horizontalRule`, `hardBreak`, `text`.
+
+**Marcas inline:** `bold`, `italic`, `strike`, `code`, `link`.
+
+### 14.2. Índice de navegación
+
+```json
+{
+  "sections": [
+    {
+      "title": "Visión del producto",
+      "anchor": "vision-del-producto",
+      "level": 2,
+      "children": [
+        { "title": "Detalle", "anchor": "detalle", "level": 3, "children": [] }
+      ]
+    }
+  ]
+}
+```
+
+Anclas generadas con `slugify_spanish()` (NFKD, sin diacríticos, preserva ñ).
+
+### 14.3. Undo/Redo
+
+El editor maneja deshacer/rehacer **localmente en memoria** (stack de steps de ProseMirror). El backend recibe snapshots completos en `[Guardar]`.
+
+---
+
+## 15. Problemas comunes
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
