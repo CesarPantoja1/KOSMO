@@ -22,7 +22,6 @@ class TestSpecDocument:
         assert SpecPhase.CARACTERISTICAS == "caracteristicas"
         assert SpecPhase.REQUISITOS == "requisitos"
         assert SpecPhase.MODELO == "modelo"
-        assert SpecPhase.PROTOTIPO == "prototipo"
         assert SpecPhase.IMPLEMENTACION == "implementacion"
 
     def test_spec_document_with_requirements(self) -> None:

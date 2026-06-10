@@ -1,4 +1,5 @@
 import httpx
+from pydantic import BaseModel
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
 
@@ -19,10 +20,10 @@ class DeepSeekClient:
             timeout=120.0,
         )
 
-    async def complete(  # noqa: ARG002
+    async def complete(
         self,
         prompt: PromptTemplate,
-        response_schema: type | None = None,
+        response_schema: type[BaseModel] | None = None,
         temperature: float = 0,
         max_tokens: int | None = None,
         cache_key: str | None = None,
@@ -43,6 +44,10 @@ class DeepSeekClient:
             "max_tokens": max_tokens or 4096,
             "stream": False,
         }
+
+        schema_to_parse: type[BaseModel] | None = response_schema or prompt.response_schema
+        if schema_to_parse is not None:
+            body["response_format"] = {"type": "json_object"}
 
         log.debug("deepseek.request", model=self._model, msg_count=len(messages))
 
@@ -69,6 +74,13 @@ class DeepSeekClient:
             content_len=len(content),
         )
 
+        parsed: BaseModel | None = None
+        if schema_to_parse is not None:
+            try:
+                parsed = schema_to_parse.model_validate_json(content)
+            except Exception:
+                pass
+
         return LLMResponse(
             content=content,
             usage=LLMUsage(
@@ -77,6 +89,7 @@ class DeepSeekClient:
                 total_tokens=usage_raw.get("total_tokens", 0),
             ),
             model_id=self._model,
+            parsed=parsed,
         )
 
     async def stream(  # noqa: ARG002

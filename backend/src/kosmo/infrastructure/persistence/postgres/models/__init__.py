@@ -57,3 +57,20 @@ class AuditEventModel(Base):
         nullable=False,
         server_default=text("'{}'::jsonb"),
     )
+
+
+class UserPreferenceModel(Base):
+    __tablename__ = "user_preferences"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    project_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    document_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    rule_text: Mapped[str] = mapped_column(Text, nullable=False)
+    context_snippet: Mapped[str] = mapped_column(Text, default="")
+    corpus: Mapped[list[str]] = mapped_column(pg.ARRAY(String), default=list)
+    confidence: Mapped[float] = mapped_column(pg.DOUBLE_PRECISION, default=1.0)
+    usage_count: Mapped[int] = mapped_column(pg.INTEGER, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(datetime.timezone.utc)
+    )

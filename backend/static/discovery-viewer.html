@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOSMO — Discovery Viewer</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --panel-bg: #ffffff;
+    --border: #dee2e6;
+    --text: #212529;
+    --text-secondary: #6c757d;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --error-bg: #fee2e2;
+    --error-text: #991b1b;
+    --heading-color: #111827;
+    --code-bg: #f1f5f9;
+    --toc-active: #dbeafe;
+    --radius: 6px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 35% 45% 20%;
+    height: 100vh;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* JSON Editor */
+  #json-editor {
+    width: 100%;
+    height: 100%;
+    border: none;
+    resize: none;
+    padding: 16px;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    background: #fafbfc;
+    tab-size: 2;
+    outline: none;
+  }
+
+  .editor-actions {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .btn {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel-bg);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #f1f5f9; }
+  .btn.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  .btn.primary:hover { background: var(--accent-hover); }
+
+  /* Error */
+  .error-banner {
+    padding: 8px 16px;
+    background: var(--error-bg);
+    color: var(--error-text);
+    font-size: 12px;
+    border-bottom: 1px solid #fecaca;
+    display: none;
+    flex-shrink: 0;
+  }
+  .error-banner.visible { display: block; }
+
+  /* Document */
+  .document {
+    padding: 32px 40px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .document h1 {
+    font-size: 2rem;
+    color: var(--heading-color);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+    margin-top: 0;
+    scroll-margin-top: 24px;
+  }
+
+  .document h2 {
+    font-size: 1.4rem;
+    color: var(--heading-color);
+    margin-top: 36px;
+    margin-bottom: 16px;
+    scroll-margin-top: 24px;
+  }
+
+  .document p {
+    line-height: 1.85;
+    margin-bottom: 16px;
+    color: #374151;
+  }
+
+  .document ol, .document ul {
+    margin-bottom: 16px;
+    padding-left: 24px;
+    line-height: 1.85;
+  }
+  .document li { margin-bottom: 10px; color: #374151; line-height: 1.75; }
+
+  .document strong { font-weight: 700; color: var(--heading-color); }
+  .document em { font-style: italic; }
+  .document code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.9em;
+  }
+  .document hr {
+    border: none;
+    border-top: 1px dashed #d1d5db;
+    margin: 28px 0;
+  }
+  .document blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 10px 18px;
+    margin: 18px 0;
+    background: #f8fafc;
+    color: #475569;
+    font-style: italic;
+  }
+  .document blockquote p {
+    margin-bottom: 0;
+  }
+
+  /* TOC */
+  .toc {
+    padding: 16px;
+  }
+
+  .toc-item {
+    display: block;
+    padding: 6px 12px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.12s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .toc-item:hover { color: var(--accent); background: #f1f5f9; }
+  .toc-item.level-2 { padding-left: 28px; font-size: 12px; }
+  .toc-item.active { color: var(--accent); background: var(--toc-active); font-weight: 500; }
+
+  .toc-empty {
+    padding: 24px 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }
+    .panel:last-child { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- PANEL 1: JSON Editor -->
+  <div class="panel">
+    <div class="panel-header">JSON Source</div>
+    <div class="error-banner" id="error-banner"></div>
+    <textarea id="json-editor" spellcheck="false" placeholder='Pega aqui el JSON del discovery...'></textarea>
+    <div class="editor-actions">
+      <button class="btn primary" onclick="formatJSON()">Format JSON</button>
+      <button class="btn" onclick="copyJSON()">Copy</button>
+    </div>
+  </div>
+
+  <!-- PANEL 2: Rendered Document -->
+  <div class="panel" id="doc-panel">
+    <div class="panel-header">Document</div>
+    <div class="panel-body" id="document-container">
+      <div class="document" id="document-content"></div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: Navigation -->
+  <div class="panel">
+    <div class="panel-header">Sections</div>
+    <div class="panel-body" id="toc-container">
+      <div class="toc-empty" id="toc-empty">No sections found</div>
+      <div class="toc" id="toc-content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const editor = document.getElementById('json-editor');
+  const errorBanner = document.getElementById('error-banner');
+  const docContent = document.getElementById('document-content');
+  const tocContent = document.getElementById('toc-content');
+  const tocEmpty = document.getElementById('toc-empty');
+  const docContainer = document.getElementById('document-container');
+
+  let currentSections = [];
+  let debounceTimer = null;
+
+  const INITIAL_JSON = JSON.stringify({
+    document: { type: "doc", content: [], version: 1 },
+    sections: [],
+    updated_at: new Date().toISOString()
+  }, null, 2);
+
+  editor.value = INITIAL_JSON;
+
+  editor.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(renderFromEditor, 400);
+  });
+
+  function renderFromEditor() {
+    try {
+      const data = JSON.parse(editor.value);
+      errorBanner.classList.remove('visible');
+      errorBanner.textContent = '';
+      renderDocument(data);
+    } catch (e) {
+      errorBanner.textContent = 'JSON invalido: ' + e.message;
+      errorBanner.classList.add('visible');
+      docContent.innerHTML = '<p style="color:#6b7280;padding:32px">Corrige el JSON para renderizar el documento.</p>';
+      tocContent.innerHTML = '';
+      tocEmpty.style.display = 'block';
+    }
+  }
+
+  function renderDocument(data) {
+    const doc = data.document;
+    if (!doc || !Array.isArray(doc.content)) {
+      docContent.innerHTML = '<p style="color:#6b7280;padding:32px">Estructura de documento no valida.</p>';
+      return;
+    }
+
+    docContent.innerHTML = '';
+    for (const node of doc.content) {
+      const el = renderNode(node);
+      if (el) docContent.appendChild(el);
+    }
+
+    currentSections = Array.isArray(data.sections) ? data.sections : [];
+    renderTOC(currentSections);
+  }
+
+  function renderNode(node) {
+    if (!node || !node.type) return null;
+
+    switch (node.type) {
+      case 'heading': return renderHeading(node);
+      case 'paragraph': return renderParagraph(node);
+      case 'orderedList': return renderList(node, 'ol');
+      case 'bulletList': return renderList(node, 'ul');
+      case 'blockquote': return renderBlockquote(node);
+      case 'horizontalRule': return document.createElement('hr');
+      default: return null;
+    }
+  }
+
+  function renderHeading(node) {
+    const level = (node.attrs && node.attrs.level) || 1;
+    const tag = level >= 1 && level <= 6 ? 'h' + level : 'h2';
+    const el = document.createElement(tag);
+    const anchor = (node.attrs && node.attrs.id) || '';
+    if (anchor) el.id = anchor;
+    renderInlineContent(node, el);
+    return el;
+  }
+
+  function renderParagraph(node) {
+    const el = document.createElement('p');
+    if (node.content && node.content.length === 0) {
+      el.innerHTML = '<br>';
+      return el;
+    }
+    renderInlineContent(node, el);
+    return el;
+  }
+
+  function renderList(node, listTag) {
+    const el = document.createElement(listTag);
+    if (node.content) {
+      for (const item of node.content) {
+        if (item.type === 'listItem') {
+          const li = document.createElement('li');
+          if (item.content) {
+            for (const inner of item.content) {
+              if (inner.type === 'paragraph') {
+                renderInlineContent(inner, li);
+              } else {
+                const innerEl = renderNode(inner);
+                if (innerEl) li.appendChild(innerEl);
+              }
+            }
+          }
+          el.appendChild(li);
+        }
+      }
+    }
+    return el;
+  }
+
+  function renderBlockquote(node) {
+    const el = document.createElement('blockquote');
+    if (node.content) {
+      for (const inner of node.content) {
+        const innerEl = renderNode(inner);
+        if (innerEl) el.appendChild(innerEl);
+      }
+    }
+    return el;
+  }
+
+  function renderInlineContent(node, parentEl) {
+    if (!node.content) return;
+    for (const child of node.content) {
+      if (child.type === 'text') {
+        let wrapper = parentEl;
+        const marks = child.marks;
+        if (marks && marks.length > 0) {
+          for (const mark of marks) {
+            if (mark.type === 'bold') {
+              const strong = document.createElement('strong');
+              parentEl.appendChild(strong);
+              wrapper = strong;
+            } else if (mark.type === 'italic') {
+              const em = document.createElement('em');
+              parentEl.appendChild(em);
+              wrapper = em;
+            } else if (mark.type === 'code') {
+              const code = document.createElement('code');
+              parentEl.appendChild(code);
+              wrapper = code;
+            }
+          }
+        }
+        wrapper.appendChild(document.createTextNode(child.text || ''));
+      } else {
+        const subEl = renderNode(child);
+        if (subEl) parentEl.appendChild(subEl);
+      }
+    }
+  }
+
+  function renderTOC(sections) {
+    tocContent.innerHTML = '';
+    if (!sections || sections.length === 0) {
+      tocEmpty.style.display = 'block';
+      return;
+    }
+    tocEmpty.style.display = 'none';
+    buildTOCItems(sections, tocContent);
+  }
+
+  function buildTOCItems(sections, parentEl, indent = 0) {
+    for (const sec of sections) {
+      const btn = document.createElement('button');
+      btn.className = 'toc-item' + (indent === 0 ? '' : ' level-2');
+      btn.textContent = sec.title || '';
+      btn.title = 'Ir a ' + (sec.title || '');
+      btn.addEventListener('click', () => {
+        const el = document.getElementById(sec.anchor);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        document.querySelectorAll('.toc-item.active').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      parentEl.appendChild(btn);
+
+      if (sec.children && sec.children.length > 0) {
+        buildTOCItems(sec.children, parentEl, indent + 1);
+      }
+    }
+  }
+
+  docContainer.addEventListener('scroll', () => {
+    if (currentSections.length === 0) return;
+
+    const scrollPos = docContainer.scrollTop + 80;
+    let activeAnchor = '';
+
+    function findActive(sections) {
+      for (const sec of sections) {
+        const el = document.getElementById(sec.anchor);
+        if (el && el.offsetTop <= scrollPos) {
+          activeAnchor = sec.anchor;
+          if (sec.children) findActive(sec.children);
+        }
+      }
+    }
+    findActive(currentSections);
+
+    document.querySelectorAll('.toc-item.active').forEach(b => b.classList.remove('active'));
+    const allBtns = tocContent.querySelectorAll('.toc-item');
+    for (const btn of allBtns) {
+      const href = btn.getAttribute('onclick') || '';
+      if (activeAnchor && href.includes("'" + activeAnchor + "'")) {
+        btn.classList.add('active');
+        if (btn.offsetTop < tocContent.scrollTop || btn.offsetTop > tocContent.scrollTop + tocContent.offsetHeight) {
+          btn.scrollIntoView({ block: 'nearest' });
+        }
+        break;
+      }
+    }
+  });
+
+  function formatJSON() {
+    try {
+      const data = JSON.parse(editor.value);
+      editor.value = JSON.stringify(data, null, 2);
+      renderFromEditor();
+    } catch (e) {
+      errorBanner.textContent = 'No se puede formatear: JSON invalido. ' + e.message;
+      errorBanner.classList.add('visible');
+    }
+  }
+
+  function copyJSON() {
+    editor.select();
+    navigator.clipboard.writeText(editor.value).then(() => {
+      const original = editor.style.backgroundColor;
+      editor.style.backgroundColor = '#dcfce7';
+      setTimeout(() => { editor.style.backgroundColor = original; }, 600);
+    }).catch(() => {
+      editor.select();
+      document.execCommand('copy');
+    });
+  }
+
+  renderFromEditor();
+</script>
+</body>
+</html>

@@ -1,4 +1,8 @@
+import structlog
 from fastapi import HTTPException, Request, status
+from redis.exceptions import ConnectionError as RedisConnectionError
+
+log = structlog.get_logger()
 
 
 class IpRateLimiter:
@@ -11,7 +15,11 @@ class IpRateLimiter:
             return
         client_ip = request.client.host if request.client else "unknown"
         key = f"auth:ip_rate:{request.url.path}:{client_ip}"
-        count = int(await redis.incr(key))
+        try:
+            count = int(await redis.incr(key))
+        except RedisConnectionError:
+            log.warning("rate_limiter.redis_unavailable", path=request.url.path)
+            return
         if count == 1:
             await redis.expire(key, 60)
         if count > self._limit:

@@ -1,0 +1,988 @@
+{
+  "info": {
+    "name": "KOSMO API v3 — Complete",
+    "description": "Colección completa y optimizada de KOSMO API — sin endpoints duplicados, sin endpoints legacy inexistentes.\n\n## Organización\n\nEjecutar en orden dentro de cada carpeta. Las variables se auto-propagan entre requests.\n\n0. Health — sanity check\n1. Auth PKCE S256 — Register → Authorize → Token → Refresh → Me → Logout\n2. Proyectos — CRUD + estado del wizard\n3. Discovery — Documento enriquecido (9 secciones, índice de navegación, IA)\n4. Features — Generar, sugerir, crear, aprobar, mejorar, eliminar\n5. Requisitos EARS — Documento enriquecido por feature (6 categorías, IA)\n6. Preferencias — Listar, ajustar confianza, eliminar\n7. Utilidades — Schemas JSON, OpenAPI, Spec viewer\n\n## IDs\n\nULID con prefijo tipado: prj_ (project), feat_ (feature), spec_ (spec), usr_ (user), pref_ (preference).\n\n## Errores\n\nRFC 7807 Problem Detail (Content-Type: application/problem+json).\n\n## Pre-requisitos\n\n- Servidor: uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- O Docker: docker compose up -d (PostgreSQL + Redis + MongoDB + Backend)\n- .env con LLM_PROVIDER configurado (noop para dev, deepseek para prod)\n- Usuario seed: uv run python -m kosmo.infrastructure.scripts.seed_dev_user",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "email", "value": "dev@kosmo.dev", "type": "string" },
+    { "key": "password", "value": "dev-password-12345", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "project_id", "value": "", "type": "string" },
+    { "key": "project_slug", "value": "", "type": "string" },
+    { "key": "feature_id", "value": "", "type": "string" },
+    { "key": "preference_id", "value": "", "type": "string" },
+    { "key": "spec_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "description": "Verificar que el servidor responde.",
+      "item": [
+        {
+          "name": "GET Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('status = ok', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Auth (PKCE S256)",
+      "description": "Flujo OAuth 2.1 + PKCE completo. Ejecutar en orden: Register → Authorize → Token. El access_token y refresh_token se guardan automáticamente en variables de colección.",
+      "item": [
+        {
+          "name": "1.1 Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('201 o 409', function () { pm.expect([201, 409]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 201) { var body = pm.response.json(); setVar('user_id', body.id); console.log('Usuario creado:', body.id); } else { console.log('Usuario ya existe (409) — OK'); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/register", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register"] }
+          }
+        },
+        {
+          "name": "1.2 Authorize (PKCE S256)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "function b64url(wordArray) { return CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, ''); }",
+                  "var verifier = b64url(CryptoJS.lib.WordArray.random(48));",
+                  "pm.collectionVariables.set('code_verifier', verifier);",
+                  "pm.collectionVariables.set('code_challenge', b64url(CryptoJS.SHA256(verifier)));"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json(); setVar('authorization_code', body.authorization_code);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"code_challenge\": \"{{code_challenge}}\",\n  \"code_challenge_method\": \"S256\",\n  \"scopes\": [\"agent:run\", \"profile:read\"]\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/authorize", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "authorize"] }
+          }
+        },
+        {
+          "name": "1.3 Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "setVar('access_token', body.access.token);",
+                  "setVar('refresh_token', body.refresh.token);",
+                  "if (body.subject) setVar('user_id', body.subject);",
+                  "console.log('Tokens obtenidos. Subject:', body.subject, '| Expires:', body.access.expires_at);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"grant_type\": \"authorization_code\",\n  \"code\": \"{{authorization_code}}\",\n  \"code_verifier\": \"{{code_verifier}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/token", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "token"] }
+          }
+        },
+        {
+          "name": "1.4 Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "setVar('access_token', body.access.token);",
+                  "setVar('refresh_token', body.refresh.token);",
+                  "console.log('Tokens rotados. Nueva familia.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"grant_type\": \"refresh_token\",\n  \"refresh_token\": \"{{refresh_token}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/refresh", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "refresh"] }
+          }
+        },
+        {
+          "name": "1.5 Me (get Principal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Tiene subject y scopes', function () { pm.expect(body.subject).to.be.a('string'); pm.expect(body.scopes).to.be.an('array'); });",
+                  "console.log('Principal:', body.subject, '| Scopes:', body.scopes.join(', '));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/me", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "me"] }
+          }
+        },
+        {
+          "name": "1.6 Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+                  "console.log('Sesión revocada.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/logout", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Proyectos",
+      "description": "CRUD de proyectos. Los proyectos inician en fase 'descubrimiento'. IDs con prefijo prj_. Slugs auto-generados desde el nombre. Soporte dual: ID y slug en todas las rutas.",
+      "item": [
+        {
+          "name": "2.1 Crear Proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json();",
+                  "setVar('project_id', body.id);",
+                  "setVar('project_slug', body.slug);",
+                  "pm.test('Fase inicial = descubrimiento', function () { pm.expect(body.current_phase).to.eql('descubrimiento'); });",
+                  "console.log('Proyecto:', body.id, '-', body.name, '| Slug:', body.slug);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sistema de Gestión de Inventario\",\n  \"description\": \"Sistema para pequeñas empresas que permite gestionar inventario en tiempo real, controlar stock, generar reportes y recibir alertas de bajo inventario.\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "projects"] }
+          }
+        },
+        {
+          "name": "2.2 Listar Proyectos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "pm.test('Es array', function () { pm.expect(data).to.be.an('array'); });",
+                  "console.log('Proyectos:', data.length);",
+                  "data.forEach(function(p) { console.log('  -', p.name, '| Fase:', p.current_phase, '| ID:', p.id); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "projects"] }
+          }
+        },
+        {
+          "name": "2.3 Obtener Proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Tiene fase y estado', function () { pm.expect(body.current_phase).to.be.a('string'); pm.expect(body.status).to.be.a('string'); });",
+                  "console.log('Proyecto:', body.name, '| Fase:', body.current_phase, '| Estado:', body.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}"] }
+          }
+        },
+        {
+          "name": "2.4 Estado del Proyecto (Wizard)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Tiene features_count y requirements_count', function () {",
+                  "  pm.expect(body.features_count).to.be.a('number');",
+                  "  pm.expect(body.requirements_count).to.be.a('number');",
+                  "});",
+                  "console.log('Wizard:', body.current_phase, '| Features:', body.features_count, '| Requisitos:', body.requirements_count);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/status", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Discovery (Fase 1)",
+      "description": "Documento de descubrimiento generado por IA (orquestación multiagente con LangGraph). El documento es un árbol JSON enriquecido compatible con editores WYSIWYG (ProseMirror/TipTap). Incluye índice de navegación extraído de headings.\n\nFlujo: Generate → Get → (editar) Save → Regenerate.",
+      "item": [
+        {
+          "name": "3.1 Generar Discovery (IA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Discovery generado | Secciones:', body.sections.length);",
+                  "  body.sections.forEach(function(s) { console.log('  [' + s.level + ']', s.title, '-> #' + s.anchor); });",
+                  "  console.log('updated_at:', body.updated_at);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "generate"] }
+          }
+        },
+        {
+          "name": "3.2 Obtener Discovery",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Documento:', body.document.type, '| Nodos:', body.document.content.length);",
+                  "  console.log('Secciones (índice):', body.sections.length);",
+                  "  body.sections.forEach(function(s) { console.log('  [' + s.level + ']', s.title); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
+          }
+        },
+        {
+          "name": "3.3 Guardar Discovery (edición manual + aprendizaje)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Guardado. Secciones:', body.sections.length);",
+                  "  console.log('updated_at:', body.updated_at);",
+                  "} else if (pm.response.code === 422) {",
+                  "  console.log('[422] Documento inválido:', pm.response.json().detail);",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": {\n    \"type\": \"doc\",\n    \"content\": [\n      {\n        \"type\": \"heading\",\n        \"attrs\": { \"level\": 2, \"id\": \"vision-del-producto\" },\n        \"content\": [{ \"type\": \"text\", \"text\": \"Visión del producto\" }]\n      },\n      {\n        \"type\": \"paragraph\",\n        \"content\": [\n          { \"type\": \"text\", \"text\": \"Plataforma \" },\n          { \"type\": \"text\", \"text\": \"web\", \"marks\": [{ \"type\": \"bold\" }] },\n          { \"type\": \"text\", \"text\": \" de gestión de inventario en tiempo real para \" },\n          { \"type\": \"text\", \"text\": \"pequeñas y medianas\", \"marks\": [{ \"type\": \"italic\" }] },\n          { \"type\": \"text\", \"text\": \" empresas con trazabilidad completa.\" }\n        ]\n      },\n      {\n        \"type\": \"bulletList\",\n        \"content\": [\n          {\n            \"type\": \"listItem\",\n            \"content\": [{ \"type\": \"paragraph\", \"content\": [{ \"type\": \"text\", \"text\": \"Control de stock en tiempo real\" }] }]\n          },\n          {\n            \"type\": \"listItem\",\n            \"content\": [{ \"type\": \"paragraph\", \"content\": [{ \"type\": \"text\", \"text\": \"Alertas de inventario bajo con notificaciones\" }] }]\n          },\n          {\n            \"type\": \"listItem\",\n            \"content\": [{ \"type\": \"paragraph\", \"content\": [{ \"type\": \"text\", \"text\": \"Reportes de movimientos\" }] }]\n          }\n        ]\n      }\n    ]\n  }\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
+          }
+        },
+        {
+          "name": "3.4 Regenerar Discovery (IA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Regenerado. Secciones:', body.sections.length);",
+                  "  body.sections.forEach(function(s) { console.log('  [' + s.level + ']', s.title); });",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] No hay documento previo. Ejecuta 3.1 primero.');",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/regenerate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "regenerate"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Features (Fase 2)",
+      "description": "Gestión de características. La IA genera y persiste 5 features iniciales. Se pueden crear manualmente, sugerir alternativas (3, no persiste), mejorar con IA y cambiar estado (Borrador ↔ Aprobada). Solo features en Borrador se pueden editar/mejorar.",
+      "item": [
+        {
+          "name": "4.1 Generar Features (IA, persiste 5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Generó features', function () { pm.expect(body.features).to.be.an('array'); });",
+                  "if (body.features && body.features.length > 0) {",
+                  "  pm.collectionVariables.set('feature_id', body.features[0].id);",
+                  "}",
+                  "console.log('Features generadas:', body.features.length);",
+                  "body.features.forEach(function(f, i) { console.log('  ' + (i+1) + '.', f.title, '(' + f.status + ')'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "generate"] }
+          }
+        },
+        {
+          "name": "4.2 Listar Features",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Lista features', function () { pm.expect(body.features).to.be.an('array'); });",
+                  "console.log('Total:', body.total || body.features.length);",
+                  "body.features.forEach(function(f) { console.log('  -', f.title, '(' + f.status + ')', f.id); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+          }
+        },
+        {
+          "name": "4.3 Crear Feature Manual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json();",
+                  "pm.collectionVariables.set('feature_id', body.id);",
+                  "pm.test('ID con prefijo feat_', function () { pm.expect(body.id).to.match(/^feat_/); });",
+                  "pm.test('Estado borrador', function () { pm.expect(body.status).to.eql('borrador'); });",
+                  "console.log('Feature:', body.id, '-', body.title);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Gestión de alertas de stock bajo\",\n  \"description\": \"Permite a los administradores configurar umbrales mínimos de stock por producto y recibir notificaciones automáticas por email cuando el inventario alcance niveles críticos.\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+          }
+        },
+        {
+          "name": "4.4 Sugerir Alternativas (IA, 3 opciones, NO persiste)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var data = pm.response.json();",
+                  "  console.log('Sugerencias:', data.suggestions.length);",
+                  "  data.suggestions.forEach(function(s, i) { console.log('  ' + (i+1) + '.', s.title); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest"] }
+          }
+        },
+        {
+          "name": "4.5 Sugerir desde Idea (IA, no persiste)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Sugerencia desde idea:');",
+                  "  console.log('  Título:', body.title);",
+                  "  console.log('  Descripción:', body.description.substring(0, 120) + '...');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"idea\": \"Alertas de stock bajo con notificaciones automáticas por email y dashboard en tiempo real\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest-from-idea", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest-from-idea"] }
+          }
+        },
+        {
+          "name": "4.6 Mejorar Feature (IA, solo Borrador)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Mejora sugerida:', body.title);",
+                  "} else if (pm.response.code === 409) {",
+                  "  console.log('[409] Solo features en Borrador. Usa 4.7 para volver a Borrador.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/improve", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "improve"] }
+          }
+        },
+        {
+          "name": "4.7 Aplicar Mejora (solo Borrador)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Mejora aplicada:', body.title);",
+                  "} else if (pm.response.code === 409) {",
+                  "  console.log('[409] Solo features en Borrador.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Gestión avanzada de alertas de stock con notificaciones inteligentes\",\n  \"description\": \"Sistema de alertas predictivas de inventario basadas en patrones históricos de consumo con notificaciones multicanal (email, dashboard, SMS).\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/apply-improvement", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "apply-improvement"] }
+          }
+        },
+        {
+          "name": "4.8 Toggle Status (Borrador ↔ Aprobada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "console.log('Nuevo estado:', body.status);",
+                  "pm.collectionVariables.set('feature_status', body.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"aprobada\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/status", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "status"] }
+          }
+        },
+        {
+          "name": "4.9 Eliminar Feature",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+                  "console.log('Feature eliminada.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Requisitos EARS (Fase 3)",
+      "description": "Documento enriquecido de requisitos EARS por feature. Taxonomía: Ubicuos, Eventos, Estado, Opcionales, Fallos, Complejos. La feature DEBE estar Aprobada (409 si Borrador). El endpoint /regenerate permite a la IA reescribir desde el contexto actual.",
+      "item": [
+        {
+          "name": "5.1 Obtener Requisitos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Feature:', body.feature_title, '| Estado:', body.feature_status);",
+                  "  console.log('Secciones:', body.sections.length);",
+                  "  body.sections.forEach(function(s) { console.log('  [' + s.level + ']', s.title); });",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] Sin requisitos. Ejecuta 5.2 primero.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/requirements", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "requirements"] }
+          }
+        },
+        {
+          "name": "5.2 Generar Requisitos EARS (IA, feature Aprobada requerida)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Requisitos generados para:', body.feature_title);",
+                  "  console.log('Secciones:', body.sections.length);",
+                  "  body.sections.forEach(function(s) { console.log('  [' + s.level + ']', s.title); });",
+                  "} else if (pm.response.code === 409) {",
+                  "  console.log('[409] Feature debe estar Aprobada. Usa 4.8 para aprobarla primero.');",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] Feature no encontrada.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/requirements/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "requirements", "generate"] }
+          }
+        },
+        {
+          "name": "5.3 Guardar Requisitos (edición manual + aprendizaje)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Guardado. Secciones:', body.sections.length);",
+                  "  console.log('updated_at:', body.updated_at);",
+                  "} else if (pm.response.code === 422) {",
+                  "  console.log('[422] Documento inválido:', pm.response.json().detail);",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": {\n    \"type\": \"doc\",\n    \"content\": [\n      {\n        \"type\": \"heading\",\n        \"attrs\": { \"level\": 2, \"id\": \"requisitos-ubicuos\" },\n        \"content\": [{ \"type\": \"text\", \"text\": \"Requisitos Ubicuos\" }]\n      },\n      {\n        \"type\": \"heading\",\n        \"attrs\": { \"level\": 3, \"id\": \"r-1\" },\n        \"content\": [{ \"type\": \"text\", \"text\": \"R-1 — Gestión completa de inventario\" }]\n      },\n      {\n        \"type\": \"paragraph\",\n        \"content\": [\n          { \"type\": \"text\", \"marks\": [{ \"type\": \"bold\" }], \"text\": \"Sistema:\" },\n          { \"type\": \"text\", \"text\": \" El sistema deberá permitir la gestión completa del ciclo de vida del inventario: registro de productos, actualización de stock, trazabilidad de movimientos y reportes históricos.\" }\n        ]\n      }\n    ]\n  }\n}"
+            },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/requirements", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "requirements"] }
+          }
+        },
+        {
+          "name": "5.4 Regenerar Requisitos (IA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Regenerado para:', body.feature_title);",
+                  "  console.log('Secciones:', body.sections.length);",
+                  "  body.sections.forEach(function(s) { console.log('  [' + s.level + ']', s.title); });",
+                  "} else if (pm.response.code === 409) {",
+                  "  console.log('[409] Feature debe estar Aprobada.');",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] No hay requisitos previos. Ejecuta 5.2 primero.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_id}}/requirements/regenerate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_id}}", "requirements", "regenerate"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Preferencias de Usuario",
+      "description": "Gestión de preferencias de usuario aprendidas del pipeline de corrección. Las preferencias se generan automáticamente cuando el usuario edita documentos generados por IA. Se pueden listar, ajustar confianza y eliminar.",
+      "item": [
+        {
+          "name": "6.1 Listar Preferencias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "pm.test('Es array', function () { pm.expect(data).to.be.an('array'); });",
+                  "console.log('Preferencias:', data.length);",
+                  "data.forEach(function(p, i) {",
+                  "  console.log('  ' + (i+1) + '.', p.rule_text.substring(0, 80) + '...', '| Confianza:', p.confidence, '| Usos:', p.usage_count);",
+                  "  if (i === 0) pm.collectionVariables.set('preference_id', p.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/{{user_id}}/preferences?project_id={{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "{{user_id}}", "preferences"],
+              "query": [{ "key": "project_id", "value": "{{project_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "6.2 Ajustar Confianza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Confianza ajustada:', body.confidence, '(delta:', body.delta, ')');",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] Preferencia no encontrada.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"delta\": 0.1\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/{{user_id}}/preferences/{{preference_id}}/confidence",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "{{user_id}}", "preferences", "{{preference_id}}", "confidence"]
+            }
+          }
+        },
+        {
+          "name": "6.3 Eliminar Preferencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+                  "console.log('Preferencia eliminada.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/{{user_id}}/preferences/{{preference_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "{{user_id}}", "preferences", "{{preference_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Utilidades",
+      "description": "Schemas JSON, OpenAPI spec, y visor de especificaciones.",
+      "item": [
+        {
+          "name": "7.1 Listar Schemas JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "console.log('Schemas disponibles:', data.length || Object.keys(data).length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/schemas", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas"] }
+          }
+        },
+        {
+          "name": "7.2 Obtener JSON Schema",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "console.log('Schema obtenido.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/schemas/CreateProjectRequest", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas", "CreateProjectRequest"] }
+          }
+        },
+        {
+          "name": "7.3 OpenAPI JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "console.log('OpenAPI', body.openapi, '| Título:', body.info.title, '| Endpoints:', Object.keys(body.paths).length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/openapi.json", "host": ["{{base_url}}"], "path": ["api", "v1", "openapi.json"] }
+          }
+        },
+        {
+          "name": "7.4 Obtener Spec",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Spec:', body.id, '| Fase:', body.phase, '| Proyecto:', body.project_id);",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] Spec no encontrada.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/specs/{{spec_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "specs", "{{spec_id}}"] }
+          }
+        }
+      ]
+    }
+  ]
+}

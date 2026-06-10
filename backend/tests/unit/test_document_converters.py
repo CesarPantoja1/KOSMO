@@ -1,11 +1,8 @@
 """Tests unitarios para document_converters — lógica pura de dominio."""
 
-import sys
-from pathlib import Path
+from __future__ import annotations
 
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
-
-from kosmo.domain.sdd.document_converters import (  # noqa: E402
+from kosmo.domain.sdd.document_converters import (
     _fallback_markdown_to_document,
     _parse_inline_marks_fallback,
     document_to_markdown,

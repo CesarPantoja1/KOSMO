@@ -1,4 +1,8 @@
-from kosmo.infrastructure.persistence.postgres.models import AuditEventModel, Base, UserModel
-from kosmo.infrastructure.persistence.postgres.models import sdd as _sdd  # noqa: F401
+from kosmo.infrastructure.persistence.postgres.models import (
+    AuditEventModel,
+    Base,
+    UserModel,
+    UserPreferenceModel,
+)
 
-__all__ = ["AuditEventModel", "Base", "UserModel"]
+__all__ = ["Base", "UserModel", "AuditEventModel", "UserPreferenceModel"]

@@ -1,7 +1,7 @@
 """Bootstrap de observabilidad: logs estructurados + tracing + métricas.
 
 Es el único punto donde se conecta la telemetría: ``configure_telemetry`` se
-invoca en el ``lifespan`` para inicializar structlog y logfire, e
+invoca en el ``lifespan`` para inicializar structlog, logfire y langsmith, e
 ``instrument_app`` adjunta la auto-instrumentación a FastAPI/SQLAlchemy/Redis
 una vez que los componentes IO están construidos.
 
@@ -12,6 +12,7 @@ del API público en :mod:`kosmo.contracts.telemetry`.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -44,12 +45,12 @@ def _build_processors(env: str) -> list[Processor]:
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
         _inject_otel_context,
     ]
     if env == "development":
         processors.append(structlog.dev.ConsoleRenderer(colors=True))
     else:
+        processors.append(structlog.processors.format_exc_info)
         processors.append(structlog.processors.JSONRenderer())
     return processors
 
@@ -79,11 +80,28 @@ def _configure_logfire(settings: Settings) -> None:
     )
 
 
+def _configure_langsmith(settings: Settings) -> None:
+    """Activa LangSmith tracing si hay API key configurada.
+
+    langchain-core y langgraph detectan automáticamente las variables de
+    entorno ``LANGCHAIN_TRACING_V2``, ``LANGCHAIN_API_KEY`` y
+    ``LANGCHAIN_PROJECT``.  Las exportamos aquí para que estén presentes
+    antes de que cualquier import de langchain/langegraph se ejecute.
+    """
+    if settings.langchain_api_key is None or not settings.langchain_tracing_v2:
+        return
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key.get_secret_value()
+    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
+    os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
+
+
 def configure_telemetry(settings: Settings) -> None:
-    """Inicializa logging estructurado y tracing distribuido."""
+    """Inicializa logging estructurado, tracing distribuido y LangSmith."""
 
     _configure_structlog(settings)
     _configure_logfire(settings)
+    _configure_langsmith(settings)
 
 
 def instrument_app(

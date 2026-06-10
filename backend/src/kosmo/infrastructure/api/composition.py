@@ -17,6 +17,9 @@ from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
+from kosmo.contracts.memory.repositories import UserPreferenceRepository
+from kosmo.contracts.orchestration.graph_engine import GraphEngine
+from kosmo.contracts.sdd.document_repository import DocumentRepository
 from kosmo.contracts.sdd.repositories import (
     FeatureRepository,
     ProjectRepository,
@@ -28,6 +31,9 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyUserRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
+    SqlAlchemyDocumentRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
 )
@@ -35,6 +41,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.project_repo import 
     SqlAlchemyProjectRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.sdd_repo import SqlAlchemySpecRepository
+from kosmo.infrastructure.persistence.postgres.repositories.user_preference_repo import (
+    SqlAlchemyUserPreferenceRepository,
+)
 from kosmo.infrastructure.persistence.redis import (
     RedisAuthorizationCodeStore,
     RedisLoginAttemptStore,
@@ -60,6 +69,9 @@ class SDDComponents:
     llm_client: LLMClient
     blob_storage: FileSystemBlobStorage
     api_key_vault: FernetApiKeyVault
+    preference_repo: UserPreferenceRepository
+    document_repo: DocumentRepository
+    graph_engine: GraphEngine | None = None
     broadcast_event: object = field(default_factory=lambda: broadcast_event)
 
 
@@ -74,8 +86,17 @@ def build_sdd_components(
     spec_repo = SqlAlchemySpecRepository(session_factory)
     project_repo = SqlAlchemyProjectRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    preference_repo = SqlAlchemyUserPreferenceRepository(session_factory)
+    document_repo = SqlAlchemyDocumentRepository(session_factory)
 
-    llm_client: LLMClient
+    graph_engine: GraphEngine | None = None
+    try:
+        from kosmo.infrastructure.orchestration.langgraph_engine import LangGraphEngine
+
+        graph_engine = LangGraphEngine(settings)
+    except Exception:
+        log.warning("graph_engine.unavailable", message="LangGraph engine could not be initialized")
+
     if settings.llm_provider == "deepseek":
         from kosmo.infrastructure.llm.deepseek_adapter import DeepSeekClient
 
@@ -114,6 +135,15 @@ def build_sdd_components(
     fernet_key = Fernet(settings.fernet_master_key.get_secret_value())
     api_key_vault = FernetApiKeyVault(fernet_key)
 
+    if graph_engine is not None:
+        graph_engine.configure_deps(
+            llm_client,
+            preference_repo,
+            spec_repo=spec_repo,
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+        )
+
     return SDDComponents(
         spec_repo=spec_repo,
         project_repo=project_repo,
@@ -121,6 +151,9 @@ def build_sdd_components(
         llm_client=llm_client,
         blob_storage=blob_storage,
         api_key_vault=api_key_vault,
+        preference_repo=preference_repo,
+        document_repo=document_repo,
+        graph_engine=graph_engine,
     )
 
 

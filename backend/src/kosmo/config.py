@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     otel_service_name: str = "kosmo-backend"
     otel_environment: str = "development"
 
+    # LangSmith tracing (auto-detectado por langchain-core)
+    langchain_tracing_v2: bool = False
+    langchain_api_key: SecretStr | None = None
+    langchain_project: str = "kosmo-backend"
+    langchain_endpoint: str = "https://api.smith.langchain.com"
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_async_postgres_url(cls, value: object) -> object:

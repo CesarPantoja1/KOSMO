@@ -32,3 +32,4 @@ class ProjectModel(Base):
         onupdate=lambda: datetime.now(UTC),
     )
     discovery_document: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    discovery_clean: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

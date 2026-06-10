@@ -101,3 +101,11 @@ class DocumentNotFoundError(SpecError):
 class MarkdownParseError(SpecError):
     def __init__(self, detail: str) -> None:
         super().__init__(f"Error al parsear Markdown: {detail}")
+
+
+class EvaluationFailedError(SpecError):
+    def __init__(self, phase: str, reason: str = "") -> None:
+        msg = f"La generacion de {phase} no paso la validacion final"
+        if reason:
+            msg += f": {reason}"
+        super().__init__(msg)

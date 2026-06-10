@@ -9,16 +9,19 @@ class ToggleFeatureStatusUseCase:
     def __init__(self, feature_repo: FeatureRepository) -> None:
         self._feature_repo = feature_repo
 
-    async def execute(self, feature_id: FeatureId) -> Feature:
+    async def execute(self, feature_id: FeatureId, target_status: str | None = None) -> Feature:
         feature = await self._feature_repo.get(feature_id)
         if feature is None:
             raise FeatureNotFoundError(str(feature_id))
 
-        new_status = (
-            FeatureStatus.APROBADA
-            if feature.status == FeatureStatus.BORRADOR
-            else FeatureStatus.BORRADOR
-        )
+        if target_status in ("aprobada", "borrador"):
+            new_status = FeatureStatus(target_status)
+        else:
+            new_status = (
+                FeatureStatus.APROBADA
+                if feature.status == FeatureStatus.BORRADOR
+                else FeatureStatus.BORRADOR
+            )
 
         if not validate_feature_status_transition(feature.status, new_status):
             raise FeatureOperationError(

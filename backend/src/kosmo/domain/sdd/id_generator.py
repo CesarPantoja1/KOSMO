@@ -10,6 +10,8 @@ class IdGenerator:
         "user": "usr",
         "apikey": "apk",
         "audit": "aud",
+        "preference": "pref",
+        "requirement": "req",
     }
 
     @staticmethod

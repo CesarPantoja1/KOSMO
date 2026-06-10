@@ -1,10 +1,17 @@
+import asyncio
+import os
+import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
@@ -14,6 +21,7 @@ from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.discovery import discovery_router
 from kosmo.infrastructure.api.routers.features import features_router
+from kosmo.infrastructure.api.routers.preferences import router as preferences_router
 from kosmo.infrastructure.api.routers.projects import projects_router
 from kosmo.infrastructure.api.routers.requirements import requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
@@ -36,9 +44,9 @@ _OPENAPI_TAGS = [
     {
         "name": "projects",
         "description": (
-            "Gestión de proyectos. Cada proyecto representa un ciclo SDD completo "
-            "(Descubrimiento → Características → Requisitos → Modelo → Implementación). "
-            "IDs con prefijo `prj_` (ULID). El parámetro `{project_id}` acepta tanto "
+            "Gestion de proyectos. Cada proyecto representa un ciclo SDD completo "
+            "(Descubrimiento -> Caracteristicas -> Requisitos -> Modelo -> Implementacion). "
+            "IDs con prefijo `prj_` (ULID). El parametro `{project_id}` acepta tanto "
             "el ID (`prj_01KT...`) como el slug legible (`mi-proyecto`)."
         ),
     },
@@ -255,6 +263,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.llm_client = sdd_components.llm_client
     app.state.blob_storage = sdd_components.blob_storage
     app.state.api_key_vault = sdd_components.api_key_vault
+    app.state.preference_repo = sdd_components.preference_repo
+    app.state.graph_engine = sdd_components.graph_engine
 
     instrument_app(settings, app=app, db_engine=auth_components.db_engine)
     try:
@@ -276,6 +286,9 @@ app = FastAPI(
     redoc_url="/redoc" if settings.env != "production" else None,
     openapi_url="/api/v1/openapi.json",
     lifespan=lifespan,
+    swagger_ui_parameters={
+        "persistAuthorization": True,
+    },
 )
 
 app.add_middleware(
@@ -298,6 +311,11 @@ app.include_router(projects_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
 app.include_router(requirements_router)
+app.include_router(preferences_router)
+
+_static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir, html=True), name="static")
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
@@ -339,6 +357,17 @@ def _custom_openapi() -> dict[str, Any]:
     components: dict[str, Any] = schema.setdefault("components", {})
     schemas: dict[str, Any] = components.setdefault("schemas", {})
     schemas["HttpErrorResponse"] = http_error_schema
+
+    components["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT RS256 emitido por POST /api/v1/auth/token",
+        }
+    }
+
+    schema["security"] = [{"bearerAuth": []}]
 
     # Inyectar respuestas globales (403, 500) en todos los paths
     paths = cast(dict[str, Any], schema.get("paths", {}))

@@ -310,7 +310,7 @@ class NoopLLMClient:
         cache_key: str | None = None,
     ) -> LLMResponse:
         sys_msg = prompt.system_prompt.lower()
-        if "analista" in sys_msg and "sdd" in sys_msg:
+        if "analista" in sys_msg and ("negocio" in sys_msg or "sdd" in sys_msg):
             content = _DISCOVERY_RESPONSE
         elif "ingeniero" in sys_msg and "ears" in sys_msg and "senior" in sys_msg:
             content = _FEATURE_REQUIREMENTS_RESPONSE

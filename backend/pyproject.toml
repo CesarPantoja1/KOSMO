@@ -17,12 +17,14 @@ dependencies = [
     "jsonschema>=4.26.0",
     "langgraph>=1.1.9",
     "langgraph-checkpoint-postgres>=3.0.5",
+    "langsmith>=0.3.0",
     "litellm>=1.80.0",
     "logfire[fastapi,sqlalchemy,redis]>=4.32.1",
     "lxml>=6.0.0",
     "markdown-it-py>=3.0.0",
     "motor>=3.7.1",
     "pgvector>=0.4.2",
+    "psycopg[binary]>=3.3.3",
     "pydantic>=2.7",
     "pydantic-ai>=1.86.1",
     "pydantic-settings>=2.14.0",
@@ -64,8 +66,16 @@ select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "T20", "SIM", "ARG"]
 [tool.ruff.lint.per-file-ignores]
 "alembic/versions/*" = ["E501"]
 "tests/e2e/*" = ["T201", "ARG002", "E501"]
+"tests/conftest.py" = ["ARG002", "E501", "N817"]
+"tests/unit/**" = ["E501", "ARG001"]
+"tests/integration/**" = ["E501"]
 "src/kosmo/infrastructure/llm/*" = ["ARG002", "E501"]
 "src/kosmo/infrastructure/api/main.py" = ["E501"]
+"src/kosmo/application/orchestration/nodes/ears_generator.py" = ["E501"]
+"src/kosmo/application/orchestration/nodes/critics.py" = ["E501"]
+"src/kosmo/domain/sdd/validators/ears_validator.py" = ["E501"]
+"src/kosmo/application/orchestration/nodes/discovery_generator.py" = ["E501"]
+"src/kosmo/application/orchestration/nodes/draft_refiner.py" = ["E501"]
 
 [tool.pyright]
 include = ["src"]

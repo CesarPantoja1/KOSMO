@@ -5,6 +5,16 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ProjectStatusResponse(BaseModel):
+    project_id: str
+    current_phase: str
+    status: str
+    last_activity_at: datetime
+    last_activity_relative: str
+    features_count: int
+    requirements_count: int
+
+
 class CreateProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

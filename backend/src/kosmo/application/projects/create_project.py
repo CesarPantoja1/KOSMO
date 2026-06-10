@@ -9,7 +9,7 @@ class CreateProjectUseCase:
     def __init__(self, project_repo: ProjectRepository) -> None:
         self._project_repo = project_repo
 
-    async def execute(self, name: str, description: str) -> Project:
+    async def execute(self, name: str, description: str, created_by: str = "") -> Project:
         slug = slugify_spanish(name, max_length=80)
         existing = await self._project_repo.get_by_slug(slug)
         if existing is not None:
@@ -21,6 +21,8 @@ class CreateProjectUseCase:
                     break
                 counter += 1
 
+        from kosmo.contracts.sdd.ids import UserId
+
         project = Project(
             id=ProjectId(IdGenerator.generate("project")),
             name=name,
@@ -28,6 +30,7 @@ class CreateProjectUseCase:
             description=description,
             current_phase=ProjectPhase.DESCUBRIMIENTO,
             status=ProjectStatus.EN_PROGRESO,
+            created_by=UserId(created_by) if created_by else None,
         )
 
         await self._project_repo.add(project)

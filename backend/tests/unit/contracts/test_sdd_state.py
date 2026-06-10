@@ -6,11 +6,10 @@ from kosmo.contracts.sdd.state import SDDState
 
 class TestSDDState:
     def test_initial_state(self) -> None:
-        state = SDDState()
+        state = SDDState(project_id="prj_01KT07HCKMM", user_id="usr_01KT07HCKMM")
         assert state.phase == SpecPhase.DESCUBRIMIENTO
         assert state.requirements == []
         assert state.features == []
-        assert state.tasks == []
         assert state.errors == []
 
     def test_state_serialization(self) -> None:
@@ -22,10 +21,11 @@ class TestSDDState:
             source_statement="S shall R",
         )
         state = SDDState(
-            spec_id="spec-1",
+            project_id="prj_01KT07HCKMM",
+            user_id="usr_01KT07HCKMM",
             requirements=[req],
             phase=SpecPhase.REQUISITOS,
         )
         data = state.model_dump()
-        assert data["spec_id"] == "spec-1"
+        assert data["project_id"] == "prj_01KT07HCKMM"
         assert len(data["requirements"]) == 1

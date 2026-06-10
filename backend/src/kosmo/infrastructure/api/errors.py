@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     DocumentValidationError,
+    EvaluationFailedError,
     FeatureNotApprovedError,
     FeatureNotEditableError,
     FeatureNotFoundError,
@@ -23,6 +24,11 @@ _ERROR_MAP = {
     ProjectNotFoundError: (404, "urn:kosmo:projects:not-found", "Proyecto no encontrado"),
     SpecNotFoundError: (404, "urn:kosmo:specs:not-found", "Especificación no encontrada"),
     MarkdownParseError: (422, "urn:kosmo:document:parse-error", "Error de parseo Markdown"),
+    EvaluationFailedError: (
+        422,
+        "urn:kosmo:evaluator:not-approved",
+        "Validacion final no superada",
+    ),
 }
 
 

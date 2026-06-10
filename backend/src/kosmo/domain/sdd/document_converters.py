@@ -635,7 +635,7 @@ def discovery_to_markdown(discovery: DiscoveryDocument) -> str:
         ("Alcance", discovery.scope),
     ]
 
-    partes: list[str] = []
+    partes: list[str] = ["# Descubrimiento de Producto\n"]
     for titulo, contenido in secciones:
         if contenido.strip():
             partes.append(f"## {titulo}\n\n{contenido.strip()}")
@@ -660,29 +660,50 @@ def requirements_document_to_markdown(
         ("Requisitos Complejos", "Complex", doc.complex),
     ]
 
+    req_counter = 0
     partes: list[str] = [f"# Requisitos: {feature_title}\n"]
 
     for titulo, _subtitulo, reqs in categorias:
         if not reqs:
             continue
         partes.append(f"## {titulo}\n")
-        for req in reqs:
-            linea = f"### {req.id}\n\n"
+        for i, req in enumerate(reqs):
+            req_counter += 1
+            resumen = _extract_summary(req.response)
+            linea = f"### Requisito {req_counter} — {resumen}\n\n"
             linea += f"**Sistema:** {req.system}\n\n"
             if req.trigger:
                 linea += f"**Disparador:** {req.trigger}\n\n"
             linea += f"**Respuesta:** {req.response}\n\n"
             if req.acceptance_criteria:
-                linea += "**Criterios de aceptación:**\n"
+                linea += "**Criterios de aceptacion:**\n"
                 for ac in req.acceptance_criteria:
                     linea += f"- {ac.description}"
+                    if ac.expected_result:
+                        linea += f"\n  Resultado esperado: {ac.expected_result}"
+                    if ac.scenario:
+                        linea += f"\n  Escenario: {ac.scenario}"
                     if ac.verified_by:
                         linea += f" _(verificado por: {ac.verified_by})_"
                     linea += "\n"
                 linea += "\n"
+            if i < len(reqs) - 1:
+                linea += "---\n\n"
             partes.append(linea)
 
     return "\n".join(partes)
+
+
+def _extract_summary(response: str) -> str:
+    if not response:
+        return "Sin descripcion"
+    words = response.strip().split()
+    if not words:
+        return "Sin descripcion"
+    summary = " ".join(words[:8])
+    if len(words) > 8:
+        summary += "..."
+    return summary[0].upper() + summary[1:] if summary else summary
 
 
 def extract_discovery_from_document(document: dict) -> dict:
@@ -735,5 +756,91 @@ def extract_discovery_from_document(document: dict) -> dict:
 
     for field in _search_keys.values():
         result.setdefault(field, "")
+
+    return result
+
+
+def clean_document_tree(document: dict) -> dict:
+    if "content" in document and isinstance(document["content"], list):
+        document["content"] = _clean_content_nodes(document["content"])
+    return document
+
+
+def _clean_content_nodes(nodes: list[dict]) -> list[dict]:
+    cleaned: list[dict] = []
+    for node in nodes:
+        if isinstance(node, dict):
+            node_type = node.get("type", "")
+            children = node.get("content")
+            if isinstance(children, list):
+                if node_type in ("paragraph", "heading"):
+                    node["content"] = _dedup_bold_and_merge(children)
+                else:
+                    node["content"] = _clean_content_nodes(children)
+            cleaned.append(node)
+    return cleaned
+
+
+def _dedup_bold_and_merge(nodes: list[dict]) -> list[dict]:
+    result: list[dict] = []
+    i = 0
+    while i < len(nodes):
+        node = dict(nodes[i])
+        i += 1
+
+        if node.get("type") != "text":
+            result.append(node)
+            continue
+
+        text = node.get("text", "")
+        marks = node.get("marks") or []
+        has_bold = any(m.get("type") == "bold" for m in marks) if marks else False
+
+        if not has_bold:
+            if text.strip():
+                result.append(node)
+            continue
+
+        bold_text = text.strip().rstrip(":").strip()
+        merged_plain = None
+
+        while i < len(nodes):
+            peek = nodes[i]
+            if not isinstance(peek, dict) or peek.get("type") != "text":
+                break
+            peek_text = peek.get("text", "")
+            peek_marks = peek.get("marks") or []
+            if any(m.get("type") == "bold" for m in peek_marks) if peek_marks else False:
+                break
+            stripped = peek_text.lstrip(": ").strip()
+            if stripped.lower().startswith(bold_text.lower()):
+                remainder = stripped[len(bold_text):].strip()
+                if remainder:
+                    merged_plain = remainder
+                i += 1
+                break
+            else:
+                merged_plain = peek_text
+                i += 1
+                break
+
+        result.append({"type": "text", "text": text, "marks": marks})
+        if merged_plain is not None:
+            result.append({"type": "text", "text": merged_plain})
+
+        while i < len(nodes):
+            peek = nodes[i]
+            if isinstance(peek, dict) and peek.get("type") == "text" and peek.get("text", "").strip() and not (peek.get("marks") or []):
+                merged = dict(peek)
+                i += 1
+                if result and result[-1].get("type") == "text" and not result[-1].get("marks"):
+                    prev = result[-1].get("text", "")
+                    curr = merged.get("text", "")
+                    needs = prev and not prev.endswith(" ") and not curr.startswith(" ")
+                    result[-1]["text"] = prev + (" " if needs else "") + curr
+                else:
+                    result.append(merged)
+            else:
+                break
 
     return result

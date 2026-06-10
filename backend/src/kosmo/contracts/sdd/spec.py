@@ -17,7 +17,6 @@ class SpecPhase(StrEnum):
     CARACTERISTICAS = "caracteristicas"
     REQUISITOS = "requisitos"
     MODELO = "modelo"
-    PROTOTIPO = "prototipo"
     IMPLEMENTACION = "implementacion"
 
 
