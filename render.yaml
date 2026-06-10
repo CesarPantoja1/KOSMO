@@ -40,5 +40,11 @@ services:
         sync: false
       - key: LLM_API_KEY
         sync: false
+      - key: LANGCHAIN_TRACING_V2
+        value: "true"
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_PROJECT
+        value: kosmo-backend
       - key: LOGFIRE_TOKEN
         sync: false

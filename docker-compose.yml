@@ -47,10 +47,15 @@ services:
       JWT_PUBLIC_KEY_PATH: /app/.secrets/jwt_public.pem
       OTEL_SERVICE_NAME: kosmo-backend
       OTEL_ENVIRONMENT: ${ENVIRONMENT:-development}
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY:-}
+      LANGCHAIN_PROJECT: ${LANGCHAIN_PROJECT:-kosmo-backend}
       PYTHONUNBUFFERED: "1"
     volumes:
       # Claves RS256 SOLO LECTURA — nunca dentro de la imagen
       - ./backend/.secrets:/app/.secrets:ro
+      # Directorio de blobs para almacenamiento de archivos
+      - ./backend/data/blobs:/app/data/blobs
     depends_on:
       postgres:
         condition: service_healthy
