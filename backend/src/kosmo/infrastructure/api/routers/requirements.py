@@ -134,11 +134,13 @@ async def generate_requirements(
     state.shared_scratchpad["current_feature_description"] = feature.description
     state.shared_scratchpad["current_feature_status"] = feature.status.value
 
+    document_repo = getattr(request.app.state, "document_repo", None)
+    if document_repo:
+        discovery_md = await document_repo.get_discovery_md(feature.project_id)
+        if discovery_md:
+            state.discovery = discovery_md
+
     project = await request.app.state.project_repo.get(feature.project_id)
-    if project:
-        specs = await request.app.state.spec_repo.list_by_project(feature.project_id)
-        if specs and specs[0].discovery:
-            state.discovery = specs[0].discovery
 
     if graph_engine is not None:
         from ulid import ULID

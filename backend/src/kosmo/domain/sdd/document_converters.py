@@ -2,11 +2,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from kosmo.contracts.sdd.discovery import DiscoveryDocument
-    from kosmo.contracts.sdd.requirements_document import RequirementsDocument
 
 
 def slugify_spanish(text: str, max_length: int = 80) -> str:
@@ -19,6 +14,20 @@ def slugify_spanish(text: str, max_length: int = 80) -> str:
         if ultimo_guion > 0:
             slug = slug[:ultimo_guion]
     return slug
+
+
+def _strip_accents(text: str) -> str:
+    normalizada = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in normalizada if not unicodedata.combining(c))
+
+
+def clean_markdown(markdown: str) -> str:
+    markdown = re.sub(r":{2,}", ":", markdown)
+    markdown = re.sub(r":\s+:", ":", markdown)
+    return markdown
+
+
+# ── Funciones de arbol ProseMirror (solo para requirements) ──
 
 
 def extract_sections(document: dict) -> list[dict]:
@@ -310,11 +319,6 @@ def _collect_inline_content(tokens: list, start: int) -> list[dict]:
 
 
 def _process_inline_children(children: list) -> list[dict]:
-    """Procesa hijos inline del tokenizador markdown-it.
-
-    Usa un bucle while con control de índice para evitar que los nodos
-    dentro de pares open/close (strong, em, s, link) se procesen dos veces.
-    """
     nodos: list[dict] = []
     i = 0
     while i < len(children):
@@ -371,29 +375,6 @@ def _process_inline_children(children: list) -> list[dict]:
             i += 1
         else:
             i += 1
-    return nodos
-
-
-def _process_inline_until(children: list, start: int, close_type: str) -> list[dict]:
-    nodos: list[dict] = []
-    i = start
-    while i < len(children):
-        child = children[i]
-        if child.type == close_type:
-            break
-        if child.type == "text":
-            nodos.append({"type": "text", "text": child.content})
-        elif child.type == "code_inline":
-            nodos.append(
-                {
-                    "type": "text",
-                    "text": child.content,
-                    "marks": [{"type": "code"}],
-                }
-            )
-        elif child.type == "softbreak" and nodos and nodos[-1].get("type") == "text":
-            nodos[-1]["text"] += " "
-        i += 1
     return nodos
 
 
@@ -504,11 +485,11 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
 
     nodos: list[dict] = []
     patron = _re.compile(
-        r"(\*\*\*(.+?)\*\*\*)|"  # bold + italic
-        r"(\*\*(.+?)\*\*)|"  # bold
-        r"(~~(.+?)~~)|"  # strike
-        r"(\*(.+?)\*)|"  # italic
-        r"(`(.+?)`)"  # code
+        r"(\*\*\*(.+?)\*\*\*)|"
+        r"(\*\*(.+?)\*\*)|"
+        r"(~~(.+?)~~)|"
+        r"(\*(.+?)\*)|"
+        r"(`(.+?)`)"
     )
 
     ultimo = 0
@@ -517,7 +498,7 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
         if inicio > ultimo:
             nodos.append({"type": "text", "text": texto[ultimo:inicio]})
 
-        if m.group(1):  # ***Text***
+        if m.group(1):
             nodos.append(
                 {
                     "type": "text",
@@ -525,7 +506,7 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
                     "marks": [{"type": "bold"}, {"type": "italic"}],
                 }
             )
-        elif m.group(3):  # **Text**
+        elif m.group(3):
             nodos.append(
                 {
                     "type": "text",
@@ -533,7 +514,7 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
                     "marks": [{"type": "bold"}],
                 }
             )
-        elif m.group(5):  # ~~Text~~
+        elif m.group(5):
             nodos.append(
                 {
                     "type": "text",
@@ -541,7 +522,7 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
                     "marks": [{"type": "strike"}],
                 }
             )
-        elif m.group(7):  # *Text*
+        elif m.group(7):
             nodos.append(
                 {
                     "type": "text",
@@ -549,7 +530,7 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
                     "marks": [{"type": "italic"}],
                 }
             )
-        elif m.group(9):  # `Text`
+        elif m.group(9):
             nodos.append(
                 {
                     "type": "text",
@@ -563,7 +544,6 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
     if ultimo < len(texto):
         nodos.append({"type": "text", "text": texto[ultimo:]})
 
-    # Fix double colons en todos los nodos de texto
     for n in nodos:
         if n.get("type") == "text" and "text" in n:
             n["text"] = re.sub(r":{2,}", ":", n["text"])
@@ -636,286 +616,3 @@ def _validate_node(node: dict, ruta: str, hallazgos: list[str]) -> None:
         else:
             for j, child in enumerate(contenido):
                 _validate_node(child, f"{ruta}.content[{j}]", hallazgos)
-
-
-def discovery_to_markdown(discovery: DiscoveryDocument) -> str:
-    secciones: list[tuple[str, str]] = [
-        ("Visión del producto", discovery.vision),
-        ("Espacio del problema", discovery.problem_space),
-        ("Actores", discovery.actors),
-        ("Propuesta de valor", discovery.value_proposition),
-        ("Casos de uso", discovery.use_cases),
-        ("Capacidades principales", discovery.core_capabilities),
-        ("Reglas de negocio", discovery.business_rules),
-        ("Atributos de calidad", discovery.quality_attributes),
-        ("Alcance", discovery.scope),
-    ]
-
-    partes: list[str] = ["# Descubrimiento de Producto\n"]
-    for titulo, contenido in secciones:
-        if contenido.strip():
-            partes.append(f"## {titulo}\n\n{contenido.strip()}")
-
-    return "\n\n".join(partes)
-
-
-def clean_markdown(markdown: str) -> str:
-    """Reemplazo global de :: por : en todo el string markdown.
-
-    Esta es la última línea de defensa contra doble-dos-puntos que
-    pudieran haber escapado a los formateadores anteriores.
-    """
-    markdown = re.sub(r":{2,}", ":", markdown)
-    markdown = re.sub(r":\s+:", ":", markdown)
-    return markdown
-
-
-def requirements_document_to_markdown(
-    doc: RequirementsDocument,
-    feature_title: str,
-) -> str:
-    categorias: list[tuple[str, str, list]] = [
-        ("Requisitos Ubicuos", "Ubiquitous", doc.ubiquitous),
-        ("Requisitos Basados en Eventos", "Event-driven", doc.event),
-        ("Requisitos Determinados por el Estado", "State-driven", doc.state),
-        ("Requisitos Opcionales", "Optional features", doc.optional),
-        (
-            "Requisitos de Respuestas Deseadas ante Fallos",
-            "Unwanted behaviors",
-            doc.unwanted,
-        ),
-        ("Requisitos Complejos", "Complex", doc.complex),
-    ]
-
-    req_counter = 0
-    partes: list[str] = [f"# Requisitos: {feature_title}\n"]
-
-    for titulo, _subtitulo, reqs in categorias:
-        if not reqs:
-            continue
-        partes.append(f"## {titulo}\n")
-        for i, req in enumerate(reqs):
-            req_counter += 1
-            resumen = _extract_summary(req.response)
-            linea = f"### Requisito {req_counter} — {resumen}\n\n"
-            linea += f"**Sistema:** {req.system}\n\n"
-            if req.trigger:
-                linea += f"**Disparador:** {req.trigger}\n\n"
-            linea += f"**Respuesta:** {req.response}\n\n"
-            if req.acceptance_criteria:
-                linea += "**Criterios de aceptación:**\n"
-                for ac in req.acceptance_criteria:
-                    linea += f"- {ac.description}"
-                    if ac.expected_result:
-                        linea += f"\n  Resultado esperado: {ac.expected_result}"
-                    if ac.scenario:
-                        linea += f"\n  Escenario: {ac.scenario}"
-                    if ac.verified_by:
-                        linea += f" _(verificado por: {ac.verified_by})_"
-                    linea += "\n"
-                linea += "\n"
-            if i < len(reqs) - 1:
-                linea += "---\n\n"
-            partes.append(linea)
-
-    return "\n".join(partes)
-
-
-def _extract_summary(response: str) -> str:
-    if not response:
-        return "Sin descripción"
-    words = response.strip().split()
-    if not words:
-        return "Sin descripción"
-    summary = " ".join(words[:8])
-    if len(words) > 8:
-        summary += "..."
-    return summary[0].upper() + summary[1:] if summary else summary
-
-
-def extract_discovery_from_document(document: dict) -> dict:
-    content = document.get("content", [])
-    heading_map: dict[str, str] = {}
-    current_heading: str | None = None
-    current_parts: list[str] = []
-
-    for node in content:
-        if node.get("type") != "heading":
-            is_content = node.get("type") in (
-                "paragraph",
-                "bulletList",
-                "orderedList",
-                "blockquote",
-            )
-            if is_content and current_heading:
-                current_parts.append(document_to_markdown(node))
-            continue
-
-        attrs = node.get("attrs") or {}
-        nivel = attrs.get("level", 0) if isinstance(attrs, dict) else 0
-        if nivel in (1, 2):
-            if current_heading:
-                heading_map[current_heading] = "\n".join(current_parts).strip()
-            current_heading = _extract_plain_text(node.get("content", []))
-            current_parts = []
-
-    if current_heading:
-        heading_map[current_heading] = "\n".join(current_parts).strip()
-
-    _search_keys = {
-        "visión del producto": "vision",
-        "espacio del problema": "problem_space",
-        "actores": "actors",
-        "propuesta de valor": "value_proposition",
-        "casos de uso": "use_cases",
-        "capacidades principales": "core_capabilities",
-        "reglas de negocio": "business_rules",
-        "atributos de calidad": "quality_attributes",
-        "alcance": "scope",
-    }
-
-    result: dict = {}
-    for raw_title, content_str in heading_map.items():
-        key = raw_title.strip().lower()
-        field = _search_keys.get(key)
-        if field:
-            result[field] = content_str
-
-    for field in _search_keys.values():
-        result.setdefault(field, "")
-
-    return result
-
-
-def clean_document_tree(document: dict) -> dict:
-    if "content" in document and isinstance(document["content"], list):
-        document["content"] = _fix_double_colons_in_nodes(_clean_content_nodes(document["content"]))
-    return document
-
-
-def _fix_double_colons_in_nodes(nodes: list[dict]) -> list[dict]:
-    """Reemplaza :: por : en todos los nodos de texto del árbol ProseMirror.
-
-    También corrige el caso en que :: cruza dos nodos de texto adyacentes.
-    """
-    for node in nodes:
-        if isinstance(node, dict):
-            if node.get("type") == "text" and "text" in node:
-                node["text"] = re.sub(r":{2,}", ":", node["text"])
-            children = node.get("content")
-            if isinstance(children, list):
-                _fix_double_colons_in_nodes(children)
-                _fix_adjacent_colons(children)
-    return nodes
-
-
-def _fix_adjacent_colons(nodes: list[dict]) -> None:
-    """Si un nodo de texto termina con ':' y el siguiente empieza con ':',
-    quita el ':' del primer nodo para evitar '::' entre ambos."""
-    for j in range(len(nodes) - 1):
-        a = nodes[j]
-        b = nodes[j + 1]
-        if (
-            isinstance(a, dict)
-            and a.get("type") == "text"
-            and isinstance(b, dict)
-            and b.get("type") == "text"
-        ):
-            a_text: str = a.get("text", "")
-            b_text: str = b.get("text", "")
-            if a_text.rstrip(" ") == "":
-                continue
-            if a_text.endswith(":") and b_text.startswith(":"):
-                a["text"] = a_text.rstrip(":").rstrip(" ")
-
-
-def _clean_content_nodes(nodes: list[dict]) -> list[dict]:
-    cleaned: list[dict] = []
-    for node in nodes:
-        if isinstance(node, dict):
-            node_type = node.get("type", "")
-            children = node.get("content")
-            if isinstance(children, list):
-                if node_type in ("paragraph", "heading"):
-                    node["content"] = _dedup_bold_and_merge(children)
-                else:
-                    node["content"] = _clean_content_nodes(children)
-            cleaned.append(node)
-    return cleaned
-
-
-def _dedup_bold_and_merge(nodes: list[dict]) -> list[dict]:
-    result: list[dict] = []
-    i = 0
-    while i < len(nodes):
-        node = dict(nodes[i])
-        i += 1
-
-        if node.get("type") != "text":
-            result.append(node)
-            continue
-
-        text = node.get("text", "")
-        marks = node.get("marks") or []
-        has_bold = any(m.get("type") == "bold" for m in marks) if marks else False
-
-        if not has_bold:
-            if text.strip():
-                result.append(node)
-            continue
-
-        bold_text = re.sub(r":{2,}", ":", text.strip()).rstrip(":").strip()
-        merged_plain = None
-
-        while i < len(nodes):
-            peek = nodes[i]
-            if not isinstance(peek, dict) or peek.get("type") != "text":
-                break
-            peek_text = peek.get("text", "")
-            peek_marks = peek.get("marks") or []
-            if any(m.get("type") == "bold" for m in peek_marks) if peek_marks else False:
-                break
-            stripped = peek_text.lstrip(": ").strip()
-            if stripped.lower().startswith(bold_text.lower()):
-                remainder = stripped[len(bold_text) :].strip()
-                if remainder.startswith(":") and text.strip().endswith(":"):
-                    text = text.rstrip(":").strip()
-                if remainder:
-                    merged_plain = remainder
-                i += 1
-                break
-            else:
-                # Si el texto bold termina en ':' y el siguiente empieza en ':',
-                # quitamos el ':' del bold para evitar '::' al concatenar
-                if text.strip().endswith(":") and peek_text.lstrip(" ").startswith(":"):
-                    text = text.rstrip(":").strip()
-                merged_plain = peek_text
-                i += 1
-                break
-
-        result.append({"type": "text", "text": re.sub(r":{2,}", ":", text), "marks": marks})
-        if merged_plain is not None:
-            result.append({"type": "text", "text": re.sub(r":{2,}", ":", merged_plain)})
-
-        while i < len(nodes):
-            peek = nodes[i]
-            if (
-                isinstance(peek, dict)
-                and peek.get("type") == "text"
-                and peek.get("text", "").strip()
-                and not (peek.get("marks") or [])
-            ):
-                merged = dict(peek)
-                i += 1
-                if result and result[-1].get("type") == "text" and not result[-1].get("marks"):
-                    prev = result[-1].get("text", "")
-                    curr = merged.get("text", "")
-                    needs = prev and not prev.endswith(" ") and not curr.startswith(" ")
-                    merged_text = prev + (" " if needs else "") + curr
-                    result[-1]["text"] = re.sub(r":{2,}", ":", merged_text)
-                else:
-                    result.append(merged)
-            else:
-                break
-
-    return result

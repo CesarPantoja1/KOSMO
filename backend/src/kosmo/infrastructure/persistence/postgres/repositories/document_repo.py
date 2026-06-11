@@ -2,93 +2,36 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from kosmo.contracts.sdd.discovery import DiscoveryDocument
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.requirements_document import RequirementsDocument
-from kosmo.domain.sdd.document_converters import extract_discovery_from_document
 
 
 class SqlAlchemyDocumentRepository:
     def __init__(self, session_factory: async_sessionmaker) -> None:
         self._session_factory = session_factory
 
-    async def save_view(self, resource_type: str, resource_id: str, document: dict) -> None:
-        async with self._session_factory() as session:
-            if resource_type == "project":
-                from kosmo.infrastructure.persistence.postgres.models.project import ProjectModel
-
-                stmt = (
-                    ProjectModel.__table__.update()
-                    .where(ProjectModel.id == resource_id)
-                    .values(discovery_document=document)
-                )
-                await session.execute(stmt)
-                await session.commit()
-            elif resource_type == "feature":
-                from kosmo.infrastructure.persistence.postgres.models.feature import FeatureModel
-
-                stmt = (
-                    FeatureModel.__table__.update()
-                    .where(FeatureModel.id == resource_id)
-                    .values(requirements_document=document)
-                )
-                await session.execute(stmt)
-                await session.commit()
-
-    async def get_view(self, resource_type: str, resource_id: str) -> dict | None:
-        async with self._session_factory() as session:
-            if resource_type == "project":
-                from kosmo.infrastructure.persistence.postgres.models.project import ProjectModel
-
-                from sqlalchemy import select
-
-                result = await session.execute(
-                    select(ProjectModel.discovery_document).where(ProjectModel.id == resource_id)
-                )
-                row = result.scalar_one_or_none()
-                return row
-            elif resource_type == "feature":
-                from kosmo.infrastructure.persistence.postgres.models.feature import FeatureModel
-
-                from sqlalchemy import select
-
-                result = await session.execute(
-                    select(FeatureModel.requirements_document).where(FeatureModel.id == resource_id)
-                )
-                row = result.scalar_one_or_none()
-                return row
-        return None
-
-    async def save_clean_discovery(
-        self, project_id: ProjectId, discovery: DiscoveryDocument
-    ) -> None:
+    async def save_discovery_md(self, project_id: ProjectId, markdown: str) -> None:
         async with self._session_factory() as session:
             from kosmo.infrastructure.persistence.postgres.models.project import ProjectModel
 
             stmt = (
                 ProjectModel.__table__.update()
                 .where(ProjectModel.id == str(project_id))
-                .values(discovery_clean=discovery.model_dump())
+                .values(discovery_md=markdown)
             )
             await session.execute(stmt)
             await session.commit()
 
-    async def get_clean_discovery(self, project_id: ProjectId) -> DiscoveryDocument | None:
+    async def get_discovery_md(self, project_id: ProjectId) -> str | None:
         async with self._session_factory() as session:
             from kosmo.infrastructure.persistence.postgres.models.project import ProjectModel
 
             from sqlalchemy import select
 
             result = await session.execute(
-                select(ProjectModel.discovery_clean).where(ProjectModel.id == str(project_id))
+                select(ProjectModel.discovery_md).where(ProjectModel.id == str(project_id))
             )
-            row = result.scalar_one_or_none()
-            if row and isinstance(row, dict):
-                try:
-                    return DiscoveryDocument(**row)
-                except (TypeError, ValueError):
-                    return None
-        return None
+            return result.scalar_one_or_none()
 
     async def save_clean_requirements(
         self, feature_id: FeatureId, requirements: RequirementsDocument
@@ -146,19 +89,4 @@ class SqlAlchemyDocumentRepository:
                     )
                 except (TypeError, ValueError):
                     return None
-        return None
-
-    async def sync_clean_from_view(
-        self, resource_type: str, resource_id: str
-    ) -> DiscoveryDocument | RequirementsDocument | None:
-        view = await self.get_view(resource_type, resource_id)
-        if view is None:
-            return None
-
-        if resource_type == "project":
-            discovery_dict = extract_discovery_from_document(view)
-            discovery = DiscoveryDocument(**discovery_dict)
-            await self.save_clean_discovery(ProjectId(resource_id), discovery)
-            return discovery
-
         return None

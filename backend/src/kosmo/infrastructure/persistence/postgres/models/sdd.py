@@ -18,7 +18,6 @@ class SpecModel(Base):
         String(32), ForeignKey("projects.id"), nullable=False, index=True
     )
     phase: Mapped[str] = mapped_column(String(32), default="descubrimiento")
-    discovery_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     roadmap_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     design_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     constitution_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

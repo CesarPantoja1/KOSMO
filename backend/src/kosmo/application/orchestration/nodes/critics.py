@@ -82,8 +82,8 @@ _CONSISTENCY_CRITIC_SYSTEM = (
     "5. DEPENDENCIAS NO DECLARADAS: Un requisito asume el comportamiento descrito en otro "
     "requisito sin hacer explícita la dependencia.\n\n"
     "SEVERITY:\n"
-    "- 'blocker': contradiccion detectada o categoria EARS critica vacia\n"
-    "- 'warning': duplicado detectado o terminologia inconsistente\n"
+    "- 'blocker': contradicción detectada o categoría EARS crítica vacía\n"
+    "- 'warning': duplicado detectado o terminología inconsistente\n"
     "- 'none': sin problemas de consistencia\n\n"
     "Responde SIEMPRE en JSON con severity, message, y lista de problemas encontrados."
 )
@@ -151,10 +151,10 @@ async def quality_critic_node(state: KOSMOState, config: RunnableConfig) -> dict
 
 ## Fase: {state.phase.value}
 
-Evalua CADA requisito contra la rubrica de 6 dimensiones. Detecta fugas tecnicas y ambiguedades.
+Evalúa CADA requisito contra la rúbrica de 6 dimensiones. Detecta fugas técnicas y ambigüedades.
 Responde en JSON:
 ```json
-{{"score": 8, "severity": "none", "message": "Evaluacion detallada...", "findings": [], "dimension_scores": {{"pureza_negocio": 9, "correccion_ears": 8, "verificabilidad": 7, "completitud": 8, "no_ambiguedad": 9, "cobertura": 7}}}}
+{{"score": 8, "severity": "none", "message": "Evaluación detallada...", "findings": [], "dimension_scores": {{"pureza_negocio": 9, "corrección_ears": 8, "verificabilidad": 7, "completitud": 8, "no_ambigüedad": 9, "cobertura": 7}}}}
 ```
 Severity: 'none' (aprobado), 'warning' (mejorable), 'blocker' (rechazado).""",
         response_schema=CriticOutputSchema,

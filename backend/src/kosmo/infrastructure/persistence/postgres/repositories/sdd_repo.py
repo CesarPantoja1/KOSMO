@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kosmo.contracts.sdd.constitution import Constitution
-from kosmo.contracts.sdd.discovery import DiscoveryDocument, ProjectRoadmap
+from kosmo.contracts.sdd.discovery import ProjectRoadmap
 from kosmo.contracts.sdd.domain_model import DomainModel
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.ids import ProjectId, SpecId, TaskId
@@ -26,7 +26,6 @@ class SqlAlchemySpecRepository:
                 id=spec.id,
                 project_id=spec.project_id,
                 phase=spec.phase.value,
-                discovery_data=spec.discovery.model_dump() if spec.discovery else None,
                 roadmap_data=spec.roadmap.model_dump() if spec.roadmap else None,
                 design_data=spec.design.model_dump() if spec.design else None,
                 constitution_data=spec.constitution.model_dump() if spec.constitution else None,
@@ -56,7 +55,6 @@ class SqlAlchemySpecRepository:
             if model is None:
                 return
             model.phase = spec.phase.value  # type: ignore[union-attr]
-            model.discovery_data = spec.discovery.model_dump() if spec.discovery else None  # type: ignore[union-attr]
             model.roadmap_data = spec.roadmap.model_dump() if spec.roadmap else None  # type: ignore[union-attr]
             model.design_data = spec.design.model_dump() if spec.design else None  # type: ignore[union-attr]
             model.constitution_data = (  # type: ignore[union-attr]
@@ -139,14 +137,9 @@ class SqlAlchemySpecRepository:
                 )
             )
 
-        discovery: DiscoveryDocument | None = None
-        if model.discovery_data:  # type: ignore[union-attr]
-            discovery = DiscoveryDocument.model_validate(model.discovery_data)  # type: ignore[union-attr]
-
         return SpecDocument(
             id=SpecId(model.id),  # type: ignore[arg-type,union-attr]
             project_id=ProjectId(model.project_id),  # type: ignore[arg-type,union-attr]
-            discovery=discovery,
             roadmap=ProjectRoadmap.model_validate(model.roadmap_data)  # type: ignore[union-attr]
             if model.roadmap_data  # type: ignore[union-attr]
             else None,

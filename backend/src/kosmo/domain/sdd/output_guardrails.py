@@ -760,3 +760,84 @@ def validate_discovery_quality(data: dict) -> dict[str, object]:
         "warning_count": warning_count,
         "summary": "; ".join(summary_parts) if summary_parts else "Calidad OK",
     }
+
+
+def validate_discovery_md(markdown: str) -> dict[str, object]:
+    """Valida que el Markdown generado tenga las secciones requeridas y sin terminos prohibidos."""
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    if not markdown or not markdown.strip():
+        blockers.append("El Markdown está vacío")
+        return {
+            "is_valid": False,
+            "blockers": blockers,
+            "warnings": warnings,
+            "blocker_count": len(blockers),
+            "warning_count": len(warnings),
+            "summary": "Markdown vacío",
+        }
+
+    expected_headings = [
+        ("vision del producto", "Vision del producto"),
+        ("espacio del problema", "Espacio del problema"),
+        ("actores", "Actores"),
+        ("propuesta de valor", "Propuesta de valor"),
+        ("casos de uso", "Casos de uso"),
+        ("capacidades principales", "Capacidades principales"),
+        ("reglas de negocio", "Reglas de negocio"),
+        ("atributos de calidad", "Atributos de calidad"),
+        ("alcance", "Alcance"),
+    ]
+
+    lower_md = markdown.lower()
+    for heading_lower, heading_display in expected_headings:
+        if f"## {heading_lower}" not in lower_md:
+            blockers.append(f"Falta la sección '{heading_display}'")
+
+    for term in PROHIBITED_TERMS:
+        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        if pattern.search(markdown):
+            blockers.append(f"Término prohibido encontrado: '{term}'")
+
+    try:
+        from kosmo.domain.sdd.document_converters import _strip_accents
+
+        tilde_words = [
+            "gestión", "visión", "análisis", "descripción", "línea", "mínimo",
+            "crítico", "ítem", "párrafo", "sección", "diagnóstico", "tecnología",
+            "acción", "generación", "información", "organización", "específico",
+            "número", "lógica", "público", "rápido", "útil", "único",
+        ]
+        words = markdown.split()
+        missing_tildes = 0
+        total_expected = 0
+        for tw in tilde_words:
+            no_accent = _strip_accents(tw)
+            if no_accent in words:
+                if tw not in words:
+                    missing_tildes += 1
+                total_expected += 1
+
+        if total_expected > 0 and missing_tildes > total_expected * 0.2:
+            warnings.append(f"Posible falta de tildes: {missing_tildes}/{total_expected}")
+    except Exception:
+        pass
+
+    if "::" in markdown:
+        warnings.append("Se encontraron dobles dos puntos '::'")
+
+    summary_parts: list[str] = []
+    if blockers:
+        summary_parts.append(f"{len(blockers)} bloqueo(s)")
+    if warnings:
+        summary_parts.append(f"{len(warnings)} advertencia(s)")
+
+    return {
+        "is_valid": len(blockers) == 0,
+        "blockers": blockers,
+        "warnings": warnings,
+        "blocker_count": len(blockers),
+        "warning_count": len(warnings),
+        "summary": "; ".join(summary_parts) if summary_parts else "OK",
+    }

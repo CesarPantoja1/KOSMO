@@ -13,34 +13,30 @@ async def search_discovery_handler(
 ) -> ToolResult:
     query = str(params.get("query", ""))
     project_id = str(params.get("project_id", ""))
-    section = str(params.get("section", ""))
 
     if not spec_repo or not project_id:
         return ToolResult(success=False, error="spec_repo or project_id not available")
 
     try:
-        spec = await spec_repo.get(project_id)
-        if spec is None or spec.discovery_document is None:
-            return ToolResult(success=True, data={"sections": [], "found": False})
+        from kosmo.contracts.sdd.ids import ProjectId
 
-        doc = spec.discovery_document
+        document_repo = getattr(spec_repo, "_document_repo", None)
+        if document_repo is None:
+            return ToolResult(success=True, data={"sections": {}, "found": False})
+
+        markdown = await document_repo.get_discovery_md(ProjectId(project_id))
+        if not markdown:
+            return ToolResult(success=True, data={"sections": {}, "found": False})
+
         sections: dict[str, str] = {}
-        for field_name in [
-            "vision",
-            "problem_space",
-            "actors",
-            "value_proposition",
-            "use_cases",
-            "core_capabilities",
-            "business_rules",
-            "quality_attributes",
-            "scope",
-        ]:
-            content = getattr(doc, field_name, None)
-            if content and isinstance(content, str):
-                if not section or field_name == section:
-                    if not query or query.lower() in content.lower():
-                        sections[field_name] = content[:2000]
+        if query:
+            lines = markdown.split("\n")
+            for line in lines:
+                if query.lower() in line.lower():
+                    sections["markdown"] = markdown[:2000]
+                    break
+        else:
+            sections["markdown"] = markdown[:2000]
 
         return ToolResult(
             success=True,

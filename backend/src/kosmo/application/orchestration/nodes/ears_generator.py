@@ -100,7 +100,7 @@ _QUALITY_CHECKLIST = """CHECKLIST DE CALIDAD POR REQUISITO:
 
 @traced("ears_generator.execute")
 async def ears_generator_node(state: KOSMOState, config: RunnableConfig) -> dict[str, object]:
-    """Genera requisitos EARS via ciclo ReAct: Analisis -> Planificacion -> Generacion -> Auto-Validacion.
+    """Genera requisitos EARS via ciclo ReAct: Análisis -> Planificación -> Generación -> Auto-Validación.
 
     Reads: graph_deps, discovery, shared_scratchpad, critique_log, generation_attempts
     Writes: requirements, generation_attempts, shared_scratchpad, validation_status,
@@ -270,31 +270,7 @@ def _build_discovery_context(state: KOSMOState) -> str:
     if not state.discovery:
         return ""
 
-    d = state.discovery
-    parts: list[str] = []
-
-    if d.vision:
-        parts.append(f"### Vision del Producto\n{d.vision}")
-    if d.problem_space:
-        parts.append(f"### Espacio de Problema\n{d.problem_space}")
-    if d.actors:
-        parts.append(f"### Actores y Stakeholders\n{d.actors}")
-    if d.value_proposition:
-        parts.append(f"### Propuesta de Valor\n{d.value_proposition}")
-    if d.business_rules:
-        parts.append(
-            f"### Reglas de Negocio (CRITICAS — derivar requisitos de estas reglas)\n{d.business_rules}"
-        )
-    if d.use_cases:
-        parts.append(f"### Casos de Uso Principales\n{d.use_cases}")
-    if d.core_capabilities:
-        parts.append(f"### Capacidades Principales\n{d.core_capabilities}")
-    if d.scope:
-        parts.append(f"### Alcance del Producto\n{d.scope}")
-    if d.quality_attributes:
-        parts.append(f"### Atributos de Calidad\n{d.quality_attributes}")
-
-    return "\n\n".join(parts)
+    return state.discovery
 
 
 def _build_system_prompt(preferences_prompt: str) -> str:
@@ -305,16 +281,22 @@ def _build_system_prompt(preferences_prompt: str) -> str:
         "QUÉ debe hacer el sistema desde la perspectiva del usuario o stakeholder, "
         "NUNCA CÓMO se implementa. Eres completamente agnóstico a la tecnología.\n\n"
         f"{_BUSINESS_PRINCIPLES}\n\n"
+        "SECCIONES CLAVE DEL DISCOVERY PARA DERIVAR REQUISITOS:\n"
+        "- Reglas de negocio: son la principal fuente de requisitos funcionales y restricciones.\n"
+        "- Casos de uso: cada paso del flujo es un requisito potencial.\n"
+        "- Actores: cada rol tiene necesidades que se traducen en requisitos.\n"
+        "- Atributos de calidad: expectativas no funcionales que DEBEN convertirse en requisitos.\n"
+        "- Alcance: los límites del producto definen qué requisitos están dentro o fuera.\n\n"
         "FORMATO DE RESPUESTA:\n"
         "- source_statement: texto plano con sintaxis EARS exacta. SIN markdown.\n"
         "- response: texto enriquecido en Markdown. Usa **negritas** para "
-        "conceptos clave. Formato correcto: **Concepto**: descripcion. "
-        "JAMAS dupliques: **Concepto**Concepto es INCORRECTO. "
+        "conceptos clave. Formato correcto: **Concepto**: descripción. "
+        "JAMÁS dupliques: **Concepto**Concepto es INCORRECTO. "
         "Usa - viñetas para enumerar comportamientos, *cursivas* para "
-        "ejemplos, '---' para separar subsecciones. Maximo 2-3 parrafos.\n"
+        "ejemplos, '---' para separar subsecciones. Máximo 2-3 párrafos.\n"
         "- rationale: texto enriquecido en Markdown con viñetas si enumera razones.\n"
         "- acceptance_criteria.description: admite **negritas** para verbos clave.\n"
-        "- Cada item de lista DEBE ir en su propia linea con salto de linea real.\n"
+        "- Cada ítem de lista DEBE ir en su propia línea con salto de línea real.\n"
         "- PROHIBIDO omitir tildes. Toda palabra que lleve tilde DEBE llevarla.\n\n"
         f"{_TERMS_PROHIBITED}\n\n"
         f"{_EARS_CATEGORY_INSTRUCTIONS}\n\n"
@@ -340,23 +322,23 @@ def _build_task(
     parts: list[str] = []
 
     if is_improve:
-        parts.append(f"## Ciclo ReAct — Iteracion {iteration} — MODO MEJORA")
+        parts.append(f"## Ciclo ReAct — Iteración {iteration} — MODO MEJORA")
         parts.append("")
         parts.append("### Documento Actual (modificado por el usuario):")
         parts.append(current_draft[:4000])
         parts.append("")
-        parts.append("### Instruccion:")
+        parts.append("### Instrucción:")
         parts.append(
             "Mejora este documento de requisitos manteniendo las ideas del usuario. "
             "Refina la estructura EARS, completa requisitos incompletos, corrige "
-            "errores de formato y mejora la redaccion. NO elimines requisitos que "
-            "el usuario anadio ni cambies su intencion."
+            "errores de formato y mejora la redacción. NO elimines requisitos que "
+            "el usuario añadió ni cambies su intención."
         )
         parts.append("")
     else:
-        parts.append(f"## Ciclo ReAct — Iteracion {iteration}")
+        parts.append(f"## Ciclo ReAct — Iteración {iteration}")
         parts.append("")
-        parts.append("### 1. ANALISIS (Thought)")
+        parts.append("### 1. ANÁLISIS (Thought)")
         parts.append("Analiza la funcionalidad desde la perspectiva del negocio:")
         parts.append("- Identifica los actores principales y sus objetivos")
         parts.append("- Identifica los flujos principales (happy path)")
@@ -366,19 +348,19 @@ def _build_task(
         parts.append("- Identifica reglas de negocio que generan restricciones")
         parts.append("")
         if critic_feedback:
-            parts.append("### 2. CORRECCION (Observation de iteracion anterior)")
+            parts.append("### 2. CORRECCIÓN (Observation de iteración anterior)")
             parts.append(f"Feedback del revisor: {critic_feedback}")
             parts.append("")
-        parts.append("### 3. PLANIFICACION (Action Plan)")
-        parts.append("Distribuye los requisitos entre las categorias EARS que apliquen.")
+        parts.append("### 3. PLANIFICACIÓN (Action Plan)")
+        parts.append("Distribuye los requisitos entre las categorías EARS que apliquen.")
         parts.append("")
-        parts.append("### 4. GENERACION (Action)")
-        parts.append("Genera los requisitos en formato JSON estructurado por categoria EARS.")
+        parts.append("### 4. GENERACIÓN (Action)")
+        parts.append("Genera los requisitos en formato JSON estructurado por categoría EARS.")
         parts.append("")
 
     parts.append("## Datos de la Funcionalidad")
-    parts.append(f"**Titulo:** {feature_title}")
-    parts.append(f"**Descripcion:** {feature_description}")
+    parts.append(f"**Título:** {feature_title}")
+    parts.append(f"**Descripción:** {feature_description}")
     parts.append("")
 
     if discovery_context:
@@ -389,27 +371,27 @@ def _build_task(
     parts.append("## Instrucciones Finales")
     if not is_improve:
         parts.append(
-            "Genera entre 3 y 15 requisitos distribuidos en las categorias EARS que apliquen."
+            "Genera entre 3 y 15 requisitos distribuidos en las categorías EARS que apliquen."
         )
-        parts.append("Cada requisito debe ser ATOMICO: un solo comportamiento de negocio.")
-    parts.append("Cada requisito debe tener al menos 1 criterio de aceptacion (idealmente 2-3).")
+        parts.append("Cada requisito debe ser ATÓMICO: un solo comportamiento de negocio.")
+    parts.append("Cada requisito debe tener al menos 1 criterio de aceptación (idealmente 2-3).")
     parts.append(
-        "Los criterios de aceptacion deben incluir scenario (Dado-Cuando-Entonces) y expected_result."
+        "Los criterios de aceptación deben incluir scenario (Dado-Cuando-Entonces) y expected_result."
     )
     parts.append("El campo system debe ser 'El sistema' de forma consistente.")
     parts.append("NO incluyas el campo 'id'.")
     parts.append(
-        "SIEMPRE incluye rationale que justifique por que el negocio necesita este requisito."
+        "SIEMPRE incluye rationale que justifique por qué el negocio necesita este requisito."
     )
     parts.append("")
-    parts.append("## Autoevaluacion de Calidad")
+    parts.append("## Autoevaluación de Calidad")
     parts.append("Antes de responder, verifica:")
-    parts.append("- [ ] ¿Cada requisito describe UN solo comportamiento atomico de negocio?")
-    parts.append("- [ ] ¿Hay requisitos en al menos 4 de las 6 categorias EARS?")
-    parts.append("- [ ] ¿Los criterios de aceptacion son verificables por un analista funcional sin conocimientos tecnicos?")
-    parts.append("- [ ] ¿CERO terminos tecnicos o de implementacion en todo el contenido?")
+    parts.append("- [ ] ¿Cada requisito describe UN solo comportamiento atómico de negocio?")
+    parts.append("- [ ] ¿Hay requisitos en al menos 4 de las 6 categorías EARS?")
+    parts.append("- [ ] ¿Los criterios de aceptación son verificables por un analista funcional sin conocimientos técnicos?")
+    parts.append("- [ ] ¿CERO términos técnicos o de implementación en todo el contenido?")
     parts.append("- [ ] ¿Se cubren los flujos: happy path, estados, errores y condiciones opcionales?")
-    parts.append("- [ ] ¿Cada source_statement sigue EXACTAMENTE el patron EARS de su categoria?")
+    parts.append("- [ ] ¿Cada source_statement sigue EXACTAMENTE el patrón EARS de su categoría?")
     parts.append("")
     parts.append("Responde SOLO con JSON:")
     parts.append("""```json

@@ -6,7 +6,6 @@ from kosmo.application.orchestration.helpers import get_deps, verify_scope
 from kosmo.contracts.llm.ports import PromptTemplate
 from kosmo.contracts.sdd.state import KOSMOState, ToolCallRecord
 from kosmo.contracts.telemetry import traced
-from kosmo.domain.sdd.document_converters import discovery_to_markdown
 from kosmo.domain.sdd.llm_helpers import extract_json
 from kosmo.contracts.sdd.schemas import ContextAnalyzerOutput
 
@@ -37,76 +36,76 @@ async def context_analyzer_node(state: KOSMOState, config: RunnableConfig) -> di
 
     prompt = PromptTemplate(
         system_prompt=(
-            "Eres un Arquitecto de Software Senior especializado en analisis de contexto "
-            "de proyectos digitales. Tu mision es EXTRAER INFORMACION ESTRUCTURADA del "
+            "Eres un Arquitecto de Software Senior especializado en análisis de contexto "
+            "de proyectos digitales. Tu misión es EXTRAER INFORMACIÓN ESTRUCTURADA del "
             "estado actual del proyecto para que otros agentes (generadores de discovery, "
             "features y requisitos EARS) produzcan contenido de ALTA CALIDAD y "
             "DOMAIN-SPECIFIC.\n\n"
-            "METODOLOGIA DE ANALISIS DE DOMINIO:\n"
-            "1. IDENTIFICA EL DOMINIO: De la descripcion del proyecto, extrae el sector "
-            "(e-commerce, logistica, salud, fintech, educacion, etc.) y el subsector "
-            "especifico (B2B, B2C, marketplace, SaaS, etc.).\n"
+            "METODOLOGÍA DE ANÁLISIS DE DOMINIO:\n"
+            "1. IDENTIFICA EL DOMINIO: De la descripción del proyecto, extrae el sector "
+            "(e-commerce, logística, salud, fintech, educación, etc.) y el subsector "
+            "específico (B2B, B2C, marketplace, SaaS, etc.).\n"
             "2. IDENTIFICA ENTIDADES CLAVE: Nombra las entidades de negocio principales "
-            "(no tecnicas). Ej: pedido, producto, cliente, factura, proveedor, almacen.\n"
-            "3. EVALUA COMPLEJIDAD: Considera numero de actores, reglas de negocio, "
+            "(no técnicas). Ej: pedido, producto, cliente, factura, proveedor, almacén.\n"
+            "3. EVALÚA COMPLEJIDAD: Considera número de actores, reglas de negocio, "
             "integraciones, flujos de estado, y volumen de datos.\n"
-            "4. IDENTIFICA BRECHAS: Que informacion falta para completar el analisis? "
-            "Que secciones del discovery estan vacias o superficiales?\n"
-            "5. RECOMIENDA FOCO: Basado en las brechas, que aspecto debe priorizar "
-            "el generador en esta iteracion?\n"
-            "6. CONTEXT BRIEF: Resume el estado actual en 3-5 lineas para orientar "
+            "4. IDENTIFICA BRECHAS: ¿Qué información falta para completar el análisis? "
+            "¿Qué secciones del discovery están vacías o superficiales?\n"
+            "5. RECOMIENDA FOCO: Basado en las brechas, ¿qué aspecto debe priorizar "
+            "el generador en esta iteración?\n"
+            "6. CONTEXT BRIEF: Resume el estado actual en 3-5 líneas para orientar "
             "a los generadores.\n\n"
-            "EJEMPLOS DE ANALISIS DE DOMINIO:\n\n"
-            "Proyecto: 'Sistema de gestion de inventario para pymes'\n"
-            "ANALISIS CORRECTO:\n"
+            "EJEMPLOS DE ANÁLISIS DE DOMINIO:\n\n"
+            "Proyecto: 'Sistema de gestión de inventario para pymes'\n"
+            "ANÁLISIS CORRECTO:\n"
             "{\n"
-            '  "domain": "Gestion de inventario y cadena de suministro B2B para '
-            'pequenas y medianas empresas del sector retail y distribucion",\n'
-            '  "key_entities": ["producto", "inventario", "almacen", "proveedor", '
+            '  "domain": "Gestión de inventario y cadena de suministro B2B para '
+            'pequeñas y medianas empresas del sector retail y distribución",\n'
+            '  "key_entities": ["producto", "inventario", "almacén", "proveedor", '
             '"orden de compra", "movimiento de stock", "alerta de reabastecimiento", '
-            '"reporte de rotacion"],\n'
+            '"reporte de rotación"],\n'
             '  "complexity_level": "medium",\n'
             '  "gaps_identified": ["Falta definir reglas de negocio para umbrales '
             'de reabastecimiento", "No se especifican los roles de usuario '
             '(administrador vs operador)", "Los casos de uso no cubren escenarios '
-            'de conciliacion de inventario"],\n'
+            'de conciliación de inventario"],\n'
             '  "recommended_focus": "Reglas de negocio y actores del sistema — '
-            'sin estos, las features careceran de contexto vinculante",\n'
-            '  "context_brief": "Proyecto de gestion de inventario B2B para pymes '
-            'con enfasis en control de stock en tiempo real y alertas. El discovery '
-            'tiene una vision clara pero carece de reglas de negocio detalladas y '
-            'definicion de actores. Se recomienda priorizar la definicion de '
+            'sin estos, las features carecerán de contexto vinculante",\n'
+            '  "context_brief": "Proyecto de gestión de inventario B2B para pymes '
+            'con énfasis en control de stock en tiempo real y alertas. El discovery '
+            'tiene una visión clara pero carece de reglas de negocio detalladas y '
+            'definición de actores. Se recomienda priorizar la definición de '
             'umbrales de inventario y roles de usuario antes de generar '
-            'caracteristicas."\n'
+            'características."\n'
             "}\n\n"
             "Proyecto: 'E-commerce de productos artesanales'\n"
-            "ANALISIS CORRECTO:\n"
+            "ANÁLISIS CORRECTO:\n"
             "{\n"
             '  "domain": "E-commerce B2C de productos artesanales y hechos a mano '
-            'con enfasis en la conexion entre artesanos y compradores",\n'
+            'con énfasis en la conexión entre artesanos y compradores",\n'
             '  "key_entities": ["producto artesanal", "artesano", "comprador", '
-            '"pedido", "resena", "categoria de producto", "pago", "envio", '
-            '"devolucion"],\n'
+            '"pedido", "reseña", "categoría de producto", "pago", "envío", '
+            '"devolución"],\n'
             '  "complexity_level": "high",\n'
             '  "gaps_identified": ["No se definen atributos de calidad como '
             'tiempos de respuesta esperados", "Los casos de uso no cubren '
-            'el flujo de devolucion", "Faltan reglas de negocio sobre '
+            'el flujo de devolución", "Faltan reglas de negocio sobre '
             'comisiones y pagos a artesanos"],\n'
             '  "recommended_focus": "Reglas de negocio de pagos y atributos '
-            'de calidad — criticos para la viabilidad del marketplace",\n'
+            'de calidad — críticos para la viabilidad del marketplace",\n'
             '  "context_brief": "Marketplace B2C de productos artesanales. '
-            'El discovery describe bien la vision y los actores, pero las '
+            'El discovery describe bien la visión y los actores, pero las '
             'reglas de negocio sobre pagos/comisiones y los atributos de '
-            'calidad estan ausentes. Hay features en borrador que necesitan '
+            'calidad están ausentes. Hay features en borrador que necesitan '
             'contexto vinculante del discovery para ser refinadas."\n'
             "}\n\n"
             "IMPORTANTE:\n"
-            "- Se ESPECIFICO y CONCRETO. No uses terminos vagos como 'varios' "
+            "- Sé ESPECÍFICO y CONCRETO. No uses términos vagos como 'varios' "
             "o 'diversos'.\n"
-            "- Las entidades clave deben ser SUSTANTIVOS DE NEGOCIO, no tecnicos.\n"
-            "- Las brechas deben ser ACCIONABLES (el generador debe saber que corregir).\n"
-            "- El context_brief debe ser util para orientar a los generadores.\n"
-            "- Usa ortografia correcta del espanol: tildes, enyes, dieresis."
+            "- Las entidades clave deben ser SUSTANTIVOS DE NEGOCIO, no técnicos.\n"
+            "- Las brechas deben ser ACCIONABLES (el generador debe saber qué corregir).\n"
+            "- El context_brief debe ser útil para orientar a los generadores.\n"
+            "- Usa ortografía correcta del español: tildes, eñes, diéresis."
         ),
         user_prompt=f"""## Fase actual: {state.phase.value}
 ## Proyecto: {state.project_id}
@@ -156,7 +155,7 @@ Produce un analisis estructurado en JSON:
 def _build_context_summary(state: KOSMOState) -> dict[str, object]:
     discovery_summary = ""
     if state.discovery:
-        discovery_summary = discovery_to_markdown(state.discovery)[:2000]
+        discovery_summary = state.discovery[:2000]
 
     feature_list = (
         "\n".join(f"- [{f.status.value}] {f.title}: {f.description[:100]}" for f in state.features)

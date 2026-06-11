@@ -4,7 +4,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from kosmo.contracts.sdd.constitution import Constitution
-from kosmo.contracts.sdd.discovery import DiscoveryDocument, ProjectRoadmap
+from kosmo.contracts.sdd.discovery import ProjectRoadmap
 from kosmo.contracts.sdd.domain_model import DomainModel
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
@@ -23,7 +23,6 @@ class SpecPhase(StrEnum):
 class SpecDocument(BaseModel):
     id: SpecId
     project_id: ProjectId
-    discovery: DiscoveryDocument | None = None
     roadmap: ProjectRoadmap | None = None
     features: list[Feature] = []
     requirements: list[EARSRequirement] = []

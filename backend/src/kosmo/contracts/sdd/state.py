@@ -24,7 +24,7 @@ def _list_merge(a: _ListT, b: _ListT) -> _ListT:
     combined = a + b
     return combined[-_MAX_CONCURRENT_LIST_SIZE:] if len(combined) > _MAX_CONCURRENT_LIST_SIZE else combined
 
-from kosmo.contracts.sdd.discovery import DiscoveryDocument, RawIdea
+from kosmo.contracts.sdd.discovery import RawIdea
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.schemas import Scratchpad
@@ -85,7 +85,7 @@ class KOSMOState(BaseModel):
     user_id: str
 
     raw_idea: RawIdea | None = None
-    discovery: DiscoveryDocument | None = None
+    discovery: str = ""
     features: list[Feature] = Field(default_factory=list)
     requirements: list[EARSRequirement] = Field(default_factory=list)
 

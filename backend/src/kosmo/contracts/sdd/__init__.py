@@ -1,5 +1,5 @@
 from kosmo.contracts.sdd.constitution import Constitution, CustomConstitution, FrozenConstitution
-from kosmo.contracts.sdd.discovery import DiscoveryDocument, ProjectRoadmap, RawIdea
+from kosmo.contracts.sdd.discovery import ProjectRoadmap, RawIdea
 from kosmo.contracts.sdd.document import (
     DocumentNode,
     DocumentResponse,
@@ -85,7 +85,6 @@ __all__ = [
     "ConstitutionRepository",
     "ContractSignature",
     "CustomConstitution",
-    "DiscoveryDocument",
     "DocumentNode",
     "DocumentNotFoundError",
     "DocumentResponse",

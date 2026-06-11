@@ -8,7 +8,6 @@ from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.contracts.sdd.state import AgentMessage, KOSMOState, ToolCallRecord
 from kosmo.contracts.telemetry import traced
-from kosmo.domain.sdd.document_converters import discovery_to_markdown
 from kosmo.domain.sdd.id_generator import IdGenerator
 from kosmo.domain.sdd.llm_helpers import extract_json, strip_markdown_formatting
 from kosmo.domain.sdd.output_guardrails import (
@@ -19,60 +18,66 @@ from kosmo.domain.sdd.output_guardrails import (
 from kosmo.domain.sdd.structured_schemas import FeaturesOutputSchema, GenerateFeaturesOutputSchema
 
 _SUGGESTION_SYSTEM = (
-    "Eres un Arquitecto de Producto Senior con 15 anos disenando funcionalidades de software.\n"
-    "Tu trabajo es INFERIR caracteristicas ricas y especificas a partir del contexto de negocio.\n\n"
-    "REGLA ANTI-TRIVIALIDAD (CRITICA):\n"
-    "- Si el input es breve como 'Gestion de productos', NO respondas lo mismo o parafreas como "
+    "Eres un Arquitecto de Producto Senior con 15 años diseñando funcionalidades de software.\n"
+    "Tu trabajo es INFERIR características ricas y específicas a partir del contexto de negocio.\n\n"
+    "REGLA ANTI-TRIVIALIDAD (CRÍTICA):\n"
+    "- Si el input es breve como 'Gestión de productos', NO respondas lo mismo o parafrasees como "
     "'Administrar productos' o 'Manejo de productos'.\n"
-    "- DEBES cruzar con el Discovery para inferir: que tipo de productos? para que actores? "
-    "bajo que reglas? que valor aporta?\n"
-    "- Cada title DEBE ser VERBO EN INFINITIVO + OBJETO DE NEGOCIO ESPECIFICO.\n"
-    "- Cada description DEBE contener: (1) QUE hace, (2) PARA QUIEN, (3) BAJO QUE CONDICION, "
-    "(4) QUE VALOR APORTA.\n"
-    "- Cada rationale DEBE explicar por que esta caracteristica es relevante dado el dominio.\n"
+    "- DEBES cruzar con el Discovery para inferir: ¿qué tipo de productos? ¿para qué actores? "
+    "¿bajo qué reglas? ¿qué valor aporta?\n"
+    "- Cada title DEBE ser VERBO EN INFINITIVO + OBJETO DE NEGOCIO ESPECÍFICO.\n"
+    "- Cada description DEBE contener: (1) QUÉ hace, (2) PARA QUIÉN, (3) BAJO QUÉ CONDICIÓN, "
+    "(4) QUÉ VALOR APORTA.\n"
+    "- Cada rationale DEBE explicar por qué esta característica es relevante dado el dominio.\n"
     "- Cada inferred_from DEBE listar las secciones de Discovery de las que se deriva.\n\n"
-    "ORTOGRAFIA OBLIGATORIA: tildes, enyes y acentos correctos del espanol.\n\n"
-    "TERMINOS PROHIBIDOS (causan RECHAZO AUTOMATICO del requisito):\n"
+    "SECCIONES CLAVE DEL DISCOVERY (presta especial atención a estas):\n"
+    "- Actores: identifica necesidades no cubiertas de cada rol.\n"
+    "- Reglas de negocio: son la principal fuente de funcionalidades concretas.\n"
+    "- Casos de uso: sugieren flujos que necesitan soporte del sistema.\n"
+    "- Propuesta de valor: cada feature debe contribuir a una propuesta de valor.\n"
+    "- Capacidades principales: identifica vacíos o capacidades complementarias.\n\n"
+    "ORTOGRAFÍA OBLIGATORIA: tildes, eñes y acentos correctos del español.\n\n"
+    "TÉRMINOS PROHIBIDOS (causan RECHAZO AUTOMÁTICO del requisito):\n"
     "NO uses: API, endpoint, REST, GraphQL, HTTP, JSON, XML, base de datos, tabla, columna, "
     "SQL, NoSQL, PostgreSQL, MongoDB, Redis, servidor, contenedor, frontend, backend, "
-    "componente, modulo, clase, metodo, funcion, controlador, middleware, framework, libreria, "
+    "componente, módulo, clase, método, función, controlador, middleware, framework, librería, "
     "React, Angular, Django, Spring, Node, Python, Java, microservicio, Docker, Kubernetes.\n"
 )
 
 _SUGGESTION_FEW_SHOT = """
 ## Ejemplo de inferencia rica (CORRECTO):
 
-Contexto Discovery: E-commerce con actores administrador/cliente, regla de inventario minimo de 48h.
+Contexto Discovery: E-commerce con actores administrador/cliente, regla de inventario mínimo de 48h.
 
-Input: "Gestion de productos"
+Input: "Gestión de productos"
 
 Sugerencias CORRECTAS:
 1. {
-     "title": "Catalogar productos con categorizacion jerarquica por atributos de negocio",
-     "description": "El administrador puede clasificar productos en categorias y subcategorias con atributos personalizables (talla, color, material), cumpliendo la regla de negocio de trazabilidad y permitiendo al cliente filtrar y encontrar productos segun sus preferencias.",
-     "rationale": "Derivado de la necesidad de trazabilidad del discovery y los casos de uso de busqueda del cliente",
+     "title": "Catalogar productos con categorización jerárquica por atributos de negocio",
+     "description": "El administrador puede clasificar productos en categorías y subcategorías con atributos personalizables (talla, color, material), cumpliendo la regla de negocio de trazabilidad y permitiendo al cliente filtrar y encontrar productos según sus preferencias.",
+     "rationale": "Derivado de la necesidad de trazabilidad del discovery y los casos de uso de búsqueda del cliente",
      "inferred_from": ["use_cases", "business_rules", "core_capabilities"],
-     "category": "gestion"
+     "category": "gestión"
    }
 2. {
-     "title": "Gestionar umbrales de inventario con notificacion proactiva al equipo de compras",
-     "description": "Cuando el stock de un producto cae por debajo del minimo configurado, el sistema notifica al comprador responsable segun la regla de reposicion de 48 horas, evitando roturas de stock que impactan la disponibilidad del catalogo.",
-     "rationale": "Derivado de la regla de negocio de inventario minimo y el actor administrador",
+     "title": "Gestionar umbrales de inventario con notificación proactiva al equipo de compras",
+     "description": "Cuando el stock de un producto cae por debajo del mínimo configurado, el sistema notifica al comprador responsable según la regla de reposición de 48 horas, evitando roturas de stock que impactan la disponibilidad del catálogo.",
+     "rationale": "Derivado de la regla de negocio de inventario mínimo y el actor administrador",
      "inferred_from": ["business_rules", "actors"],
-     "category": "operacion"
+     "category": "operación"
    }
 3. {
      "title": "Publicar y despublicar productos con control de visibilidad por canal de venta",
-     "description": "El administrador controla que productos son visibles en cada canal (web, movil, marketplace) segun la regla de negocio de exclusividad por convenio, permitiendo estrategias de venta diferenciadas sin duplicar catalogo.",
-     "rationale": "Derivado de la propuesta de valor de centralizacion y las reglas de negocio de exclusividad",
+     "description": "El administrador controla qué productos son visibles en cada canal (web, móvil, marketplace) según la regla de negocio de exclusividad por convenio, permitiendo estrategias de venta diferenciadas sin duplicar catálogo.",
+     "rationale": "Derivado de la propuesta de valor de centralización y las reglas de negocio de exclusividad",
      "inferred_from": ["value_proposition", "business_rules"],
-     "category": "comunicacion"
+     "category": "comunicación"
    }
 
 Sugerencias INCORRECTAS (TRIVIALES):
-- "Gestion de productos" -> Repite el input
-- "Administrar productos" -> Parafrasis del input
-- "Gestion del catalogo" -> Variante generica sin inferencia
+- "Gestión de productos" -> Repite el input
+- "Administrar productos" -> Paráfrasis del input
+- "Gestión del catálogo" -> Variante genérica sin inferencia
 """
 
 
@@ -105,9 +110,8 @@ async def features_generator_node(state: KOSMOState, config: RunnableConfig) -> 
     preferences_prompt = prefs.get("preferences_prompt", "") if isinstance(prefs, dict) else ""
     context = state.shared_scratchpad.get("context_analyzer_output", {})
 
-    discovery_md = ""
     if state.discovery:
-        discovery_md = discovery_to_markdown(state.discovery)
+        discovery_md = state.discovery
 
     existing_titles = [f.title for f in state.features]
     existing_ids = [f.id for f in state.features]
@@ -122,12 +126,12 @@ async def features_generator_node(state: KOSMOState, config: RunnableConfig) -> 
         system += f"\n\n## Preferencias del Usuario\n{preferences_prompt}"
 
     denied_section = (
-        f"\n## CARACTERISTICAS EXISTENTES — PROHIBIDO sugerir cualquiera de estas o parafrasis:\n"
+        f"\n## CARACTERÍSTICAS EXISTENTES — PROHIBIDO sugerir cualquiera de estas o paráfrasis:\n"
         f"{existing_text}\n\n"
-        f"Ejemplos de parafrasis PROHIBIDAS:\n"
+        f"Ejemplos de paráfrasis PROHIBIDAS:\n"
     )
     for title in existing_titles[:5]:
-        denied_section += f"- '{title}' → cualquier variante como 'Administrar {title.lower()}', 'Manejo de {title.lower()}' esta PROHIBIDO\n"
+        denied_section += f"- '{title}' → cualquier variante como 'Administrar {title.lower()}', 'Manejo de {title.lower()}' está PROHIBIDO\n"
 
     generation_mode = state.shared_scratchpad.get("generation_mode", "suggest")
     if generation_mode == "generate":
@@ -140,30 +144,15 @@ async def features_generator_node(state: KOSMOState, config: RunnableConfig) -> 
         guardrail_fn = validate_features_output
 
     task = (
-        f"Genera exactamente {target_count} caracteristicas NUEVAS, RICAS y ESPECIFICAS del dominio. "
-        "NINGUNA debe ser parafrasis o variacion de las existentes. "
-        "Cada caracteristica debe inferir riqueza contextual del Discovery."
+        f"Genera exactamente {target_count} características NUEVAS, RICAS y ESPECÍFICAS del dominio. "
+        "NINGUNA debe ser paráfrasis o variación de las existentes. "
+        "Cada característica debe inferir riqueza contextual del Discovery."
     )
     if critic_feedback and iteration > 1:
-        task = f"Corrige las caracteristicas previas. Feedback: {critic_feedback}"
+        task = f"Corrige las características previas. Feedback: {critic_feedback}"
 
-    discovery_context = ""
     if state.discovery:
-        d = state.discovery
-        sections: list[str] = []
-        if d.vision:
-            sections.append(f"### Vision del Producto\n{d.vision}")
-        if d.actors:
-            sections.append(f"### Actores\n{d.actors}")
-        if d.value_proposition:
-            sections.append(f"### Propuesta de Valor\n{d.value_proposition}")
-        if d.business_rules:
-            sections.append(f"### Reglas de Negocio (DERIVAR de estas)\n{d.business_rules}")
-        if d.use_cases:
-            sections.append(f"### Casos de Uso\n{d.use_cases}")
-        if d.core_capabilities:
-            sections.append(f"### Capacidades Principales\n{d.core_capabilities}")
-        discovery_context = "\n\n".join(sections)
+        discovery_md = state.discovery
 
     domain_info = (
         context.get("domain", "No disponible") if isinstance(context, dict) else "No disponible"
@@ -172,50 +161,47 @@ async def features_generator_node(state: KOSMOState, config: RunnableConfig) -> 
     user_prompt = f"""{_SUGGESTION_FEW_SHOT}
 
 ## Documento de Descubrimiento
-{discovery_md[:4000]}
-
-## Contexto de Negocio Vinculado (OBLIGATORIO — cruzar con cada sugerencia)
-{discovery_context[:3000] if discovery_context else "No disponible"}
+{discovery_md[:6000]}
 
 ## Dominio inferido: {domain_info}
 
 {denied_section}
 
-## Ciclo ReAct — Iteracion {iteration}
+## Ciclo ReAct — Iteración {iteration}
 
-### 1. ANALISIS (Thought)
+### 1. ANÁLISIS (Thought)
 Analiza el discovery desde la perspectiva de producto:
-- Que actores tienen necesidades no cubiertas?
-- Que reglas de negocio generan oportunidades de funcionalidad?
-- Que capacidades faltan para completar la propuesta de valor?
-- Que patrones de uso sugieren los casos de uso descritos?
+- ¿Qué actores tienen necesidades no cubiertas?
+- ¿Qué reglas de negocio generan oportunidades de funcionalidad?
+- ¿Qué capacidades faltan para completar la propuesta de valor?
+- ¿Qué patrones de uso sugieren los casos de uso descritos?
 
-### 2. OBSERVACION (Feedback){' ' + critic_feedback if critic_feedback and iteration > 1 else ' (primera iteracion, sin feedback previo)'}
+### 2. OBSERVACIÓN (Feedback){' ' + critic_feedback if critic_feedback and iteration > 1 else ' (primera iteración, sin feedback previo)'}
 
-### 3. PLANIFICACION (Action Plan)
-Distribuye las caracteristicas entre aspectos del negocio:
-gestion de entidades, operacion, comunicacion, analisis, integracion.
+### 3. PLANIFICACIÓN (Action Plan)
+Distribuye las características entre aspectos del negocio:
+gestión de entidades, operación, comunicación, análisis, integración.
 
-### 4. GENERACION (Action)
+### 4. GENERACIÓN (Action)
 
 {task}
 
-## Autoevaluacion de Calidad
+## Autoevaluación de Calidad
 Antes de responder, verifica:
-- [ ] ¿Cada feature tiene un titulo con VERBO EN INFINITIVO + OBJETO DE NEGOCIO ESPECIFICO?
-- [ ] ¿Ninguna feature es parafrasis de las existentes?
-- [ ] ¿Cada descripcion cubre las 4 partes: QUE, PARA QUIEN, BAJO QUE CONDICION, QUE VALOR?
+- [ ] ¿Cada feature tiene un título con VERBO EN INFINITIVO + OBJETO DE NEGOCIO ESPECÍFICO?
+- [ ] ¿Ninguna feature es paráfrasis de las existentes?
+- [ ] ¿Cada descripción cubre las 4 partes: QUÉ, PARA QUIÉN, BAJO QUÉ CONDICIÓN, QUÉ VALOR?
 - [ ] ¿Los rationale vinculan cada feature con secciones concretas del discovery?
-- [ ] ¿Hay al menos una feature por cada area: gestion de entidades, operacion, comunicacion/notificacion, analisis/reporte?
+- [ ] ¿Hay al menos una feature por cada área: gestión de entidades, operación, comunicación/notificación, análisis/reporte?
 
 Si alguna respuesta es negativa, REFUERZA esas features antes de entregar el JSON.
 
 Cada feature DEBE tener:
-- title: verbo en infinitivo + objeto de negocio especifico (min 3 car.)
-- description: QUE hace, PARA QUIEN, BAJO QUE CONDICION, QUE VALOR APORTA (min 20 car.)
-- rationale: por que es relevante dado el dominio (min 10 car.)
+- title: verbo en infinitivo + objeto de negocio específico (mín 3 car.)
+- description: QUÉ hace, PARA QUIÉN, BAJO QUÉ CONDICIÓN, QUÉ VALOR APORTA (mín 20 car.)
+- rationale: por qué es relevante dado el dominio (mín 10 car.)
 - inferred_from: secciones de discovery que motivan esta sugerencia
-- category: categoria de negocio inferida
+- category: categoría de negocio inferida
 
 Responde SOLO con JSON:
 ```json

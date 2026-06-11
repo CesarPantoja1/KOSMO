@@ -126,8 +126,6 @@ async def generate_features(
     getattr(request.app.state, "preference_repo", None)
     graph_engine = getattr(request.app.state, "graph_engine", None)
 
-    project = await request.app.state.project_repo.get(pid)
-
     state = KOSMOState(
         project_id=str(pid),
         user_id=principal.subject,
@@ -136,8 +134,10 @@ async def generate_features(
     )
     state.shared_scratchpad["generation_mode"] = "generate"
     document_repo = getattr(request.app.state, "document_repo", None)
-    if document_repo and project:
-        state.discovery = await document_repo.get_clean_discovery(pid)
+    if document_repo:
+        discovery_md = await document_repo.get_discovery_md(pid)
+        if discovery_md:
+            state.discovery = discovery_md
 
     existing_features = await request.app.state.feature_repo.get_by_project(pid)
     state.features = existing_features
@@ -179,8 +179,6 @@ async def suggest_alternative_features(
     getattr(request.app.state, "preference_repo", None)
     graph_engine = getattr(request.app.state, "graph_engine", None)
 
-    project = await request.app.state.project_repo.get(pid)
-
     state = KOSMOState(
         project_id=str(pid),
         user_id=principal.subject,
@@ -188,8 +186,10 @@ async def suggest_alternative_features(
         max_iterations=3,
     )
     document_repo = getattr(request.app.state, "document_repo", None)
-    if document_repo and project:
-        state.discovery = await document_repo.get_clean_discovery(pid)
+    if document_repo:
+        discovery_md = await document_repo.get_discovery_md(pid)
+        if discovery_md:
+            state.discovery = discovery_md
 
     existing_features = await request.app.state.feature_repo.get_by_project(pid)
     state.existing_feature_titles = [f.title for f in existing_features]

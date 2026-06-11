@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
-from typing import Any
 
-from sqlalchemy import JSON, DateTime, String, Text
+from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kosmo.domain.sdd.id_generator import IdGenerator
@@ -31,5 +30,4 @@ class ProjectModel(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
-    discovery_document: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    discovery_clean: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    discovery_md: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -15,16 +15,16 @@ from kosmo.domain.sdd.structured_schemas import EvaluationOutputSchema
 
 _FINAL_EVALUATOR_SYSTEM = (
     "Eres un Evaluador de Calidad de contenido generado por IA para un producto digital. "
-    "Tu rol es PROVEER RETROALIMENTACION CONSTRUCTIVA sobre la calidad del contenido, "
+    "Tu rol es PROVEER RETROALIMENTACIÓN CONSTRUCTIVA sobre la calidad del contenido, "
     "NO bloquear ni rechazar. El contenido SIEMPRE se entrega al usuario.\n\n"
-    "Evalua estos 5 criterios de calidad de negocio (escala 1-10):\n\n"
-    "1. PUREZA DE NEGOCIO (1-10): CERO fugas de implementacion. El contenido describe "
-    "comportamiento del negocio sin mencionar tecnologia, bases de datos, APIs, frameworks.\n\n"
-    "2. COBERTURA (1-10): El contenido cubre todas las secciones o categorias esperadas.\n\n"
+    "Evalúa estos 5 criterios de calidad de negocio (escala 1-10):\n\n"
+    "1. PUREZA DE NEGOCIO (1-10): CERO fugas de implementación. El contenido describe "
+    "comportamiento del negocio sin mencionar tecnología, bases de datos, APIs, frameworks.\n\n"
+    "2. COBERTURA (1-10): El contenido cubre todas las secciones o categorías esperadas.\n\n"
     "3. VERIFICABILIDAD (1-10): Los elementos son verificables por un analista funcional "
-    "sin conocimientos tecnicos.\n\n"
+    "sin conocimientos técnicos.\n\n"
     "4. DENSIDAD (1-10): Cada elemento tiene suficiente profundidad y detalle de negocio.\n\n"
-    "5. ORTOGRAFIA (1-10): El contenido usa tildes, enyes y acentos correctos del espanol.\n\n"
+    "5. ORTOGRAFÍA (1-10): El contenido usa tildes, eñes y acentos correctos del español.\n\n"
     "Tu veredicto (overall_verdict) es INFORMATIVO, no bloqueante:\n"
     "- 'approved': calidad aceptable\n"
     "- 'needs_improvement': recomendaciones de mejora incluidas en summary\n\n"
@@ -40,7 +40,7 @@ async def final_evaluator_node(state: KOSMOState, config: RunnableConfig) -> dic
     deps = get_deps(config)
 
     critic_log_entries = [f"[{c.agent_id}] {c.severity}: {c.message}" for c in state.critique_log]
-    critic_summary = "\n".join(critic_log_entries) if critic_log_entries else "Sin criticas previas"
+    critic_summary = "\n".join(critic_log_entries) if critic_log_entries else "Sin críticas previas"
 
     content = extract_generated_content(state, max_chars=6000)
     next_attempt = state.generation_attempts
@@ -50,13 +50,13 @@ async def final_evaluator_node(state: KOSMOState, config: RunnableConfig) -> dic
         user_prompt=f"""## Contenido generado
 {content}
 
-## Resumen de Criticas Previas
+## Resumen de Críticas Previas
 {critic_summary}
 
 ## Fase: {state.phase.value}
 ## Intento: {next_attempt}/{state.max_iterations}
 
-Evalua los 5 criterios de calidad de negocio.
+Evalúa los 5 criterios de calidad de negocio.
 El veredicto es INFORMATIVO, no bloqueante.
 Incluye recomendaciones accionables en el summary.
 
@@ -89,7 +89,7 @@ Responde en JSON:
     except Exception:
         data = {
             "overall_verdict": "approved",
-            "summary": "Evaluacion automatica no disponible. Contenido entregado sin revision.",
+            "summary": "Evaluación automática no disponible. Contenido entregado sin revisión.",
             "blockers": [],
         }
 
@@ -102,7 +102,7 @@ Responde en JSON:
             CritiqueRecord(
                 agent_id="final_evaluator",
                 severity="none",
-                message=data.get("summary", "Evaluacion completada"),
+                message=data.get("summary", "Evaluación completada"),
             ),
         ],
         "critic_iteration": 0,

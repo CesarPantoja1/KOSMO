@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy import update as sql_update
@@ -28,7 +27,6 @@ class SqlAlchemyProjectRepository:
                 created_by=project.created_by,
                 created_at=project.created_at,
                 updated_at=project.updated_at,
-                discovery_document=project.discovery_document,
             )
             session.add(model)
             await session.commit()
@@ -81,8 +79,8 @@ class SqlAlchemyProjectRepository:
             model.updated_at = datetime.now(UTC)  # type: ignore[union-attr]
             await session.commit()
 
-    async def update_discovery_document(
-        self, project_id: ProjectId, document: dict[str, Any]
+    async def update_discovery_md(
+        self, project_id: ProjectId, markdown: str
     ) -> None:
         session: AsyncSession = self._session_factory()  # type: ignore[call-arg,misc]
         async with session:
@@ -90,18 +88,18 @@ class SqlAlchemyProjectRepository:
                 sql_update(ProjectModel)
                 .where(ProjectModel.id == project_id)  # type: ignore[arg-type,union-attr]
                 .values(
-                    discovery_document=document,
+                    discovery_md=markdown,
                     updated_at=datetime.now(UTC),
                     last_activity_at=datetime.now(UTC),
                 )
             )
             await session.commit()
 
-    async def get_discovery_document(self, project_id: ProjectId) -> dict[str, Any] | None:
+    async def get_discovery_md(self, project_id: ProjectId) -> str | None:
         session: AsyncSession = self._session_factory()  # type: ignore[call-arg,misc]
         async with session:
             result = await session.execute(
-                select(ProjectModel.discovery_document).where(
+                select(ProjectModel.discovery_md).where(
                     ProjectModel.id == project_id  # type: ignore[arg-type,union-attr]
                 )
             )
@@ -120,5 +118,4 @@ class SqlAlchemyProjectRepository:
             created_by=model.created_by,  # type: ignore[arg-type,union-attr]
             created_at=model.created_at,  # type: ignore[arg-type,union-attr]
             updated_at=model.updated_at,  # type: ignore[arg-type,union-attr]
-            discovery_document=model.discovery_document,  # type: ignore[arg-type,union-attr]
         )
