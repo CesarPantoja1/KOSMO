@@ -113,17 +113,17 @@ Corrección hardcodeada: `"Visión del producto"` (antes `"Vision del producto"`
 | Archivo | Cambios Clave |
 |---|---|
 | `src/kosmo/__init__.py` | `WindowsSelectorEventLoopPolicy` para Windows |
-| `src/kosmo/domain/sdd/llm_helpers.py` | `strip_markdown_formatting()`, `strip_llm_artifacts()`, `extract_json()` |
-| `src/kosmo/domain/sdd/document_converters.py` | `clean_document_tree()`, `_dedup_bold_and_merge()`, `_clean_content_nodes()`, tilde en "Visión" |
+| `src/kosmo/domain/sdd/llm_helpers.py` | `strip_markdown_formatting()`, `strip_llm_artifacts()` (regex `::{2,}` después de quitar `**`), `extract_json()` |
+| `src/kosmo/domain/sdd/document_converters.py` | `clean_document_tree()`, `_dedup_bold_and_merge()`, `_clean_content_nodes()`, `_process_inline_children()` (rewrite), `_fix_adjacent_colons()`, `clean_markdown()`, tilde en "Visión" |
 | `src/kosmo/domain/sdd/output_guardrails.py` | `validate_discovery_quality()` con diccionario de 80+ tildes, `validate_semantic_quality()` |
-| `src/kosmo/application/orchestration/nodes/discovery_generator.py` | Prompt compacto 25 líneas, `_format_list_section()`, fallback LLM siempre emite discovery |
+| `src/kosmo/application/orchestration/nodes/discovery_generator.py` | Prompt compacto 25 líneas, `_format_kv_list()`, `_format_scope()`, `_format_plain_list()`, fallback LLM siempre emite discovery, reorden regex `::{2,}` |
 | `src/kosmo/application/orchestration/nodes/ears_generator.py` | Sanitización selectiva por campo (`strip_llm_artifacts` vs `strip_markdown_formatting`) |
 | `src/kosmo/application/orchestration/nodes/features_generator.py` | `strip_markdown_formatting()` en título y descripción |
 | `src/kosmo/application/orchestration/nodes/draft_refiner.py` | Prompt sin `**Título:**` ni `**Descripción:**` |
 | `src/kosmo/infrastructure/orchestration/langgraph_engine.py` | `MemorySaver` en Windows, `AsyncPostgresSaver` en Linux/macOS |
-| `src/kosmo/infrastructure/api/routers/discovery.py` | Try/except con logging en `graph_engine.invoke()`, `clean_document_tree` en generate y regenerate |
-| `src/kosmo/infrastructure/api/routers/requirements.py` | `clean_document_tree` en generate y regenerate, fix `get_uc` no definido |
-| `src/kosmo/infrastructure/api/routers/features.py` | `strip_markdown_formatting()` en `suggest-from-idea` |
+| `src/kosmo/infrastructure/api/routers/discovery.py` | Try/except con logging en `graph_engine.invoke()`, `clean_document_tree` + `clean_markdown` en generate y regenerate, `thread_id` con `ULID().hex` |
+| `src/kosmo/infrastructure/api/routers/requirements.py` | `clean_document_tree` en generate y regenerate, fix `get_uc` no definido, `thread_id` con `ULID().hex` |
+| `src/kosmo/infrastructure/api/routers/features.py` | `strip_markdown_formatting()` en `suggest-from-idea`, `thread_id` con `ULID().hex` |
 | `src/kosmo/infrastructure/llm/noop_adapter.py` | Match `"analista" + "negocio"` para nuevo prompt |
 | `src/kosmo/infrastructure/api/main.py` | Static mount para `discovery-viewer.html` |
 | `static/discovery-viewer.html` | Visor/editor 3-panel con renderizado ProseMirror, TOC, CSS para hr/blockquote |
@@ -195,6 +195,12 @@ API Router (POST /discovery/generate)
 4. **Windows + psycopg + LangGraph**: La combinación `ProactorEventLoop` + `AsyncPostgresSaver` no funciona en Windows. `MemorySaver` es una alternativa válida para desarrollo local.
 
 5. **Prompt compacto > Prompt extenso**: Un prompt de 25 líneas con reglas explícitas y ejemplos de formato correcto/incorrecto produce mejor adherencia que uno de 80 líneas con ejemplos narrativos largos.
+
+6. **El bug del `::` fueron tres bugs encadenados**: (a) `_process_inline_children()` duplicaba nodos de texto, (b) `_dedup_bold_and_merge()` convertía los duplicados en patrón `::`, (c) `_fix_double_colons_in_nodes()` no detectaba `::` cruzando nodos. Arreglar solo (c) era insuficiente — había que eliminar la causa raíz en (a).
+
+7. **LangGraph checkpointing con thread_id estático = caché invisible**: Cuando `ainvoke()` encuentra un checkpoint completado para el mismo `thread_id`, devuelve el estado cacheado sin re-ejecutar el grafo. Cada invocación debe usar un `thread_id` único (`ULID().hex`).
+
+8. **Los regex `::{2,}` deben ejecutarse después de quitar `**`**: El patrón `**Incluido:**::` tiene `::` separado por `**`, por lo que `re.sub(r":{2,}", ":", text)` no lo detecta. Quitar `**` primero (`re.sub(r"\*+", "", text)`) expone el `::` oculto.
 
 ---
 
