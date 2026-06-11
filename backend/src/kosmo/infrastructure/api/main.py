@@ -264,6 +264,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.blob_storage = sdd_components.blob_storage
     app.state.api_key_vault = sdd_components.api_key_vault
     app.state.preference_repo = sdd_components.preference_repo
+    app.state.document_repo = sdd_components.document_repo
     app.state.graph_engine = sdd_components.graph_engine
 
     instrument_app(settings, app=app, db_engine=auth_components.db_engine)

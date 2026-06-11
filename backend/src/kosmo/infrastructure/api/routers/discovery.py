@@ -70,6 +70,7 @@ async def save_discovery(
     uc = SaveDiscoveryDocumentUseCase(
         project_repo=request.app.state.project_repo,
         spec_repo=request.app.state.spec_repo,
+        document_repo=getattr(request.app.state, "document_repo", None),
         preference_repo=getattr(request.app.state, "preference_repo", None),
         llm_client=getattr(request.app.state, "llm_client", None),
     )
@@ -164,6 +165,9 @@ async def generate_discovery(
         )
         document_tree = clean_document_tree(document_tree)
         await request.app.state.project_repo.update_discovery_document(pid, document_tree)
+        document_repo = getattr(request.app.state, "document_repo", None)
+        if document_repo:
+            await document_repo.save_clean_discovery(pid, result_state.discovery)
         spec_repo = request.app.state.spec_repo
         specs = await spec_repo.list_by_project(pid)
         if specs:
@@ -262,6 +266,9 @@ async def regenerate_discovery(
         )
         document_tree = clean_document_tree(document_tree)
         await request.app.state.project_repo.update_discovery_document(pid, document_tree)
+        document_repo = getattr(request.app.state, "document_repo", None)
+        if document_repo:
+            await document_repo.save_clean_discovery(pid, result_state.discovery)
         spec_repo = request.app.state.spec_repo
         specs = await spec_repo.list_by_project(pid)
         if specs:

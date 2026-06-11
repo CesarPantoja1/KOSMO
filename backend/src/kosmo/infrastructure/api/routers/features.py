@@ -135,14 +135,9 @@ async def generate_features(
         max_iterations=10,
     )
     state.shared_scratchpad["generation_mode"] = "generate"
-    if project and project.discovery_document:
-        from kosmo.contracts.sdd.discovery import DiscoveryDocument
-
-        state.discovery = (
-            DiscoveryDocument(**project.discovery_document)
-            if isinstance(project.discovery_document, dict)
-            else None
-        )
+    document_repo = getattr(request.app.state, "document_repo", None)
+    if document_repo and project:
+        state.discovery = await document_repo.get_clean_discovery(pid)
 
     existing_features = await request.app.state.feature_repo.get_by_project(pid)
     state.features = existing_features
@@ -192,14 +187,9 @@ async def suggest_alternative_features(
         phase=SpecPhase.CARACTERISTICAS,
         max_iterations=3,
     )
-    if project and project.discovery_document:
-        from kosmo.contracts.sdd.discovery import DiscoveryDocument
-
-        state.discovery = (
-            DiscoveryDocument(**project.discovery_document)
-            if isinstance(project.discovery_document, dict)
-            else None
-        )
+    document_repo = getattr(request.app.state, "document_repo", None)
+    if document_repo and project:
+        state.discovery = await document_repo.get_clean_discovery(pid)
 
     existing_features = await request.app.state.feature_repo.get_by_project(pid)
     state.existing_feature_titles = [f.title for f in existing_features]
