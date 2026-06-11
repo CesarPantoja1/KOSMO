@@ -150,9 +150,10 @@ async def generate_features(
     state.existing_feature_ids = [f.id for f in existing_features]
 
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{pid}"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{pid}_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         raise HTTPException(status_code=503, detail="Motor de IA no disponible")
 
@@ -205,9 +206,10 @@ async def suggest_alternative_features(
     state.existing_feature_ids = [f.id for f in existing_features]
 
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{pid}_suggest"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{pid}_suggest_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         raise HTTPException(status_code=503, detail="Motor de IA no disponible")
 
@@ -261,9 +263,10 @@ async def suggest_feature_from_user_idea(
 
     graph_engine = getattr(request.app.state, "graph_engine", None)
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{pid}_idea"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{pid}_idea_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         raise HTTPException(status_code=503, detail="Motor de IA no disponible")
 
@@ -321,9 +324,10 @@ async def improve_feature(
 
     graph_engine = getattr(request.app.state, "graph_engine", None)
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{fid}_improve"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{fid}_improve_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         raise HTTPException(status_code=503, detail="Motor de IA no disponible")
 

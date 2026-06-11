@@ -141,9 +141,10 @@ async def generate_requirements(
             state.discovery = specs[0].discovery
 
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{fid}"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{fid}_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         result_state = state
 
@@ -236,9 +237,10 @@ async def regenerate_requirements(
         state.shared_scratchpad["generator_action"] = "improve"
 
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{fid}_regen"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{fid}_regen_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         result_state = state
 

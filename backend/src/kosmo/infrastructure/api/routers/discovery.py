@@ -105,11 +105,13 @@ async def generate_discovery(
 
     if graph_engine is not None:
         import structlog
+        from ulid import ULID
 
         logger = structlog.get_logger()
         try:
+            thread_id = f"{principal.subject}_{pid}_{ULID().hex}"
             result_state = await graph_engine.invoke(
-                state, {"configurable": {"thread_id": f"{principal.subject}_{pid}"}}
+                state, {"configurable": {"thread_id": thread_id}}
             )
         except Exception as exc:
             logger.error("graph_engine.invoke failed", error=str(exc), project_id=str(pid))
@@ -151,11 +153,12 @@ async def generate_discovery(
     if result_state.discovery:
         from kosmo.domain.sdd.document_converters import (
             clean_document_tree,
+            clean_markdown,
             discovery_to_markdown,
             markdown_to_document,
         )
 
-        markdown = discovery_to_markdown(result_state.discovery)
+        markdown = clean_markdown(discovery_to_markdown(result_state.discovery))
         document_tree = result_state.shared_scratchpad.get(
             "generated_document_tree", markdown_to_document(markdown)
         )
@@ -228,16 +231,17 @@ async def regenerate_discovery(
         state.shared_scratchpad["current_draft"] = current_md
         state.shared_scratchpad["improve_instruction"] = (
             "Mejora este documento de descubrimiento manteniendo las ideas "
-            "y modificaciones del usuario. Enriquece el analisis de negocio, "
-            "completa secciones vacias y refina la redaccion. "
-            "NO elimines contenido que el usuario anadio."
+            "y modificaciones del usuario. Enriquece el análisis de negocio, "
+            "completa secciones vacías y refina la redacción. "
+            "NO elimines contenido que el usuario añadió."
         )
         state.shared_scratchpad["generator_action"] = "improve"
 
     if graph_engine is not None:
-        result_state = await graph_engine.invoke(
-            state, {"configurable": {"thread_id": f"{principal.subject}_{pid}_regen"}}
-        )
+        from ulid import ULID
+
+        thread_id = f"{principal.subject}_{pid}_regen_{ULID().hex}"
+        result_state = await graph_engine.invoke(state, {"configurable": {"thread_id": thread_id}})
     else:
         from kosmo.contracts.sdd.discovery import DiscoveryDocument
 
@@ -247,11 +251,12 @@ async def regenerate_discovery(
     if result_state.discovery:
         from kosmo.domain.sdd.document_converters import (
             clean_document_tree,
+            clean_markdown,
             discovery_to_markdown,
             markdown_to_document,
         )
 
-        markdown = discovery_to_markdown(result_state.discovery)
+        markdown = clean_markdown(discovery_to_markdown(result_state.discovery))
         document_tree = result_state.shared_scratchpad.get(
             "generated_document_tree", markdown_to_document(markdown)
         )

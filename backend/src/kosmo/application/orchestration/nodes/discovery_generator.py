@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from langchain_core.runnables import RunnableConfig
 
 from kosmo.application.orchestration.helpers import get_deps, verify_scope
@@ -8,6 +10,7 @@ from kosmo.contracts.sdd.discovery import DiscoveryDocument
 from kosmo.contracts.sdd.state import KOSMOState, ToolCallRecord
 from kosmo.contracts.telemetry import traced
 from kosmo.domain.sdd.document_converters import (
+    clean_markdown,
     discovery_to_markdown,
     markdown_to_document,
 )
@@ -15,29 +18,40 @@ from kosmo.domain.sdd.llm_helpers import extract_json, strip_llm_artifacts
 from kosmo.domain.sdd.output_guardrails import validate_discovery_output, validate_discovery_quality
 from kosmo.domain.sdd.structured_schemas import DiscoveryOutputSchema
 
-_DISCOVERY_SYSTEM = """Eres un Analista de Negocio Senior. Generas contenido EXCLUSIVAMENTE de negocio: describe que hace el producto, para quien, por que y bajo que reglas. Nunca menciones tecnologia.
+_DISCOVERY_SYSTEM = """Eres un Analista de Negocio Senior. Generas contenido exclusivamente de negocio. Nunca menciones tecnología, software, bases de datos ni infraestructura.
 
-REGLAS DE ORO:
-- Toda palabra con tilde DEBE llevarla. Ej: gestion -> gestión, vision -> visión.
-- Cada item de lista en su propia linea con salto de linea real (\\n). Esto es CRITICO: el backend necesita \\n reales entre items, no espacios.
-  CORRECTO: "1. Primer item\\n2. Segundo item\\n3. Tercer item"
-  INCORRECTO: "1. Primer item 2. Segundo item 3. Tercer item"
-  INCORRECTO: "Incluido: gestion Excluido: facturacion Futuro potencial: IA"
-- NO dupliques: jamas escribas **X**X. Correcto: **Disponibilidad**: descripcion. Incorrecto: **Disponibilidad**Disponibilidad.
+IDIOMA Y ORTOGRAFÍA: escribes en español con todas las tildes correctas (gestión, visión, análisis, descripción, línea, mínimo, crítico, ítem, párrafo, sección, diagnóstico, tecnología). Las palabras sin tilde son rechazadas.
 
-FORMATO POR SECCION:
-- vision: 1 parrafo de 3-5 lineas. Comienza con "Plataforma/Sistema/Herramienta que..."
-- problem_space: 1-2 parrafos de diagnostico. Menciona dolores concretos con cifras si aplica.
-- actors: lista con '- **Rol**: responsabilidad (1-2 lineas)'. Minimo 3 roles. Cada rol en su propia linea con \\n.
-- value_proposition: lista con '- Para el **Rol**: beneficio concreto y medible (1-2 lineas)'. Cada item con \\n.
-- use_cases: lista numerada '1. Escenario: descripcion'. Minimo 3. Cada uno en su propia linea con \\n.
-- core_capabilities: lista con '- **Capacidad**: descripcion (1-2 lineas)'. Minimo 5. Cada uno con \\n.
-- business_rules: lista numerada '1. Regla concreta (1-2 lineas)'. Minimo 4. Cada regla con \\n.
-- quality_attributes: lista con '- **Atributo**: expectativa medible (1-2 lineas)'. Minimo 4. Cada uno con \\n.
-- scope: "Incluido: ...\\nExcluido: ...\\nFuturo potencial: ...". CADA bloque separado por \\n real.
+FORMATO DE CADA CAMPO DEL JSON:
 
-FORMATO PROHIBIDO:
-NO: **X**X  |  NO: juntar items en un parrafo  |  NO: omitir tildes  |  NO: items sin \\n entre ellos"""
+vision: 1 párrafo de 3 a 5 líneas describiendo qué hace el producto y para quién. Texto plano, sin formato.
+
+problem_space: 1 o 2 párrafos describiendo el problema de negocio que el producto resuelve. Texto plano, sin formato.
+
+actors: lista donde cada línea tiene el formato "Rol: descripción breve". Ejemplo:
+"Administrador: gestiona usuarios y configura el sistema\nMentor: acepta sesiones y comparte materiales\nEstudiante: agenda sesiones y califica tutorías"
+
+value_proposition: lista donde cada línea tiene el formato "Rol: beneficio concreto". Ejemplo:
+"Para Administrador: visibilidad completa de la actividad y métricas de uso\nPara Mentor: optimización del tiempo con agenda automatizada\nPara Estudiante: acceso rápido a mentores y materiales organizados"
+
+use_cases: lista donde cada línea tiene el formato "Título breve: descripción de la interacción usuario-sistema". Ejemplo:
+"Agendar sesión: el estudiante selecciona mentor, fecha y hora, y el sistema confirma disponibilidad y envía recordatorio\nCalificar tutoría: el estudiante asigna puntuación y escribe reseña, y el sistema actualiza el perfil del mentor\nCancelar reserva: el usuario cancela antes del inicio y el sistema libera el espacio"
+
+core_capabilities: lista donde cada línea tiene el formato "Capacidad: descripción breve". Ejemplo:
+"Agenda inteligente: mentores definen disponibilidad y estudiantes reservan en tiempo real\nSistema de calificaciones: estudiantes puntúan tutorías con reseñas visibles en perfiles\nRepositorio de archivos: almacena materiales compartidos por sesión\nNotificaciones: envía recordatorios de sesiones y alertas de actividad\nPerfiles de usuario: muestra historial, calificaciones y reseñas"
+
+business_rules: lista donde cada línea es "Regla de negocio concreta". Ejemplo:
+"Un estudiante no puede agendar más de 3 sesiones con el mismo mentor por semana\nLas calificaciones solo pueden editarse dentro de las 24 horas posteriores a la sesión\nUn mentor debe tener al menos 5 reseñas para mostrar su calificación promedio"
+
+quality_attributes: lista donde cada línea tiene el formato "Atributo: expectativa medible". Ejemplo:
+"Disponibilidad: el sistema debe estar operativo el 99.5% del tiempo en horario hábil\nRendimiento: la búsqueda de mentores debe responder en menos de 2 segundos\nSeguridad: los archivos solo son accesibles para los participantes de la sesión"
+
+scope: texto con tres secciones "Incluido: ... Excluido: ... Futuro potencial: ...". Cada sección contiene ítems separados por punto y coma. Ejemplo:
+"Incluido: agendamiento de sesiones; calificación y reseñas; perfiles de usuario; notificaciones por email\nExcluido: videollamadas integradas; pagos en línea; foros de discusión\nFuturo potencial: integración con calendarios externos; recomendación de mentores; aplicación móvil"
+
+───────
+IMPORTANTE: en cada campo debes usar UN SOLO ':' como separador entre etiqueta y valor. NUNCA uses '::' (doble dos puntos). El backend formateará tu texto para darle presentación visual (negritas, viñetas, numeración).
+───────"""
 
 
 @traced("discovery_generator.execute")
@@ -105,7 +119,7 @@ async def discovery_generator_node(state: KOSMOState, config: RunnableConfig) ->
     except Exception:
         records[-1].result = "llm_error"
         records[-1].error = "LLM call failed"
-        empty = DiscoveryDocument(vision=description or "Sin descripcion")
+        empty = DiscoveryDocument(vision=description or "Sin descripción")
         return {
             "discovery": empty,
             "generation_attempts": iteration,
@@ -128,7 +142,7 @@ async def discovery_generator_node(state: KOSMOState, config: RunnableConfig) ->
     if not discovery or not discovery.vision:
         records[-1].result = "parse_failed"
         records[-1].error = "Empty vision field"
-        empty = DiscoveryDocument(vision=description or "Sin descripcion")
+        empty = DiscoveryDocument(vision=description or "Sin descripción")
         return {
             "discovery": empty,
             "generation_attempts": iteration,
@@ -146,13 +160,15 @@ async def discovery_generator_node(state: KOSMOState, config: RunnableConfig) ->
     discovery = DiscoveryDocument(
         vision=strip_llm_artifacts(discovery.vision),
         problem_space=strip_llm_artifacts(discovery.problem_space),
-        actors=_format_list_section(discovery.actors),
-        value_proposition=_format_list_section(discovery.value_proposition),
-        use_cases=_format_list_section(discovery.use_cases),
-        core_capabilities=_format_list_section(discovery.core_capabilities),
-        business_rules=_format_list_section(discovery.business_rules),
-        quality_attributes=_format_list_section(discovery.quality_attributes),
-        scope=strip_llm_artifacts(discovery.scope),
+        actors=_format_kv_list(strip_llm_artifacts(discovery.actors)),
+        value_proposition=_format_kv_list(
+            strip_llm_artifacts(discovery.value_proposition), bullet_prefix="Para "
+        ),
+        use_cases=_format_kv_list(strip_llm_artifacts(discovery.use_cases), ordered=True),
+        core_capabilities=_format_kv_list(strip_llm_artifacts(discovery.core_capabilities)),
+        business_rules=_format_plain_list(strip_llm_artifacts(discovery.business_rules)),
+        quality_attributes=_format_kv_list(strip_llm_artifacts(discovery.quality_attributes)),
+        scope=_format_scope(strip_llm_artifacts(discovery.scope)),
     )
 
     guardrail_result = validate_discovery_output(discovery.model_dump())
@@ -175,7 +191,7 @@ async def discovery_generator_node(state: KOSMOState, config: RunnableConfig) ->
             records[-1].result = "generated_with_warnings"
         records[-1].error = (records[-1].error or "") + " | " + quality_issues.get("summary", "")
 
-    markdown = discovery_to_markdown(discovery)
+    markdown = clean_markdown(discovery_to_markdown(discovery))
     document_tree = markdown_to_document(markdown)
 
     return {
@@ -192,43 +208,134 @@ async def discovery_generator_node(state: KOSMOState, config: RunnableConfig) ->
     }
 
 
-def _format_list_section(text: str) -> str:
+# ── Formateadores (backend genera el markdown, el LLM solo entrega datos) ──
+
+
+def _split_entries(text: str) -> list[str]:
+    """Divide texto en entradas individuales por saltos de línea o límites de oración."""
+    if not text:
+        return []
+    if "\n" in text:
+        return [e.strip() for e in text.split("\n") if e.strip()]
+    parts = re.split(r"\.\s+(?=[A-ZÁÉÍÓÚÑ])", text)
+    return [p.strip().rstrip(".") for p in parts if p.strip()]
+
+
+def _format_kv_list(
+    text: str,
+    *,
+    ordered: bool = False,
+    bullet_prefix: str = "",
+) -> str:
+    """Convierte 'Etiqueta: descripción' o 'Etiqueta:: descripción' en bullet/numbered con bold.
+
+    ordered=True  → "1. **Etiqueta:** descripción"
+    ordered=False → "- **Etiqueta:** descripción"
+    bullet_prefix se antepone a la etiqueta (ej: "Para " para value_proposition).
+    """
     if not text:
         return ""
 
-    import re
+    # Fix double colons – primero quitar ** para exponer :: ocultos
+    text = re.sub(r"\*+", "", text)
+    text = re.sub(r":{2,}", ":", text)
 
-    text = re.sub(r"(\d+)\.\s+(?=[A-Z])", r"\n\1. ", text)
-    text = re.sub(r"\b(Incluido:|Excluido:|Futuro potencial:)", r"\n\1", text)
-
-    lines = text.strip().split("\n")
+    entries = _split_entries(text)
     formatted: list[str] = []
 
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
+    for i, entry in enumerate(entries):
+        entry = re.sub(r"\*+", "", entry)
+        entry = re.sub(r"^\d+[\.\)]\s*", "", entry)
+        entry = re.sub(r"^[-*]\s*", "", entry)
+        entry = entry.strip()
 
-        if stripped.startswith("- ") or stripped.startswith("* "):
-            formatted.append(stripped)
-            continue
+        prefix = f"{i + 1}. " if ordered else "- "
 
-        if _looks_like_numbered_item(stripped):
-            formatted.append(stripped)
-            continue
-
-        needs_bullet = not formatted and not stripped.startswith("- ")
-        if needs_bullet:
-            formatted.append(f"- {stripped}")
+        if ":" in entry:
+            colon_idx = entry.index(":")
+            label = entry[:colon_idx].strip().rstrip(":")
+            body = re.sub(r"^:\s*", "", entry[colon_idx + 1 :].strip()).strip()
+            if body:
+                formatted.append(f"{prefix}{bullet_prefix}**{label}:** {body}")
+            else:
+                formatted.append(f"{prefix}{bullet_prefix}**{label}**")
         else:
-            formatted.append(stripped)
+            formatted.append(f"{prefix}{entry}")
+
+    result = "\n".join(formatted)
+    result = re.sub(r":{2,}", ":", result)
+    return result
+
+
+def _format_scope(text: str) -> str:
+    """Convierte el scope caótico del LLM en formato limpio con bullets.
+
+    Maneja 'Incluido:: contenido', 'Incluido:Excluido:', '**Incluido:** contenido', etc.
+    """
+    if not text:
+        return ""
+
+    # Fix double colons and remove markdown chars
+    # Orden: primero quitar ** para exponer :: escondidos entre marcadores markdown
+    text = re.sub(r"\*+", "", text)
+    text = re.sub(r":{2,}", ":", text)
+
+    # Fix concatenated keywords: "Incluido:Excluido:" → split
+    text = re.sub(r"(Incluido)\s*:\s*(Excluido)", r"\n\2", text, flags=re.IGNORECASE)
+    text = re.sub(r"(Incluido)\s*:\s*(Futuro\s+potencial)", r"\n\2", text, flags=re.IGNORECASE)
+    text = re.sub(r"(Excluido)\s*:\s*(Futuro\s+potencial)", r"\n\2", text, flags=re.IGNORECASE)
+    text = re.sub(r"(Excluido)\s*:\s*(Incluido)", r"\n\2", text, flags=re.IGNORECASE)
+
+    pattern = re.compile(r"(Incluido|Excluido|Futuro potencial)\s*:\s*", re.IGNORECASE)
+    parts = pattern.split(text)
+
+    result: list[str] = []
+    i = 1
+    while i < len(parts):
+        kw = parts[i].strip()
+        raw = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        i += 2
+
+        kw_lower = kw.lower()
+        if "incluido" in kw_lower:
+            header = "Incluido"
+        elif "excluido" in kw_lower:
+            header = "Excluido"
+        else:
+            header = "Futuro potencial"
+
+        result.append(f"**{header}:**")
+
+        items = re.split(r"[;]", raw)
+        for item in items:
+            item = item.strip().strip(".").strip()
+            if item and len(item) > 1:
+                item = item[0].upper() + item[1:]
+                result.append(f"- {item}")
+        result.append("")
+
+    return "\n".join(result).strip()
+
+
+def _format_plain_list(text: str, *, ordered: bool = True) -> str:
+    """Convierte texto plano en lista numerada o con viñetas."""
+    if not text:
+        return ""
+
+    text = re.sub(r":{2,}", ":", text)
+    entries = _split_entries(text)
+    formatted: list[str] = []
+
+    for i, entry in enumerate(entries):
+        entry = re.sub(r"^\d+[\.\)]\s*", "", entry)
+        entry = re.sub(r"^[-*]\s*", "", entry)
+        entry = entry.strip()
+        formatted.append(f"{i + 1}. {entry}" if ordered else f"- {entry}")
 
     return "\n".join(formatted)
 
 
-def _looks_like_numbered_item(text: str) -> bool:
-    import re
-    return bool(re.match(r"^\d+[\.\)]\s+", text))
+# ── Prompt builder ──
 
 
 def _build_discovery_prompt(
@@ -244,18 +351,22 @@ def _build_discovery_prompt(
     parts: list[str] = []
 
     if is_improve:
-        parts.append(f"## Ciclo ReAct — Iteracion {iteration} — MEJORA")
+        parts.append(f"## Ciclo ReAct — Iteración {iteration} — MEJORA")
         parts.append("Documento actual:")
         parts.append(current_draft[:4000])
-        parts.append("Instruccion: mejora manteniendo ideas del usuario. Enriquece analisis, completa secciones vacias. NO reescribas desde cero.")
+        parts.append(
+            "Instrucción: mejora manteniendo ideas del usuario. Enriquece análisis, completa secciones vacías. NO reescribas desde cero."
+        )
     else:
-        parts.append(f"## Ciclo ReAct — Iteracion {iteration}")
-        parts.append("ANALISIS: que problema resuelve, para quien, que valor aporta.")
-        parts.append("PLANIFICACION: distribuye en las 9 secciones.")
-        parts.append("GENERACION: contenido sustancial con ortografia correcta.")
+        parts.append(f"## Ciclo ReAct — Iteración {iteration}")
+        parts.append("ANÁLISIS: qué problema resuelve, para quién, qué valor aporta.")
+        parts.append("PLANIFICACIÓN: distribuye en las 9 secciones.")
+        parts.append(
+            "GENERACIÓN: contenido con el formato 'Etiqueta: descripción' especificado en el system prompt."
+        )
 
     if feedback:
-        parts.append(f"\n## Retroalimentacion del Critico\n{feedback}")
+        parts.append(f"\n## Retroalimentación del Crítico\n{feedback}")
         if previous:
             parts.append(f"\n## Contenido previo\n{previous[:2000]}")
 
@@ -269,7 +380,7 @@ def _build_discovery_prompt(
         parts.append(f"\n## Sub-objetivos\n{', '.join(goals.get('sub_goals', []))}")
 
     parts.append("""
-## Formato de Respuesta (JSON exacto, usa estos nombres de campo)
+## Formato de Respuesta (JSON exacto)
 ```json
 {
   "vision": "...",

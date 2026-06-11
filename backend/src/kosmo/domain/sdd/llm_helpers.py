@@ -32,7 +32,12 @@ def strip_llm_artifacts(text: str) -> str:
         return text
 
     cleaned = _FIELD_LABEL.sub("", text)
+    cleaned = re.sub(r"\*+", "", cleaned)
+    cleaned = re.sub(r":{2,}", ":", cleaned)
+    cleaned = re.sub(r":\s+:", ":", cleaned)
     cleaned = cleaned.replace("\\n", " ")
+    cleaned = re.sub(r":{2,}", ":", cleaned)
+    cleaned = re.sub(r":\s+:", ":", cleaned)
 
     return cleaned.strip()
 

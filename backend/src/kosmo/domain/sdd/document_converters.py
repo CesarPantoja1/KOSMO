@@ -310,35 +310,37 @@ def _collect_inline_content(tokens: list, start: int) -> list[dict]:
 
 
 def _process_inline_children(children: list) -> list[dict]:
+    """Procesa hijos inline del tokenizador markdown-it.
+
+    Usa un bucle while con control de índice para evitar que los nodos
+    dentro de pares open/close (strong, em, s, link) se procesen dos veces.
+    """
     nodos: list[dict] = []
-    for child in children:
-        if child.type == "text":
+    i = 0
+    while i < len(children):
+        child = children[i]
+        ttype = child.type
+
+        if ttype == "text":
             nodos.append({"type": "text", "text": child.content})
-        elif child.type == "strong_open":
-            contenido = _process_inline_until(children, children.index(child) + 1, "strong_close")
-            if contenido:
-                for c in contenido:
-                    existing = c.get("marks") or []
-                    existing.append({"type": "bold"})
-                    c["marks"] = existing
-                nodos.extend(contenido)
-        elif child.type == "em_open":
-            contenido = _process_inline_until(children, children.index(child) + 1, "em_close")
-            if contenido:
-                for c in contenido:
-                    existing = c.get("marks") or []
-                    existing.append({"type": "italic"})
-                    c["marks"] = existing
-                nodos.extend(contenido)
-        elif child.type == "s_open":
-            contenido = _process_inline_until(children, children.index(child) + 1, "s_close")
-            if contenido:
-                for c in contenido:
-                    existing = c.get("marks") or []
-                    existing.append({"type": "strike"})
-                    c["marks"] = existing
-                nodos.extend(contenido)
-        elif child.type == "code_inline":
+            i += 1
+        elif ttype in ("strong_open", "em_open", "s_open"):
+            close_type = ttype.replace("_open", "_close")
+            _mark_map = {"strong_open": "bold", "em_open": "italic", "s_open": "strike"}
+            mark_type = _mark_map[ttype]
+            j = i + 1
+            while j < len(children) and children[j].type != close_type:
+                j += 1
+            contenido = _process_inline_children(children[i + 1 : j])
+            for c in contenido:
+                existing = c.get("marks") or []
+                existing.append({"type": mark_type})
+                c["marks"] = existing
+            nodos.extend(contenido)
+            i = j + 1
+        elif ttype in ("strong_close", "em_close", "s_close"):
+            i += 1
+        elif ttype == "code_inline":
             nodos.append(
                 {
                     "type": "text",
@@ -346,20 +348,29 @@ def _process_inline_children(children: list) -> list[dict]:
                     "marks": [{"type": "code"}],
                 }
             )
-        elif child.type == "link_open":
-            idx = children.index(child)
+            i += 1
+        elif ttype == "link_open":
+            j = i + 1
+            while j < len(children) and children[j].type != "link_close":
+                j += 1
             href = child.attrs.get("href", "") if child.attrs else ""
-            inner = _process_inline_until(children, idx + 1, "link_close")
-            if inner:
-                for c in inner:
-                    existing = c.get("marks") or []
-                    existing.append({"type": "link", "attrs": {"href": href}})
-                    c["marks"] = existing
-                nodos.extend(inner)
-        elif child.type == "softbreak" and nodos and nodos[-1].get("type") == "text":
+            contenido = _process_inline_children(children[i + 1 : j])
+            for c in contenido:
+                existing = c.get("marks") or []
+                existing.append({"type": "link", "attrs": {"href": href}})
+                c["marks"] = existing
+            nodos.extend(contenido)
+            i = j + 1
+        elif ttype == "link_close":
+            i += 1
+        elif ttype == "softbreak" and nodos and nodos[-1].get("type") == "text":
             nodos[-1]["text"] += " "
-        elif child.type == "hardbreak":
+            i += 1
+        elif ttype == "hardbreak":
             nodos.append({"type": "hardBreak"})
+            i += 1
+        else:
+            i += 1
     return nodos
 
 
@@ -552,6 +563,11 @@ def _parse_inline_marks_fallback(texto: str) -> list[dict]:
     if ultimo < len(texto):
         nodos.append({"type": "text", "text": texto[ultimo:]})
 
+    # Fix double colons en todos los nodos de texto
+    for n in nodos:
+        if n.get("type") == "text" and "text" in n:
+            n["text"] = re.sub(r":{2,}", ":", n["text"])
+
     return nodos or [{"type": "text", "text": texto}]
 
 
@@ -643,6 +659,17 @@ def discovery_to_markdown(discovery: DiscoveryDocument) -> str:
     return "\n\n".join(partes)
 
 
+def clean_markdown(markdown: str) -> str:
+    """Reemplazo global de :: por : en todo el string markdown.
+
+    Esta es la última línea de defensa contra doble-dos-puntos que
+    pudieran haber escapado a los formateadores anteriores.
+    """
+    markdown = re.sub(r":{2,}", ":", markdown)
+    markdown = re.sub(r":\s+:", ":", markdown)
+    return markdown
+
+
 def requirements_document_to_markdown(
     doc: RequirementsDocument,
     feature_title: str,
@@ -676,7 +703,7 @@ def requirements_document_to_markdown(
                 linea += f"**Disparador:** {req.trigger}\n\n"
             linea += f"**Respuesta:** {req.response}\n\n"
             if req.acceptance_criteria:
-                linea += "**Criterios de aceptacion:**\n"
+                linea += "**Criterios de aceptación:**\n"
                 for ac in req.acceptance_criteria:
                     linea += f"- {ac.description}"
                     if ac.expected_result:
@@ -696,10 +723,10 @@ def requirements_document_to_markdown(
 
 def _extract_summary(response: str) -> str:
     if not response:
-        return "Sin descripcion"
+        return "Sin descripción"
     words = response.strip().split()
     if not words:
-        return "Sin descripcion"
+        return "Sin descripción"
     summary = " ".join(words[:8])
     if len(words) > 8:
         summary += "..."
@@ -762,8 +789,44 @@ def extract_discovery_from_document(document: dict) -> dict:
 
 def clean_document_tree(document: dict) -> dict:
     if "content" in document and isinstance(document["content"], list):
-        document["content"] = _clean_content_nodes(document["content"])
+        document["content"] = _fix_double_colons_in_nodes(_clean_content_nodes(document["content"]))
     return document
+
+
+def _fix_double_colons_in_nodes(nodes: list[dict]) -> list[dict]:
+    """Reemplaza :: por : en todos los nodos de texto del árbol ProseMirror.
+
+    También corrige el caso en que :: cruza dos nodos de texto adyacentes.
+    """
+    for node in nodes:
+        if isinstance(node, dict):
+            if node.get("type") == "text" and "text" in node:
+                node["text"] = re.sub(r":{2,}", ":", node["text"])
+            children = node.get("content")
+            if isinstance(children, list):
+                _fix_double_colons_in_nodes(children)
+                _fix_adjacent_colons(children)
+    return nodes
+
+
+def _fix_adjacent_colons(nodes: list[dict]) -> None:
+    """Si un nodo de texto termina con ':' y el siguiente empieza con ':',
+    quita el ':' del primer nodo para evitar '::' entre ambos."""
+    for j in range(len(nodes) - 1):
+        a = nodes[j]
+        b = nodes[j + 1]
+        if (
+            isinstance(a, dict)
+            and a.get("type") == "text"
+            and isinstance(b, dict)
+            and b.get("type") == "text"
+        ):
+            a_text: str = a.get("text", "")
+            b_text: str = b.get("text", "")
+            if a_text.rstrip(" ") == "":
+                continue
+            if a_text.endswith(":") and b_text.startswith(":"):
+                a["text"] = a_text.rstrip(":").rstrip(" ")
 
 
 def _clean_content_nodes(nodes: list[dict]) -> list[dict]:
@@ -801,7 +864,7 @@ def _dedup_bold_and_merge(nodes: list[dict]) -> list[dict]:
                 result.append(node)
             continue
 
-        bold_text = text.strip().rstrip(":").strip()
+        bold_text = re.sub(r":{2,}", ":", text.strip()).rstrip(":").strip()
         merged_plain = None
 
         while i < len(nodes):
@@ -814,30 +877,42 @@ def _dedup_bold_and_merge(nodes: list[dict]) -> list[dict]:
                 break
             stripped = peek_text.lstrip(": ").strip()
             if stripped.lower().startswith(bold_text.lower()):
-                remainder = stripped[len(bold_text):].strip()
+                remainder = stripped[len(bold_text) :].strip()
+                if remainder.startswith(":") and text.strip().endswith(":"):
+                    text = text.rstrip(":").strip()
                 if remainder:
                     merged_plain = remainder
                 i += 1
                 break
             else:
+                # Si el texto bold termina en ':' y el siguiente empieza en ':',
+                # quitamos el ':' del bold para evitar '::' al concatenar
+                if text.strip().endswith(":") and peek_text.lstrip(" ").startswith(":"):
+                    text = text.rstrip(":").strip()
                 merged_plain = peek_text
                 i += 1
                 break
 
-        result.append({"type": "text", "text": text, "marks": marks})
+        result.append({"type": "text", "text": re.sub(r":{2,}", ":", text), "marks": marks})
         if merged_plain is not None:
-            result.append({"type": "text", "text": merged_plain})
+            result.append({"type": "text", "text": re.sub(r":{2,}", ":", merged_plain)})
 
         while i < len(nodes):
             peek = nodes[i]
-            if isinstance(peek, dict) and peek.get("type") == "text" and peek.get("text", "").strip() and not (peek.get("marks") or []):
+            if (
+                isinstance(peek, dict)
+                and peek.get("type") == "text"
+                and peek.get("text", "").strip()
+                and not (peek.get("marks") or [])
+            ):
                 merged = dict(peek)
                 i += 1
                 if result and result[-1].get("type") == "text" and not result[-1].get("marks"):
                     prev = result[-1].get("text", "")
                     curr = merged.get("text", "")
                     needs = prev and not prev.endswith(" ") and not curr.startswith(" ")
-                    result[-1]["text"] = prev + (" " if needs else "") + curr
+                    merged_text = prev + (" " if needs else "") + curr
+                    result[-1]["text"] = re.sub(r":{2,}", ":", merged_text)
                 else:
                     result.append(merged)
             else:

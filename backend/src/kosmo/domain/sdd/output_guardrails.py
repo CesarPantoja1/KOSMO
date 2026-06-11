@@ -28,7 +28,7 @@ def validate_discovery_output(data: dict) -> GuardrailResult:
             violations=[
                 GuardrailViolation(
                     field="root",
-                    message="El output no es un diccionario valido",
+                    message="El output no es un diccionario válido",
                     severity="blocker",
                 )
             ],
@@ -57,7 +57,7 @@ def validate_discovery_output(data: dict) -> GuardrailResult:
         violations.append(
             GuardrailViolation(
                 field=section,
-                message=f"Seccion requerida '{section}' ausente",
+                message=f"Sección requerida '{section}' ausente",
                 severity="blocker",
             )
         )
@@ -66,7 +66,7 @@ def validate_discovery_output(data: dict) -> GuardrailResult:
         violations.append(
             GuardrailViolation(
                 field=section,
-                message=f"Seccion '{section}' esta vacia",
+                message=f"Sección '{section}' está vacía",
                 severity="blocker",
             )
         )
@@ -76,7 +76,7 @@ def validate_discovery_output(data: dict) -> GuardrailResult:
             GuardrailViolation(
                 field=section,
                 message=(
-                    f"Seccion '{section}' es demasiado corta ({MIN_SECTION_LENGTH} car. minimo)"
+                    f"Sección '{section}' es demasiado corta ({MIN_SECTION_LENGTH} car. mínimo)"
                 ),
                 severity="warning",
             )
@@ -88,7 +88,7 @@ def validate_discovery_output(data: dict) -> GuardrailResult:
         violations.append(
             GuardrailViolation(
                 field="prohibited_terms",
-                message=f"Termino prohibido detectado: '{term}'",
+                message=f"Término prohibido detectado: '{term}'",
                 severity="blocker",
             )
         )
@@ -126,7 +126,9 @@ def validate_generate_features_output(
     existing_titles: list[str],
 ) -> GuardrailResult:
     """Valida output de /generate: exactamente 5 caracteristicas."""
-    return _validate_features_inner(data, existing_titles, expected_count=5, label="caracteristicas")
+    return _validate_features_inner(
+        data, existing_titles, expected_count=5, label="caracteristicas"
+    )
 
 
 def _validate_features_inner(
@@ -143,7 +145,7 @@ def _validate_features_inner(
             violations=[
                 GuardrailViolation(
                     field="root",
-                    message="El output no es una lista valida",
+                    message="El output no es una lista válida",
                     severity="blocker",
                 )
             ],
@@ -334,7 +336,7 @@ def validate_ears_output(data: dict) -> GuardrailResult:
             violations=[
                 GuardrailViolation(
                     field="root",
-                    message="El output no es un diccionario valido",
+                    message="El output no es un diccionario válido",
                     severity="blocker",
                 )
             ],
@@ -542,7 +544,10 @@ def validate_semantic_quality(
                 continue
             pattern = req.get("pattern", "")
             source = req.get("source_statement", "")
-            if pattern in ("event", "state", "optional", "unwanted") and "shall" not in source.lower():
+            if (
+                pattern in ("event", "state", "optional", "unwanted")
+                and "shall" not in source.lower()
+            ):
                 violations.append(
                     GuardrailViolation(
                         field="ears_syntax",
@@ -553,9 +558,24 @@ def validate_semantic_quality(
 
     if feature_title:
         verbs_start = [
-            "gestionar", "administrar", "crear", "eliminar", "editar", "configurar",
-            "visualizar", "notificar", "generar", "procesar", "validar", "enviar",
-            "publicar", "analizar", "programar", "registrar", "modificar", "actualizar",
+            "gestionar",
+            "administrar",
+            "crear",
+            "eliminar",
+            "editar",
+            "configurar",
+            "visualizar",
+            "notificar",
+            "generar",
+            "procesar",
+            "validar",
+            "enviar",
+            "publicar",
+            "analizar",
+            "programar",
+            "registrar",
+            "modificar",
+            "actualizar",
         ]
         title_lower = feature_title.lower().strip()
         if any(title_lower.startswith(v) for v in verbs_start):
@@ -571,25 +591,97 @@ def validate_semantic_quality(
 
 
 _SPANISH_TILDES: dict[str, list[str]] = {
-    "ón": ["accion", "administracion", "aplicacion", "aprobacion", "autorizacion",
-           "cancelacion", "categorizacion", "comunicacion", "configuracion",
-           "conciliacion", "confirmacion", "decision", "definicion", "devolucion",
-           "descripcion", "duracion", "especificacion", "facturacion", "funcion",
-           "generacion", "gestion", "informacion", "integracion", "negociacion",
-           "notificacion", "operacion", "organizacion", "planificacion", "poblacion",
-           "posicion", "preparacion", "programacion", "promocion", "recomendacion",
-           "reduccion", "relacion", "rendicion", "reposicion", "rotacion",
-           "satisfaccion", "seccion", "seleccion", "sesion", "solucion",
-           "supervision", "trazabilidad", "ubicacion", "validacion", "valoracion",
-           "verificacion", "version", "visualizacion"],
+    "ón": [
+        "accion",
+        "administracion",
+        "aplicacion",
+        "aprobacion",
+        "autorizacion",
+        "cancelacion",
+        "categorizacion",
+        "comunicacion",
+        "configuracion",
+        "conciliacion",
+        "confirmacion",
+        "decision",
+        "definicion",
+        "devolucion",
+        "descripcion",
+        "duracion",
+        "especificacion",
+        "facturacion",
+        "funcion",
+        "generacion",
+        "gestion",
+        "informacion",
+        "integracion",
+        "negociacion",
+        "notificacion",
+        "operacion",
+        "organizacion",
+        "planificacion",
+        "poblacion",
+        "posicion",
+        "preparacion",
+        "programacion",
+        "promocion",
+        "recomendacion",
+        "reduccion",
+        "relacion",
+        "rendicion",
+        "reposicion",
+        "rotacion",
+        "satisfaccion",
+        "seccion",
+        "seleccion",
+        "sesion",
+        "solucion",
+        "supervision",
+        "trazabilidad",
+        "ubicacion",
+        "validacion",
+        "valoracion",
+        "verificacion",
+        "version",
+        "visualizacion",
+    ],
     "ía": ["categoria", "compañia", "garantia", "gerencia", "mercancia", "tecnologia"],
     "és": ["interes", "despues", "traves"],
-    "á": ["analisis", "baja", "capacitacion", "catalogo", "ciclico", "codigo",
-          "comite", "critico", "demas", "estrategia", "estara", "fisico",
-          "historico", "limite", "margen", "maximo", "metodo", "minimo",
-          "optimo", "perdida", "perdidas", "periodo", "practico", "proximo",
-          "publica", "rapido", "tactico", "tambien", "tendran", "ultimo",
-          "unico", "util", "vacio"],
+    "á": [
+        "analisis",
+        "baja",
+        "capacitacion",
+        "catalogo",
+        "ciclico",
+        "codigo",
+        "comite",
+        "critico",
+        "demas",
+        "estrategia",
+        "estara",
+        "fisico",
+        "historico",
+        "limite",
+        "margen",
+        "maximo",
+        "metodo",
+        "minimo",
+        "optimo",
+        "perdida",
+        "perdidas",
+        "periodo",
+        "practico",
+        "proximo",
+        "publica",
+        "rapido",
+        "tactico",
+        "tambien",
+        "tendran",
+        "ultimo",
+        "unico",
+        "util",
+        "vacio",
+    ],
     "é": ["electronico", "estara", "genero", "numero", "tambien"],
     "í": ["critico", "fisico", "juridico", "maximo", "minimo", "optimo", "unico"],
 }
@@ -618,25 +710,38 @@ def validate_discovery_quality(data: dict) -> dict[str, object]:
         ortho_pct = (orthography_checked - orthography_issues) / orthography_checked * 100
         if ortho_pct < 80:
             violations.append(
-                f"Ortografia: solo {ortho_pct:.0f}% de tildes correctas ({orthography_issues} errores de {orthography_checked}). "
+                f"Ortografía: solo {ortho_pct:.0f}% de tildes correctas ({orthography_issues} errores de {orthography_checked}). "
                 f"Revisa: gestion->gestión, critico->crítico, descripcion->descripción, etc."
             )
+
+    double_colons = re.findall(r"::", all_text)
+    if double_colons:
+        violations.append(
+            f"Doble dos puntos '::' detectado ({len(double_colons)} ocurrencias). "
+            f"Usa un solo ':' en lugar de '::'."
+        )
 
     duplicates = re.findall(r"\*\*([^*]+)\*\*\1", all_text)
     if duplicates:
         violations.append(
-            f"Duplicacion bold+plain detectada: {', '.join(d for d in duplicates[:3])}. "
-            f"Usa **Palabra**: descripcion, NO **Palabra**Palabra."
+            f"Duplicación bold+plain detectada: {', '.join(d for d in duplicates[:3])}. "
+            f"Usa **Palabra**: descripción, NO **Palabra**Palabra."
         )
 
-    for section_name in ["actors", "value_proposition", "use_cases",
-                         "core_capabilities", "business_rules", "quality_attributes"]:
+    for section_name in [
+        "actors",
+        "value_proposition",
+        "use_cases",
+        "core_capabilities",
+        "business_rules",
+        "quality_attributes",
+    ]:
         section_text = str(data.get(section_name, ""))
         items = [line.strip() for line in section_text.split("\n") if line.strip()]
         if len(items) < 2:
             warnings.append(
-                f"Seccion '{section_name}' tiene {len(items)} items visibles. "
-                f"Debe tener al menos 3 items en lineas separadas."
+                f"Sección '{section_name}' tiene {len(items)} ítems visibles. "
+                f"Debe tener al menos 3 ítems en líneas separadas."
             )
 
     summary_parts: list[str] = []

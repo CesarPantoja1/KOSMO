@@ -146,16 +146,17 @@ API Router (POST /discovery/generate)
        │
        ├─ context_merger → supervisor → route to discovery_generator
        │
-       ├─ discovery_generator_node:
-       │   1. Build prompt (_DISCOVERY_SYSTEM + _build_discovery_prompt)
-       │   2. LLM complete (DeepSeek, structured output con DiscoveryOutputSchema)
-       │   3. Parse: response.parsed (Pydantic) ‖ extract_json (fallback)
-       │   4. strip_llm_artifacts() + _format_list_section()
-       │   5. validate_discovery_output() → guardrail estructural
-       │   6. validate_discovery_quality() → tildes, anti-dup, items
-       │   7. discovery_to_markdown() → markdown
-       │   8. markdown_to_document() → árbol ProseMirror
-       │   9. clean_document_tree() → _dedup_bold_and_merge()
+        ├─ discovery_generator_node:
+        │   1. Build prompt (_DISCOVERY_SYSTEM + _build_discovery_prompt)
+        │   2. LLM complete (DeepSeek, structured output con DiscoveryOutputSchema)
+        │   3. Parse: response.parsed (Pydantic) ‖ extract_json (fallback)
+        │   4. strip_llm_artifacts() + _format_kv_list() / _format_scope() / _format_plain_list()
+        │   5. validate_discovery_output() → guardrail estructural
+        │   6. validate_discovery_quality() → tildes, anti-dup, items
+        │   7. discovery_to_markdown() → clean_markdown() → markdown
+        │   8. markdown_to_document() → árbol ProseMirror
+        │   9. clean_document_tree() → _clean_content_nodes() → _dedup_bold_and_merge()
+        │      → _fix_double_colons_in_nodes() → _fix_adjacent_colons()
        │
        ├─ [quality_critic ‖ style_critic ‖ consistency_critic] (paralelo, fan-out<3)
        │
@@ -197,7 +198,160 @@ API Router (POST /discovery/generate)
 
 ---
 
-## 7. Estado Actual
+## 7. Corrección del Bug `::` (Doble Dos Puntos) en ProseMirror
+
+### 7.1. Síntoma
+
+En el árbol ProseMirror generado, secciones como Alcance y Atributos de calidad mostraban `::` (doble dos puntos) en el renderizado final:
+
+```json
+// Árbol ProseMirror — Scope section
+{"type": "text", "marks": [{"type": "bold"}], "text": "Excluido:"},
+{"type": "text", "marks": null, "text": ":"}
+// Renderizado: Excluido::  ← doble dos puntos
+```
+
+El problema afectaba **todas las secciones** con formato `**Etiqueta:** descripción` (actores, propuesta de valor, casos de uso, capacidades, atributos de calidad, alcance).
+
+### 7.2. Causa Raíz — Tres Bugs Interconectados
+
+#### Bug 1 (PRIMARIO): `_process_inline_children()` duplicaba nodos de texto
+
+**Archivo**: `domain/sdd/document_converters.py:312-363` (versión antigua)
+
+Cuando `markdown-it` tokeniza `**Excluido:**`, produce el token inline con hijos:
+```
+[text(""), strong_open, text("Excluido:"), strong_close, text("")]
+```
+
+La función `_process_inline_children()` usaba un `for child in children` que:
+1. Procesaba `strong_open` → llamaba `_process_inline_until()` → recolectaba `text("Excluido:")` con bold
+2. El bucle `for` **iteraba de nuevo** sobre `text("Excluido:")` → lo añadía como texto plano sin marcas
+
+Resultado: **dos nodos de texto** para el mismo contenido — uno bold `"Excluido:"` y uno plain `"Excluido:"`.
+
+#### Bug 2 (CASCADA): `_dedup_bold_and_merge()` convertía el duplicado en patrón `::`
+
+**Archivo**: `domain/sdd/document_converters.py:812-884`
+
+Al procesar los dos nodos duplicados:
+1. `bold_text = "Excluido:".rstrip(":")` = `"Excluido"` (quita los dos puntos del bold)
+2. El texto plano `"Excluido:"` empieza con `bold_text` → coincide
+3. `remainder = "Excluido:"[len("Excluido"):]` = `":"` (lo que sobra)
+4. Resultado: `{"text": "Excluido:", "marks": [bold]}` + `{"text": ":"}`
+
+El renderizado concatenaba ambos: `Excluido:` + `:` = `Excluido::`
+
+#### Bug 3 (INEFECTIVO): `_fix_double_colons_in_nodes()` no detectaba `::` entre nodos
+
+**Archivo**: `domain/sdd/document_converters.py:785-794`
+
+La función usaba `re.sub(r":{2,}", ":", node["text"])` que solo corrige `::` **dentro de un mismo nodo de texto**. No podía detectar el patrón `(texto termina en ":") + (texto siguiente empieza con ":")` que cruza dos nodos adyacentes.
+
+Además, esta función existía pero **nunca se llamaba** desde `clean_document_tree()` — era código muerto.
+
+### 7.3. Arreglos Aplicados
+
+#### Fix 1 (PRIMARIO): Reescribir `_process_inline_children()` con bucle `while` e índice
+
+**Archivo**: `domain/sdd/document_converters.py:312`
+
+Se reemplazó `for child in children` por `while i < len(children)`. Cuando encuentra `strong_open`, `em_open`, `s_open`, o `link_open`:
+1. Busca el índice del `_close` correspondiente
+2. Procesa recursivamente los hijos internos
+3. Agrega las marcas (bold/italic/strike/link)
+4. **Avanza `i` más allá del `_close`** para no reprocesar los nodos ya manejados
+
+Esto elimina completamente la duplicación de nodos de texto. Cada texto se procesa una sola vez.
+
+```python
+# Antes (for loop — reprocesaba hijos)
+for child in children:
+    if child.type == "strong_open":
+        contenido = _process_inline_until(children, ...)
+        nodos.extend(contenido)  # Los hijos se procesan aquí...
+    elif child.type == "text":
+        nodos.append(...)  # ...y otra vez aquí
+
+# Después (while loop — salta hijos procesados)
+while i < len(children):
+    child = children[i]
+    if child.type in ("strong_open", "em_open", "s_open"):
+        j = find_close_index(children, i + 1, close_type)
+        contenido = _process_inline_children(children[i+1:j])
+        nodos.extend(contenido)  # Solo se procesan aquí
+        i = j + 1  # Salta todo el bloque open...close
+    elif child.type == "text":
+        nodos.append(...)
+        i += 1
+```
+
+#### Fix 2 (SECUNDARIO): Añadir `_fix_adjacent_colons()` — detección de `::` entre nodos
+
+**Archivo**: `domain/sdd/document_converters.py:812`
+
+Nueva función que recorre los hijos de cada nodo del árbol. Si un nodo de texto termina con `:` y el siguiente nodo de texto empieza con `:`, **quita el `:` del primer nodo** para que solo el segundo lo conserve.
+
+Se ejecuta dentro de `_fix_double_colons_in_nodes()`, que a su vez se cableó en `clean_document_tree()`.
+
+#### Fix 3 (TERCIARIO): `_dedup_bold_and_merge()` — rama de deduplicación corregida
+
+**Archivo**: `domain/sdd/document_converters.py:878`
+
+En la rama donde el texto plano coincide con el bold (deduplicación exitosa), si el `remainder` empieza con `:` y el texto bold original termina con `:`, se quita el `:` final del bold. Esto evita el patrón `bold_con_:` + `plain_:_`.
+
+Mismo fix en la rama `else` (no-dedup), ya aplicado en iteración anterior.
+
+#### Fix 4 (DEFENSA): Reordenar regex `::{2,}` para ejecutarse después de quitar `**`
+
+**Archivos**: `domain/sdd/llm_helpers.py:35`, `application/orchestration/nodes/discovery_generator.py:278`
+
+**Problema**: Cuando el LLM generaba `**Incluido:**::` (doble dos puntos cruzando el marcador `**`), el regex `re.sub(r":{2,}", ":", text)` no detectaba `::` porque los dos puntos estaban separados por `**` (`:*:*:`).
+
+**Solución**: En `strip_llm_artifacts()`, `_format_scope()`, y `_format_kv_list()`, se reordenó:
+1. Primero: `re.sub(r"\*+", "", text)` — quita `**` para exponer `::` ocultos
+2. Luego: `re.sub(r":{2,}", ":", text)` — ahora sí detecta y corrige `::`
+
+### 7.4. Fix Adicional: LangGraph Devolvía Resultados en Caché (Stale Checkpoints)
+
+**Archivos**: `infrastructure/api/routers/discovery.py`, `features.py`, `requirements.py`
+
+**Problema**: Los endpoints usaban `thread_id` estáticos (`f"{user}_{project_id}"`). LangGraph con `MemorySaver`/`AsyncPostgresSaver` persistía el estado completado del grafo. En invocaciones posteriores con el mismo `thread_id`, `ainvoke()` **devolvía el estado cacheado** sin re-ejecutar el grafo, haciendo invisibles todos los fixes de código.
+
+**Solución**: Cada invocación genera un `thread_id` único con `ULID().hex`:
+```python
+thread_id = f"{principal.subject}_{pid}_{ULID().hex}"
+```
+
+### 7.5. Archivos Modificados para el Fix `::`
+
+| Archivo | Cambio |
+|---|---|
+| `domain/sdd/document_converters.py` | Fix 1–3: rewrite `_process_inline_children()`, `_fix_adjacent_colons()`, fix `_dedup_bold_and_merge()`, wire `_fix_double_colons_in_nodes()` en `clean_document_tree()` |
+| `domain/sdd/llm_helpers.py` | Fix 4: `strip_llm_artifacts()` ejecuta `::{2,}` regex después de `\*+` |
+| `application/orchestration/nodes/discovery_generator.py` | Fix 4: `_format_scope()`, `_format_kv_list()` — reorden de regex; import `clean_markdown` |
+| `infrastructure/api/routers/discovery.py` | `thread_id` con `ULID().hex` en generate y regenerate; `clean_markdown()` |
+| `infrastructure/api/routers/features.py` | `thread_id` con `ULID().hex` en 4 endpoints |
+| `infrastructure/api/routers/requirements.py` | `thread_id` con `ULID().hex` en 2 endpoints |
+
+### 7.6. Capas de Defensa contra `::`
+
+Después de los fixes, el pipeline tiene **8 capas** que eliminan `::`:
+
+| # | Capa | Dónde | Qué corrige |
+|---|---|---|---|
+| 1 | `strip_llm_artifacts()` | `llm_helpers.py` | `::` en texto LLM crudo (después de quitar `**`) |
+| 2 | `_format_kv_list()` | `discovery_generator.py` | `::` después de quitar `**` en entradas |
+| 3 | `_format_scope()` | `discovery_generator.py` | `::` después de quitar `**` en scope |
+| 4 | `_format_plain_list()` | `discovery_generator.py` | `::` en reglas de negocio |
+| 5 | `clean_markdown()` | `document_converters.py` | `::` global en el string markdown completo |
+| 6 | `_process_inline_children()` | `document_converters.py` | Elimina duplicación de nodos (causa raíz) |
+| 7 | `_dedup_bold_and_merge()` | `document_converters.py` | `::` en patrón bold+plain adyacente |
+| 8 | `_fix_adjacent_colons()` | `document_converters.py` | `::` que cruza cualquier par de nodos de texto |
+
+---
+
+## 8. Estado Actual
 
 - **Backend**: Apagado. Listo para `uv run uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port 8000`
 - **PostgreSQL 17**: Limpio, 4 migraciones aplicadas, usuario seed `dev@kosmo.dev / dev-password-12345`
