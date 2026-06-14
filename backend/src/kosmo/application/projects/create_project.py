@@ -6,6 +6,7 @@ from kosmo.contracts.sdd.document import ProjectPhase, ProjectStatus
 from kosmo.contracts.sdd.ids import PipelineId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ProjectRepository
+from kosmo.domain.sdd.document_converters import slugify_spanish
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 
@@ -23,6 +24,7 @@ class CreateProjectUseCase:
         project = Project(
             id=ProjectId(IdGenerator.generate("project")),
             name=name,
+            slug=slugify_spanish(name),
             description=description,
             owner_id=owner_id,
             current_phase=ProjectPhase.descubrimiento,

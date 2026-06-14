@@ -49,7 +49,7 @@ _DISCOVERY_SYSTEM_PROMPT = (
     "- Ítem excluido (mínimo 3)\n\n"
     "*Futuro potencial:*\n"
     "- Mejora futura\n\n"
-    "## Guardrails\n"
+    "REGLAS DE GENERACIÓN (no incluir en el documento):\n"
     "- PROHIBIDO: API, base de datos, microservicios, endpoints, servidores, "
     "lenguajes, frameworks, protocolos, arquitectura, deployment, Docker, "
     "cloud, SQL, HTTP, REST, GraphQL, backend, frontend, cache, Redis, "
@@ -60,6 +60,9 @@ _DISCOVERY_SYSTEM_PROMPT = (
     "- Reglas de negocio verificables, no ambiguas.\n"
     "- Al menos 3 exclusiones explícitas en Alcance.\n"
     "- NUNCA uses formato 'Como... quiero... para...'.\n"
+    "- NO incluyas esta sección de instrucciones en tu respuesta.\n"
+    "- Tu respuesta debe contener ÚNICAMENTE las 9 secciones del documento,\n"
+    "  comenzando con '## Visión del producto' y terminando con '## Alcance'.\n"
 )
 
 

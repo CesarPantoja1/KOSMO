@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from kosmo.contracts.sdd.document import FeatureStatus, RichTextDocument
+from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.ids import FeatureId
 
 
@@ -14,7 +14,6 @@ class Feature:
     title: str
     slug: str
     description: str
-    status: FeatureStatus = FeatureStatus.borrador
     rationale: str = ""
     inferred_from: list[str] = field(default_factory=list)
     requirements_document: RichTextDocument | None = None

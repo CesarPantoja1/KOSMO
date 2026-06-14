@@ -8,8 +8,8 @@ from kosmo.contracts.pipeline.phase_contexts import (
 )
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.pipeline.pipeline_state import KOSMOPipelineState
-from kosmo.contracts.sdd.document import FeatureStatus, RichTextDocument, SpecPhase
-from kosmo.contracts.sdd.errors import FeatureNotApprovedError, FeatureNotFoundError
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
 
 
@@ -91,11 +91,6 @@ class ContextBuilder:
             raise FeatureNotFoundError(
                 feature_id=feature_id,
                 instance=f"/features/{feature_id}",
-            )
-        if feature.status != FeatureStatus.aprobada:
-            raise FeatureNotApprovedError(
-                feature_id=feature_id,
-                instance=f"/features/{feature_id}/requirements",
             )
         feature_number = self._get_feature_number(state, feature_id)
         return EARSPhaseContext(

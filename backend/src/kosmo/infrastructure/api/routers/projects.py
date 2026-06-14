@@ -18,6 +18,7 @@ class CreateProjectRequest(BaseModel):
 class ProjectResponse(BaseModel):
     id: str
     name: str
+    slug: str
     description: str
     owner_id: str
     current_phase: str
@@ -30,12 +31,13 @@ def _project_to_response(project: Project) -> ProjectResponse:
     return ProjectResponse(
         id=str(project.id),
         name=project.name,
+        slug=project.slug,
         description=project.description,
         owner_id=str(project.owner_id),
         current_phase=project.current_phase.value,
         status=project.status.value,
-        created_at=project.created_at.isoformat(),
-        updated_at=project.updated_at.isoformat(),
+        created_at=project.created_at.isoformat().replace("+00:00", "Z"),
+        updated_at=project.updated_at.isoformat().replace("+00:00", "Z"),
     )
 
 

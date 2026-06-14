@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.sdd.document import FeatureStatus
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
@@ -53,16 +52,6 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             await session.commit()
             return features
 
-    async def update_status(self, feature_id: FeatureId, status: FeatureStatus) -> Feature | None:
-        async with self._session_factory() as session:
-            model = await session.get(FeatureModel, str(feature_id))
-            if model is None:
-                return None
-            model.status = status.value
-            model.updated_at = datetime.now(UTC)
-            await session.commit()
-            return self._to_entity(model)
-
     async def next_number(self, project_id: ProjectId) -> int:
         async with self._session_factory() as session:
             stmt = (
@@ -89,7 +78,6 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             title=model.title,
             slug=model.slug,
             description=model.description,
-            status=FeatureStatus(model.status),
             rationale=model.rationale,
             inferred_from=model.inferred_from if isinstance(model.inferred_from, list) else [],
             requirements_document=req_doc,
@@ -109,7 +97,6 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             title=feature.title,
             slug=feature.slug,
             description=feature.description,
-            status=feature.status.value,
             rationale=feature.rationale,
             inferred_from=feature.inferred_from,
             requirements_document=req_doc_data,
@@ -120,7 +107,6 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
         model.title = feature.title
         model.slug = feature.slug
         model.description = feature.description
-        model.status = feature.status.value
         model.rationale = feature.rationale
         model.inferred_from = feature.inferred_from
         if feature.requirements_document:

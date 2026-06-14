@@ -18,9 +18,10 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.pipeline.pipeline_state import KOSMOPipelineState
-from kosmo.contracts.sdd.document import FeatureStatus, RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
+from kosmo.domain.sdd.document_converters import slugify_spanish
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 _PHASE_TEMPERATURES: dict[SpecPhase, float] = {
@@ -124,29 +125,39 @@ class KOSMOAgent:
     ) -> SuggestFeaturesOutput:
         context = await self._context_builder.build_suggest_features_context(pipeline_state)
 
-        features_mode = self._modes.get(SpecPhase.CARACTERISTICAS)
-        if features_mode is None:
-            raise ValueError("No hay modo para la fase de Caracteristicas")
-
         suggest_prompt = (
-            f"{features_mode.system_prompt}\n\n"
-            f"## Modo: Sugerir 3 caracteristicas adicionales\n\n"
-            f"Genera EXACTAMENTE 3 sugerencias que NO dupliquen las caracteristicas ya existentes.\n"
-            f"La primera sugerencia sera C{context.next_feature_number:02d}.\n\n"
-            f"Documento de Descubrimiento:\n\n"
+            "Eres un diseñador de producto experto.\n"
+            "A continuación se presenta un Documento de Descubrimiento y una lista de\n"
+            "características ya existentes. Tu tarea es sugerir EXACTAMENTE 3 nuevas\n"
+            "características que NO dupliquen las ya existentes.\n\n"
+            "Respondé ÚNICAMENTE con JSON:\n"
+            "```json\n"
+            '{"suggestions": [\n'
+            '  {"title": "...", "description": "...", "rationale": "...",\n'
+            '   "inferred_from": ["..."]}\n'
+            "]}\n"
+            "```\n\n"
         )
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
+        suggest_prompt += "## Documento de Descubrimiento\n\n"
         suggest_prompt += document_to_markdown(context.discovery_document)
 
         if context.existing_feature_titles:
             titles = ", ".join(context.existing_feature_titles)
-            suggest_prompt += f"\n\nCaracteristicas ya existentes (NO duplicar): {titles}"
+            suggest_prompt += (
+                f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
+            )
+
+        suggest_prompt += (
+            f"\n\nLa primera sugerencia será C{context.next_feature_number:02d}."
+            f"\nGenerá exactamente 3 sugerencias. Nada de texto antes o después del JSON."
+        )
 
         llm_response = await self._llm_client.complete(
             prompt=PromptTemplate(
                 system_prompt=suggest_prompt,
-                user_prompt="Genera 3 sugerencias de caracteristicas.",
+                user_prompt="Generá 3 sugerencias de características.",
             ),
             temperature=0.4,
         )
@@ -265,9 +276,8 @@ class KOSMOAgent:
                     id=IdGenerator.generate("feature"),
                     number=item.get("number", i),
                     title=item.get("title", f"Caracteristica {i}"),
-                    slug=item.get("slug", item.get("title", f"c{i:02d}").lower().replace(" ", "-")),
+                    slug=item.get("slug") or slugify_spanish(item.get("title", f"c{i:02d}")),
                     description=item.get("description", ""),
-                    status=FeatureStatus.borrador,
                     rationale=item.get("rationale", ""),
                     inferred_from=item.get("inferred_from", []),
                 )

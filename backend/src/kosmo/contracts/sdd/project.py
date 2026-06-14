@@ -11,6 +11,7 @@ from kosmo.contracts.sdd.ids import ProjectId, UserId
 class Project:
     id: ProjectId
     name: str
+    slug: str
     description: str
     owner_id: UserId
     current_phase: ProjectPhase = ProjectPhase.descubrimiento

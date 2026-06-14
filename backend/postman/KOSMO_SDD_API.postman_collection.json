@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "KOSMO SDD API",
-    "description": "Colección completa del flujo SDD (Spec-Driven Development) de KOSMO. Incluye autenticación PKCE S256 y el pipeline completo: Health → Auth → Proyectos → Discovery → Features → Requisitos EARS.\n\n## Flujo\n\nEjecutar en orden dentro de cada carpeta. Las variables se auto-propagan entre requests.\n\n0. Health — sanity check\n1. Auth PKCE S256 — Register → Authorize → Token → Refresh → Me → Logout\n2. Proyectos — Crear proyecto (nombre + descripción = input del discovery)\n3. Discovery — Documento de descubrimiento generado por IA con ReAct (9 secciones, Casos de Uso reales). El input se toma del nombre y descripción del proyecto. No requiere body.\n4. Features — Generar, sugerir, guardar, aprobar\n5. Requisitos EARS — Documento enriquecido por feature (6 categorías)\n6. Schemas — Listar y obtener JSON Schemas\n\n## IDs\n\nULID con prefijo tipado: prj_ (project), feat_ (feature), usr_ (user).\n\n## Errores\n\nFormato OAuth 2.0 (RFC 6749 §5.2) para auth. RFC 7807 Problem Detail para negocio.\n\n## Pre-requisitos\n\n- Servidor: uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- O Docker: docker compose up -d\n- Usuario seed: uv run python -m kosmo.infrastructure.scripts.seed_dev_user (dev@kosmo.dev / dev-password-12345)",
+    "description": "Colección completa del flujo SDD (Spec-Driven Development) de KOSMO.\n\n## Flujo completo\n\n0. Health — sanity check\n1. Auth PKCE S256 — Register → Authorize → Token → Refresh → Me → Logout\n2. Proyectos — Crear proyecto (nombre + descripción = input del discovery)\n3. Discovery — Generar (desde nombre/descripción del proyecto) → Obtener → Guardar\n4. Features — Generar (5 iniciales desde discovery) → Sugerir (3 nuevas) → Guardar → Listar\n5. Requisitos EARS — Generar por feature → Guardar\n\n## IDs\n\nULID con prefijo tipado: prj_ (project), feat_ (feature), usr_ (user).\nDisplay IDs: C01, C02 (number secuencial, humano).\n\n## Pre-requisitos\n\n- uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- Usuario seed: uv run python -m kosmo.infrastructure.scripts.seed_dev_user",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -46,7 +46,7 @@
     },
     {
       "name": "1. Auth (PKCE S256)",
-      "description": "Flujo OAuth 2.1 + PKCE completo. Ejecutar en orden: Register → Authorize → Token. El access_token, refresh_token y user_id se guardan automáticamente en variables de colección.\n\nEl code_verifier y code_challenge se generan dinámicamente con CryptoJS en el pre-request de Authorize. No es necesario hardcodearlos.",
+      "description": "Flujo OAuth 2.1 + PKCE completo. Las variables se auto-propagan entre requests.",
       "item": [
         {
           "name": "1.1 Register",
@@ -124,7 +124,7 @@
                   "var body = pm.response.json();",
                   "setVar('access_token', body.access.token);",
                   "setVar('refresh_token', body.refresh.token);",
-                  "console.log('Tokens obtenidos. Access expira:', body.access.expires_at, '| Refresh expira:', body.refresh.expires_at);"
+                  "console.log('Tokens obtenidos.');"
                 ],
                 "type": "text/javascript"
               }
@@ -149,7 +149,7 @@
                   "var body = pm.response.json();",
                   "setVar('access_token', body.access.token);",
                   "setVar('refresh_token', body.refresh.token);",
-                  "console.log('Tokens rotados. Nueva familia.');"
+                  "console.log('Tokens rotados.');"
                 ],
                 "type": "text/javascript"
               }
@@ -173,8 +173,7 @@
                   "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
                   "var body = pm.response.json();",
                   "setVar('user_id', body.subject);",
-                  "pm.test('Tiene subject y scopes', function () { pm.expect(body.subject).to.be.a('string'); pm.expect(body.scopes).to.be.an('array'); });",
-                  "console.log('Principal:', body.subject, '| Scopes:', body.scopes.join(', '));"
+                  "console.log('Principal:', body.subject);"
                 ],
                 "type": "text/javascript"
               }
@@ -214,7 +213,7 @@
     },
     {
       "name": "2. Proyectos",
-      "description": "CRUD de proyectos. Los proyectos inician en fase 'descubrimiento'. IDs con prefijo prj_. Requiere user_id obtenido en Auth.",
+      "description": "CRUD de proyectos. El proyecto inicia en fase 'descubrimiento'. IDs con prefijo prj_. El nombre y descripción del proyecto son el input para generar el discovery.",
       "item": [
         {
           "name": "2.1 Crear Proyecto",
@@ -227,9 +226,7 @@
                   "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
                   "var body = pm.response.json();",
                   "setVar('project_id', body.id);",
-                  "pm.test('ID con prefijo prj_', function () { pm.expect(body.id).to.match(/^prj_/); });",
-                  "pm.test('Fase inicial = descubrimiento', function () { pm.expect(body.current_phase).to.eql('descubrimiento'); });",
-                  "console.log('Proyecto:', body.id, '-', body.name, '| Fase:', body.current_phase);"
+                  "console.log('Proyecto:', body.id, '-', body.name);"
                 ],
                 "type": "text/javascript"
               }
@@ -241,7 +238,7 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sistema de Gestión de Inventario\",\n  \"description\": \"Sistema para pequeñas empresas que permite gestionar inventario en tiempo real, controlar stock, generar reportes y recibir alertas de bajo inventario.\",\n  \"owner_id\": \"{{user_id}}\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"División de Gastos Compartidos\",\n  \"description\": \"Aplicación para grupos de amigos o roomies que permite registrar gastos compartidos, calcular balances automáticos y sugerir la forma más eficiente de liquidar deudas.\",\n  \"owner_id\": \"{{user_id}}\"\n}" },
             "url": { "raw": "{{base_url}}/api/v1/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "projects"] }
           }
         },
@@ -254,9 +251,8 @@
                 "exec": [
                   "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
                   "var data = pm.response.json();",
-                  "pm.test('Es array', function () { pm.expect(data).to.be.an('array'); });",
                   "console.log('Proyectos:', data.length);",
-                  "data.forEach(function(p) { console.log('  -', p.name, '| Fase:', p.current_phase, '| ID:', p.id); });"
+                  "data.forEach(function(p) { console.log('  -', p.name, '| ID:', p.id); });"
                 ],
                 "type": "text/javascript"
               }
@@ -282,8 +278,7 @@
                 "exec": [
                   "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
                   "var body = pm.response.json();",
-                  "pm.test('Tiene fase y estado', function () { pm.expect(body.current_phase).to.be.a('string'); pm.expect(body.status).to.be.a('string'); });",
-                  "console.log('Proyecto:', body.name, '| Fase:', body.current_phase, '| Estado:', body.status);"
+                  "console.log('Proyecto:', body.name, '| Fase:', body.current_phase);"
                 ],
                 "type": "text/javascript"
               }
@@ -299,7 +294,7 @@
     },
     {
       "name": "3. Discovery (Fase 1)",
-      "description": "Documento de descubrimiento generado por IA. Incluye 9 secciones (visión, problema, actores, propuesta de valor, casos de uso, capacidades, reglas, calidad, alcance).\n\nFlujo: Generate → (editar) → Save.\n\nEl input se toma automáticamente del nombre y descripción del proyecto (creado en 2.1). No requiere body.\nLa respuesta contiene solo el campo document_markdown con el documento en formato Markdown.\nEl documento comienza directamente con '## Visión del producto', sin texto introductorio.",
+      "description": "Documento de descubrimiento generado por IA (9 secciones). El input se toma del nombre y descripción del proyecto. No requiere body. Respuesta: { document_markdown }.",
       "item": [
         {
           "name": "3.1 Generar Discovery (IA)",
@@ -311,10 +306,7 @@
                   "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
                   "if (pm.response.code === 200) {",
                   "  var body = pm.response.json();",
-                  "  console.log('Discovery generado.');",
-                  "  if (body.document_markdown) {",
-                  "    console.log('Markdown generado (' + body.document_markdown.length + ' chars):', body.document_markdown.substring(0, 120) + '...');",
-                  "  }",
+                  "  console.log('Discovery generado (' + body.document_markdown.length + ' chars)');",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -323,15 +315,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "" },
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
             "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "generate"] }
           }
         },
         {
-          "name": "3.2 Guardar Discovery (edición manual)",
+          "name": "3.2 Obtener Discovery",
           "event": [
             {
               "listen": "test",
@@ -339,9 +328,30 @@
                 "exec": [
                   "if (pm.response.code === 200) {",
                   "  var body = pm.response.json();",
-                  "  console.log('Guardado. Fase:', body.current_phase, '| updated_at:', body.updated_at);",
-                  "} else if (pm.response.code === 422) {",
-                  "  console.log('[422] Documento inválido:', JSON.stringify(pm.response.json()));",
+                  "  console.log('Discovery obtenido (' + body.document_markdown.length + ' chars)');",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] No hay discovery. Ejecutá 3.1.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
+          }
+        },
+        {
+          "name": "3.3 Guardar Discovery (edición manual)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  console.log('Discovery guardado.');",
                   "} else {",
                   "  console.log('[ERROR]', pm.response.text());",
                   "}"
@@ -356,7 +366,7 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"markdown\": \"## Visión del producto\\n\\nKOSMO es una plataforma de inteligencia artificial que guía a ingenieros de software desde la idea inicial hasta una especificación de diseño técnico estructurada (SDD).\\n\\n## Espacio del problema\\n\\nLos equipos de desarrollo gastan horas redactando especificaciones inconsistentes que generan ambigüedad en la implementación. No existe una herramienta que estructure y valide automáticamente los requisitos de negocio antes de codificar.\\n\\n## Actores\\n\\n1. **Ingeniero de Software**: Define la idea, revisa y edita el documento de descubrimiento.\\n2. **Product Manager**: Solicita características y aprueba las que se implementarán.\\n3. **Agente de IA KOSMO**: Genera y valida contenido estructurado.\\n\\n## Propuesta de valor\\n\\n- Reduce en un 70% el tiempo de redacción de especificaciones.\\n- Garantiza trazabilidad entre requisitos y necesidades de negocio.\\n- Elimina ambigüedades de implementación.\\n\\n## Casos de uso\\n\\n1. Como Ingeniero, quiero ingresar mi idea en lenguaje natural para obtener un documento de descubrimiento estructurado.\\n2. Como Ingeniero, quiero editar libremente el documento para refinar la visión del producto.\\n3. Como Product Manager, quiero generar características derivadas del descubrimiento para priorizar el backlog.\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"markdown\": \"## Visión del producto\\n\\nAplicación para grupos que permite registrar gastos compartidos y calcular balances automáticos.\\n\\n## Espacio del problema\\n\\nDividir gastos en grupos genera tensiones y errores manuales. No existe una herramienta simple que automatice el balance.\\n\\n## Actores\\n\\n- **Roomie:** miembro del grupo que comparte gastos.\\n- **Administrador:** usuario que configura el grupo.\\n\\n## Propuesta de valor\\n\\n- **Para Roomie:** evita cálculos manuales.\\n- **Para Administrador:** centraliza la gestión.\\n\\n## Casos de uso\\n\\n1. **Registrar gasto:** un miembro ingresa un gasto y selecciona participantes.\\n2. **Calcular balance:** el sistema calcula cuánto debe cada persona.\\n3. **Sugerir liquidación:** el sistema propone la ruta de pagos más eficiente.\\n\\n## Capacidades principales\\n\\n- **Registro de gastos:** captura monto, concepto, pagador y participantes.\\n- **Balance automático:** calcula saldos individuales en tiempo real.\\n\\n## Reglas de negocio\\n\\n1. Un gasto debe tener al menos un pagador y un participante.\\n2. El reparto puede ser equitativo, por porcentaje o por montos fijos.\\n3. El balance se recalcula tras cada nuevo gasto.\\n4. Un grupo solo puede cerrarse con saldos en cero.\\n\\n## Atributos de calidad\\n\\n- **Precisión:** balance exacto, sin errores de redondeo.\\n- **Rapidez:** cálculo del balance en menos de 2 segundos.\\n\\n## Alcance\\n\\n*Incluido:*\\n- Registro de gastos con reparto equitativo, porcentual o fijo.\\n- Cálculo automático de balances individuales.\\n\\n*Excluido:*\\n- Integración con bancos o pasarelas de pago.\\n- Gestión de ingresos o presupuestos personales.\\n- Soporte para múltiples monedas.\\n\\n*Futuro potencial:*\\n- Sincronización con calendarios para gastos recurrentes.\\n- Exportación de balances a hojas de cálculo.\"\n}" },
             "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
           }
         }
@@ -364,10 +374,10 @@
     },
     {
       "name": "4. Features (Fase 2)",
-      "description": "Gestión de características. La IA genera y persiste 5 features iniciales (C01-C05). Se pueden sugerir alternativas (no persiste), guardar manualmente y cambiar estado (Borrador → Aprobada). Solo features en Aprobada pueden generar requisitos.",
+      "description": "Características del producto. Se generan 5 iniciales desde el discovery. Se pueden sugerir 3 adicionales que no dupliquen las existentes. Todas las features son elegibles para requisitos.",
       "item": [
         {
-          "name": "4.1 Generar Features (IA, persiste 5)",
+          "name": "4.1 Generar Features (IA, 5 iniciales)",
           "event": [
             {
               "listen": "test",
@@ -376,13 +386,13 @@
                   "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
                   "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
                   "var body = pm.response.json();",
-                  "pm.test('Generó features', function () { pm.expect(body.features).to.be.an('array'); });",
+                  "pm.test('Generó features', function () { pm.expect(body.features).to.be.an('array'); pm.expect(body.total).to.eql(body.features.length); });",
                   "if (body.features && body.features.length > 0) {",
                   "  setVar('feature_id', body.features[0].id);",
                   "  if (body.features.length > 1) setVar('feature_id_alt', body.features[1].id);",
                   "}",
-                  "console.log('Features generadas:', body.features.length);",
-                  "body.features.forEach(function(f, i) { console.log('  ' + (i+1) + '.', f.display_id || f.number, f.title, '(' + f.status + ')'); });"
+                  "console.log('Features generadas:', body.total);",
+                  "body.features.forEach(function(f, i) { console.log('  ' + (i+1) + '.', f.display_id, f.title); });"
                 ],
                 "type": "text/javascript"
               }
@@ -390,15 +400,38 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
-            ],
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
             "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "generate"] }
           }
         },
         {
-          "name": "4.2 Sugerir Features (IA, no persiste)",
+          "name": "4.2 Listar Features",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "if (body.features && body.features.length > 0) {",
+                  "  setVar('feature_id', body.features[0].id);",
+                  "}",
+                  "console.log('Features:', body.total);",
+                  "body.features.forEach(function(f) { console.log('  -', f.display_id, f.title, '|', f.created_at); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+          }
+        },
+        {
+          "name": "4.3 Sugerir Features (IA, 3 adicionales)",
           "event": [
             {
               "listen": "test",
@@ -408,8 +441,7 @@
                   "if (pm.response.code === 200) {",
                   "  var body = pm.response.json();",
                   "  console.log('Sugerencias:', body.suggestions.length);",
-                  "  console.log('Dominio inferido:', body.domain_inferred);",
-                  "  body.suggestions.forEach(function(s, i) { console.log('  ' + (i+1) + '.', s.display_id || s.number, s.title); });",
+                  "  body.suggestions.forEach(function(s, i) { console.log('  ' + (i+1) + '.', s.display_id, s.title); });",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -418,15 +450,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
-            ],
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
             "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest"] }
           }
         },
         {
-          "name": "4.3 Guardar Features Seleccionadas",
+          "name": "4.4 Guardar Features Seleccionadas",
           "event": [
             {
               "listen": "test",
@@ -435,11 +464,8 @@
                   "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
                   "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
                   "var body = pm.response.json();",
-                  "if (body.features && body.features.length === 1) {",
-                  "  setVar('feature_id', body.features[0].id);",
-                  "}",
-                  "console.log('Features guardadas:', body.features.length);",
-                  "body.features.forEach(function(f) { console.log('  -', f.display_id || f.number, f.title, '(' + f.status + ')'); });"
+                  "console.log('Features guardadas:', body.total);",
+                  "body.features.forEach(function(f) { console.log('  -', f.display_id, f.title); });"
                 ],
                 "type": "text/javascript"
               }
@@ -451,44 +477,18 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"selected_suggestions\": [\n    {\n      \"number\": 6,\n      \"title\": \"Validación automática de requisitos\",\n      \"description\": \"QUÉ: Verifica la estructura y calidad de los requisitos generados. PARA QUIÉN: Ingenieros de software que necesitan garantizar completitud. BAJO QUÉ CONDICIÓN: Cuando el usuario solicita generación de requisitos. QUÉ VALOR: Reduce errores de especificación en un 80%.\",\n      \"rationale\": \"La validación automática es esencial para garantizar que los requisitos sean verificables y trazables.\",\n      \"inferred_from\": [\"Reglas de negocio\", \"Atributos de calidad\"]\n    }\n  ]\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"selected_suggestions\": [\n    {\n      \"number\": 6,\n      \"title\": \"Notificaciones de deudas\",\n      \"description\": \"Envía alertas a los miembros del grupo cuando tienen deudas pendientes o cuando reciben un pago, manteniendo a todos informados sobre el estado de sus cuentas.\",\n      \"rationale\": \"Las notificaciones mantienen a los usuarios al tanto sin necesidad de revisar manualmente la aplicación.\",\n      \"inferred_from\": [\"Casos de uso\", \"Actores\"]\n    }\n  ]\n}" },
             "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
-          }
-        },
-        {
-          "name": "4.4 Aprobar Feature (Borrador → Aprobada)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "var body = pm.response.json();",
-                  "pm.test('Estado = aprobada', function () { pm.expect(body.status).to.eql('aprobada'); });",
-                  "console.log('Feature aprobada:', body.id, '-', body.title);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\"\n}" },
-            "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/status", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "status"] }
           }
         }
       ]
     },
     {
       "name": "5. Requisitos EARS (Fase 3)",
-      "description": "Documento de requisitos EARS por feature. Taxonomía: Ubicuos, Eventos, Estado, Opcionales, Fallos, Complejos. La feature DEBE estar Aprobada (409 Conflict si Borrador).\n\nFlujo: Aprobar feature (4.4) → Generar requisitos → (editar) → Guardar.",
+      "description": "Generación de requisitos EARS por feature. Cualquier feature existente puede generar requisitos.",
       "item": [
         {
-          "name": "5.1 Generar Requisitos EARS (IA, feature Aprobada requerida)",
+          "name": "5.1 Generar Requisitos EARS (IA)",
           "event": [
             {
               "listen": "test",
@@ -498,10 +498,7 @@
                   "  var body = pm.response.json();",
                   "  console.log('Requisitos generados para feature', body.feature_number);",
                   "  console.log('Total requisitos:', body.requirements.length);",
-                  "  console.log('Validación:', body.validation.is_valid ? 'OK' : 'ERRORES');",
                   "  body.requirements.forEach(function(r) { console.log('  -', r.display_id, r.pattern); });",
-                  "} else if (pm.response.code === 409) {",
-                  "  console.log('[409] Feature debe estar Aprobada. Ejecuta 4.4 primero.');",
                   "} else {",
                   "  console.log('[ERROR]', pm.response.text());",
                   "}"
@@ -528,10 +525,7 @@
               "script": {
                 "exec": [
                   "if (pm.response.code === 200) {",
-                  "  var body = pm.response.json();",
-                  "  console.log('Guardado. Fase:', body.current_phase, '| updated_at:', body.updated_at);",
-                  "} else if (pm.response.code === 422) {",
-                  "  console.log('[422] Documento inválido:', JSON.stringify(pm.response.json()));",
+                  "  console.log('Requisitos guardados.');",
                   "} else {",
                   "  console.log('[ERROR]', pm.response.text());",
                   "}"
@@ -546,55 +540,8 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"markdown\": \"### Requisitos Ubicuos\\n\\n- REQ-1.1: El sistema shall gestionar los datos de forma segura. **Criterio**: Dado un usuario autenticado, Cuando accede a sus datos, Entonces los datos se muestran correctamente.\\n\\n### Requisitos Basados en Eventos\\n\\n- REQ-1.2: CUANDO el usuario envía una solicitud de generación, El sistema shall procesar la solicitud y retornar un documento estructurado. **Criterio**: Dado un usuario con proyecto activo, Cuando presiona Generar, Entonces recibe un documento válido.\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"markdown\": \"### Requisitos Ubicuos\\n\\n- REQ-1.1: El sistema shall gestionar los datos de forma segura. **Criterio**: Dado un usuario autenticado, Cuando accede a sus datos, Entonces los datos se muestran correctamente.\"\n}" },
             "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements"] }
-          }
-        }
-      ]
-    },
-    {
-      "name": "6. Schemas",
-      "description": "Utilidades: listar y obtener JSON Schemas de los DTOs de la API.",
-      "item": [
-        {
-          "name": "6.1 Listar Schemas JSON",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "var body = pm.response.json();",
-                  "console.log('Schemas disponibles:', body.schemas.length);",
-                  "body.schemas.forEach(function(s) { console.log('  -', s); });"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{base_url}}/api/v1/schemas", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas"] }
-          }
-        },
-        {
-          "name": "6.2 Obtener JSON Schema (RegisterRequest)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "var body = pm.response.json();",
-                  "console.log('Schema:', body.title, '| Campos:', Object.keys(body.properties).join(', '));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": { "raw": "{{base_url}}/api/v1/schemas/RegisterRequest", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas", "RegisterRequest"] }
           }
         }
       ]

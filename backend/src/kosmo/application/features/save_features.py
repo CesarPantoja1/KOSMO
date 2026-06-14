@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature
 from kosmo.contracts.pipeline.pipeline_ports import PipelineRepository
-from kosmo.contracts.sdd.document import FeatureStatus
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.domain.sdd.id_generator import IdGenerator
+from kosmo.domain.sdd.document_converters import slugify_spanish
 
 
 class SaveSelectedFeaturesUseCase:
@@ -27,9 +27,8 @@ class SaveSelectedFeaturesUseCase:
                 id=IdGenerator.generate("feature"),
                 number=suggestion.number,
                 title=suggestion.title,
-                slug=suggestion.title.lower().replace(" ", "-"),
+                slug=slugify_spanish(suggestion.title),
                 description=suggestion.description,
-                status=FeatureStatus.borrador,
                 rationale=suggestion.rationale,
                 inferred_from=suggestion.inferred_from,
             )

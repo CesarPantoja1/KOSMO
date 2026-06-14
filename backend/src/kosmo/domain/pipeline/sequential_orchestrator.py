@@ -12,7 +12,8 @@ from kosmo.contracts.pipeline.pipeline_state import (
     KOSMOPipelineState,
     PhaseTransitionRecord,
 )
-from kosmo.contracts.sdd.document import FeatureStatus, SpecPhase
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.repositories import DocumentRepository
 
 if TYPE_CHECKING:
     from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
@@ -25,8 +26,13 @@ _PHASE_ORDER: list[SpecPhase] = [
 
 
 class SequentialOrchestrator:
-    def __init__(self, agent: KOSMOAgent | None = None) -> None:
+    def __init__(
+        self,
+        agent: KOSMOAgent | None = None,
+        document_repo: DocumentRepository | None = None,
+    ) -> None:
         self._agent = agent
+        self._document_repo = document_repo
 
     def can_advance(
         self,
@@ -55,7 +61,7 @@ class SequentialOrchestrator:
         pipeline_state: KOSMOPipelineState,
         target_phase: SpecPhase,
     ) -> KOSMOPipelineState:
-        self._validate_transition(pipeline_state, target_phase)
+        await self._validate_transition(pipeline_state, target_phase)
 
         transition = PhaseTransitionRecord(
             from_phase=pipeline_state.current_phase,
@@ -81,7 +87,7 @@ class SequentialOrchestrator:
         elif isinstance(output, EARSPhaseOutput):
             state.ears_outputs[output.feature_id] = output
 
-    def _validate_transition(
+    async def _validate_transition(
         self,
         state: KOSMOPipelineState,
         target_phase: SpecPhase,
@@ -91,24 +97,32 @@ class SequentialOrchestrator:
 
         if target_idx <= current_idx and target_phase != state.current_phase:
             raise PhaseTransitionError(
-                detail=f"No se puede retroceder de {state.current_phase.value} a {target_phase.value}",
+                detail=(
+                    f"No se puede retroceder de {state.current_phase.value}"
+                    f" a {target_phase.value}"
+                ),
                 instance="/pipeline/advance",
             )
 
         if target_phase == SpecPhase.CARACTERISTICAS:
-            if state.discovery_output is None:
+            discovery_exists = state.discovery_output is not None
+            if not discovery_exists and self._document_repo is not None:
+                doc = await self._document_repo.get_discovery(state.project_id)
+                discovery_exists = doc is not None
+            if not discovery_exists:
                 raise PhaseTransitionError(
-                    detail="No se puede avanzar a Caracteristicas sin un documento de discovery valido",
+                    detail=(
+                        "No se puede avanzar a Caracteristicas sin un documento"
+                        " de discovery valido"
+                    ),
                     instance="/pipeline/advance",
                 )
 
-        if target_phase == SpecPhase.REQUISITOS:
-            approved = [f for f in state.features if f.status == FeatureStatus.aprobada]
-            if not approved:
-                raise PhaseTransitionError(
-                    detail="No se puede avanzar a Requisitos sin al menos una feature aprobada",
-                    instance="/pipeline/advance",
-                )
+        if target_phase == SpecPhase.REQUISITOS and not state.features:
+            raise PhaseTransitionError(
+                detail="No se puede avanzar a Requisitos sin al menos una feature",
+                instance="/pipeline/advance",
+            )
 
 
 def _utc_now():

@@ -51,6 +51,7 @@ class ProjectModel(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text(), nullable=False)
     owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     current_phase: Mapped[str] = mapped_column(String(32), nullable=False, default="descubrimiento")
@@ -72,7 +73,6 @@ class FeatureModel(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text(), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="borrador")
     rationale: Mapped[str] = mapped_column(Text(), nullable=False, default="")
     inferred_from: Mapped[dict[str, Any]] = mapped_column(
         pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")

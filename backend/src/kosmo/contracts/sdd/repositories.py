@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Protocol
 
 from kosmo.contracts.sdd.document import (
-    FeatureStatus,
     ProjectPhase,
     ProjectStatus,
     RichTextDocument,
@@ -29,9 +28,6 @@ class FeatureRepository(Protocol):
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]: ...
     async def save(self, feature: Feature) -> Feature: ...
     async def save_many(self, features: list[Feature]) -> list[Feature]: ...
-    async def update_status(
-        self, feature_id: FeatureId, status: FeatureStatus
-    ) -> Feature | None: ...
     async def next_number(self, project_id: ProjectId) -> int: ...
 
 

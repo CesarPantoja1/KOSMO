@@ -5,7 +5,6 @@ from kosmo.contracts.sdd.document import (
     EARSPattern_SYNTAX,
     EARSPatternLabel,
     FeatureSelection,
-    FeatureStatus,
     MarkType,
     ProjectPhase,
     ProjectStatus,
@@ -19,8 +18,6 @@ from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     DocumentValidationError,
-    FeatureNotApprovedError,
-    FeatureNotEditableError,
     FeatureNotFoundError,
     LLMInvocationError,
     MarkdownParseError,

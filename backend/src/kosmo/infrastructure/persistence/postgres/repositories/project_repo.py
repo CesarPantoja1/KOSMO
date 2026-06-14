@@ -38,6 +38,7 @@ class SqlAlchemyProjectRepository(ProjectRepository):
                 model = ProjectModel(
                     id=str(project.id),
                     name=project.name,
+                    slug=project.slug,
                     description=project.description,
                     owner_id=str(project.owner_id),
                     current_phase=project.current_phase.value,
@@ -46,6 +47,7 @@ class SqlAlchemyProjectRepository(ProjectRepository):
                 session.add(model)
             else:
                 model.name = project.name
+                model.slug = project.slug
                 model.description = project.description
                 model.current_phase = project.current_phase.value
                 model.status = project.status.value
@@ -77,6 +79,7 @@ class SqlAlchemyProjectRepository(ProjectRepository):
         return Project(
             id=ProjectId(model.id),
             name=model.name,
+            slug=model.slug,
             description=model.description,
             owner_id=model.owner_id,
             current_phase=ProjectPhase(model.current_phase),

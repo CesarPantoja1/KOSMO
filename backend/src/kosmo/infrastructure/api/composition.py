@@ -12,9 +12,12 @@ from kosmo.application.auth import (
     RevokeSession,
     VerifyAccessToken,
 )
-from kosmo.application.discovery import GenerateDiscoveryUseCase, SaveDiscoveryUseCase
+from kosmo.application.discovery import (
+    GenerateDiscoveryUseCase,
+    GetDiscoveryUseCase,
+    SaveDiscoveryUseCase,
+)
 from kosmo.application.features import (
-    ApproveFeatureUseCase,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
@@ -83,10 +86,10 @@ class PipelineComponents:
     advance_pipeline_uc: AdvancePipelineUseCase
     get_pipeline_status_uc: GetPipelineStatusUseCase
     generate_discovery_uc: GenerateDiscoveryUseCase
+    get_discovery_uc: GetDiscoveryUseCase
     save_discovery_uc: SaveDiscoveryUseCase
     generate_features_uc: GenerateFeaturesUseCase
     suggest_features_uc: SuggestFeaturesUseCase
-    approve_feature_uc: ApproveFeatureUseCase
     save_features_uc: SaveSelectedFeaturesUseCase
     generate_ears_uc: GenerateEARSUseCase
     save_requirements_uc: SaveRequirementsUseCase
@@ -230,7 +233,7 @@ def build_pipeline_components(
         modes=modes,
     )
 
-    sequential_orchestrator = SequentialOrchestrator(agent=agent)
+    sequential_orchestrator = SequentialOrchestrator(agent=agent, document_repo=document_repo)
 
     execute_phase_uc = ExecutePhaseUseCase(
         orchestrator=sequential_orchestrator,
@@ -247,6 +250,7 @@ def build_pipeline_components(
         project_repo=project_repo,
         document_repo=document_repo,
     )
+    get_discovery_uc = GetDiscoveryUseCase(document_repo=document_repo)
     save_discovery_uc = SaveDiscoveryUseCase(
         pipeline_repo=pipeline_repo,
         document_repo=document_repo,
@@ -260,7 +264,6 @@ def build_pipeline_components(
         context_builder=context_builder,
         pipeline_repo=pipeline_repo,
     )
-    approve_feature_uc = ApproveFeatureUseCase(pipeline_repo=pipeline_repo)
     save_features_uc = SaveSelectedFeaturesUseCase(pipeline_repo=pipeline_repo)
     generate_ears_uc = GenerateEARSUseCase(
         agent=agent,
@@ -278,10 +281,10 @@ def build_pipeline_components(
         advance_pipeline_uc=advance_pipeline_uc,
         get_pipeline_status_uc=get_pipeline_status_uc,
         generate_discovery_uc=generate_discovery_uc,
+        get_discovery_uc=get_discovery_uc,
         save_discovery_uc=save_discovery_uc,
         generate_features_uc=generate_features_uc,
         suggest_features_uc=suggest_features_uc,
-        approve_feature_uc=approve_feature_uc,
         save_features_uc=save_features_uc,
         generate_ears_uc=generate_ears_uc,
         save_requirements_uc=save_requirements_uc,

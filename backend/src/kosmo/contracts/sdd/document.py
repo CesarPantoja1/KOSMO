@@ -87,11 +87,6 @@ class EARSPattern(StrEnum):
     complex = "complex"
 
 
-class FeatureStatus(StrEnum):
-    borrador = "borrador"
-    aprobada = "aprobada"
-
-
 class ProjectPhase(StrEnum):
     descubrimiento = "descubrimiento"
     caracteristicas = "caracteristicas"

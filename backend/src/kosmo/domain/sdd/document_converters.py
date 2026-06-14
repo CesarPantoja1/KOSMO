@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from kosmo.contracts.sdd.document import (
     DocumentNode,
@@ -15,7 +16,10 @@ _SPACES_RE = re.compile(r"[-\s]+")
 
 
 def slugify_spanish(text: str) -> str:
-    normalized = _SLUG_RE.sub("", text.lower().strip())
+    normalized = unicodedata.normalize("NFKD", text.lower().strip())
+    normalized = "".join(c for c in normalized if not unicodedata.combining(c))
+    normalized = normalized.replace("ñ", "n")
+    normalized = _SLUG_RE.sub("", normalized)
     return _SPACES_RE.sub("-", normalized)
 
 

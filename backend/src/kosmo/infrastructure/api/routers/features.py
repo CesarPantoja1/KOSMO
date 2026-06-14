@@ -3,13 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import ProjectId
 
 router = APIRouter(tags=["features"])
-
-
-class ApproveFeatureRequest(BaseModel):
-    project_id: str
 
 
 class SaveSelectedFeaturesRequest(BaseModel):
@@ -31,18 +27,43 @@ async def generate_features(project_id: str, request: Request) -> dict:
                 "title": f.title,
                 "slug": f.slug,
                 "description": f.description,
-                "status": f.status.value,
                 "rationale": f.rationale,
                 "inferred_from": f.inferred_from,
+                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
             }
         )
     return {
         "features": features_data,
-        "validation": {
-            "is_valid": output.validation_result.is_valid,
-            "errors": output.validation_result.errors,
-            "warnings": output.validation_result.warnings,
-        },
+        "total": len(features_data),
+    }
+
+
+@router.get("/api/v1/projects/{project_id}/features")
+async def get_features(project_id: str, request: Request) -> dict:
+    uc = request.app.state.pipeline_components.get_pipeline_status_uc
+    state = await uc.execute(ProjectId(project_id))
+    if state is None:
+        return {"features": [], "total": 0}
+    features_data = []
+    for f in state.features:
+        features_data.append(
+            {
+                "id": str(f.id),
+                "display_id": f.display_id,
+                "number": f.number,
+                "title": f.title,
+                "slug": f.slug,
+                "description": f.description,
+                "rationale": f.rationale,
+                "inferred_from": f.inferred_from,
+                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
+            }
+        )
+    return {
+        "features": features_data,
+        "total": len(features_data),
     }
 
 
@@ -99,27 +120,12 @@ async def save_selected_features(
                 "display_id": f.display_id,
                 "number": f.number,
                 "title": f.title,
-                "status": f.status.value,
+                "slug": f.slug,
+                "description": f.description,
+                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
             }
             for f in features
-        ]
-    }
-
-
-@router.patch("/api/v1/features/{feature_id}/status")
-async def approve_feature(
-    feature_id: str,
-    body: ApproveFeatureRequest,
-    request: Request,
-) -> dict:
-    uc = request.app.state.pipeline_components.approve_feature_uc
-    feature = await uc.execute(
-        project_id=ProjectId(body.project_id),
-        feature_id=FeatureId(feature_id),
-    )
-    return {
-        "id": str(feature.id),
-        "display_id": feature.display_id,
-        "title": feature.title,
-        "status": feature.status.value,
+        ],
+        "total": len(features),
     }

@@ -27,25 +27,38 @@ _FEATURES_SYSTEM_PROMPT = """Eres un diseñador de producto experto. Tu ÚNICA r
 - La lista de preferencias del usuario (si existen).
 - La lista de títulos de features ya existentes (para evitar duplicados).
 
-## Formato de salida
+## Formato de salida (JSON)
+
+Respondé ÚNICAMENTE con un objeto JSON con la clave "features". Nada de texto antes o después.
+
+```json
+{
+  "features": [
+    {
+      "number": 1,
+      "title": "Registro de gastos compartidos",
+      "description": "Permite a cualquier miembro del grupo registrar un gasto indicando el monto, concepto y los participantes. El sistema calcula automáticamente cuánto debe cada persona según el método de reparto elegido.",
+      "rationale": "Es el punto de entrada de toda la información de gastos. Sin esta capacidad el sistema no tendría datos que procesar.",
+      "inferred_from": ["Casos de uso", "Actores"]
+    }
+  ]
+}
+```
+
 Generá EXACTAMENTE 5 características. Cada una con:
 
-- **display_id**: C0X donde X es el número correlativo (C01, C02, C03, C04, C05).
+- **number**: Número correlativo (1, 2, 3, 4, 5).
 - **title**: Nombre corto y descriptivo (máximo 6 palabras).
-- **description**: Descripción en formato 4W:
-  - QUÉ hace la característica.
-  - PARA QUIÉN está destinada (actor del Discovery).
-  - BAJO QUÉ CONDICIÓN se activa o es relevante.
-  - QUÉ VALOR entrega al actor o al negocio.
-- **rationale**: Por qué esta característica es esencial (2-3 oraciones, trazando al Discovery).
-- **inferred_from**: Secciones del Discovery de las que se deriva (referencias específicas).
+- **description**: Descripción en lenguaje natural, como una idea de lo que hace la característica. Un párrafo de 1-2 oraciones que explique claramente qué funcionalidad aporta al producto y cómo beneficia a los usuarios. No uses formato 4W ni viñetas, solo texto corrido.
+- **rationale**: Por qué esta característica es esencial (1-2 oraciones, trazando al Discovery).
+- **inferred_from**: Secciones del Discovery de las que se deriva.
 
 ## Guardrails (obligatorio)
 - PROHIBIDO mencionar: API, base de datos, microservicios, endpoints, lenguajes, frameworks, protocolos técnicos.
 - NO Parafrasees: cada característica debe representar una capacidad DISTINTA del producto.
 - NO Seas Trivial: las características deben ser agregaciones de valor, no traducciones literales de casos de uso.
 - Cada característica debe trazar a al menos una sección del Discovery (inferred_from no vacío).
-- Los 4W de la descripción deben ser específicos, no genéricos.
+- Las descripciones deben ser en lenguaje natural, no en formato 4W ni viñetas.
 - Todo en español con tildes correctas.
 
 ## Anti-duplicación
@@ -133,5 +146,7 @@ class FeaturesMode:
             f"## Correcciones necesarias (intento {retry_count})\n\n"
             f"Las características generadas tienen los siguientes problemas:\n\n"
             f"{error_list}\n\n"
-            f"Corregí estos problemas y generá las características nuevamente."
+            f"Corregí estos problemas y generá las características nuevamente.\n"
+            f"IMPORTANTE: respondé ÚNICAMENTE con el JSON. Usá ```json ... ``` "
+            f"para delimitar el bloque JSON."
         )

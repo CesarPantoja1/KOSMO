@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.pipeline.pipeline_ports import PipelineRepository
 from kosmo.contracts.pipeline.pipeline_state import KOSMOPipelineState, PhaseTransitionRecord
-from kosmo.contracts.sdd.document import FeatureStatus, SpecPhase
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, PipelineId, ProjectId, UserId
 from kosmo.domain.sdd.id_generator import IdGenerator
@@ -88,7 +88,6 @@ class SqlAlchemyPipelineRepository(PipelineRepository):
                     title=f_data.get("title", ""),
                     slug=f_data.get("slug", ""),
                     description=f_data.get("description", ""),
-                    status=FeatureStatus(f_data.get("status", "borrador")),
                     rationale=f_data.get("rationale", ""),
                     inferred_from=f_data.get("inferred_from", []),
                 )
@@ -149,7 +148,6 @@ class SqlAlchemyPipelineRepository(PipelineRepository):
                     "title": f.title,
                     "slug": f.slug,
                     "description": f.description,
-                    "status": f.status.value,
                     "rationale": f.rationale,
                     "inferred_from": f.inferred_from,
                 }

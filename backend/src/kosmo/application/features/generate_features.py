@@ -24,7 +24,6 @@ class GenerateFeaturesUseCase:
         if state is None:
             raise ValueError(f"No se encontro el pipeline para el proyecto {project_id}")
 
-        state.current_phase = SpecPhase.CARACTERISTICAS
         state = await self._orchestrator.advance_pipeline(state, SpecPhase.CARACTERISTICAS)
         state = await self._orchestrator.execute_phase(state, SpecPhase.CARACTERISTICAS)
         state = await self._pipeline_repo.save(state)
