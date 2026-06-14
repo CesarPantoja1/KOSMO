@@ -1,8 +1,8 @@
 from kosmo.infrastructure.persistence.postgres.models import (
     AuditEventModel,
     Base,
+    DiscoveryDocumentModel,
     FeatureModel,
-    PipelineStateModel,
     ProjectModel,
     RequirementModel,
     UserModel,
@@ -11,8 +11,8 @@ from kosmo.infrastructure.persistence.postgres.models import (
 __all__ = [
     "AuditEventModel",
     "Base",
+    "DiscoveryDocumentModel",
     "FeatureModel",
-    "PipelineStateModel",
     "ProjectModel",
     "RequirementModel",
     "UserModel",

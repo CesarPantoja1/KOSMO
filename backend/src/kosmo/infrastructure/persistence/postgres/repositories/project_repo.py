@@ -22,6 +22,32 @@ class SqlAlchemyProjectRepository(ProjectRepository):
                 return None
             return self._to_entity(model)
 
+    async def by_slug(self, owner_id: str, slug: str) -> Project | None:
+        async with self._session_factory() as session:
+            from sqlalchemy import select
+
+            stmt = (
+                select(ProjectModel)
+                .where(ProjectModel.owner_id == owner_id)
+                .where(ProjectModel.slug == slug)
+            )
+            result = await session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return None
+            return self._to_entity(model)
+
+    async def find_by_slug(self, slug: str) -> Project | None:
+        async with self._session_factory() as session:
+            from sqlalchemy import select
+
+            stmt = select(ProjectModel).where(ProjectModel.slug == slug)
+            result = await session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return None
+            return self._to_entity(model)
+
     async def list_by_owner(self, owner_id: str) -> list[Project]:
         async with self._session_factory() as session:
             from sqlalchemy import select

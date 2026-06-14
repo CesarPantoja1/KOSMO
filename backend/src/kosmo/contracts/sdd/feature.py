@@ -4,12 +4,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from kosmo.contracts.sdd.document import RichTextDocument
-from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 
 
-@dataclass(frozen=True)
+@dataclass
 class Feature:
     id: FeatureId
+    project_id: ProjectId
     number: int
     title: str
     slug: str

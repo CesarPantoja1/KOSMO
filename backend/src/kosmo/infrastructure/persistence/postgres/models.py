@@ -125,22 +125,3 @@ class DiscoveryDocumentModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-
-
-class PipelineStateModel(Base):
-    __tablename__ = "pipeline_states"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    project_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    pipeline_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    current_phase: Mapped[str] = mapped_column(String(32), nullable=False, default="descubrimiento")
-    state_json: Mapped[dict[str, Any]] = mapped_column(
-        pg.JSONB(), nullable=False, server_default=text("'{}'::jsonb")
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )

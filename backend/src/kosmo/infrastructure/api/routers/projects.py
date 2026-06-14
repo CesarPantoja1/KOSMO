@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.project import Project
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
@@ -61,7 +60,7 @@ async def list_projects(owner_id: str, request: Request) -> list[ProjectResponse
 
 @router.get("/{project_id}")
 async def get_project(project_id: str, request: Request) -> ProjectResponse:
-    uc = request.app.state.pipeline_components.get_project_uc
+    from kosmo.infrastructure.api.routers.helpers import resolve_project
 
-    project = await uc.execute(project_id=ProjectId(project_id))
+    project = await resolve_project(request, project_id)
     return _project_to_response(project)

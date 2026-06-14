@@ -44,8 +44,7 @@ def validate_features_structure(features: list[Any]) -> ValidationResult:
         words_in_title = len(title.split())
         if words_in_title > 6:
             errors.append(
-                f"{display_id}: Título '{title}' tiene {words_in_title} palabras "
-                f"(máximo 6)"
+                f"{display_id}: Título '{title}' tiene {words_in_title} palabras (máximo 6)"
             )
 
         if not description.strip():

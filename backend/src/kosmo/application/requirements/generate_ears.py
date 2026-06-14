@@ -1,43 +1,39 @@
 from __future__ import annotations
 
-from kosmo.contracts.pipeline.orchestrator_ports import AgentOrchestrator
 from kosmo.contracts.pipeline.phase_outputs import EARSPhaseOutput
-from kosmo.contracts.pipeline.pipeline_ports import PipelineRepository
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.repositories import FeatureRepository
 from kosmo.domain.pipeline.context_builder import ContextBuilder
+from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
+from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 
 
 class GenerateEARSUseCase:
     def __init__(
         self,
-        agent: AgentOrchestrator,
+        agent: KOSMOAgent,
         context_builder: ContextBuilder,
-        orchestrator: AgentOrchestrator,
-        pipeline_repo: PipelineRepository,
+        orchestrator: SequentialOrchestrator,
+        feature_repo: FeatureRepository,
     ) -> None:
         self._agent = agent
         self._context_builder = context_builder
         self._orchestrator = orchestrator
-        self._pipeline_repo = pipeline_repo
+        self._feature_repo = feature_repo
 
     async def execute(
         self,
         project_id: ProjectId,
         feature_id: FeatureId,
     ) -> EARSPhaseOutput:
-        state = await self._pipeline_repo.get(project_id)
-        if state is None:
-            raise ValueError(f"No se encontro el pipeline para el proyecto {project_id}")
+        await self._orchestrator.validate_transition(project_id, SpecPhase.REQUISITOS)
 
-        await self._context_builder.build_ears_context_for_feature(state, feature_id)
+        context = await self._context_builder.build_ears_context_for_feature(project_id, feature_id)
 
-        state.current_phase = SpecPhase.REQUISITOS
-        state = await self._orchestrator.execute_phase(state, SpecPhase.REQUISITOS)
-        state = await self._pipeline_repo.save(state)
+        output = await self._agent.execute(SpecPhase.REQUISITOS, context)
 
-        feature_output = state.ears_outputs.get(feature_id)
-        if feature_output is None:
-            raise ValueError(f"El agente no genero requisitos para la feature {feature_id}")
+        if not isinstance(output, EARSPhaseOutput):
+            raise ValueError("El agente no genero requisitos")
 
-        return feature_output
+        return output

@@ -17,7 +17,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     SuggestFeaturesOutput,
     ValidationResult,
 )
-from kosmo.contracts.pipeline.pipeline_state import KOSMOPipelineState
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
@@ -52,14 +51,13 @@ class KOSMOAgent:
 
     async def execute(
         self,
-        pipeline_state: KOSMOPipelineState,
+        phase: SpecPhase,
+        context: Any,
     ) -> DiscoveryPhaseOutput | FeaturesPhaseOutput | EARSPhaseOutput:
-        phase = pipeline_state.current_phase
         mode = self._modes.get(phase)
         if mode is None:
             raise ValueError(f"No hay modo para la fase {phase.value}")
 
-        context = await self._context_builder.build_context(pipeline_state, phase)
         system_prompt = mode.system_prompt
         user_prompt = mode.build_user_prompt(context)
 
@@ -121,10 +119,8 @@ class KOSMOAgent:
 
     async def execute_suggest(
         self,
-        pipeline_state: KOSMOPipelineState,
+        context: SuggestFeaturesContext,
     ) -> SuggestFeaturesOutput:
-        context = await self._context_builder.build_suggest_features_context(pipeline_state)
-
         suggest_prompt = (
             "Eres un diseñador de producto experto.\n"
             "A continuación se presenta un Documento de Descubrimiento y una lista de\n"
@@ -145,9 +141,7 @@ class KOSMOAgent:
 
         if context.existing_feature_titles:
             titles = ", ".join(context.existing_feature_titles)
-            suggest_prompt += (
-                f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
-            )
+            suggest_prompt += f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
 
         suggest_prompt += (
             f"\n\nLa primera sugerencia será C{context.next_feature_number:02d}."
@@ -270,13 +264,17 @@ class KOSMOAgent:
         elif isinstance(content, list):
             items = content
 
+        seen_slugs: set[str] = set()
         for i, item in enumerate(items, start=1):
+            raw_slug = item.get("slug") or slugify_spanish(item.get("title", f"c{i:02d}"))
+            slug = _unique_slug(raw_slug, seen_slugs)
+            seen_slugs.add(slug)
             features.append(
                 Feature(
                     id=IdGenerator.generate("feature"),
                     number=item.get("number", i),
                     title=item.get("title", f"Caracteristica {i}"),
-                    slug=item.get("slug") or slugify_spanish(item.get("title", f"c{i:02d}")),
+                    slug=slug,
                     description=item.get("description", ""),
                     rationale=item.get("rationale", ""),
                     inferred_from=item.get("inferred_from", []),
@@ -360,3 +358,12 @@ class KOSMOAgent:
             lines.append("")
 
         return "\n".join(lines)
+
+
+def _unique_slug(base: str, existing: set[str]) -> str:
+    slug = base
+    counter = 2
+    while slug in existing:
+        slug = f"{base}-{counter}"
+        counter += 1
+    return slug

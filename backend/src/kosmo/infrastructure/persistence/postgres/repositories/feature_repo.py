@@ -74,6 +74,7 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
                 req_doc = markdown_to_document(md)
         return Feature(
             id=FeatureId(model.id),
+            project_id=ProjectId(model.project_id),
             number=model.number,
             title=model.title,
             slug=model.slug,
@@ -92,7 +93,7 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             req_doc_data = {"markdown": md}
         return FeatureModel(
             id=str(feature.id),
-            project_id="",
+            project_id=str(feature.project_id),
             number=feature.number,
             title=feature.title,
             slug=feature.slug,

@@ -12,7 +12,6 @@ from kosmo.contracts.pipeline.phase_contexts import (
 from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
-from kosmo.contracts.pipeline.pipeline_state import KOSMOPipelineState
 from kosmo.contracts.sdd.document import SpecPhase
 
 
@@ -57,23 +56,3 @@ class PhaseMode(Protocol):
         errors: list[str],
         retry_count: int,
     ) -> str: ...
-
-
-class AgentOrchestrator(Protocol):
-    async def execute_phase(
-        self,
-        pipeline_state: KOSMOPipelineState,
-        phase: SpecPhase,
-    ) -> KOSMOPipelineState: ...
-
-    async def advance_pipeline(
-        self,
-        pipeline_state: KOSMOPipelineState,
-        target_phase: SpecPhase,
-    ) -> KOSMOPipelineState: ...
-
-    def can_advance(
-        self,
-        pipeline_state: KOSMOPipelineState,
-        target_phase: SpecPhase,
-    ) -> bool: ...

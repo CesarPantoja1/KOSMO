@@ -22,11 +22,6 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
-from kosmo.application.pipeline import (
-    AdvancePipelineUseCase,
-    ExecutePhaseUseCase,
-    GetPipelineStatusUseCase,
-)
 from kosmo.application.projects import CreateProjectUseCase, GetProjectUseCase, ListProjectsUseCase
 from kosmo.application.requirements import GenerateEARSUseCase, SaveRequirementsUseCase
 from kosmo.config import Settings
@@ -34,6 +29,7 @@ from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.repositories import FeatureRepository, ProjectRepository
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.domain.pipeline.phase_modes import DiscoveryMode, EARSMode, FeaturesMode
@@ -43,7 +39,6 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyDocumentRepository,
     SqlAlchemyFeatureRepository,
-    SqlAlchemyPipelineRepository,
     SqlAlchemyProjectRepository,
     SqlAlchemyUserRepository,
 )
@@ -82,9 +77,8 @@ class AuthComponents:
 
 @dataclass(frozen=True, slots=True)
 class PipelineComponents:
-    execute_phase_uc: ExecutePhaseUseCase
-    advance_pipeline_uc: AdvancePipelineUseCase
-    get_pipeline_status_uc: GetPipelineStatusUseCase
+    project_repo: ProjectRepository
+    feature_repo: FeatureRepository
     generate_discovery_uc: GenerateDiscoveryUseCase
     get_discovery_uc: GetDiscoveryUseCase
     save_discovery_uc: SaveDiscoveryUseCase
@@ -118,9 +112,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         settings=jwt_settings,
     )
 
-    redis: Redis = Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
-        settings.redis_url.get_secret_value()
-    )
+    redis: Redis = Redis.from_url(settings.redis_url.get_secret_value())
     token_store = RedisTokenRevocationStore(redis)
     authorization_code_store = RedisAuthorizationCodeStore(redis)
     login_attempt_store = RedisLoginAttemptStore(redis)
@@ -183,12 +175,6 @@ def build_auth_components(settings: Settings) -> AuthComponents:
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
-    """Construye el modelo pydantic-ai correspondiente al provider configurado.
-
-    Toda la lógica de mapeo provider→modelo vive aquí (composition root),
-    no en el adapter. El adapter recibe un modelo ya construido y opera
-    de forma genérica sobre él (DIP/OCP).
-    """
     if provider == "deepseek":
         from pydantic_ai.models.openai import OpenAIModel
         from pydantic_ai.providers.openai import OpenAIProvider
@@ -207,10 +193,9 @@ def build_pipeline_components(
 ) -> PipelineComponents:
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
 
-    pipeline_repo = SqlAlchemyPipelineRepository(session_factory)
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
-    SqlAlchemyFeatureRepository(session_factory)
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
 
     if settings.llm_provider == "noop":
         llm_client: LLMClient = NoopLLMClient()
@@ -219,7 +204,11 @@ def build_pipeline_components(
         model = _build_pydantic_ai_model(settings.llm_provider, settings.llm_model, api_key)
         llm_client = PydanticAILLMClient(model=model)
 
-    context_builder = ContextBuilder(document_repo=document_repo, project_repo=project_repo)
+    context_builder = ContextBuilder(
+        document_repo=document_repo,
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+    )
 
     modes = {
         SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
@@ -233,53 +222,46 @@ def build_pipeline_components(
         modes=modes,
     )
 
-    sequential_orchestrator = SequentialOrchestrator(agent=agent, document_repo=document_repo)
+    orchestrator = SequentialOrchestrator(
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        project_repo=project_repo,
+    )
 
-    execute_phase_uc = ExecutePhaseUseCase(
-        orchestrator=sequential_orchestrator,
-        pipeline_repo=pipeline_repo,
-    )
-    advance_pipeline_uc = AdvancePipelineUseCase(
-        orchestrator=sequential_orchestrator,
-        pipeline_repo=pipeline_repo,
-    )
-    get_pipeline_status_uc = GetPipelineStatusUseCase(pipeline_repo=pipeline_repo)
     generate_discovery_uc = GenerateDiscoveryUseCase(
-        orchestrator=sequential_orchestrator,
-        pipeline_repo=pipeline_repo,
+        agent=agent,
+        context_builder=context_builder,
         project_repo=project_repo,
         document_repo=document_repo,
     )
     get_discovery_uc = GetDiscoveryUseCase(document_repo=document_repo)
-    save_discovery_uc = SaveDiscoveryUseCase(
-        pipeline_repo=pipeline_repo,
-        document_repo=document_repo,
-    )
+    save_discovery_uc = SaveDiscoveryUseCase(document_repo=document_repo)
     generate_features_uc = GenerateFeaturesUseCase(
-        orchestrator=sequential_orchestrator,
-        pipeline_repo=pipeline_repo,
+        agent=agent,
+        context_builder=context_builder,
+        orchestrator=orchestrator,
+        feature_repo=feature_repo,
     )
     suggest_features_uc = SuggestFeaturesUseCase(
         agent=agent,
         context_builder=context_builder,
-        pipeline_repo=pipeline_repo,
+        feature_repo=feature_repo,
     )
-    save_features_uc = SaveSelectedFeaturesUseCase(pipeline_repo=pipeline_repo)
+    save_features_uc = SaveSelectedFeaturesUseCase(feature_repo=feature_repo)
     generate_ears_uc = GenerateEARSUseCase(
         agent=agent,
         context_builder=context_builder,
-        orchestrator=sequential_orchestrator,
-        pipeline_repo=pipeline_repo,
+        orchestrator=orchestrator,
+        feature_repo=feature_repo,
     )
-    save_requirements_uc = SaveRequirementsUseCase(pipeline_repo=pipeline_repo)
-    create_project_uc = CreateProjectUseCase(project_repo=project_repo, pipeline_repo=pipeline_repo)
+    save_requirements_uc = SaveRequirementsUseCase(feature_repo=feature_repo)
+    create_project_uc = CreateProjectUseCase(project_repo=project_repo)
     get_project_uc = GetProjectUseCase(project_repo=project_repo)
     list_projects_uc = ListProjectsUseCase(project_repo=project_repo)
 
     return PipelineComponents(
-        execute_phase_uc=execute_phase_uc,
-        advance_pipeline_uc=advance_pipeline_uc,
-        get_pipeline_status_uc=get_pipeline_status_uc,
+        project_repo=project_repo,
+        feature_repo=feature_repo,
         generate_discovery_uc=generate_discovery_uc,
         get_discovery_uc=get_discovery_uc,
         save_discovery_uc=save_discovery_uc,

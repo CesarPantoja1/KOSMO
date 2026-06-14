@@ -5,9 +5,6 @@ from kosmo.infrastructure.persistence.postgres.repositories.document_repo import
 from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
 )
-from kosmo.infrastructure.persistence.postgres.repositories.pipeline_repo import (
-    SqlAlchemyPipelineRepository,
-)
 from kosmo.infrastructure.persistence.postgres.repositories.project_repo import (
     SqlAlchemyProjectRepository,
 )
@@ -17,7 +14,6 @@ __all__ = [
     "SqlAlchemyAuditEventSink",
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyFeatureRepository",
-    "SqlAlchemyPipelineRepository",
     "SqlAlchemyProjectRepository",
     "SqlAlchemyUserRepository",
 ]

@@ -77,13 +77,9 @@ async def save_requirements(
 ) -> dict:
     uc = request.app.state.pipeline_components.save_requirements_uc
     doc = markdown_to_document(body.markdown)
-    state = await uc.execute(
+    await uc.execute(
         project_id=ProjectId(body.project_id),
         feature_id=FeatureId(feature_id),
         document=doc,
     )
-    return {
-        "feature_id": feature_id,
-        "current_phase": state.current_phase.value,
-        "updated_at": state.updated_at.isoformat(),
-    }
+    return {"feature_id": feature_id, "message": "ok"}

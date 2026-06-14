@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "KOSMO SDD API",
-    "description": "Colección completa del flujo SDD (Spec-Driven Development) de KOSMO.\n\n## Flujo completo\n\n0. Health — sanity check\n1. Auth PKCE S256 — Register → Authorize → Token → Refresh → Me → Logout\n2. Proyectos — Crear proyecto (nombre + descripción = input del discovery)\n3. Discovery — Generar (desde nombre/descripción del proyecto) → Obtener → Guardar\n4. Features — Generar (5 iniciales desde discovery) → Sugerir (3 nuevas) → Guardar → Listar\n5. Requisitos EARS — Generar por feature → Guardar\n\n## IDs\n\nULID con prefijo tipado: prj_ (project), feat_ (feature), usr_ (user).\nDisplay IDs: C01, C02 (number secuencial, humano).\n\n## Pre-requisitos\n\n- uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- Usuario seed: uv run python -m kosmo.infrastructure.scripts.seed_dev_user",
+    "description": "Colección completa del flujo SDD (Spec-Driven Development) de KOSMO.\n\n## Flujo completo\n\n0. Health — sanity check\n1. Auth PKCE S256 — Register → Authorize → Token → Refresh → Me → Logout\n2. Proyectos — Crear proyecto (nombre + descripción = input del discovery)\n3. Discovery — Generar (desde nombre/descripción del proyecto) → Obtener → Guardar\n4. Features — Generar (5 iniciales desde discovery) → Listar → Sugerir (3 nuevas) → Guardar → Obtener por slug\n5. Requisitos EARS — Generar por feature → Guardar\n\n## IDs y Slugs\n\nULID con prefijo tipado: prj_ (project), feat_ (feature), usr_ (user).\nDisplay IDs: C01, C02 (number secuencial).\nSlug: version URL-amigable del nombre (ej: division-de-gastos-compartidos).\nTodas las rutas bajo /projects/{id_or_slug} aceptan ULID o slug indistintamente.\n\n## Pre-requisitos\n\n- uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- Usuario seed: uv run python -m kosmo.infrastructure.scripts.seed_dev_user",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -16,7 +16,8 @@
     { "key": "code_challenge", "value": "", "type": "string" },
     { "key": "project_id", "value": "", "type": "string" },
     { "key": "feature_id", "value": "", "type": "string" },
-    { "key": "feature_id_alt", "value": "", "type": "string" }
+    { "key": "feature_id_alt", "value": "", "type": "string" },
+    { "key": "feature_slug", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -390,6 +391,7 @@
                   "if (body.features && body.features.length > 0) {",
                   "  setVar('feature_id', body.features[0].id);",
                   "  if (body.features.length > 1) setVar('feature_id_alt', body.features[1].id);",
+                  "  setVar('feature_slug', body.features[0].slug);",
                   "}",
                   "console.log('Features generadas:', body.total);",
                   "body.features.forEach(function(f, i) { console.log('  ' + (i+1) + '.', f.display_id, f.title); });"
@@ -416,9 +418,10 @@
                   "var body = pm.response.json();",
                   "if (body.features && body.features.length > 0) {",
                   "  setVar('feature_id', body.features[0].id);",
+                  "  setVar('feature_slug', body.features[0].slug);",
                   "}",
                   "console.log('Features:', body.total);",
-                  "body.features.forEach(function(f) { console.log('  -', f.display_id, f.title, '|', f.created_at); });"
+                  "body.features.forEach(function(f) { console.log('  -', f.display_id, f.title, '(' + f.slug + ')'); });"
                 ],
                 "type": "text/javascript"
               }
@@ -478,7 +481,36 @@
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
             "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"selected_suggestions\": [\n    {\n      \"number\": 6,\n      \"title\": \"Notificaciones de deudas\",\n      \"description\": \"Envía alertas a los miembros del grupo cuando tienen deudas pendientes o cuando reciben un pago, manteniendo a todos informados sobre el estado de sus cuentas.\",\n      \"rationale\": \"Las notificaciones mantienen a los usuarios al tanto sin necesidad de revisar manualmente la aplicación.\",\n      \"inferred_from\": [\"Casos de uso\", \"Actores\"]\n    }\n  ]\n}" },
-            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+             "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+          }
+        },
+        {
+          "name": "4.5 Obtener Feature por slug (detalle completo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Feature:', body.display_id, '-', body.title);",
+                  "  console.log('Slug:', body.slug);",
+                  "  console.log('Rationale:', body.rationale);",
+                  "  console.log('Inferred from:', body.inferred_from.join(', '));",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] Feature no encontrada con ese slug.');",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/{{feature_slug}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "{{feature_slug}}"] }
           }
         }
       ]
