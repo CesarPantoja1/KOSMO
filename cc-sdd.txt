@@ -1,0 +1,327 @@
+Sí. `cc-sdd` implementa un flujo de **Spec-Driven Development (SDD)** en dos capas: primero define el contrato de la solución con specs aprobables por humanos, y después usa un agente autónomo para implementar esas specs con validación mecánica y revisión independiente.
+
+## Resumen corto
+El flujo base es:
+
+1. **Steering**: carga el contexto del proyecto.
+2. **Discovery**: decide si hace falta una spec, una roadmap o implementación directa.
+3. **Specification**: crea `requirements.md`, `design.md` y `tasks.md`.
+4. **Aprobación humana**: se aprueban las specs antes de codificar.
+5. **Implementation**: un agente ejecuta tareas, prueba, revisa y corrige.
+6. **Validation**: se verifica que la implementación siga la spec y el diseño.
+
+---
+
+## Paso a paso detallado
+
+### 0) Steering opcional: contexto del proyecto
+Antes de escribir la spec, puedes cargar el “memory” del proyecto con:
+
+- `/kiro-steering`
+- `/kiro-steering-custom`
+
+Esto llena `.kiro/steering/` con guías del producto, tech stack, estructura, reglas y decisiones del proyecto.
+
+**Objetivo:** que el agente no trabaje “en vacío”, sino con contexto estable sobre arquitectura, convenciones y límites.
+
+---
+
+### 1) Discovery: entender qué camino seguir
+Se arranca con:
+
+- `/kiro-discovery "idea"`
+
+Según la idea, el sistema decide:
+
+- si basta una spec simple,
+- si hace falta una roadmap,
+- si conviene dividir en varias specs,
+- o si se puede saltar parte del proceso para algo pequeño.
+
+**Salida típica:**
+- `brief.md`
+- `roadmap.md` si el proyecto es grande o multi-spec
+
+**Qué hace aquí el flujo:**
+- identifica el alcance,
+- detecta candidatos de boundary/contratos,
+- propone la ruta correcta de desarrollo.
+
+---
+
+### 2) Inicio de una spec
+Para una nueva funcionalidad:
+
+- `/kiro-spec-init <feature>`
+
+Esto crea la carpeta de spec en:
+
+- `.kiro/specs/<feature>/`
+
+Ahí vive toda la información de esa feature.
+
+---
+
+### 3) Requirements: definir el contrato
+Luego:
+
+- `/kiro-spec-requirements <feature>`
+
+Aquí se redacta `requirements.md`.
+
+Según la documentación del repo, este archivo suele contener:
+
+- requisitos en formato EARS,
+- criterios de aceptación,
+- alcance y exclusiones,
+- contexto de boundary,
+- dependencias relevantes.
+
+**Importante:** esta es la capa que el humano revisa primero.
+
+### Qué busca esta fase
+- Qué debe hacer la feature
+- Qué no debe hacer
+- Qué dependencias están permitidas
+- Qué quedará afectado si cambia después
+
+En cc-sdd, la especificación se centra mucho en **boundary-first**:
+- lo que la spec posee,
+- lo que no posee,
+- qué puede tocar,
+- qué necesita revalidación si cambia.
+
+---
+
+### 4) Gap validation opcional
+Si el proyecto ya existe:
+
+- `/kiro-validate-gap <feature>`
+
+Esto revisa la brecha entre el código actual y la spec.
+
+**Útil para:**
+- extender sistemas existentes,
+- evitar duplicar trabajo,
+- descubrir incompatibilidades con la arquitectura actual.
+
+---
+
+### 5) Design: convertir requirements en arquitectura
+Luego:
+
+- `/kiro-spec-design <feature> [-y]`
+
+Se genera `design.md`.
+
+Normalmente incluye:
+- arquitectura,
+- decisiones técnicas,
+- diagramas Mermaid,
+- estructura de archivos,
+- componentes,
+- límites por módulo,
+- dependencias,
+- reglas de implementación.
+
+### Idea clave
+En cc-sdd se separa claramente:
+
+- **Specification** = contrato / límites / intención
+- **Design** = exploración interna dentro de ese contrato
+
+O sea: primero se fija el marco, después se deja libertad al agente para diseñar dentro de él.
+
+---
+
+### 6) Design validation opcional
+Luego:
+
+- `/kiro-validate-design <feature>`
+
+Esta validación revisa si el diseño:
+- respeta los requirements,
+- mantiene boundaries claros,
+- no introduce dependencias indebidas,
+- está suficientemente aterrizado para implementarse.
+
+---
+
+### 7) Tasks: convertir el diseño en trabajo ejecutable
+Después:
+
+- `/kiro-spec-tasks <feature> [-y]`
+
+Esto produce `tasks.md`.
+
+Este archivo normalmente:
+- divide la solución en tareas implementables,
+- marca dependencias entre tareas,
+- organiza waves o grupos paralelizables,
+- deja límites claros por tarea.
+
+En la doc del repo aparecen tareas con:
+- boundaries locales,
+- dependencias,
+- orden de ejecución,
+- posibilidad de paralelismo.
+
+---
+
+### 8) Aprobación humana antes de implementar
+El flujo insiste en un punto importante:
+
+- **Requirements → Design → Tasks → Implementation**
+
+Y cada fase requiere revisión humana, salvo que se use `-y` para fast-track intencional.
+
+**Esto significa:**
+no se pasa a codificar hasta que la spec está aprobada.
+
+---
+
+### 9) Implementation: ejecución autónoma
+Luego se ejecuta:
+
+- `/kiro-impl <feature> [tasks]`
+
+o en algunos adaptadores:
+- `/kiro:spec-impl`
+- `/prompts:kiro-spec-impl`
+- `@kiro-spec-impl`
+
+### Qué hace el implementador
+El agente:
+
+1. carga contexto:
+   - `spec.json`
+   - `requirements.md`
+   - `design.md`
+   - `tasks.md`
+   - toda `.kiro/steering/`
+2. verifica que la spec esté aprobada
+3. selecciona tareas:
+   - todas las pendientes, o
+   - solo las especificadas por ID
+4. implementa cada tarea
+5. corre validaciones
+6. usa TDD cuando aplica
+7. deja el código detrás de feature flags cuando corresponde
+8. actualiza el estado de tareas
+
+---
+
+### 10) Revisión independiente y auto-debug
+Una parte distintiva del flujo es que la implementación no es “solo escribir código”.
+
+cc-sdd dice que `/kiro-impl` corre de forma autónoma con:
+
+- **fresh implementer**
+- **independent reviewer**
+- **auto-debug por tarea**
+
+Eso implica:
+- una pasada de implementación,
+- una pasada de revisión adversarial,
+- una pasada de corrección si algo falla.
+
+---
+
+### 11) Validation final
+Opcionalmente:
+
+- `/kiro-validate-impl <feature>`
+
+Esto vuelve a comprobar:
+- si se cumplió la spec,
+- si no hubo violaciones de boundary,
+- si la implementación está alineada con el diseño,
+- si tests/build/lint/typecheck pasan.
+
+---
+
+### 12) Status y seguimiento
+En cualquier momento:
+
+- `/kiro-spec-status <feature>`
+
+Esto sirve para ver:
+- estado de la spec,
+- en qué fase va,
+- qué está aprobado,
+- qué queda pendiente.
+
+---
+
+## Flujo completo resumido en orden
+
+### Para un feature nuevo
+1. `/kiro-steering`  
+2. `/kiro-discovery "idea"`  
+3. `/kiro-spec-init <feature>`  
+4. `/kiro-spec-requirements <feature>`  
+5. `/kiro-validate-gap <feature>` opcional  
+6. `/kiro-spec-design <feature>`  
+7. `/kiro-validate-design <feature>` opcional  
+8. `/kiro-spec-tasks <feature>`  
+9. aprobación humana  
+10. `/kiro-impl <feature>`  
+11. `/kiro-validate-impl <feature>` opcional  
+12. `/kiro-spec-status <feature>` cuando quieras
+
+---
+
+## Qué artefactos produce
+Los principales archivos son:
+
+- `.kiro/steering/*.md` → memoria del proyecto
+- `.kiro/specs/<feature>/requirements.md`
+- `.kiro/specs/<feature>/design.md`
+- `.kiro/specs/<feature>/tasks.md`
+- `.kiro/specs/<feature>/research.md` cuando hay investigación
+- `.kiro/specs/<feature>/spec.json` como metadata y approvals
+
+---
+
+## Principios importantes del repo
+
+### 1) Boundary-first
+Cada spec debe dejar claro:
+- qué cubre,
+- qué excluye,
+- qué dependencias toca,
+- qué puede romperse si cambia.
+
+### 2) Spec-centered, mechanically grounded
+La spec manda, pero la validación real se apoya en:
+- tests,
+- build,
+- lint,
+- typecheck,
+- smoke checks.
+
+### 3) Change-friendly
+El sistema está pensado para ser adaptable:
+- las specs se pueden cambiar,
+- el flujo se puede personalizar,
+- los templates y skills están pensados para extenderse.
+
+### 4) Multi-agent / multi-tool
+El mismo set de skills funciona en varios agentes:
+- Claude Code
+- Codex
+- Cursor
+- Copilot
+- Windsurf
+- OpenCode
+- Gemini CLI
+- Antigravity
+
+---
+
+## En una frase
+`cc-sdd` convierte una idea en una implementación autónoma mediante un proceso guiado por specs aprobadas por humanos, donde primero se define el contrato, después el diseño, luego las tareas, y finalmente un agente ejecuta, revisa y corrige la implementación.
+
+Si quieres, te puedo hacer ahora mismo una de estas dos cosas:
+1. un **diagrama visual del flujo**, o  
+2. un **mapa de cada comando y qué archivo genera**.

@@ -1,0 +1,603 @@
+{
+  "info": {
+    "name": "KOSMO SDD API",
+    "description": "Colección completa del flujo SDD (Spec-Driven Development) de KOSMO. Incluye autenticación PKCE S256 y el pipeline completo: Health → Auth → Proyectos → Discovery → Features → Requisitos EARS.\n\n## Flujo\n\nEjecutar en orden dentro de cada carpeta. Las variables se auto-propagan entre requests.\n\n0. Health — sanity check\n1. Auth PKCE S256 — Register → Authorize → Token → Refresh → Me → Logout\n2. Proyectos — Crear proyecto (nombre + descripción = input del discovery)\n3. Discovery — Documento de descubrimiento generado por IA con ReAct (9 secciones, Casos de Uso reales). El input se toma del nombre y descripción del proyecto. No requiere body.\n4. Features — Generar, sugerir, guardar, aprobar\n5. Requisitos EARS — Documento enriquecido por feature (6 categorías)\n6. Schemas — Listar y obtener JSON Schemas\n\n## IDs\n\nULID con prefijo tipado: prj_ (project), feat_ (feature), usr_ (user).\n\n## Errores\n\nFormato OAuth 2.0 (RFC 6749 §5.2) para auth. RFC 7807 Problem Detail para negocio.\n\n## Pre-requisitos\n\n- Servidor: uv run uvicorn kosmo.infrastructure.api.main:app --reload --host 0.0.0.0 --port 8000\n- O Docker: docker compose up -d\n- Usuario seed: uv run python -m kosmo.infrastructure.scripts.seed_dev_user (dev@kosmo.dev / dev-password-12345)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "email", "value": "dev@kosmo.dev", "type": "string" },
+    { "key": "password", "value": "dev-password-12345", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "authorization_code", "value": "", "type": "string" },
+    { "key": "code_verifier", "value": "", "type": "string" },
+    { "key": "code_challenge", "value": "", "type": "string" },
+    { "key": "project_id", "value": "", "type": "string" },
+    { "key": "feature_id", "value": "", "type": "string" },
+    { "key": "feature_id_alt", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "description": "Verificar que el servidor responde correctamente.",
+      "item": [
+        {
+          "name": "GET Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('status = ok', function () { pm.expect(pm.response.json().status).to.eql('ok'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Auth (PKCE S256)",
+      "description": "Flujo OAuth 2.1 + PKCE completo. Ejecutar en orden: Register → Authorize → Token. El access_token, refresh_token y user_id se guardan automáticamente en variables de colección.\n\nEl code_verifier y code_challenge se generan dinámicamente con CryptoJS en el pre-request de Authorize. No es necesario hardcodearlos.",
+      "item": [
+        {
+          "name": "1.1 Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('201 o 409', function () { pm.expect([201, 409]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 201) {",
+                  "  var body = pm.response.json();",
+                  "  setVar('user_id', body.id);",
+                  "  console.log('Usuario creado:', body.id);",
+                  "} else {",
+                  "  console.log('Usuario ya existe (409) — OK');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/register", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register"] }
+          }
+        },
+        {
+          "name": "1.2 Authorize (PKCE S256)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "function b64url(wordArray) { return CryptoJS.enc.Base64.stringify(wordArray).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, ''); }",
+                  "var verifier = b64url(CryptoJS.lib.WordArray.random(48));",
+                  "pm.collectionVariables.set('code_verifier', verifier);",
+                  "pm.collectionVariables.set('code_challenge', b64url(CryptoJS.SHA256(verifier)));"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json();",
+                  "setVar('authorization_code', body.authorization_code);",
+                  "console.log('Authorization code obtenido. Expira en:', body.expires_in, 's');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"code_challenge\": \"{{code_challenge}}\",\n  \"code_challenge_method\": \"S256\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/authorize", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "authorize"] }
+          }
+        },
+        {
+          "name": "1.3 Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "setVar('access_token', body.access.token);",
+                  "setVar('refresh_token', body.refresh.token);",
+                  "console.log('Tokens obtenidos. Access expira:', body.access.expires_at, '| Refresh expira:', body.refresh.expires_at);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"grant_type\": \"authorization_code\",\n  \"code\": \"{{authorization_code}}\",\n  \"code_verifier\": \"{{code_verifier}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/token", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "token"] }
+          }
+        },
+        {
+          "name": "1.4 Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "setVar('access_token', body.access.token);",
+                  "setVar('refresh_token', body.refresh.token);",
+                  "console.log('Tokens rotados. Nueva familia.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"grant_type\": \"refresh_token\",\n  \"refresh_token\": \"{{refresh_token}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/refresh", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "refresh"] }
+          }
+        },
+        {
+          "name": "1.5 Me (get Principal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "setVar('user_id', body.subject);",
+                  "pm.test('Tiene subject y scopes', function () { pm.expect(body.subject).to.be.a('string'); pm.expect(body.scopes).to.be.an('array'); });",
+                  "console.log('Principal:', body.subject, '| Scopes:', body.scopes.join(', '));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/auth/me", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "me"] }
+          }
+        },
+        {
+          "name": "1.6 Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204 No Content', function () { pm.response.to.have.status(204); });",
+                  "console.log('Sesión revocada.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/auth/logout", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Proyectos",
+      "description": "CRUD de proyectos. Los proyectos inician en fase 'descubrimiento'. IDs con prefijo prj_. Requiere user_id obtenido en Auth.",
+      "item": [
+        {
+          "name": "2.1 Crear Proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('201 Created', function () { pm.response.to.have.status(201); });",
+                  "var body = pm.response.json();",
+                  "setVar('project_id', body.id);",
+                  "pm.test('ID con prefijo prj_', function () { pm.expect(body.id).to.match(/^prj_/); });",
+                  "pm.test('Fase inicial = descubrimiento', function () { pm.expect(body.current_phase).to.eql('descubrimiento'); });",
+                  "console.log('Proyecto:', body.id, '-', body.name, '| Fase:', body.current_phase);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sistema de Gestión de Inventario\",\n  \"description\": \"Sistema para pequeñas empresas que permite gestionar inventario en tiempo real, controlar stock, generar reportes y recibir alertas de bajo inventario.\",\n  \"owner_id\": \"{{user_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "projects"] }
+          }
+        },
+        {
+          "name": "2.2 Listar Proyectos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "pm.test('Es array', function () { pm.expect(data).to.be.an('array'); });",
+                  "console.log('Proyectos:', data.length);",
+                  "data.forEach(function(p) { console.log('  -', p.name, '| Fase:', p.current_phase, '| ID:', p.id); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/projects?owner_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "projects"],
+              "query": [{ "key": "owner_id", "value": "{{user_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "2.3 Obtener Proyecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Tiene fase y estado', function () { pm.expect(body.current_phase).to.be.a('string'); pm.expect(body.status).to.be.a('string'); });",
+                  "console.log('Proyecto:', body.name, '| Fase:', body.current_phase, '| Estado:', body.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Discovery (Fase 1)",
+      "description": "Documento de descubrimiento generado por IA. Incluye 9 secciones (visión, problema, actores, propuesta de valor, casos de uso, capacidades, reglas, calidad, alcance).\n\nFlujo: Generate → (editar) → Save.\n\nEl input se toma automáticamente del nombre y descripción del proyecto (creado en 2.1). No requiere body.\nLa respuesta contiene solo el campo document_markdown con el documento en formato Markdown.\nEl documento comienza directamente con '## Visión del producto', sin texto introductorio.",
+      "item": [
+        {
+          "name": "3.1 Generar Discovery (IA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Discovery generado.');",
+                  "  if (body.document_markdown) {",
+                  "    console.log('Markdown generado (' + body.document_markdown.length + ' chars):', body.document_markdown.substring(0, 120) + '...');",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "generate"] }
+          }
+        },
+        {
+          "name": "3.2 Guardar Discovery (edición manual)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Guardado. Fase:', body.current_phase, '| updated_at:', body.updated_at);",
+                  "} else if (pm.response.code === 422) {",
+                  "  console.log('[422] Documento inválido:', JSON.stringify(pm.response.json()));",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"markdown\": \"## Visión del producto\\n\\nKOSMO es una plataforma de inteligencia artificial que guía a ingenieros de software desde la idea inicial hasta una especificación de diseño técnico estructurada (SDD).\\n\\n## Espacio del problema\\n\\nLos equipos de desarrollo gastan horas redactando especificaciones inconsistentes que generan ambigüedad en la implementación. No existe una herramienta que estructure y valide automáticamente los requisitos de negocio antes de codificar.\\n\\n## Actores\\n\\n1. **Ingeniero de Software**: Define la idea, revisa y edita el documento de descubrimiento.\\n2. **Product Manager**: Solicita características y aprueba las que se implementarán.\\n3. **Agente de IA KOSMO**: Genera y valida contenido estructurado.\\n\\n## Propuesta de valor\\n\\n- Reduce en un 70% el tiempo de redacción de especificaciones.\\n- Garantiza trazabilidad entre requisitos y necesidades de negocio.\\n- Elimina ambigüedades de implementación.\\n\\n## Casos de uso\\n\\n1. Como Ingeniero, quiero ingresar mi idea en lenguaje natural para obtener un documento de descubrimiento estructurado.\\n2. Como Ingeniero, quiero editar libremente el documento para refinar la visión del producto.\\n3. Como Product Manager, quiero generar características derivadas del descubrimiento para priorizar el backlog.\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Features (Fase 2)",
+      "description": "Gestión de características. La IA genera y persiste 5 features iniciales (C01-C05). Se pueden sugerir alternativas (no persiste), guardar manualmente y cambiar estado (Borrador → Aprobada). Solo features en Aprobada pueden generar requisitos.",
+      "item": [
+        {
+          "name": "4.1 Generar Features (IA, persiste 5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Generó features', function () { pm.expect(body.features).to.be.an('array'); });",
+                  "if (body.features && body.features.length > 0) {",
+                  "  setVar('feature_id', body.features[0].id);",
+                  "  if (body.features.length > 1) setVar('feature_id_alt', body.features[1].id);",
+                  "}",
+                  "console.log('Features generadas:', body.features.length);",
+                  "body.features.forEach(function(f, i) { console.log('  ' + (i+1) + '.', f.display_id || f.number, f.title, '(' + f.status + ')'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "generate"] }
+          }
+        },
+        {
+          "name": "4.2 Sugerir Features (IA, no persiste)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Sugerencias:', body.suggestions.length);",
+                  "  console.log('Dominio inferido:', body.domain_inferred);",
+                  "  body.suggestions.forEach(function(s, i) { console.log('  ' + (i+1) + '.', s.display_id || s.number, s.title); });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest"] }
+          }
+        },
+        {
+          "name": "4.3 Guardar Features Seleccionadas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "function setVar(key, value) { pm.collectionVariables.set(key, value); if (pm.environment && pm.environment.name) pm.environment.set(key, value); }",
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "if (body.features && body.features.length === 1) {",
+                  "  setVar('feature_id', body.features[0].id);",
+                  "}",
+                  "console.log('Features guardadas:', body.features.length);",
+                  "body.features.forEach(function(f) { console.log('  -', f.display_id || f.number, f.title, '(' + f.status + ')'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"selected_suggestions\": [\n    {\n      \"number\": 6,\n      \"title\": \"Validación automática de requisitos\",\n      \"description\": \"QUÉ: Verifica la estructura y calidad de los requisitos generados. PARA QUIÉN: Ingenieros de software que necesitan garantizar completitud. BAJO QUÉ CONDICIÓN: Cuando el usuario solicita generación de requisitos. QUÉ VALOR: Reduce errores de especificación en un 80%.\",\n      \"rationale\": \"La validación automática es esencial para garantizar que los requisitos sean verificables y trazables.\",\n      \"inferred_from\": [\"Reglas de negocio\", \"Atributos de calidad\"]\n    }\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+          }
+        },
+        {
+          "name": "4.4 Aprobar Feature (Borrador → Aprobada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "pm.test('Estado = aprobada', function () { pm.expect(body.status).to.eql('aprobada'); });",
+                  "console.log('Feature aprobada:', body.id, '-', body.title);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/status", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Requisitos EARS (Fase 3)",
+      "description": "Documento de requisitos EARS por feature. Taxonomía: Ubicuos, Eventos, Estado, Opcionales, Fallos, Complejos. La feature DEBE estar Aprobada (409 Conflict si Borrador).\n\nFlujo: Aprobar feature (4.4) → Generar requisitos → (editar) → Guardar.",
+      "item": [
+        {
+          "name": "5.1 Generar Requisitos EARS (IA, feature Aprobada requerida)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Requisitos generados para feature', body.feature_number);",
+                  "  console.log('Total requisitos:', body.requirements.length);",
+                  "  console.log('Validación:', body.validation.is_valid ? 'OK' : 'ERRORES');",
+                  "  body.requirements.forEach(function(r) { console.log('  -', r.display_id, r.pattern); });",
+                  "} else if (pm.response.code === 409) {",
+                  "  console.log('[409] Feature debe estar Aprobada. Ejecuta 4.4 primero.');",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements", "generate"] }
+          }
+        },
+        {
+          "name": "5.2 Guardar Requisitos (edición manual)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  console.log('Guardado. Fase:', body.current_phase, '| updated_at:', body.updated_at);",
+                  "} else if (pm.response.code === 422) {",
+                  "  console.log('[422] Documento inválido:', JSON.stringify(pm.response.json()));",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"markdown\": \"### Requisitos Ubicuos\\n\\n- REQ-1.1: El sistema shall gestionar los datos de forma segura. **Criterio**: Dado un usuario autenticado, Cuando accede a sus datos, Entonces los datos se muestran correctamente.\\n\\n### Requisitos Basados en Eventos\\n\\n- REQ-1.2: CUANDO el usuario envía una solicitud de generación, El sistema shall procesar la solicitud y retornar un documento estructurado. **Criterio**: Dado un usuario con proyecto activo, Cuando presiona Generar, Entonces recibe un documento válido.\"\n}" },
+            "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Schemas",
+      "description": "Utilidades: listar y obtener JSON Schemas de los DTOs de la API.",
+      "item": [
+        {
+          "name": "6.1 Listar Schemas JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "console.log('Schemas disponibles:', body.schemas.length);",
+                  "body.schemas.forEach(function(s) { console.log('  -', s); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/schemas", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas"] }
+          }
+        },
+        {
+          "name": "6.2 Obtener JSON Schema (RegisterRequest)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "var body = pm.response.json();",
+                  "console.log('Schema:', body.title, '| Campos:', Object.keys(body.properties).join(', '));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/api/v1/schemas/RegisterRequest", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas", "RegisterRequest"] }
+          }
+        }
+      ]
+    }
+  ]
+}

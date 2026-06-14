@@ -12,11 +12,36 @@ from kosmo.application.auth import (
     RevokeSession,
     VerifyAccessToken,
 )
+from kosmo.application.discovery import GenerateDiscoveryUseCase, SaveDiscoveryUseCase
+from kosmo.application.features import (
+    ApproveFeatureUseCase,
+    GenerateFeaturesUseCase,
+    SaveSelectedFeaturesUseCase,
+    SuggestFeaturesUseCase,
+)
+from kosmo.application.pipeline import (
+    AdvancePipelineUseCase,
+    ExecutePhaseUseCase,
+    GetPipelineStatusUseCase,
+)
+from kosmo.application.projects import CreateProjectUseCase, GetProjectUseCase, ListProjectsUseCase
+from kosmo.application.requirements import GenerateEARSUseCase, SaveRequirementsUseCase
 from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
+from kosmo.contracts.llm.ports import LLMClient
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.pipeline.context_builder import ContextBuilder
+from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
+from kosmo.domain.pipeline.phase_modes import DiscoveryMode, EARSMode, FeaturesMode
+from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
+from kosmo.infrastructure.llm import NoopLLMClient, PydanticAILLMClient
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
+    SqlAlchemyDocumentRepository,
+    SqlAlchemyFeatureRepository,
+    SqlAlchemyPipelineRepository,
+    SqlAlchemyProjectRepository,
     SqlAlchemyUserRepository,
 )
 from kosmo.infrastructure.persistence.redis import (
@@ -50,6 +75,24 @@ class AuthComponents:
     verify_access_token: VerifyAccessToken
     refresh_token_pair: RefreshTokenPair
     revoke_session: RevokeSession
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineComponents:
+    execute_phase_uc: ExecutePhaseUseCase
+    advance_pipeline_uc: AdvancePipelineUseCase
+    get_pipeline_status_uc: GetPipelineStatusUseCase
+    generate_discovery_uc: GenerateDiscoveryUseCase
+    save_discovery_uc: SaveDiscoveryUseCase
+    generate_features_uc: GenerateFeaturesUseCase
+    suggest_features_uc: SuggestFeaturesUseCase
+    approve_feature_uc: ApproveFeatureUseCase
+    save_features_uc: SaveSelectedFeaturesUseCase
+    generate_ears_uc: GenerateEARSUseCase
+    save_requirements_uc: SaveRequirementsUseCase
+    create_project_uc: CreateProjectUseCase
+    get_project_uc: GetProjectUseCase
+    list_projects_uc: ListProjectsUseCase
 
 
 def build_auth_components(settings: Settings) -> AuthComponents:
@@ -133,4 +176,116 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         revoke_session=RevokeSession(
             verifier=verifier, revocation_store=token_store, audit_sink=audit_sink
         ),
+    )
+
+
+def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
+    """Construye el modelo pydantic-ai correspondiente al provider configurado.
+
+    Toda la lógica de mapeo provider→modelo vive aquí (composition root),
+    no en el adapter. El adapter recibe un modelo ya construido y opera
+    de forma genérica sobre él (DIP/OCP).
+    """
+    if provider == "deepseek":
+        from pydantic_ai.models.openai import OpenAIModel
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        return OpenAIModel(
+            model,
+            provider=OpenAIProvider(base_url="https://api.deepseek.com", api_key=api_key),
+        )
+
+    return f"{provider}:{model}"
+
+
+def build_pipeline_components(
+    settings: Settings,
+    db_engine: AsyncEngine,
+) -> PipelineComponents:
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    pipeline_repo = SqlAlchemyPipelineRepository(session_factory)
+    project_repo = SqlAlchemyProjectRepository(session_factory)
+    document_repo = SqlAlchemyDocumentRepository(session_factory)
+    SqlAlchemyFeatureRepository(session_factory)
+
+    if settings.llm_provider == "noop":
+        llm_client: LLMClient = NoopLLMClient()
+    else:
+        api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else None
+        model = _build_pydantic_ai_model(settings.llm_provider, settings.llm_model, api_key)
+        llm_client = PydanticAILLMClient(model=model)
+
+    context_builder = ContextBuilder(document_repo=document_repo, project_repo=project_repo)
+
+    modes = {
+        SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
+        SpecPhase.CARACTERISTICAS: FeaturesMode(),
+        SpecPhase.REQUISITOS: EARSMode(),
+    }
+
+    agent = KOSMOAgent(
+        llm_client=llm_client,
+        context_builder=context_builder,
+        modes=modes,
+    )
+
+    sequential_orchestrator = SequentialOrchestrator(agent=agent)
+
+    execute_phase_uc = ExecutePhaseUseCase(
+        orchestrator=sequential_orchestrator,
+        pipeline_repo=pipeline_repo,
+    )
+    advance_pipeline_uc = AdvancePipelineUseCase(
+        orchestrator=sequential_orchestrator,
+        pipeline_repo=pipeline_repo,
+    )
+    get_pipeline_status_uc = GetPipelineStatusUseCase(pipeline_repo=pipeline_repo)
+    generate_discovery_uc = GenerateDiscoveryUseCase(
+        orchestrator=sequential_orchestrator,
+        pipeline_repo=pipeline_repo,
+        project_repo=project_repo,
+        document_repo=document_repo,
+    )
+    save_discovery_uc = SaveDiscoveryUseCase(
+        pipeline_repo=pipeline_repo,
+        document_repo=document_repo,
+    )
+    generate_features_uc = GenerateFeaturesUseCase(
+        orchestrator=sequential_orchestrator,
+        pipeline_repo=pipeline_repo,
+    )
+    suggest_features_uc = SuggestFeaturesUseCase(
+        agent=agent,
+        context_builder=context_builder,
+        pipeline_repo=pipeline_repo,
+    )
+    approve_feature_uc = ApproveFeatureUseCase(pipeline_repo=pipeline_repo)
+    save_features_uc = SaveSelectedFeaturesUseCase(pipeline_repo=pipeline_repo)
+    generate_ears_uc = GenerateEARSUseCase(
+        agent=agent,
+        context_builder=context_builder,
+        orchestrator=sequential_orchestrator,
+        pipeline_repo=pipeline_repo,
+    )
+    save_requirements_uc = SaveRequirementsUseCase(pipeline_repo=pipeline_repo)
+    create_project_uc = CreateProjectUseCase(project_repo=project_repo, pipeline_repo=pipeline_repo)
+    get_project_uc = GetProjectUseCase(project_repo=project_repo)
+    list_projects_uc = ListProjectsUseCase(project_repo=project_repo)
+
+    return PipelineComponents(
+        execute_phase_uc=execute_phase_uc,
+        advance_pipeline_uc=advance_pipeline_uc,
+        get_pipeline_status_uc=get_pipeline_status_uc,
+        generate_discovery_uc=generate_discovery_uc,
+        save_discovery_uc=save_discovery_uc,
+        generate_features_uc=generate_features_uc,
+        suggest_features_uc=suggest_features_uc,
+        approve_feature_uc=approve_feature_uc,
+        save_features_uc=save_features_uc,
+        generate_ears_uc=generate_ears_uc,
+        save_requirements_uc=save_requirements_uc,
+        create_project_uc=create_project_uc,
+        get_project_uc=get_project_uc,
+        list_projects_uc=list_projects_uc,
     )

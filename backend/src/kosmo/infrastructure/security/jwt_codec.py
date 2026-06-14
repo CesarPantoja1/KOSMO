@@ -84,26 +84,24 @@ class JoseJwtVerifier:
                 issuer=self._settings.issuer,
             )
         except ExpiredSignatureError as exc:
-            raise TokenExpiredError("Token expired") from exc
-        except (JWTClaimsError, JWTError) as exc:
-            raise InvalidTokenError(str(exc)) from exc
+            raise TokenExpiredError("Token expirado") from exc
+        except JWTClaimsError as exc:
+            raise InvalidTokenError(f"Claims invalidos: {exc}") from exc
+        except JWTError as exc:
+            raise InvalidTokenError(f"Token mal formado: {exc}") from exc
 
-        token_type_raw = payload.get("type")
-        if token_type_raw != expected_type.value:
+        token_type = payload.get("type")
+        if token_type != expected_type.value:
             raise InvalidTokenError(
-                f"Unexpected token type: got {token_type_raw!r}, expected {expected_type.value!r}"
+                f"Tipo de token incorrecto: esperado {expected_type.value}, obtenido {token_type}"
             )
 
-        try:
-            family_raw = payload.get("fam")
-            return TokenClaims(
-                subject=str(payload["sub"]),
-                jti=str(payload["jti"]),
-                issued_at=datetime.fromtimestamp(int(payload["iat"]), tz=UTC),
-                expires_at=datetime.fromtimestamp(int(payload["exp"]), tz=UTC),
-                token_type=TokenType(token_type_raw),
-                scopes=frozenset(payload.get("scopes") or []),
-                family_id=str(family_raw) if family_raw is not None else None,
-            )
-        except (KeyError, TypeError, ValueError) as exc:
-            raise InvalidTokenError(f"Malformed claims: {exc}") from exc
+        return TokenClaims(
+            subject=payload["sub"],
+            scopes=frozenset(payload.get("scopes", [])),
+            jti=payload["jti"],
+            token_type=TokenType(token_type),
+            issued_at=datetime.fromtimestamp(payload["iat"], tz=UTC),
+            expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            family_id=payload.get("fam"),
+        )
