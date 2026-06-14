@@ -23,7 +23,11 @@ from kosmo.application.features import (
     SuggestFeaturesUseCase,
 )
 from kosmo.application.projects import CreateProjectUseCase, GetProjectUseCase, ListProjectsUseCase
-from kosmo.application.requirements import GenerateEARSUseCase, SaveRequirementsUseCase
+from kosmo.application.requirements import (
+    GenerateEARSUseCase,
+    GetRequirementsUseCase,
+    SaveRequirementsUseCase,
+)
 from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
@@ -40,6 +44,7 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyDocumentRepository,
     SqlAlchemyFeatureRepository,
     SqlAlchemyProjectRepository,
+    SqlAlchemyRequirementRepository,
     SqlAlchemyUserRepository,
 )
 from kosmo.infrastructure.persistence.redis import (
@@ -86,6 +91,7 @@ class PipelineComponents:
     suggest_features_uc: SuggestFeaturesUseCase
     save_features_uc: SaveSelectedFeaturesUseCase
     generate_ears_uc: GenerateEARSUseCase
+    get_requirements_uc: GetRequirementsUseCase
     save_requirements_uc: SaveRequirementsUseCase
     create_project_uc: CreateProjectUseCase
     get_project_uc: GetProjectUseCase
@@ -196,6 +202,7 @@ def build_pipeline_components(
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
 
     if settings.llm_provider == "noop":
         llm_client: LLMClient = NoopLLMClient()
@@ -253,8 +260,13 @@ def build_pipeline_components(
         context_builder=context_builder,
         orchestrator=orchestrator,
         feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
     )
-    save_requirements_uc = SaveRequirementsUseCase(feature_repo=feature_repo)
+    get_requirements_uc = GetRequirementsUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+    )
+    save_requirements_uc = SaveRequirementsUseCase(requirement_repo=requirement_repo)
     create_project_uc = CreateProjectUseCase(project_repo=project_repo)
     get_project_uc = GetProjectUseCase(project_repo=project_repo)
     list_projects_uc = ListProjectsUseCase(project_repo=project_repo)
@@ -269,6 +281,7 @@ def build_pipeline_components(
         suggest_features_uc=suggest_features_uc,
         save_features_uc=save_features_uc,
         generate_ears_uc=generate_ears_uc,
+        get_requirements_uc=get_requirements_uc,
         save_requirements_uc=save_requirements_uc,
         create_project_uc=create_project_uc,
         get_project_uc=get_project_uc,

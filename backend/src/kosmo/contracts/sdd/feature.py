@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 
 
@@ -17,7 +16,6 @@ class Feature:
     project_id: ProjectId = field(default_factory=lambda: ProjectId(""))
     rationale: str = ""
     inferred_from: list[str] = field(default_factory=list)
-    requirements_document: RichTextDocument | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 

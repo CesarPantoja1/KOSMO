@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
-from kosmo.domain.sdd.document_converters import document_to_markdown
 from kosmo.infrastructure.persistence.postgres.models import FeatureModel
 
 
@@ -65,13 +64,6 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             return (max_number or 0) + 1
 
     def _to_entity(self, model: FeatureModel) -> Feature:
-        req_doc = None
-        if model.requirements_document:
-            from kosmo.domain.sdd.document_converters import markdown_to_document
-
-            md = model.requirements_document.get("markdown", "")
-            if md:
-                req_doc = markdown_to_document(md)
         return Feature(
             id=FeatureId(model.id),
             project_id=ProjectId(model.project_id),
@@ -81,16 +73,11 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             description=model.description,
             rationale=model.rationale,
             inferred_from=model.inferred_from if isinstance(model.inferred_from, list) else [],
-            requirements_document=req_doc,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
 
     def _to_model(self, feature: Feature) -> FeatureModel:
-        req_doc_data = None
-        if feature.requirements_document:
-            md = document_to_markdown(feature.requirements_document)
-            req_doc_data = {"markdown": md}
         return FeatureModel(
             id=str(feature.id),
             project_id=str(feature.project_id),
@@ -100,7 +87,6 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             description=feature.description,
             rationale=feature.rationale,
             inferred_from=feature.inferred_from,
-            requirements_document=req_doc_data,
         )
 
     def _update_model(self, model: FeatureModel, feature: Feature) -> None:
@@ -110,7 +96,4 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
         model.description = feature.description
         model.rationale = feature.rationale
         model.inferred_from = feature.inferred_from
-        if feature.requirements_document:
-            md = document_to_markdown(feature.requirements_document)
-            model.requirements_document = {"markdown": md}
         model.updated_at = datetime.now(UTC)

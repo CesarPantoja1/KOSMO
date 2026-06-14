@@ -517,7 +517,7 @@
     },
     {
       "name": "5. Requisitos EARS (Fase 3)",
-      "description": "Generación de requisitos EARS por feature. Cualquier feature existente puede generar requisitos.",
+      "description": "Generación de requisitos EARS por feature. Cualquier feature existente puede generar requisitos. Se guardan como blob markdown. El formato sigue la taxonomía EARS: Ubicuos, Eventos, Estado, Opcionales, Fallos, Complejos.",
       "item": [
         {
           "name": "5.1 Generar Requisitos EARS (IA)",
@@ -529,8 +529,7 @@
                   "if (pm.response.code === 200) {",
                   "  var body = pm.response.json();",
                   "  console.log('Requisitos generados para feature', body.feature_number);",
-                  "  console.log('Total requisitos:', body.requirements.length);",
-                  "  body.requirements.forEach(function(r) { console.log('  -', r.display_id, r.pattern); });",
+                  "  console.log('Total requisitos:', body.total);",
                   "} else {",
                   "  console.log('[ERROR]', pm.response.text());",
                   "}"
@@ -550,7 +549,33 @@
           }
         },
         {
-          "name": "5.2 Guardar Requisitos (edición manual)",
+          "name": "5.2 Obtener Requisitos (markdown)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var body = pm.response.json();",
+                  "  if (body.document_markdown) console.log('Markdown (' + body.document_markdown.length + ' chars)');",
+                  "} else if (pm.response.code === 404) {",
+                  "  console.log('[404] Sin requisitos para esta feature.');",
+                  "} else {",
+                  "  console.log('[ERROR]', pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements?project_id={{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements"], "query": [{ "key": "project_id", "value": "{{project_id}}" }] }
+          }
+        },
+        {
+          "name": "5.3 Guardar Requisitos (edición manual)",
           "event": [
             {
               "listen": "test",
@@ -572,7 +597,7 @@
               { "key": "Content-Type", "value": "application/json" },
               { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"markdown\": \"### Requisitos Ubicuos\\n\\n- REQ-1.1: El sistema shall gestionar los datos de forma segura. **Criterio**: Dado un usuario autenticado, Cuando accede a sus datos, Entonces los datos se muestran correctamente.\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"markdown\": \"### Requisitos Ubicuos\\n\\n- REQ-1.1: El sistema shall gestionar los datos de forma segura.\\n\\n### Requisitos Basados en Eventos\\n\\n- REQ-1.2: CUANDO el usuario envía una solicitud, El sistema shall procesar la solicitud.\"\n}" },
             "url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements"] }
           }
         }

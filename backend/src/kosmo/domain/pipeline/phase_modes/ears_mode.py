@@ -163,8 +163,8 @@ class EARSMode:
             quality_result = validate_ears_quality(requirements)
             leaks_result = detect_implementation_leaks(requirements)
 
-            all_errors = syntax_result.errors + quality_result.errors + leaks_result.errors
-            all_warnings = syntax_result.warnings + quality_result.warnings + leaks_result.warnings
+            all_errors = syntax_result.errors + quality_result.errors + leaks_result.error_messages
+            all_warnings = syntax_result.warnings + quality_result.warnings
 
             return ValidationResult(
                 is_valid=len(all_errors) == 0,

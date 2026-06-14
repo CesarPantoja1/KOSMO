@@ -77,7 +77,6 @@ class FeatureModel(Base):
     inferred_from: Mapped[dict[str, Any]] = mapped_column(
         pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
     )
-    requirements_document: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -89,23 +88,12 @@ class FeatureModel(Base):
 class RequirementModel(Base):
     __tablename__ = "requirements"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    feature_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    feature_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    requirement_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    pattern: Mapped[str] = mapped_column(String(32), nullable=False)
-    trigger: Mapped[str] = mapped_column(Text(), nullable=False)
-    system: Mapped[str] = mapped_column(String(255), nullable=False)
-    response: Mapped[str] = mapped_column(Text(), nullable=False)
-    source_statement: Mapped[str] = mapped_column(Text(), nullable=False)
-    rationale: Mapped[str] = mapped_column(Text(), nullable=False, default="")
-    traceability: Mapped[dict[str, Any]] = mapped_column(
-        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
-    )
-    acceptance_criteria: Mapped[dict[str, Any]] = mapped_column(
-        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
-    )
+    feature_id: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False)
+    markdown: Mapped[str] = mapped_column(Text(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 

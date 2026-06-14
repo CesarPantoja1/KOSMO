@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from kosmo.contracts.pipeline.phase_outputs import ValidationResult
 from kosmo.contracts.sdd.document import EARSPattern, EARSPattern_SYNTAX
-from kosmo.contracts.sdd.ears import EARSRequirement
 
 _UBIQUITOUS_RE = re.compile(
     r"^(el sistema|la aplicación|el sistema)\s+(shall|debe|deberá)\s+", re.IGNORECASE
@@ -25,18 +25,54 @@ _COMPLEX_RE = re.compile(
 )
 
 
-def validate_ears_syntax(requirements: list[EARSRequirement]) -> ValidationResult:
+def _get(req: Any, key: str, default: Any = "") -> Any:
+    if isinstance(req, dict):
+        return req.get(key, default)
+    return getattr(req, key, default)
+
+
+def _get_source_statement(req: Any) -> str:
+    return str(_get(req, "source_statement", ""))
+
+
+def _get_pattern(req: Any) -> EARSPattern | str:
+    val = _get(req, "pattern", "")
+    if isinstance(val, EARSPattern):
+        return val
+    try:
+        return EARSPattern(str(val))
+    except ValueError:
+        return str(val)
+
+
+def _get_display_id(req: Any) -> str:
+    if isinstance(req, dict):
+        fn = req.get("feature_number", 0)
+        rn = req.get("requirement_number", 0)
+        return f"REQ-{fn}.{rn}"
+    return str(_get(req, "display_id", "REQ-?.?"))
+
+
+def _get_acceptance_criteria(req: Any) -> list:
+    ac = _get(req, "acceptance_criteria", [])
+    if isinstance(ac, list):
+        return ac
+    return []
+
+
+def validate_ears_syntax(requirements: list[Any]) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
 
     for req in requirements:
-        stmt = req.source_statement
-        pattern = req.pattern
+        stmt = _get_source_statement(req)
+        pattern = _get_pattern(req)
+        display_id = _get_display_id(req)
 
         if pattern == EARSPattern.ubiquitous:
             if not _UBIQUITOUS_RE.match(stmt):
                 errors.append(
-                    f"{req.display_id}: Sintaxis ubiquitous incorrecta. "
+                    f"{display_id}: Sintaxis ubiquitous incorrecta. "
                     f"Esperado: '{EARSPattern_SYNTAX[EARSPattern.ubiquitous]}'. "
                     f"Obtenido: '{stmt[:80]}'"
                 )
@@ -44,35 +80,35 @@ def validate_ears_syntax(requirements: list[EARSRequirement]) -> ValidationResul
         elif pattern == EARSPattern.event_driven:
             if not _EVENT_DRIVEN_RE.match(stmt):
                 warnings.append(
-                    f"{req.display_id}: Posible sintaxis event-driven incorrecta. "
+                    f"{display_id}: Posible sintaxis event-driven incorrecta. "
                     f"Esperado inicio con 'CUANDO/al'. Obtenido: '{stmt[:80]}'"
                 )
 
         elif pattern == EARSPattern.state_driven:
             if not _STATE_DRIVEN_RE.match(stmt):
                 warnings.append(
-                    f"{req.display_id}: Posible sintaxis state-driven incorrecta. "
+                    f"{display_id}: Posible sintaxis state-driven incorrecta. "
                     f"Esperado inicio con 'MIENTRAS/durante'. Obtenido: '{stmt[:80]}'"
                 )
 
         elif pattern == EARSPattern.optional:
             if not _OPTIONAL_RE.match(stmt):
                 warnings.append(
-                    f"{req.display_id}: Posible sintaxis optional incorrecta. "
+                    f"{display_id}: Posible sintaxis optional incorrecta. "
                     f"Esperado inicio con 'DONDE/si'. Obtenido: '{stmt[:80]}'"
                 )
 
         elif pattern == EARSPattern.unwanted:
             if not _UNWANTED_RE.match(stmt):
                 warnings.append(
-                    f"{req.display_id}: Posible sintaxis unwanted incorrecta. "
+                    f"{display_id}: Posible sintaxis unwanted incorrecta. "
                     f"Esperado inicio con 'SI ... falla'. Obtenido: '{stmt[:80]}'"
                 )
 
         elif pattern == EARSPattern.complex:
             if not _COMPLEX_RE.match(stmt):
                 warnings.append(
-                    f"{req.display_id}: Posible sintaxis complex incorrecta. "
+                    f"{display_id}: Posible sintaxis complex incorrecta. "
                     f"Esperado inicio con 'MIENTRAS ... Y ...'. Obtenido: '{stmt[:80]}'"
                 )
 
@@ -83,7 +119,7 @@ def validate_ears_syntax(requirements: list[EARSRequirement]) -> ValidationResul
     )
 
 
-def validate_ears_quality(requirements: list[EARSRequirement]) -> ValidationResult:
+def validate_ears_quality(requirements: list[Any]) -> ValidationResult:
     errors: list[str] = []
     warnings: list[str] = []
 
@@ -94,15 +130,19 @@ def validate_ears_quality(requirements: list[EARSRequirement]) -> ValidationResu
     elif len(requirements) > 15:
         warnings.append(f"Se recomienda máximo 15 requisitos por feature, hay {len(requirements)}")
 
-    patterns_seen: set[EARSPattern] = set()
+    patterns_seen: set[str] = set()
     for req in requirements:
-        patterns_seen.add(req.pattern)
+        pattern = _get_pattern(req)
+        patterns_seen.add(str(pattern))
+        display_id = _get_display_id(req)
+        stmt = _get_source_statement(req)
+        ac = _get_acceptance_criteria(req)
 
-        if not req.source_statement.strip():
-            errors.append(f"{req.display_id}: source_statement vacío")
+        if not stmt.strip():
+            errors.append(f"{display_id}: source_statement vacío")
 
-        if not req.acceptance_criteria:
-            warnings.append(f"{req.display_id}: sin criterios de aceptación")
+        if not ac:
+            warnings.append(f"{display_id}: sin criterios de aceptación")
 
     if len(patterns_seen) < 4:
         warnings.append(

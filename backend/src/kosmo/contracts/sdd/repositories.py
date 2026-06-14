@@ -7,7 +7,6 @@ from kosmo.contracts.sdd.document import (
     ProjectStatus,
     RichTextDocument,
 )
-from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.project import Project
@@ -34,9 +33,8 @@ class FeatureRepository(Protocol):
 
 
 class RequirementRepository(Protocol):
-    async def by_feature_id(self, feature_id: FeatureId) -> list[EARSRequirement]: ...
-    async def save_many(self, requirements: list[EARSRequirement]) -> list[EARSRequirement]: ...
-    async def next_requirement_number(self, feature_id: FeatureId) -> int: ...
+    async def by_feature_id(self, feature_id: FeatureId) -> str | None: ...
+    async def save(self, feature_id: FeatureId, markdown: str) -> None: ...
 
 
 class DocumentRepository(Protocol):

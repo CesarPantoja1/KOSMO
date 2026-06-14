@@ -1,28 +1,16 @@
 from __future__ import annotations
 
-from kosmo.contracts.sdd.document import RichTextDocument
-from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-from kosmo.contracts.sdd.repositories import FeatureRepository
+from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.contracts.sdd.repositories import RequirementRepository
 
 
 class SaveRequirementsUseCase:
-    def __init__(self, feature_repo: FeatureRepository) -> None:
-        self._feature_repo = feature_repo
+    def __init__(self, requirement_repo: RequirementRepository) -> None:
+        self._requirement_repo = requirement_repo
 
     async def execute(
         self,
-        project_id: ProjectId,
         feature_id: FeatureId,
-        document: RichTextDocument,
+        markdown: str,
     ) -> None:
-        _ = project_id
-        feature = await self._feature_repo.by_id(feature_id)
-        if feature is None:
-            raise FeatureNotFoundError(
-                feature_id=str(feature_id),
-                instance=f"/features/{feature_id}",
-            )
-
-        feature.requirements_document = document
-        await self._feature_repo.save(feature)
+        await self._requirement_repo.save(feature_id, markdown)
