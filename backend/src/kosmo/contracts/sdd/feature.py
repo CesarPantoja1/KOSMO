@@ -10,11 +10,11 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 @dataclass
 class Feature:
     id: FeatureId
-    project_id: ProjectId
     number: int
     title: str
     slug: str
     description: str
+    project_id: ProjectId = field(default_factory=lambda: ProjectId(""))
     rationale: str = ""
     inferred_from: list[str] = field(default_factory=list)
     requirements_document: RichTextDocument | None = None
