@@ -1,8 +1,11 @@
 // Theme Provider
 export { ThemeProvider, useTheme } from '../../../app/providers/theme-provider';
 
-// Theme utilities
-export { useThemeVar, hslToRgb, useThemeHsl } from './useThemeVar';
-
 // Buttons
 export { ButtonSM, ButtonMD, ButtonLG } from './button';
+
+// icons
+export { default as Ai } from './icons/Ai';
+export { default as ArrowRight } from './icons/ArrowRight';
+export { default as Load } from './icons/Load';
+export { default as Close } from './icons/Close';

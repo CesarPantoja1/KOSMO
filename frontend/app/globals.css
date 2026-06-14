@@ -1,87 +1,80 @@
-@import 'tailwindcss/preflight';
-@import 'tailwindcss/utilities';
 @import 'tailwindcss';
-
-@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
 
 @theme {
 	/* =========================
-   * PRIMARY
+   * COLORS
    * ========================= */
-	--color-primary: #03593f;
-	--color-primary-hover: #003319;
-	--color-primary-active: #001900;
-	--color-primary-disabled: #03593f80;
 
-	/* =========================
-   * SNOW / BACKGROUND
-   * ========================= */
-	--color-snow: #fafafa;
-	--color-snow-hover: #d4d4d4;
-	--color-snow-active: #bababa;
-	--color-snow-disabled: #fafafa80;
+	/* base */
+	--color-base-50: #fcfcfc;
+	--color-base-100: #f1f2f4;
+	--color-base-200: #f2f2f2;
+	--color-base-300: #e8e8e8;
+	--color-base-600: #96989b;
+	--color-base-800: #8d8b8b;
+	--color-base-950: #0f172a;
 
-	/* =========================
-   * TEXT
-   * ========================= */
-	--color-text: #0f172a;
-	--color-text-hover: #000004;
-	--color-text-active: #000000;
-	--color-text-disabled: #0f172a80;
+	/* primary */
+	--color-primary-50: #ebf9f3;
+	--color-primary-100: #53a83e;
 
-	/* =========================
-   * SUCCESS
-   * ========================= */
-	--color-success: #10b981;
-	--color-success-hover: #00935b;
-	--color-success-active: #007941;
-	--color-success-disabled: #10b98180;
-
-	/* =========================
-   * WARNING
-   * ========================= */
-	--color-warning: #f59e0b;
-	--color-warning-hover: #cf7800;
-	--color-warning-active: #b55e00;
-	--color-warning-disabled: #f59e0b80;
-
-	/* =========================
-   * ERROR
-   * ========================= */
-	--color-error: #e11d48;
-	--color-error-hover: #bb0022;
-	--color-error-active: #a10008;
-	--color-error-disabled: #e11d4880;
-
-	/* =========================
-   * AI
-   * ========================= */
+	/* AI */
 	--color-ai: #6366f1;
-	--color-ai-hover: #3d40cb;
-	--color-ai-active: #2326b1;
-	--color-ai-disabled: #6366f180;
+
+	/* Status */
+	--color-status-success: #10b981;
+	--color-status-warning: #f59e0b;
+	--color-status-error: #e11d48;
+
+	/* Misc */
+	--color-light-yellow: #ffe1ad;
 
 	/* =========================
-   * MUTED
+   * SPACING
    * ========================= */
-	--color-muted: #96989b;
-	--color-muted-hover: #707275;
-	--color-muted-active: #56585b;
-	--color-muted-disabled: #96989b80;
+
+	--espaciado-xs: 3px;
+	--espaciado-sm: 8px;
+	--espaciado-md: 16px;
+	--espaciado-lg: 24px;
+	--espaciado-xl: 32px;
 
 	/* =========================
-   * BORDER
+   * BORDER RADIUS
    * ========================= */
-	--color-border: #e5e7eb;
-	--color-border-hover: #bfc1c5;
-	--color-border-active: #a5a7ab;
-	--color-border-disabled: #e5e7eb80;
+
+	--border-radius-rounded-none: 0;
+	--border-radius-rounded-sm: 2px;
+	--border-radius-rounded: 4px;
+	--border-radius-rounded-md: 6px;
+	--border-radius-rounded-lg: 8px;
+	--border-radius-rounded-xl: 12px;
+	--border-radius-rounded-full: 9999px;
 
 	/* =========================
-   * LIGHT STATES
+   * BORDER WIDTH
    * ========================= */
-	--color-success-light: #ebf9f3;
-	--color-warning-light: #ffe1ad;
+
+	--borders-thickness-border: 1px;
+	--borders-thickness-border-2: 2px;
+	--borders-thickness-border-4: 4px;
+	--borders-thickness-border-8: 8px;
+
+	/* =========================
+   * SHADOWS
+   * ========================= */
+
+	--shadows-shadow-offset-x: 0px;
+	--shadows-shadow-offset-y: 4px;
+	--shadows-shadow-blur: 8px;
+
+	--shadows-color-10: rgba(0, 0, 0, 0.1);
+	--shadows-color-20: rgba(0, 0, 0, 0.2);
+	--shadows-color-30: rgba(0, 0, 0, 0.3);
+	--shadows-color-40: rgba(0, 0, 0, 0.4);
+	--shadows-color-50: rgba(0, 0, 0, 0.5);
+	--shadows-color-60: rgba(0, 0, 0, 0.6);
 
 	--font-sans: 'Geist', sans-serif;
 	--font-mono: 'Geist Mono', monospace;
