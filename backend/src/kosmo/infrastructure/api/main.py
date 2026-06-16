@@ -23,6 +23,10 @@ from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
 
 _OPENAPI_TAGS = [
     {
+        "name": "health",
+        "description": "Verificacion de disponibilidad del servicio.",
+    },
+    {
         "name": "auth",
         "description": (
             "Flujo de autenticacion PKCE + OAuth 2.0. "
@@ -90,15 +94,20 @@ generacion de especificaciones de diseno tecnico (SDD) asistida por IA.
 ### Flujo SDD (Spec-Driven Development)
 
 ```
-1. POST /api/v1/projects                           -> Crear proyecto
-2. POST /api/v1/projects/{id}/discovery/generate    -> Generar documento de discovery
-3. PUT  /api/v1/projects/{id}/discovery              -> Guardar ediciones de discovery
-4. POST /api/v1/projects/{id}/features/generate     -> Generar 5 features (C01-C05)
-5. POST /api/v1/projects/{id}/features/suggest      -> Sugerir 3 features adicionales
-6. POST /api/v1/projects/{id}/features               -> Guardar features seleccionadas
-7. PATCH /api/v1/features/{id}/status                -> Aprobar feature (borrador -> aprobada)
-8. POST /api/v1/features/{id}/requirements/generate  -> Generar requisitos EARS por feature
-9. PUT  /api/v1/features/{id}/requirements            -> Guardar ediciones de requisitos
+ 1. POST /api/v1/projects                                -> Crear proyecto
+ 2. GET  /api/v1/projects                                -> Listar proyectos del usuario
+ 3. GET  /api/v1/projects/{id}                           -> Consultar proyecto
+ 4. POST /api/v1/projects/{id}/discovery/generate         -> Generar documento de discovery
+ 5. GET  /api/v1/projects/{id}/discovery                  -> Consultar discovery
+ 6. PUT  /api/v1/projects/{id}/discovery                  -> Guardar ediciones de discovery
+ 7. POST /api/v1/projects/{id}/features/generate          -> Generar 5 features (C01-C05)
+ 8. POST /api/v1/projects/{id}/features/suggest           -> Sugerir features adicionales
+ 9. POST /api/v1/projects/{id}/features                   -> Guardar features seleccionadas
+10. GET  /api/v1/projects/{id}/features                   -> Listar features
+11. GET  /api/v1/projects/{id}/features/{slug}            -> Obtener feature por slug
+12. POST /api/v1/features/{id}/requirements/generate       -> Generar requisitos EARS
+13. GET  /api/v1/features/{id}/requirements               -> Consultar requisitos
+14. PUT  /api/v1/features/{id}/requirements               -> Guardar ediciones de requisitos
 ```
 
 ### Seguridad
@@ -111,8 +120,13 @@ generacion de especificaciones de diseno tecnico (SDD) asistida por IA.
 
 ### Respuestas de error
 
-Todos los errores de autenticacion siguen el esquema `OAuthErrorResponse`
-(RFC 6749 section 5.2). Los errores de infraestructura usan `HttpErrorResponse`.
+- Los errores de autenticacion siguen el esquema `OAuthErrorResponse`
+  (RFC 6749 section 5.2).
+- Los errores de negocio usan `ProblemDetail` (RFC 7807) con URNs tipadas
+  (ej: ``urn:kosmo:projects:not-found``, ``urn:kosmo:features:not-approved``,
+  ``urn:kosmo:document:invalid-structure``, ``urn:kosmo:llm:invocation-error``).
+- Los errores de infraestructura usan `HttpErrorResponse`.
+- Errores de validacion Pydantic devuelven 422 con violaciones detalladas.
 """
 
 _SERVERS = [

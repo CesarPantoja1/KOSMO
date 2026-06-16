@@ -1,0 +1,2300 @@
+openapi: "3.0.3"
+
+info:
+  title: KOSMO API
+  version: "1.0.0"
+  description: |
+    KOSMO es una plataforma de agentes de IA con identidad centralizada que gestiona
+    el ciclo completo de especificaciones de diseño técnico (SDD) asistida por IA.
+
+    ## Flujo de autenticación (PKCE + OAuth 2.0)
+
+    ```
+    1. POST /api/v1/auth/register      → Crear cuenta
+    2. POST /api/v1/auth/authorize     → Obtener authorization_code (PKCE)
+    3. POST /api/v1/auth/token         → Intercambiar código por JWT pair
+    4. GET  /api/v1/auth/me            → Verificar identidad (Bearer token)
+    5. POST /api/v1/auth/refresh       → Renovar tokens antes de expirar
+    6. POST /api/v1/auth/logout        → Revocar sesión activa
+    ```
+
+    ## Flujo SDD (Spec-Driven Development)
+
+    ```
+    1. POST /api/v1/projects                              → Crear proyecto
+    2. POST /api/v1/projects/{id}/discovery/generate      → Generar documento de discovery
+    3. GET  /api/v1/projects/{id}/discovery               → Consultar discovery
+    4. PUT  /api/v1/projects/{id}/discovery               → Guardar ediciones de discovery
+    5. POST /api/v1/projects/{id}/features/generate       → Generar features (C01-C05)
+    6. POST /api/v1/projects/{id}/features/suggest        → Sugerir features adicionales
+    7. POST /api/v1/projects/{id}/features                → Guardar features seleccionadas
+    8. POST /api/v1/features/{id}/requirements/generate   → Generar requisitos EARS
+    9. GET  /api/v1/features/{id}/requirements            → Consultar requisitos
+    10.PUT  /api/v1/features/{id}/requirements            → Guardar ediciones de requisitos
+    ```
+
+    ## Seguridad
+
+    - Tokens firmados con **RS256** (par de claves RSA 2048-bit).
+    - Contraseñas hasheadas con **Argon2id** (OWASP 2025).
+    - Refresh tokens con **Token Rotation**: cada uso emite un par nuevo y revoca el anterior.
+    - Rate limiting por IP en todos los endpoints sensibles.
+    - Secrets cifrados con **Fernet** (AES-128-CBC + HMAC-SHA256).
+
+    ## Respuestas de error
+
+    - Los errores de autenticación siguen el esquema `OAuthErrorResponse` (RFC 6749 §5.2).
+    - Los errores de negocio usan `ProblemDetail` (RFC 7807) con URNs tipadas.
+    - Los errores de infraestructura usan `HttpErrorResponse`.
+  contact:
+    name: Equipo KOSMO
+    email: dev@kosmo.app
+    url: https://github.com/CesarPantoja1/KOSMO
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local — desarrollo en máquina del programador
+  - url: https://api-dev.kosmo.app
+    description: Desarrollo — entorno de integración continua
+  - url: https://api.kosmo.app
+    description: Producción — tráfico real de usuarios
+
+tags:
+  - name: health
+    description: Verificación de disponibilidad del servicio.
+  - name: auth
+    description: |
+      Flujo de autenticación PKCE + OAuth 2.0. Los endpoints siguen el estándar
+      RFC 6749/7636: el cliente genera un `code_verifier` efímero, solicita un
+      `authorization_code` en `/authorize`, lo intercambia por tokens JWT en
+      `/token` y los renueva con `/refresh`. Todos los endpoints protegidos
+      requieren `Authorization: Bearer <access_token>`.
+  - name: projects
+    description: Gestión de proyectos KOSMO. Crear, listar y consultar proyectos.
+  - name: discovery
+    description: Fase de Descubrimiento. Generación, consulta y edición del documento de discovery.
+  - name: features
+    description: Fase de Características. Generación, sugerencia y aprobación de features.
+  - name: requirements
+    description: Fase de Requisitos EARS. Generación, consulta y edición de requisitos por feature.
+  - name: schemas
+    description: |
+      Introspección de contratos. Permite al Frontend consultar el JSON Schema
+      de cualquier DTO expuesto por la API para generación dinámica de formularios,
+      validaciones y tipos TypeScript.
+
+components:
+  schemas:
+    # ── Enums ──────────────────────────────────────────────────────────────────
+
+    CodeChallengeMethod:
+      type: string
+      enum: [S256]
+      description: Método de transformación PKCE. Solo se acepta S256 (SHA-256).
+
+    GrantType:
+      type: string
+      enum: [authorization_code]
+      description: Tipo de concesión OAuth 2.0 soportado en el endpoint `/token`.
+
+    RefreshGrantType:
+      type: string
+      enum: [refresh_token]
+      description: Tipo de concesión para renovar un par de tokens mediante refresh token.
+
+    TokenType:
+      type: string
+      enum: [Bearer]
+      description: Esquema de autenticación que debe adjuntarse en el header Authorization.
+
+    ProjectPhase:
+      type: string
+      enum: [descubrimiento, caracteristicas, requisitos, modelo, implementacion]
+      description: Fase actual del proyecto en el pipeline SDD.
+
+    ProjectStatus:
+      type: string
+      enum: [en_proceso, finalizado]
+      description: Estado global del proyecto.
+
+    # ── Auth Requests ──────────────────────────────────────────────────────────
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Dirección de correo electrónico del nuevo usuario. Debe ser única en el sistema.
+          example: usuario@ejemplo.com
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Contraseña en texto plano. El servidor la procesa con Argon2id antes de persistirla.
+          example: M1ContraseñaSegura!
+
+    AuthorizeRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, code_challenge]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email del usuario que intenta autenticarse.
+          example: usuario@ejemplo.com
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Contraseña en texto plano del usuario.
+          example: M1ContraseñaSegura!
+        code_challenge:
+          type: string
+          minLength: 43
+          maxLength: 128
+          description: Hash SHA-256 del `code_verifier`, codificado en Base64URL sin padding.
+          example: E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+        code_challenge_method:
+          $ref: "#/components/schemas/CodeChallengeMethod"
+        scopes:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Permisos solicitados para la sesión. Valores reconocidos — profile:read, profile:write, agent:run, agent:read, admin.
+          example: ["profile:read", "agent:run"]
+
+    TokenExchangeRequest:
+      type: object
+      additionalProperties: false
+      required: [grant_type, code, code_verifier]
+      properties:
+        grant_type:
+          $ref: "#/components/schemas/GrantType"
+        code:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Código de autorización opaco devuelto por `/authorize`. Es de un solo uso y expira en 5 minutos.
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+        code_verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+          description: Secreto original generado por el cliente antes de calcular el challenge.
+          example: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+
+    TokenRefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [grant_type, refresh_token]
+      properties:
+        grant_type:
+          $ref: "#/components/schemas/RefreshGrantType"
+        refresh_token:
+          type: string
+          minLength: 1
+          description: JWT de tipo refresh emitido previamente. Es de un solo uso; el servidor rota el par.
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJqdGkiOiJydGktMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJ0eXAiOiJyZWZyZXNoIn0.SIGNATURE
+
+    LogoutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        refresh_token:
+          type: string
+          nullable: true
+          description: JWT de tipo refresh a revocar junto con el access token. Opcional pero recomendado.
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJqdGkiOiJydGktMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJ0eXAiOiJyZWZyZXNoIn0.SIGNATURE
+
+    # ── Auth Responses ─────────────────────────────────────────────────────────
+
+    AuthorizationCodeResponse:
+      type: object
+      required: [authorization_code, expires_in]
+      properties:
+        authorization_code:
+          type: string
+          description: Código de autorización opaco de un solo uso vinculado al code_verifier.
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+        expires_in:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: Segundos restantes hasta que el código expire. Máximo 600 (10 min).
+          example: 300
+
+    TokenView:
+      type: object
+      required: [token, jti, expires_at]
+      properties:
+        token:
+          type: string
+          description: Token JWT firmado con RS256. Incluye claims estándar (sub, iat, exp, jti) más claims propietarios.
+          example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJqdGkiOiJhdGktMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJ0eXAiOiJhY2Nlc3MiLCJzY29wZXMiOlsicHJvZmlsZTpyZWFkIl0sImlhdCI6MTc0NjE0MDAwMCwiZXhwIjoxNzQ2MTQwOTAwfQ.SIGNATURE
+        jti:
+          type: string
+          description: JWT ID — identificador único del token usado como clave en Redis para la lista de revocación.
+          example: ati-01HXYAZABCDEFGHIJKLMNOP
+        expires_at:
+          type: string
+          format: date-time
+          description: Timestamp ISO-8601 UTC en que el token expira. Access token TTL de 15 min; refresh token TTL de 7 días.
+          example: "2025-12-31T23:59:59Z"
+
+    TokenPairResponse:
+      type: object
+      required: [access, refresh, token_type]
+      properties:
+        access:
+          $ref: "#/components/schemas/TokenView"
+        refresh:
+          $ref: "#/components/schemas/TokenView"
+        token_type:
+          $ref: "#/components/schemas/TokenType"
+
+    PrincipalView:
+      type: object
+      required: [subject, scopes]
+      properties:
+        subject:
+          type: string
+          description: Identificador opaco del usuario (claim `sub` del JWT). Formato usr- + ULID.
+          example: usr-01HXYAZABCDEFGHIJKLMNOP
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Permisos concedidos en esta sesión, ordenados alfabéticamente.
+          example: ["agent:run", "profile:read"]
+
+    UserPublic:
+      type: object
+      required: [id, email, created_at]
+      properties:
+        id:
+          type: string
+          description: Identificador único del usuario. Formato usr- + ULID de 26 caracteres.
+          example: usr-01HXYAZABCDEFGHIJKLMNOP
+        email:
+          type: string
+          format: email
+          description: Dirección de correo verificada y normalizada.
+          example: usuario@ejemplo.com
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp ISO-8601 UTC de creación de la cuenta.
+          example: "2025-01-15T10:30:00Z"
+
+    # ── Error Responses ────────────────────────────────────────────────────────
+
+    OAuthErrorResponse:
+      type: object
+      required: [error, error_description]
+      properties:
+        error:
+          type: string
+          description: Código de error máquina-legible según OAuth 2.0 RFC 6749. Valores comunes — invalid_grant, invalid_token, account_locked, email_already_registered.
+          example: invalid_grant
+        error_description:
+          type: string
+          description: Descripción legible por humanos del error para logging y debugging.
+          example: Credenciales inválidas
+
+    HttpErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Mensaje descriptivo del error de infraestructura.
+          example: Error interno del servidor. Por favor contacte al soporte.
+
+    Violation:
+      type: object
+      required: [loc, msg]
+      properties:
+        loc:
+          type: array
+          items:
+            type: string
+          description: Ruta JSON al campo que falló la validación (ej. ["body", "email"]).
+          example: ["body", "name"]
+        msg:
+          type: string
+          description: Mensaje descriptivo de la violación.
+          example: El campo 'name' es obligatorio
+        input:
+          description: Valor recibido que causó la violación.
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail, instance, trace_id]
+      properties:
+        type:
+          type: string
+          description: URN tipada del error. Sirve para switch en la UI.
+          example: urn:kosmo:projects:not-found
+        title:
+          type: string
+          description: Mensaje corto traducible para banner de error.
+          example: Proyecto no encontrado
+        status:
+          type: integer
+          description: Código HTTP de la respuesta.
+          example: 404
+        detail:
+          type: string
+          description: Descripción larga para tooltip o log.
+          example: El proyecto prj_01KTA no existe
+        instance:
+          type: string
+          description: Ruta exacta que originó el error.
+          example: /api/v1/projects/prj_01KTA
+        trace_id:
+          type: string
+          description: Identificador de correlación (mismo que header X-Trace-Id). Debe mostrarse al usuario.
+          example: "01KT05JRA7466PPYQXYTX"
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
+          description: Lista de violaciones de validación con ubicación, mensaje y valor recibido.
+
+    # ── Project DTOs ───────────────────────────────────────────────────────────
+
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [name, description, owner_id]
+      properties:
+        name:
+          type: string
+          description: Nombre descriptivo del proyecto.
+          example: Plataforma de E-Commerce
+        description:
+          type: string
+          description: Descripción detallada del alcance y objetivos del proyecto.
+          example: Sistema de comercio electrónico con catálogo de productos, carrito de compras y pasarela de pago integrada.
+        owner_id:
+          type: string
+          description: Identificador del usuario propietario del proyecto (usr- + ULID).
+          example: usr-01HXYAZABCDEFGHIJKLMNOP
+
+    ProjectResponse:
+      type: object
+      required: [id, name, slug, description, owner_id, current_phase, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          description: Identificador único del proyecto (prj_ + ULID).
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+        name:
+          type: string
+          description: Nombre descriptivo del proyecto.
+          example: Plataforma de E-Commerce
+        slug:
+          type: string
+          description: Slug URL-amigable generado a partir del nombre.
+          example: plataforma-de-ecommerce
+        description:
+          type: string
+          description: Descripción detallada del proyecto.
+          example: Sistema de comercio electrónico con catálogo de productos, carrito de compras y pasarela de pago integrada.
+        owner_id:
+          type: string
+          description: Identificador del usuario propietario.
+          example: usr-01HXYAZABCDEFGHIJKLMNOP
+        current_phase:
+          $ref: "#/components/schemas/ProjectPhase"
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp ISO-8601 UTC de creación del proyecto.
+          example: "2025-06-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp ISO-8601 UTC de la última modificación.
+          example: "2025-06-15T10:30:00Z"
+
+    # ── Discovery DTOs ─────────────────────────────────────────────────────────
+
+    SaveDiscoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [markdown]
+      properties:
+        markdown:
+          type: string
+          description: Contenido del documento de discovery en formato Markdown.
+          example: |
+            # Documento de Descubrimiento
+
+            ## Propósito del Sistema
+            El sistema tiene como objetivo...
+
+    DiscoveryDocumentResponse:
+      type: object
+      required: [document_markdown]
+      properties:
+        document_markdown:
+          type: string
+          description: Contenido completo del documento de discovery en formato Markdown estructurado.
+          example: |
+            # Documento de Descubrimiento
+
+            ## Propósito del Sistema
+            Proveer una plataforma de comercio electrónico...
+
+    DiscoverySaveResponse:
+      type: object
+      required: [project_id, message]
+      properties:
+        project_id:
+          type: string
+          description: Identificador del proyecto cuyo discovery fue guardado.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+        message:
+          type: string
+          description: Confirmación de la operación.
+          example: ok
+
+    # ── Feature DTOs ───────────────────────────────────────────────────────────
+
+    FeatureItem:
+      type: object
+      required: [display_id, title, slug, description]
+      properties:
+        display_id:
+          type: string
+          description: Identificador de presentación de la feature (formato C01-C99).
+          example: C01
+        title:
+          type: string
+          description: Título breve de la feature.
+          example: Catálogo de productos
+        slug:
+          type: string
+          description: Slug URL-amigable generado a partir del título.
+          example: catalogo-de-productos
+        description:
+          type: string
+          description: Descripción detallada de la funcionalidad propuesta.
+          example: Permitir a los usuarios navegar y buscar productos por categoría, precio y disponibilidad.
+
+    FeatureDetail:
+      type: object
+      required: [id, display_id, number, title, slug, description, rationale, inferred_from, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          description: Identificador único de la feature (feat_ + ULID).
+          example: feat-01HXYAZABCDEFGHIJKLMNOP
+        display_id:
+          type: string
+          description: Identificador de presentación (formato C01-C99).
+          example: C01
+        number:
+          type: integer
+          description: Número secuencial de la feature dentro del proyecto.
+          example: 1
+        title:
+          type: string
+          description: Título breve de la feature.
+          example: Catálogo de productos
+        slug:
+          type: string
+          description: Slug URL-amigable.
+          example: catalogo-de-productos
+        description:
+          type: string
+          description: Descripción detallada de la funcionalidad.
+          example: Permitir a los usuarios navegar y buscar productos por categoría, precio y disponibilidad.
+        rationale:
+          type: string
+          description: Justificación de negocio para la feature.
+          example: El catálogo es el punto de entrada principal para la experiencia de compra del usuario.
+        inferred_from:
+          type: array
+          items:
+            type: string
+          description: Fragmentos del documento de discovery que fundamentan esta feature.
+          example: ["El sistema debe permitir explorar productos", "Se requiere búsqueda por categoría"]
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp ISO-8601 UTC de creación.
+          example: "2025-06-15T10:35:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp ISO-8601 UTC de la última modificación.
+          example: "2025-06-15T10:35:00Z"
+
+    FeatureListResponse:
+      type: object
+      required: [features, total]
+      properties:
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeatureItem"
+        total:
+          type: integer
+          description: Número total de features en la lista.
+          example: 5
+
+    SaveSelectedFeaturesRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, selected_suggestions]
+      properties:
+        project_id:
+          type: string
+          description: Identificador del proyecto al que pertenecen las features.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+        selected_suggestions:
+          type: array
+          items:
+            type: object
+            properties:
+              number:
+                type: integer
+                description: Número secuencial de la sugerencia.
+                example: 1
+              title:
+                type: string
+                description: Título de la feature sugerida.
+                example: Catálogo de productos
+              description:
+                type: string
+                description: Descripción de la feature.
+                example: Permitir a los usuarios navegar productos.
+              rationale:
+                type: string
+                description: Justificación de negocio.
+                example: Punto de entrada principal para la experiencia de compra.
+              inferred_from:
+                type: array
+                items:
+                  type: string
+                description: Fragmentos del discovery que fundamentan esta feature.
+                example: ["El sistema debe permitir explorar productos"]
+          description: Lista de features sugeridas que el usuario selecciona para aprobar.
+
+    SuggestedFeatureItem:
+      type: object
+      required: [number, display_id, title, description, rationale, inferred_from]
+      properties:
+        number:
+          type: integer
+          description: Número secuencial de la sugerencia.
+          example: 6
+        display_id:
+          type: string
+          description: Identificador de presentación (formato C06-C99).
+          example: C06
+        title:
+          type: string
+          description: Título de la feature sugerida.
+        description:
+          type: string
+          description: Descripción detallada de la funcionalidad propuesta.
+        rationale:
+          type: string
+          description: Justificación de negocio para sugerir esta feature.
+        inferred_from:
+          type: array
+          items:
+            type: string
+          description: Fragmentos del discovery que fundamentan la sugerencia.
+
+    SuggestFeaturesResponse:
+      type: object
+      required: [suggestions, excluded_titles, domain_inferred]
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SuggestedFeatureItem"
+          description: Features sugeridas por el agente de IA.
+        excluded_titles:
+          type: array
+          items:
+            type: string
+          description: Títulos de features ya existentes que fueron excluidos de la sugerencia.
+          example: ["Catálogo de productos", "Carrito de compras"]
+        domain_inferred:
+          type: string
+          description: Dominio inferido por el agente a partir del discovery.
+          example: comercio-electronico
+
+    # ── Requirements DTOs ──────────────────────────────────────────────────────
+
+    GenerateRequirementsRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id]
+      properties:
+        project_id:
+          type: string
+          description: Identificador del proyecto padre (prj_ + ULID).
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+
+    SaveRequirementsRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, markdown]
+      properties:
+        project_id:
+          type: string
+          description: Identificador del proyecto padre.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+        markdown:
+          type: string
+          description: Contenido de los requisitos en formato Markdown estructurado según EARS.
+          example: |
+            # Requisitos EARS — Catálogo de productos
+
+            ## Requisitos Ubicuos
+            - El sistema shall mostrar una lista paginada de productos.
+
+    GenerateRequirementsResponse:
+      type: object
+      required: [feature_id, feature_number, requirements_markdown, total]
+      properties:
+        feature_id:
+          type: string
+          description: Identificador de la feature para la que se generaron requisitos.
+          example: feat-01HXYAZABCDEFGHIJKLMNOP
+        feature_number:
+          type: integer
+          description: Número secuencial de la feature dentro del proyecto.
+          example: 1
+        requirements_markdown:
+          type: string
+          description: Requisitos EARS generados en formato Markdown estructurado.
+          example: |
+            # Requisitos EARS — Catálogo de productos
+
+            ## Requisitos Ubicuos
+            - El sistema shall mostrar una lista paginada de productos.
+            - El sistema shall permitir filtrar productos por categoría.
+
+            ## Requisitos Basados en Eventos
+            - CUANDO el usuario selecciona una categoría, el sistema shall filtrar la lista de productos.
+        total:
+          type: integer
+          description: Cantidad total de requisitos EARS generados.
+          example: 8
+
+    RequirementsDocumentResponse:
+      type: object
+      required: [document_markdown]
+      properties:
+        document_markdown:
+          type: string
+          description: Contenido completo del documento de requisitos en formato Markdown.
+          example: |
+            # Requisitos EARS — Catálogo de productos
+
+            ## Requisitos Ubicuos
+            - El sistema shall mostrar una lista paginada de productos.
+
+    RequirementsSaveResponse:
+      type: object
+      required: [feature_id, message]
+      properties:
+        feature_id:
+          type: string
+          description: Identificador de la feature cuyos requisitos fueron guardados.
+          example: feat-01HXYAZABCDEFGHIJKLMNOP
+        message:
+          type: string
+          description: Confirmación de la operación.
+          example: ok
+
+    # ── Schemas DTOs ───────────────────────────────────────────────────────────
+
+    SchemaListResponse:
+      type: object
+      required: [schemas]
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          description: Lista alfabética de nombres de DTOs disponibles para introspección.
+          example: ["AuthorizeRequest", "AuthorizationCodeResponse", "LogoutRequest", "RegisterRequest", "TokenExchangeRequest", "TokenRefreshRequest", "TokenPairResponse", "PrincipalView", "UserPublic", "OAuthErrorResponse"]
+
+    # ── Health ─────────────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: Estado del servicio.
+          example: ok
+
+  # ── Security Schemes ─────────────────────────────────────────────────────────
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT de acceso emitido por `/token` o `/refresh`.
+        Formato del header: `Authorization: Bearer <access_token>`
+
+  # ── Reusable Responses ───────────────────────────────────────────────────────
+
+  responses:
+    Unauthorized:
+      description: |
+        El token de acceso no fue proporcionado, está mal formado, tiene una firma
+        inválida, ha expirado o ha sido revocado. El cliente debe reautenticarse
+        mediante el flujo PKCE.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OAuthErrorResponse"
+          example:
+            error: invalid_token
+            error_description: El access token presentado es inválido o ha expirado
+
+    Forbidden:
+      description: |
+        El token es válido pero el principal no posee los scopes requeridos para
+        acceder al recurso solicitado. Verificar los scopes concedidos en `/me`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpErrorResponse"
+          example:
+            detail: No tienes permisos suficientes para realizar esta acción.
+
+    InternalServerError:
+      description: |
+        Error inesperado en el servidor. Se registra automáticamente en el sistema
+        de observabilidad (Logfire/OTEL). El cliente debe implementar retry con
+        back-off exponencial y notificar al equipo de soporte si el error persiste.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HttpErrorResponse"
+          example:
+            detail: Error interno del servidor. Por favor contacte al soporte.
+
+    ValidationError:
+      description: |
+        El cuerpo de la petición no cumple con el esquema esperado. El servidor
+        rechaza campos desconocidos (`additionalProperties: false`) y valida tipos,
+        formatos y restricciones de cada campo.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+          example:
+            type: urn:kosmo:validation:error
+            title: Error de validación
+            status: 422
+            detail: El cuerpo de la petición contiene errores de validación
+            instance: /api/v1/auth/register
+            trace_id: "01KT05JRA7466PPYQXYTX"
+            violations:
+              - loc: ["body", "email"]
+                msg: "value is not a valid email address: El email no tiene un formato válido"
+                input: "no-es-un-email"
+              - loc: ["body", "password"]
+                msg: "ensure this value has at least 12 characters"
+                input: "corta"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PATHS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+paths:
+  # ── Health ───────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [health]
+      summary: Verificar disponibilidad del servicio
+      description: Endpoint de health check sin autenticación. Devuelve el estado del servidor.
+      operationId: health_check
+      responses:
+        "200":
+          description: Servicio operativo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Auth ─────────────────────────────────────────────────────────────────────
+
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Registrar nuevo usuario
+      description: |
+        Crea una nueva cuenta de usuario en KOSMO. La contraseña se hashea con
+        **Argon2id** (OWASP 2025) antes de persistirse. Si el email ya existe
+        en el sistema se devuelve `409 Conflict`.
+
+        **Rate limit:** 3 peticiones / IP / ventana.
+      operationId: register_user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              email: usuario@ejemplo.com
+              password: M1ContraseñaSegura!
+      responses:
+        "201":
+          description: Cuenta creada exitosamente. Devuelve los datos públicos del usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPublic"
+              example:
+                id: usr-01HXYAZABCDEFGHIJKLMNOP
+                email: usuario@ejemplo.com
+                created_at: "2025-01-15T10:30:00Z"
+        "409":
+          description: El email ya está registrado en el sistema.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: email_already_registered
+                error_description: Email ya registrado
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          description: Rate limit excedido por IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: rate_limit_exceeded
+                error_description: Demasiadas peticiones. Intente más tarde.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/auth/authorize:
+    post:
+      tags: [auth]
+      summary: Iniciar autenticación PKCE — obtener código de autorización
+      description: |
+        Valida las credenciales del usuario e inicia el flujo PKCE. Si son correctas,
+        emite un `authorization_code` de un solo uso (TTL: 5 min) vinculado al
+        `code_challenge` enviado.
+
+        Tras **10 intentos fallidos consecutivos** en 15 minutos la cuenta se bloquea
+        temporalmente y se responde con `429` incluyendo el header `Retry-After`.
+
+        **Rate limit:** 10 peticiones / IP / ventana.
+      operationId: authorize_pkce
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeRequest"
+            example:
+              email: usuario@ejemplo.com
+              password: M1ContraseñaSegura!
+              code_challenge: E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+              code_challenge_method: S256
+              scopes: ["profile:read", "agent:run"]
+      responses:
+        "201":
+          description: Código de autorización emitido. Usar en `POST /token` antes de que expire.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorizationCodeResponse"
+              example:
+                authorization_code: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+                expires_in: 300
+        "401":
+          description: Credenciales inválidas (email no encontrado o contraseña incorrecta).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: invalid_grant
+                error_description: Credenciales inválidas
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          description: |
+            Cuenta bloqueada por intentos fallidos excesivos.
+            El header `Retry-After` indica los segundos restantes de bloqueo.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Segundos restantes hasta que la cuenta se desbloquee.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: account_locked
+                error_description: Cuenta bloqueada. Intente de nuevo en 300 segundos.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/auth/token:
+    post:
+      tags: [auth]
+      summary: Intercambiar código de autorización por par de tokens JWT
+      description: |
+        Completa el flujo PKCE: valida el `code_verifier` contra el `code_challenge`
+        almacenado, consume el `authorization_code` (lo invalida para usos futuros)
+        y emite un par de tokens JWT firmados con RS256.
+
+        - **Access token:** TTL de 15 minutos. Uso: header `Authorization: Bearer`.
+        - **Refresh token:** TTL de 7 días. Uso: endpoint `/refresh`.
+
+        **Rate limit:** 5 peticiones / IP / ventana.
+      operationId: token_exchange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenExchangeRequest"
+            example:
+              grant_type: authorization_code
+              code: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+              code_verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+      responses:
+        "200":
+          description: Par de tokens JWT emitido exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPairResponse"
+              example:
+                access:
+                  token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AifQ.SIGNATURE
+                  jti: ati-01HXYAZABCDEFGHIJKLMNOP
+                  expires_at: "2025-12-31T00:15:00Z"
+                refresh:
+                  token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AifQ.SIGNATURE
+                  jti: rti-01HXYAZABCDEFGHIJKLMNOP
+                  expires_at: "2026-01-07T00:00:00Z"
+                token_type: Bearer
+        "400":
+          description: Código inválido, expirado, ya consumido o `code_verifier` que no satisface el `code_challenge`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: invalid_grant
+                error_description: Código de autorización inválido o expirado
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          description: Rate limit excedido por IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: rate_limit_exceeded
+                error_description: Demasiadas peticiones. Intente más tarde.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Renovar par de tokens usando refresh token
+      description: |
+        Implementa **Token Rotation**: consume el refresh token presentado, lo revoca
+        en Redis y emite un par nuevo. Si se detecta reutilización del mismo refresh
+        token (posible robo de sesión), **toda la familia de tokens** queda revocada y
+        el usuario debe reautenticarse.
+
+        **Rate limit:** 30 peticiones / IP / ventana.
+      operationId: refresh_token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRefreshRequest"
+            example:
+              grant_type: refresh_token
+              refresh_token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJqdGkiOiJydGktMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJ0eXAiOiJyZWZyZXNoIn0.SIGNATURE
+      responses:
+        "200":
+          description: Par de tokens renovado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPairResponse"
+              example:
+                access:
+                  token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.NEW.SIGNATURE
+                  jti: ati-02HXYAZABCDEFGHIJKLMNOP
+                  expires_at: "2025-12-31T01:15:00Z"
+                refresh:
+                  token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.NEW.SIGNATURE
+                  jti: rti-02HXYAZABCDEFGHIJKLMNOP
+                  expires_at: "2026-01-14T00:00:00Z"
+                token_type: Bearer
+        "401":
+          description: |
+            Refresh token inválido, expirado, revocado o reutilizado.
+            En caso de reutilización, toda la familia de sesiones queda invalidada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                expirado:
+                  summary: Token expirado
+                  value:
+                    error: invalid_grant
+                    error_description: Refresh token expirado
+                reutilizado:
+                  summary: Token reutilizado (posible ataque)
+                  value:
+                    error: invalid_grant
+                    error_description: Refresh token reusado, sesión revocada
+                revocado:
+                  summary: Token revocado manualmente
+                  value:
+                    error: invalid_grant
+                    error_description: Refresh token revocado
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          description: Rate limit excedido por IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: rate_limit_exceeded
+                error_description: Demasiadas peticiones. Intente más tarde.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Obtener identidad del usuario autenticado
+      description: |
+        Decodifica y verifica el `access_token` del header `Authorization: Bearer`.
+        Devuelve el `subject` (ID del usuario) y los `scopes` de la sesión activa.
+        La verificación es completamente local contra la clave pública RSA y la
+        lista de revocación en Redis (sin acceso a base de datos).
+      operationId: get_principal
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Identidad verificada del token presentado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrincipalView"
+              example:
+                subject: usr-01HXYAZABCDEFGHIJKLMNOP
+                scopes: ["agent:run", "profile:read"]
+        "401":
+          description: Token ausente, mal formado, con firma inválida, expirado o revocado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                sin_token:
+                  summary: Header Authorization ausente
+                  value:
+                    error: missing_token
+                    error_description: Se requiere el header Authorization Bearer token
+                token_expirado:
+                  summary: Token expirado
+                  value:
+                    error: invalid_token
+                    error_description: El access token ha expirado
+                token_revocado:
+                  summary: Token revocado
+                  value:
+                    error: invalid_token
+                    error_description: El token ha sido revocado
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Cerrar sesión y revocar tokens activos
+      description: |
+        Revoca el `access_token` del header `Authorization: Bearer` y, opcionalmente,
+        el `refresh_token` del body. Ambos tokens quedan invalidados en Redis hasta
+        su expiración natural. Devuelve `204 No Content` en éxito.
+
+        **Rate limit:** 20 peticiones / IP / ventana.
+      operationId: logout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+            example:
+              refresh_token: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJqdGkiOiJydGktMDFIWFlaQVpCQ0RFRkdISUpLTE1OT1AiLCJ0eXAiOiJyZWZyZXNoIn0.SIGNATURE
+      responses:
+        "204":
+          description: Sesión cerrada exitosamente. No se devuelve body.
+        "401":
+          description: Token ausente, mal formado, expirado o ya revocado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: invalid_token
+                error_description: El access token presentado es inválido o ha expirado
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          description: Rate limit excedido por IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: rate_limit_exceeded
+                error_description: Demasiadas peticiones. Intente más tarde.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Projects ─────────────────────────────────────────────────────────────────
+
+  /api/v1/projects:
+    post:
+      tags: [projects]
+      summary: Crear nuevo proyecto
+      description: Crea un proyecto KOSMO con nombre, descripción y propietario. El sistema genera automáticamente un slug URL-amigable y asigna el proyecto a la fase inicial de descubrimiento.
+      operationId: create_project
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+            example:
+              name: Plataforma de E-Commerce
+              description: Sistema de comercio electrónico con catálogo de productos, carrito de compras y pasarela de pago integrada.
+              owner_id: usr-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "201":
+          description: Proyecto creado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponse"
+              example:
+                id: prj-01HXYAZABCDEFGHIJKLMNOP
+                name: Plataforma de E-Commerce
+                slug: plataforma-de-ecommerce
+                description: Sistema de comercio electrónico con catálogo de productos, carrito de compras y pasarela de pago integrada.
+                owner_id: usr-01HXYAZABCDEFGHIJKLMNOP
+                current_phase: descubrimiento
+                status: en_proceso
+                created_at: "2025-06-15T10:30:00Z"
+                updated_at: "2025-06-15T10:30:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    get:
+      tags: [projects]
+      summary: Listar proyectos del usuario
+      description: Devuelve todos los proyectos asociados al `owner_id` especificado. El parámetro es obligatorio y debe ser un identificador de usuario válido (usr- + ULID).
+      operationId: list_projects
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: owner_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Identificador del usuario propietario (usr- + ULID).
+          example: usr-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Lista de proyectos del usuario.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectResponse"
+              example:
+                - id: prj-01HXYAZABCDEFGHIJKLMNOP
+                  name: Plataforma de E-Commerce
+                  slug: plataforma-de-ecommerce
+                  description: Sistema de comercio electrónico con catálogo de productos.
+                  owner_id: usr-01HXYAZABCDEFGHIJKLMNOP
+                  current_phase: descubrimiento
+                  status: en_proceso
+                  created_at: "2025-06-15T10:30:00Z"
+                  updated_at: "2025-06-15T10:30:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/projects/{project_id}:
+    get:
+      tags: [projects]
+      summary: Obtener proyecto por ID o slug
+      description: |
+        Resuelve un proyecto por su identificador único (`prj_` + ULID) o por su slug
+        URL-amigable. Si el proyecto no existe, devuelve `404`.
+      operationId: get_project
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug del proyecto.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Datos del proyecto solicitado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponse"
+              example:
+                id: prj-01HXYAZABCDEFGHIJKLMNOP
+                name: Plataforma de E-Commerce
+                slug: plataforma-de-ecommerce
+                description: Sistema de comercio electrónico con catálogo de productos.
+                owner_id: usr-01HXYAZABCDEFGHIJKLMNOP
+                current_phase: descubrimiento
+                status: en_proceso
+                created_at: "2025-06-15T10:30:00Z"
+                updated_at: "2025-06-15T10:30:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado con el ID o slug proporcionado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Discovery ────────────────────────────────────────────────────────────────
+
+  /api/v1/projects/{project_id}/discovery/generate:
+    post:
+      tags: [discovery]
+      summary: Generar documento de discovery
+      description: |
+        Invoca al agente de IA para generar el documento de descubrimiento a partir
+        de la descripción del proyecto y cualquier documento de discovery preexistente.
+        El resultado se devuelve en formato Markdown estructurado.
+      operationId: generate_discovery
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Documento de discovery generado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoveryDocumentResponse"
+              example:
+                document_markdown: |
+                  # Documento de Descubrimiento
+
+                  ## Propósito del Sistema
+                  Proveer una plataforma de comercio electrónico que permita a los usuarios
+                  navegar productos, gestionar un carrito de compras y realizar pedidos.
+
+                  ## Usuarios Objetivo
+                  - Compradores minoristas
+                  - Administradores de tienda
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST/discovery/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "502":
+          description: Error al invocar el modelo de IA (LLM).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:llm:invocation-error
+                title: Error de invocación al modelo de IA
+                status: 502
+                detail: El modelo de IA no respondió dentro del tiempo límite
+                instance: /api/v1/projects/prj-01HXYAZ/discovery/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/projects/{project_id}/discovery:
+    get:
+      tags: [discovery]
+      summary: Obtener documento de discovery
+      description: Recupera el documento de discovery actual del proyecto en formato Markdown. Devuelve `404` si aún no se ha generado ningún documento.
+      operationId: get_discovery
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Documento de discovery recuperado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoveryDocumentResponse"
+              example:
+                document_markdown: |
+                  # Documento de Descubrimiento
+
+                  ## Propósito del Sistema
+                  Proveer una plataforma de comercio electrónico...
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Documento de discovery no encontrado para este proyecto.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:document:not-found
+                title: Documento no encontrado
+                status: 404
+                detail: El documento de tipo discovery no existe
+                instance: /api/v1/projects/prj-01HXYAZ/discovery
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    put:
+      tags: [discovery]
+      summary: Guardar ediciones del documento de discovery
+      description: |
+        Guarda el contenido editado del documento de discovery en formato Markdown.
+        El servidor valida la estructura del documento antes de persistirlo.
+        Si el Markdown no puede parsearse, devuelve `422`.
+      operationId: save_discovery
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveDiscoveryRequest"
+            example:
+              markdown: |
+                # Documento de Descubrimiento
+
+                ## Propósito del Sistema
+                Proveer una plataforma de comercio electrónico actualizada.
+      responses:
+        "200":
+          description: Documento de discovery guardado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoverySaveResponse"
+              example:
+                project_id: prj-01HXYAZABCDEFGHIJKLMNOP
+                message: ok
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST/discovery
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "422":
+          description: El Markdown proporcionado no puede parsearse o tiene estructura inválida.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              examples:
+                parse_error:
+                  summary: Error de parseo Markdown
+                  value:
+                    type: urn:kosmo:document:parse-error
+                    title: Error de parseo Markdown
+                    status: 422
+                    detail: El documento contiene sintaxis Markdown inválida
+                    instance: /api/v1/projects/prj-01HXYAZ/discovery
+                    trace_id: "01KT05JRA7466PPYQXYTX"
+                    violations: []
+                invalid_structure:
+                  summary: Estructura de documento inválida
+                  value:
+                    type: urn:kosmo:document:invalid-structure
+                    title: Documento inválido
+                    status: 422
+                    detail: El documento no contiene las secciones requeridas
+                    instance: /api/v1/projects/prj-01HXYAZ/discovery
+                    trace_id: "01KT05JRA7466PPYQXYTX"
+                    violations:
+                      - loc: ["body", "markdown"]
+                        msg: Falta la sección 'Propósito del Sistema'
+                        input: "# Documento\n\nContenido insuficiente"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Features ─────────────────────────────────────────────────────────────────
+
+  /api/v1/projects/{project_id}/features/generate:
+    post:
+      tags: [features]
+      summary: Generar features iniciales (C01-C05)
+      description: |
+        Invoca al agente de IA para generar 5 features iniciales a partir del
+        documento de discovery del proyecto. Las features se identifican como
+        C01 a C05 y son la base para el desarrollo dirigido por especificación.
+      operationId: generate_features
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Features generadas exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureListResponse"
+              example:
+                features:
+                  - display_id: C01
+                    title: Catálogo de productos
+                    slug: catalogo-de-productos
+                    description: Permitir a los usuarios navegar y buscar productos por categoría, precio y disponibilidad.
+                  - display_id: C02
+                    title: Carrito de compras
+                    slug: carrito-de-compras
+                    description: Gestionar productos seleccionados para compra con cantidades y precios actualizados.
+                  - display_id: C03
+                    title: Pasarela de pago
+                    slug: pasarela-de-pago
+                    description: Integración con proveedores de pago para procesar transacciones seguras.
+                  - display_id: C04
+                    title: Gestión de pedidos
+                    slug: gestion-de-pedidos
+                    description: Seguimiento del ciclo de vida de pedidos desde confirmación hasta entrega.
+                  - display_id: C05
+                    title: Autenticación de usuarios
+                    slug: autenticacion-de-usuarios
+                    description: Registro, inicio de sesión y gestión de perfil para compradores.
+                total: 5
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST/features/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "502":
+          description: Error al invocar el modelo de IA (LLM).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:llm:invocation-error
+                title: Error de invocación al modelo de IA
+                status: 502
+                detail: El modelo de IA no respondió dentro del tiempo límite
+                instance: /api/v1/projects/prj-01HXYAZ/features/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/projects/{project_id}/features:
+    get:
+      tags: [features]
+      summary: Listar features del proyecto
+      description: Devuelve todas las features asociadas al proyecto, incluyendo las generadas y las guardadas manualmente.
+      operationId: list_features
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Lista de features del proyecto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureListResponse"
+              example:
+                features:
+                  - display_id: C01
+                    title: Catálogo de productos
+                    slug: catalogo-de-productos
+                    description: Permitir a los usuarios navegar y buscar productos.
+                  - display_id: C02
+                    title: Carrito de compras
+                    slug: carrito-de-compras
+                    description: Gestionar productos seleccionados para compra.
+                total: 2
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST/features
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [features]
+      summary: Guardar features seleccionadas
+      description: |
+        Persiste las features que el usuario ha seleccionado de la lista de sugerencias.
+        El cuerpo debe incluir el `project_id` y la lista de sugerencias seleccionadas
+        con sus propiedades completas.
+      operationId: save_selected_features
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveSelectedFeaturesRequest"
+            example:
+              project_id: prj-01HXYAZABCDEFGHIJKLMNOP
+              selected_suggestions:
+                - number: 1
+                  title: Catálogo de productos
+                  description: Permitir a los usuarios navegar y buscar productos.
+                  rationale: Punto de entrada principal para la experiencia de compra.
+                  inferred_from:
+                    - "El sistema debe permitir explorar productos"
+                - number: 2
+                  title: Carrito de compras
+                  description: Gestionar productos seleccionados para compra con cantidades y precios.
+                  rationale: Funcionalidad core de cualquier e-commerce.
+                  inferred_from:
+                    - "Los usuarios deben poder comprar productos"
+      responses:
+        "200":
+          description: Features guardadas exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureListResponse"
+              example:
+                features:
+                  - display_id: C01
+                    title: Catálogo de productos
+                    slug: catalogo-de-productos
+                    description: Permitir a los usuarios navegar y buscar productos.
+                  - display_id: C02
+                    title: Carrito de compras
+                    slug: carrito-de-compras
+                    description: Gestionar productos seleccionados para compra.
+                total: 2
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST/features
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/projects/{project_id}/features/{slug}:
+    get:
+      tags: [features]
+      summary: Obtener feature por slug
+      description: |
+        Recupera una feature específica del proyecto usando su slug URL-amigable.
+        Devuelve `404` si el proyecto no existe o si la feature no se encuentra.
+      operationId: get_feature_by_slug
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Slug de la feature a recuperar.
+          example: catalogo-de-productos
+      responses:
+        "200":
+          description: Detalle completo de la feature solicitada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureDetail"
+              example:
+                id: feat-01HXYAZABCDEFGHIJKLMNOP
+                display_id: C01
+                number: 1
+                title: Catálogo de productos
+                slug: catalogo-de-productos
+                description: Permitir a los usuarios navegar y buscar productos por categoría, precio y disponibilidad.
+                rationale: El catálogo es el punto de entrada principal para la experiencia de compra.
+                inferred_from:
+                  - "El sistema debe permitir explorar productos"
+                  - "Se requiere búsqueda por categoría"
+                created_at: "2025-06-15T10:35:00Z"
+                updated_at: "2025-06-15T10:35:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto o feature no encontrados.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              examples:
+                proyecto_no_encontrado:
+                  summary: Proyecto no encontrado
+                  value:
+                    type: urn:kosmo:projects:not-found
+                    title: Proyecto no encontrado
+                    status: 404
+                    detail: El proyecto prj-01NONEXIST no existe
+                    instance: /api/v1/projects/prj-01NONEXIST/features/catalogo
+                    trace_id: "01KT05JRA7466PPYQXYTX"
+                    violations: []
+                feature_no_encontrada:
+                  summary: Feature no encontrada
+                  value:
+                    type: urn:kosmo:features:not-found
+                    title: Feature no encontrada
+                    status: 404
+                    detail: La feature feature-inexistente no existe en este proyecto
+                    instance: /api/v1/projects/prj-01HXYAZ/features/feature-inexistente
+                    trace_id: "01KT05JRA7466PPYQXYTX"
+                    violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/projects/{project_id}/features/suggest:
+    post:
+      tags: [features]
+      summary: Sugerir features adicionales
+      description: |
+        Invoca al agente de IA para sugerir features adicionales basadas en el
+        documento de discovery y las features ya existentes. El agente excluye
+        automáticamente features ya aprobadas para evitar duplicados y devuelve
+        el dominio inferido del proyecto.
+      operationId: suggest_features
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto (prj_ + ULID) o slug.
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Sugerencias de features generadas por el agente de IA.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuggestFeaturesResponse"
+              example:
+                suggestions:
+                  - number: 6
+                    display_id: C06
+                    title: Notificaciones por email
+                    description: Enviar notificaciones transaccionales por email para confirmación de pedido, envío y entrega.
+                    rationale: Mantener al usuario informado del estado de su pedido mejora la retención.
+                    inferred_from:
+                      - "Los usuarios deben recibir confirmación de sus pedidos"
+                  - number: 7
+                    display_id: C07
+                    title: Panel de administración
+                    description: Dashboard para administradores con métricas de ventas, gestión de inventario y usuarios.
+                    rationale: Los administradores necesitan herramientas para gestionar la plataforma.
+                    inferred_from:
+                      - "Se requiere gestión de inventario"
+                excluded_titles:
+                  - "Catálogo de productos"
+                  - "Carrito de compras"
+                  - "Pasarela de pago"
+                  - "Gestión de pedidos"
+                  - "Autenticación de usuarios"
+                domain_inferred: comercio-electronico
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Proyecto no encontrado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:projects:not-found
+                title: Proyecto no encontrado
+                status: 404
+                detail: El proyecto prj-01NONEXIST no existe
+                instance: /api/v1/projects/prj-01NONEXIST/features/suggest
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "502":
+          description: Error al invocar el modelo de IA (LLM).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:llm:invocation-error
+                title: Error de invocación al modelo de IA
+                status: 502
+                detail: El modelo de IA no respondió dentro del tiempo límite
+                instance: /api/v1/projects/prj-01HXYAZ/features/suggest
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Requirements ─────────────────────────────────────────────────────────────
+
+  /api/v1/features/{feature_id}/requirements/generate:
+    post:
+      tags: [requirements]
+      summary: Generar requisitos EARS para una feature
+      description: |
+        Invoca al agente de IA para generar requisitos en formato EARS
+        (Easy Approach to Requirements Syntax) para la feature especificada.
+        Los requisitos se clasifican en patrones: Ubicuos, Basados en Eventos,
+        Determinados por el Estado, Opcionales, de Respuesta ante Fallos y Complejos.
+
+        El `project_id` debe enviarse en el cuerpo de la petición. La `feature_id`
+        en la URL puede ser el identificador ULID (`feat_`) o el slug.
+      operationId: generate_requirements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: feature_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador de la feature (feat_ + ULID) o slug.
+          example: feat-01HXYAZABCDEFGHIJKLMNOP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRequirementsRequest"
+            example:
+              project_id: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Requisitos EARS generados exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateRequirementsResponse"
+              example:
+                feature_id: feat-01HXYAZABCDEFGHIJKLMNOP
+                feature_number: 1
+                requirements_markdown: |
+                  # Requisitos EARS — Catálogo de productos
+
+                  ## Requisitos Ubicuos
+                  - El sistema shall mostrar una lista paginada de productos.
+                  - El sistema shall permitir filtrar productos por categoría.
+                  - El sistema shall mostrar el precio y disponibilidad de cada producto.
+
+                  ## Requisitos Basados en Eventos
+                  - CUANDO el usuario selecciona una categoría, el sistema shall filtrar la lista de productos.
+                  - CUANDO el usuario aplica un filtro de precio, el sistema shall actualizar los resultados.
+
+                  ## Requisitos Determinados por el Estado
+                  - MIENTRAS la búsqueda esté activa, el sistema shall mostrar un indicador de carga.
+
+                  ## Requisitos de Respuestas Deseadas ante Fallos
+                  - SI la búsqueda no produce resultados, el sistema shall mostrar un mensaje sugeriendo ampliar criterios.
+                total: 8
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Feature o proyecto no encontrados.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:features:not-found
+                title: Feature no encontrada
+                status: 404
+                detail: La feature feat-01NONEXIST no existe en este proyecto
+                instance: /api/v1/features/feat-01NONEXIST/requirements/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "409":
+          description: La feature no está en estado aprobado. Solo se pueden generar requisitos para features aprobadas.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:features:not-approved
+                title: Feature no aprobada
+                status: 409
+                detail: La feature feat-01HXYAZ debe estar Aprobada para generar requisitos
+                instance: /api/v1/features/feat-01HXYAZ/requirements/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          description: Error al invocar el modelo de IA (LLM).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:llm:invocation-error
+                title: Error de invocación al modelo de IA
+                status: 502
+                detail: El modelo de IA no respondió dentro del tiempo límite
+                instance: /api/v1/features/feat-01HXYAZ/requirements/generate
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/features/{feature_id}/requirements:
+    get:
+      tags: [requirements]
+      summary: Obtener requisitos de una feature
+      description: |
+        Recupera el documento de requisitos EARS de la feature especificada.
+        Requiere el `project_id` como query parameter para resolución contextual.
+        Devuelve `404` si la feature no existe o si no se han generado requisitos.
+      operationId: get_requirements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: feature_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador de la feature (feat_ + ULID) o slug.
+          example: feat-01HXYAZABCDEFGHIJKLMNOP
+        - name: project_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Identificador del proyecto padre (prj_ + ULID).
+          example: prj-01HXYAZABCDEFGHIJKLMNOP
+      responses:
+        "200":
+          description: Documento de requisitos recuperado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequirementsDocumentResponse"
+              example:
+                document_markdown: |
+                  # Requisitos EARS — Catálogo de productos
+
+                  ## Requisitos Ubicuos
+                  - El sistema shall mostrar una lista paginada de productos.
+                  - El sistema shall permitir filtrar productos por categoría.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Feature no encontrada en el proyecto especificado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:features:not-found
+                title: Feature no encontrada
+                status: 404
+                detail: La feature feat-01NONEXIST no existe en este proyecto
+                instance: /api/v1/features/feat-01NONEXIST/requirements
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    put:
+      tags: [requirements]
+      summary: Guardar ediciones de requisitos
+      description: |
+        Guarda el contenido editado del documento de requisitos EARS en formato
+        Markdown. El `project_id` debe enviarse en el cuerpo junto con el markdown.
+        La `feature_id` en la URL puede ser el identificador ULID o el slug.
+      operationId: save_requirements
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: feature_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador de la feature (feat_ + ULID) o slug.
+          example: feat-01HXYAZABCDEFGHIJKLMNOP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveRequirementsRequest"
+            example:
+              project_id: prj-01HXYAZABCDEFGHIJKLMNOP
+              markdown: |
+                # Requisitos EARS — Catálogo de productos
+
+                ## Requisitos Ubicuos
+                - El sistema shall mostrar una lista paginada de productos.
+                - El sistema shall permitir filtrar productos por categoría.
+      responses:
+        "200":
+          description: Requisitos guardados exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequirementsSaveResponse"
+              example:
+                feature_id: feat-01HXYAZABCDEFGHIJKLMNOP
+                message: ok
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Feature no encontrada en el proyecto especificado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:features:not-found
+                title: Feature no encontrada
+                status: 404
+                detail: La feature feat-01NONEXIST no existe en este proyecto
+                instance: /api/v1/features/feat-01NONEXIST/requirements
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "409":
+          description: La feature no es editable en su estado actual.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: urn:kosmo:features:not-editable
+                title: Feature no editable
+                status: 409
+                detail: La feature no es editable en su estado actual
+                instance: /api/v1/features/feat-01HXYAZ/requirements
+                trace_id: "01KT05JRA7466PPYQXYTX"
+                violations: []
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── Schemas ──────────────────────────────────────────────────────────────────
+
+  /api/v1/schemas:
+    get:
+      tags: [schemas]
+      summary: Listar esquemas disponibles para introspección
+      description: |
+        Devuelve la lista alfabética de nombres de todos los DTOs expuestos por la API
+        cuyo JSON Schema puede consultarse mediante el endpoint `GET /api/v1/schemas/{name}`.
+        Útil para generación dinámica de formularios y tipos TypeScript en el Frontend.
+      operationId: list_schemas
+      responses:
+        "200":
+          description: Lista de nombres de esquemas disponibles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchemaListResponse"
+              example:
+                schemas:
+                  - AuthorizationCodeResponse
+                  - AuthorizeRequest
+                  - LogoutRequest
+                  - OAuthErrorResponse
+                  - PrincipalView
+                  - RegisterRequest
+                  - TokenExchangeRequest
+                  - TokenPairResponse
+                  - TokenRefreshRequest
+                  - UserPublic
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/schemas/{name}:
+    get:
+      tags: [schemas]
+      summary: Obtener JSON Schema de un DTO por nombre
+      description: |
+        Devuelve el JSON Schema completo (Draft 2020-12) del DTO solicitado.
+        El esquema incluye tipos, restricciones de validación, valores por defecto
+        y descripciones de cada campo, permitiendo al Frontend generar formularios
+        y validaciones de forma dinámica.
+      operationId: get_schema
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Nombre exacto del DTO cuyo JSON Schema se solicita.
+          example: RegisterRequest
+      responses:
+        "200":
+          description: JSON Schema del DTO solicitado.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: JSON Schema (Draft 2020-12) del DTO.
+              example:
+                $defs:
+                  EmailStr:
+                    type: string
+                    format: email
+                properties:
+                  email:
+                    $ref: "#/$defs/EmailStr"
+                    description: Dirección de correo electrónico del nuevo usuario.
+                    examples: ["usuario@ejemplo.com"]
+                    title: Email
+                  password:
+                    type: string
+                    minLength: 12
+                    maxLength: 128
+                    description: Contraseña en texto plano.
+                    examples: ["M1ContraseñaSegura!"]
+                    title: Password
+                required: [email, password]
+                additionalProperties: false
+                title: RegisterRequest
+                type: object
+        "404":
+          description: El nombre del esquema solicitado no existe en el registro.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HttpErrorResponse"
+              example:
+                detail: "Schema 'InexistenteRequest' no encontrado"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+
