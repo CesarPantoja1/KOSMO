@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.sdd.document import ProjectPhase, ProjectStatus
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ProjectRepository
@@ -80,36 +79,3 @@ class SqlAlchemyProjectRepository(ProjectRepository):
                 model.updated_at = datetime.now(UTC)
             await session.commit()
             return project
-
-    async def update_phase(self, project_id: ProjectId, phase: ProjectPhase) -> Project | None:
-        async with self._session_factory() as session:
-            model = await session.get(ProjectModel, str(project_id))
-            if model is None:
-                return None
-            model.current_phase = phase.value
-            model.updated_at = datetime.now(UTC)
-            await session.commit()
-            return self._to_entity(model)
-
-    async def update_status(self, project_id: ProjectId, status: ProjectStatus) -> Project | None:
-        async with self._session_factory() as session:
-            model = await session.get(ProjectModel, str(project_id))
-            if model is None:
-                return None
-            model.status = status.value
-            model.updated_at = datetime.now(UTC)
-            await session.commit()
-            return self._to_entity(model)
-
-    def _to_entity(self, model: ProjectModel) -> Project:
-        return Project(
-            id=ProjectId(model.id),
-            name=model.name,
-            slug=model.slug,
-            description=model.description,
-            owner_id=model.owner_id,
-            current_phase=ProjectPhase(model.current_phase),
-            status=ProjectStatus(model.status),
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
