@@ -21,7 +21,7 @@ class ProblemDetail:
     detail: str
     instance: str
     trace_id: str = field(default_factory=lambda: ULID().hex)
-    violations: list[Violation] = field(default_factory=list)
+    violations: list[Violation] = field(default_factory=lambda: list[Violation]())
 
 
 class SpecError(Exception):

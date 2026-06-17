@@ -53,6 +53,7 @@ class AuditEventModel(Base):
         server_default=text("'{}'::jsonb"),
     )
 
+
 class ProjectModel(Base):
     __tablename__ = "projects"
 

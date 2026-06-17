@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ProjectRepository
 from kosmo.infrastructure.persistence.postgres.models import ProjectModel
@@ -66,16 +66,23 @@ class SqlAlchemyProjectRepository(ProjectRepository):
                     slug=project.slug,
                     description=project.description,
                     owner_id=str(project.owner_id),
-                    current_phase=project.current_phase.value,
-                    status=project.status.value,
                 )
                 session.add(model)
             else:
                 model.name = project.name
                 model.slug = project.slug
                 model.description = project.description
-                model.current_phase = project.current_phase.value
-                model.status = project.status.value
                 model.updated_at = datetime.now(UTC)
             await session.commit()
             return project
+
+    def _to_entity(self, model: ProjectModel) -> Project:
+        return Project(
+            id=ProjectId(model.id),
+            name=model.name,
+            slug=model.slug,
+            description=model.description,
+            owner_id=UserId(model.owner_id),
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )

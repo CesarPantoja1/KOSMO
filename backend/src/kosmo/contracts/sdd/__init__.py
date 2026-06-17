@@ -21,5 +21,5 @@ __all__ = [
     "RequirementId",
     "SpecId",
     "TaskId",
-    "UserId"
+    "UserId",
 ]
