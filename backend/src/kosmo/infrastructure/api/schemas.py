@@ -410,14 +410,6 @@ class ProjectResponse(BaseModel):
         description="Identificador del usuario propietario.",
         examples=["usr_abc123"],
     )
-    current_phase: str = Field(
-        description="Fase actual del proyecto.",
-        examples=["descubrimiento"],
-    )
-    status: str = Field(
-        description="Estado del proyecto.",
-        examples=["en_proceso"],
-    )
     created_at: datetime = Field(
         description="Timestamp ISO-8601 (UTC) de creación del proyecto.",
         examples=["2026-06-16T10:00:00Z"],

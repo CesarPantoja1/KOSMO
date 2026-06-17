@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from kosmo.contracts.sdd.document import ProjectPhase, ProjectStatus
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 
 
@@ -14,7 +13,5 @@ class Project:
     slug: str
     description: str
     owner_id: UserId
-    current_phase: ProjectPhase = ProjectPhase.descubrimiento
-    status: ProjectStatus = ProjectStatus.en_proceso
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

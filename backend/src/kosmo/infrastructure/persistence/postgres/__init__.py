@@ -5,4 +5,9 @@ from kosmo.infrastructure.persistence.postgres.models import (
     UserModel,
 )
 
-__all__ = ["AuditEventModel", "Base", "ProjectModel", "UserModel"]
+__all__ = [
+    "AuditEventModel",
+    "Base",
+    "ProjectModel",
+    "UserModel",
+]

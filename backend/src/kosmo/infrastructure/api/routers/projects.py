@@ -66,8 +66,6 @@ async def create_project(
         slug=project.slug,
         description=project.description,
         owner_id=project.owner_id,
-        current_phase=project.current_phase.value,
-        status=project.status.value,
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
@@ -102,8 +100,6 @@ async def list_projects(
             slug=p.slug,
             description=p.description,
             owner_id=p.owner_id,
-            current_phase=p.current_phase.value,
-            status=p.status.value,
             created_at=p.created_at,
             updated_at=p.updated_at,
         )
@@ -149,8 +145,6 @@ async def get_project(
         slug=project.slug,
         description=project.description,
         owner_id=project.owner_id,
-        current_phase=project.current_phase.value,
-        status=project.status.value,
         created_at=project.created_at,
         updated_at=project.updated_at,
     )

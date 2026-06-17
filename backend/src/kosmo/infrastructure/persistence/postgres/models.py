@@ -58,21 +58,15 @@ class ProjectModel(Base):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    slug: Mapped[str] = mapped_column(String(300), nullable=False)
-    description: Mapped[str] = mapped_column(Text(), nullable=False, default="")
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text(), nullable=False)
     owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    current_phase: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="descubrimiento"
-    )
+    current_phase: Mapped[str] = mapped_column(String(32), nullable=False, default="descubrimiento")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="en_proceso")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

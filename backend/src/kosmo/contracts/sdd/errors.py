@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import uuid4
+
+from ulid import ULID
 
 
 @dataclass
 class Violation:
     loc: list[str]
     msg: str
-    input: Any | None = None
+    input: Any = None
 
 
 @dataclass
@@ -19,8 +20,8 @@ class ProblemDetail:
     status: int
     detail: str
     instance: str
-    trace_id: str = field(default_factory=lambda: uuid4().hex)
-    violations: list[Violation] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    trace_id: str = field(default_factory=lambda: ULID().hex)
+    violations: list[Violation] = field(default_factory=lambda: list[Violation]())
 
 
 class SpecError(Exception):
