@@ -17,6 +17,13 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   detect-changes:
     name: Detect changed areas
@@ -87,7 +94,11 @@ jobs:
     name: Backend
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
+    name: Backend
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     timeout-minutes: 15
     defaults:
       run:
@@ -119,6 +130,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
 
       - name: Install dependencies
         run: uv sync --all-groups
@@ -136,7 +150,11 @@ jobs:
     name: Frontend
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
+    name: Frontend
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     timeout-minutes: 15
     defaults:
       run:
@@ -178,6 +196,41 @@ jobs:
 
       - name: Run build
         run: bun run build
+
+  ci-summary:
+    name: CI summary
+    runs-on: ubuntu-latest
+    needs:
+      - detect-changes
+      - backend
+      - frontend
+    if: always()
+
+    steps:
+      - name: Report CI result
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Backend required: ${{ needs.detect-changes.outputs.backend }}"
+          echo "Backend result:   ${{ needs.backend.result }}"
+          echo "Frontend required: ${{ needs.detect-changes.outputs.frontend }}"
+          echo "Frontend result:   ${{ needs.frontend.result }}"
+
+          if [ "${{ needs.backend.result }}" = "failure" ] || \
+             [ "${{ needs.backend.result }}" = "cancelled" ] || \
+             [ "${{ needs.frontend.result }}" = "failure" ] || \
+             [ "${{ needs.frontend.result }}" = "cancelled" ]; then
+            echo "One or more required CI jobs failed."
+            exit 1
+          fi
+
+          if [ "${{ needs.detect-changes.outputs.backend }}" != "true" ] && \
+             [ "${{ needs.detect-changes.outputs.frontend }}" != "true" ]; then
+            echo "No backend or frontend changes detected. Heavy CI jobs were skipped."
+          else
+            echo "Required CI jobs completed successfully."
+          fi
 
   ci-summary:
     name: CI summary

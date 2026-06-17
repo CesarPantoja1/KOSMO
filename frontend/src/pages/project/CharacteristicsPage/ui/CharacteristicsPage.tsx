@@ -1,4 +1,4 @@
-
+import { MarkdownEditor } from '@/feature';
 import { ButtonMD } from '@/shared/ui';
 import { Metadata } from 'next';
 import Trash from './icons/Trash';

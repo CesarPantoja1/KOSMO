@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 
 import Discovery from './icons/Discovery';
 import { getStyleIconStatus } from '../lib/get-status-color';
@@ -39,11 +39,17 @@ interface MainNavbarProps {
 export function MainNavbar({
 	children,
 	project,
+	phases,
 	onBackToHub,
 	onOpenApiKeys,
 }: MainNavbarProps) {
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const router = useRouter();
+	const pathname = usePathname();
+	const params = useParams<{ projectId?: string }>() ?? {};
+	const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
+	const projectPhases = phases;
+
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
 		if (onBackToHub) {
@@ -51,7 +57,7 @@ export function MainNavbar({
 			return;
 		}
 
-		router.push('/');
+		router.push('/proyecto');
 	};
 
 	const handleOpenApiKeys = () => {
@@ -64,11 +70,30 @@ export function MainNavbar({
 		router.push('/profile');
 	};
 
+	const getPhaseHref = (phase: ProjectPhase) => {
+		if (phase.href) {
+			return phase.href;
+		}
+
+		if (!projectId) {
+			return '/';
+		}
+
+		return `/proyecto/${projectId}/${phase.key}`;
+	};
+
+	const isPhaseActive = (phase: ProjectPhase) => {
+		const href = getPhaseHref(phase);
+		return pathname === href || pathname?.endsWith(`/${phase.key}`);
+	};
+
 	const colors = getStyleIconStatus('completed');
+
+	const [isProyectosOpen, setIsProyectosOpen] = useState(false);
 
 	return (
 		<header className='flex h-screen max-h-screen overflow-hidden'>
-			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-primary-50'>
+			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-base-200'>
 				<div className='relative flex py-5 justify-center bg-primary-100'>
 					<button
 						className='text-2xl font-semibold text-base-50 cursor-pointer'
@@ -144,43 +169,46 @@ export function MainNavbar({
 						<Right size={25} color='text-base-600' />
 						Inicio
 					</div>
-					<nav className='flex justify-between px-16 py-3'>
-						<WizardItem
-							href='/proyecto/descubrimiento'
-							icon={<Discovery color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Descubrimiento'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/caracteristicas'
-							icon={<Characteristics color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Características'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/requisitos'
-							icon={<Requirements color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Requisitos'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/modelo'
-							icon={<Modeling color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Modelo'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/codigo'
-							icon={<Implementation color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Código'
-							labelStyles={colors.labelStyles}
-						/>
-					</nav>
+
+					{isProyectosOpen && (
+						<nav className='flex justify-between px-16 py-3'>
+							<WizardItem
+								href='/proyecto/descubrimiento'
+								icon={<Discovery color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Descubrimiento'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/caracteristicas'
+								icon={<Characteristics color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Características'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/requisitos'
+								icon={<Requirements color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Requisitos'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/modelo'
+								icon={<Modeling color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Modelo'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/codigo'
+								icon={<Implementation color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Código'
+								labelStyles={colors.labelStyles}
+							/>
+						</nav>
+					)}
 				</div>
 				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
