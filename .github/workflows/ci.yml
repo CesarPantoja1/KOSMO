@@ -46,7 +46,7 @@ jobs:
             head_sha="${{ github.sha }}"
           fi
 
-          if [ -z "$base_sha" ] || [[ "$base_sha" =~ ^0+$ ]]; then
+          if [ -z "$base_sha" ] || [[ "$base_sha" =~ ^0+$ ]] || ! git cat-file -e "$base_sha" 2>/dev/null; then
             base_sha="$(git rev-list --max-parents=0 "$head_sha")"
           fi
 
