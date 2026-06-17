@@ -171,10 +171,10 @@ export function ButtonMD({
 				<button
 					onClick={onClick}
 					disabled={disabled}
-					className='px-4 py-2 text-sm rounded-lg min-w-20 bg-ai text-snow hover:bg-ai-hover active:bg-ai-active disabled:bg-ai-disabled disabled:cursor-not-allowed'
+					className='px-4 py-2 text-base flex items-center rounded-lg min-w-20 bg-ai text-base-50 hover:bg-ai-hover active:bg-ai-active disabled:bg-ai-disabled disabled:cursor-not-allowed'
 				>
 					{icon ? (
-						<span className='inline-flex items-center gap-1'>
+						<span className='inline-flex items-center gap-2'>
 							{icon} {children}
 						</span>
 					) : (

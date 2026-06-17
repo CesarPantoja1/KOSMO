@@ -58,7 +58,7 @@ export function MainNavbar({
 			return;
 		}
 
-		router.push('/');
+		router.push('/proyecto');
 	};
 
 	const handleOpenPalette = () => {
@@ -96,9 +96,11 @@ export function MainNavbar({
 
 	const colors = getStyleIconStatus('completed');
 
+	const [isProyectosOpen, setIsProyectosOpen] = useState(false);
+
 	return (
 		<header className='flex h-screen max-h-screen overflow-hidden'>
-			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-primary-50'>
+			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-base-200'>
 				<div className='relative flex py-5 justify-center bg-primary-100'>
 					<button
 						className='text-2xl font-semibold text-base-50 cursor-pointer'
@@ -174,43 +176,46 @@ export function MainNavbar({
 						<Right size={25} color='text-base-600' />
 						Inicio
 					</div>
-					<nav className='flex justify-between px-16 py-3'>
-						<WizardItem
-							href='/proyecto/descubrimiento'
-							icon={<Discovery color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Descubrimiento'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/caracteristicas'
-							icon={<Characteristics color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Características'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/requisitos'
-							icon={<Requirements color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Requisitos'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/modelo'
-							icon={<Modeling color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Modelo'
-							labelStyles={colors.labelStyles}
-						/>
-						<WizardItem
-							href='/proyecto/codigo'
-							icon={<Implementation color={colors.iconStyles} />}
-							iconContainerStyles={colors.iconContainer}
-							label='Código'
-							labelStyles={colors.labelStyles}
-						/>
-					</nav>
+
+					{isProyectosOpen && (
+						<nav className='flex justify-between px-16 py-3'>
+							<WizardItem
+								href='/proyecto/descubrimiento'
+								icon={<Discovery color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Descubrimiento'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/caracteristicas'
+								icon={<Characteristics color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Características'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/requisitos'
+								icon={<Requirements color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Requisitos'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/modelo'
+								icon={<Modeling color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Modelo'
+								labelStyles={colors.labelStyles}
+							/>
+							<WizardItem
+								href='/proyecto/codigo'
+								icon={<Implementation color={colors.iconStyles} />}
+								iconContainerStyles={colors.iconContainer}
+								label='Código'
+								labelStyles={colors.labelStyles}
+							/>
+						</nav>
+					)}
 				</div>
 				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
