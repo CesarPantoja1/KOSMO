@@ -4,6 +4,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
+import Discovery from './icons/Discovery';
+import { getStyleIconStatus } from '../lib/get-status-color';
+import WizardItem from './WizardItem';
+import {
+	Characteristics,
+	ComputerDesktop,
+	Home,
+	Implementation,
+	Modeling,
+	Requirements,
+	Right,
+	Sidebar,
+	UserCircle,
+} from './icons';
+
 type ProjectPhase = {
 	key: string;
 	label: string;
@@ -11,27 +26,20 @@ type ProjectPhase = {
 };
 
 interface MainNavbarProps {
+	children: React.ReactNode;
 	project: {
 		name: string;
 	};
-	phases?: ProjectPhase[];
-	provider: string;
+	phases: ProjectPhase[];
 	onBackToHub?: () => void;
 	onOpenPalette?: () => void;
 	onOpenApiKeys?: () => void;
 }
 
-const defaultPhases: ProjectPhase[] = [
-	{ key: 'requirements', label: 'Requirements' },
-	{ key: 'discovery', label: 'Discovery' },
-	{ key: 'idea', label: 'Idea' },
-	{ key: 'modeling', label: 'Modeling' },
-];
-
 export function MainNavbar({
+	children,
 	project,
 	phases,
-	provider,
 	onBackToHub,
 	onOpenPalette,
 	onOpenApiKeys,
@@ -41,7 +49,7 @@ export function MainNavbar({
 	const pathname = usePathname();
 	const params = useParams<{ projectId?: string }>() ?? {};
 	const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
-	const projectPhases = phases?.length ? phases : defaultPhases;
+	const projectPhases = phases;
 
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
@@ -78,7 +86,7 @@ export function MainNavbar({
 			return '/';
 		}
 
-		return `/project/${projectId}/${phase.key}`;
+		return `/proyecto/${projectId}/${phase.key}`;
 	};
 
 	const isPhaseActive = (phase: ProjectPhase) => {
@@ -86,91 +94,125 @@ export function MainNavbar({
 		return pathname === href || pathname?.endsWith(`/${phase.key}`);
 	};
 
+	const colors = getStyleIconStatus('completed');
+
 	return (
-		<header className='sticky top-0 z-40 flex h-(--topbar-h) shrink-0 items-center gap-3 border-b border-border-default bg-bg-base px-3.5 shadow-sm'>
-			<button
-				className='btn btn-ghost h-7 px-2 text-xs gap-1.5'
-				onClick={handleBackToHub}
-			>
-				<span aria-hidden='true'>←</span>
-				Kosmo
-			</button>
+		<header className='flex h-screen max-h-screen overflow-hidden'>
+			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-primary-50'>
+				<div className='relative flex py-5 justify-center bg-primary-100'>
+					<button
+						className='text-2xl font-semibold text-base-50 cursor-pointer'
+						onClick={handleBackToHub}
+					>
+						KOSMO
+					</button>
+					<div className='absolute right-1 top-0 bottom-0 flex items-center justify-center'>
+						<Sidebar size={38} color='text-base-50' />
+					</div>
+				</div>
+				<hr />
+				<div className='flex justify-between gap-2'>
+					<h2>Proyectos</h2>
+					<Link
+						className='flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]'
+						href='/crear-proyecto'
+						rel='noopener noreferrer'
+					>
+						+
+					</Link>
+				</div>
 
-			<span className='text-base text-border-default' aria-hidden='true'>
-				|
-			</span>
+				<div className='flex flex-col align-top flex-1'>
+					<span className='text-base text-border-default' aria-hidden='true'>
+						Recientes
+					</span>
 
-			<button
-				type='button'
-				className='btn btn-ghost h-7 px-2 text-xs font-semibold text-text-primary hover:text-text-primary'
-				onClick={() => setAvatarOpen(false)}
-			>
-				{project.name}
-			</button>
-
-			<nav className='mx-2 hidden flex-1 items-center justify-center gap-1 md:flex'>
-				{projectPhases.map((phase) => {
-					const href = getPhaseHref(phase);
-					const active = isPhaseActive(phase);
-
-					return (
-						<Link
-							key={phase.key}
-							href={href}
-							className={`btn h-8 px-3 text-xs transition-colors ${
-								active
-									? 'bg-bg-subtle text-text-primary border-border-strong'
-									: 'btn-ghost text-text-secondary'
-							}`}
-							aria-current={active ? 'page' : undefined}
-						>
-							{phase.label}
-						</Link>
-					);
-				})}
-			</nav>
-
-			<div className='flex items-center gap-2'>
-				<span className='chip hidden bg-bg-subtle text-text-secondary sm:inline-flex'>
-					{provider}
-				</span>
-
-				<button
-					className='btn btn-secondary h-7 px-2.5 text-xs gap-1.5'
-					onClick={handleOpenPalette}
-				>
-					<span aria-hidden='true'>⌘</span>
-					Ctrl+K
-				</button>
-
-				<div className='relative'>
 					<button
 						type='button'
-						className='flex h-7 w-7 items-center justify-center rounded-full border-2 border-accent-primary bg-blue-50 text-[11px] font-bold text-accent-primary shadow-sm transition hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50'
-						onClick={() => setAvatarOpen((value) => !value)}
-						aria-haspopup='menu'
-						aria-expanded={avatarOpen}
+						className='btn btn-ghost h-7 px-2 text-xs font-semibold text-text-primary hover:text-text-primary'
+						onClick={() => setAvatarOpen(false)}
 					>
-						M
+						<ComputerDesktop color='text-base-600' /> {project.name}
 					</button>
-
-					{avatarOpen && (
-						<div className='anim-fade-in absolute right-0 top-[120%] z-50 min-w-44 overflow-hidden rounded-md border border-border-default bg-bg-base shadow-lg'>
-							<DropdownItem
-								label='Bóveda de API Keys'
-								onClick={handleOpenApiKeys}
-							/>
-							<DropdownItem
-								label='Configuración'
-								onClick={() => setAvatarOpen(false)}
-							/>
-							<DropdownItem
-								label='Cerrar sesión'
-								onClick={() => setAvatarOpen(false)}
-							/>
-						</div>
-					)}
 				</div>
+
+				<div className='flex items-center gap-2'>
+					<span className='chip hidden bg-bg-subtle text-text-secondary sm:inline-flex'></span>
+
+					<div className='relative'>
+						<button
+							type='button'
+							className='flex items-center justify-center rounded-full border'
+							onClick={() => setAvatarOpen((value) => !value)}
+							aria-haspopup='menu'
+							aria-expanded={avatarOpen}
+						>
+							<UserCircle color='text-base-600' />
+						</button>
+
+						{avatarOpen && (
+							<div className='anim-fade-in absolute right-0 top-[120%] z-50 min-w-44 overflow-hidden rounded-md border border-border-default bg-bg-base shadow-lg'>
+								<DropdownItem label='Bóveda de API Keys' onClick={handleOpenApiKeys} />
+								<DropdownItem
+									label='Configuración'
+									onClick={() => setAvatarOpen(false)}
+								/>
+								<DropdownItem
+									label='Cerrar sesión'
+									onClick={() => setAvatarOpen(false)}
+								/>
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
+
+			<div className='flex w-10/12 min-h-0 flex-col overflow-hidden'>
+				<div className='z-50 shrink-0'>
+					<div className='flex items-center gap-2 p-2'>
+						<Home size={35} color='text-base-600' />
+						<Right size={25} color='text-base-600' />
+						Inicio
+					</div>
+					<nav className='flex justify-between px-16 py-3'>
+						<WizardItem
+							href='/proyecto/descubrimiento'
+							icon={<Discovery color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Descubrimiento'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/caracteristicas'
+							icon={<Characteristics color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Características'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/requisitos'
+							icon={<Requirements color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Requisitos'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/modelo'
+							icon={<Modeling color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Modelo'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/codigo'
+							icon={<Implementation color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Código'
+							labelStyles={colors.labelStyles}
+						/>
+					</nav>
+				</div>
+				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
 		</header>
 	);

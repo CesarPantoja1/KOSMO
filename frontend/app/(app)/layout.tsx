@@ -2,20 +2,19 @@ import { MainNavbar } from '@/widgets/main-navbar/ui/MainNavbar';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	const props = {
-		project: { name: 'Proyecto Ejemplo' },
+		project: { name: 'Ferreteria' },
 		phases: [
-			{ key: 'idea', label: 'Idea' },
-			{ key: 'discovery', label: 'Discovery' },
-			{ key: 'requirements', label: 'Requirements' },
-			{ key: 'modeling', label: 'Modeling' },
+			{ key: 'descubrimiento', label: 'Descubrimiento' },
+			{ key: 'caracteristicas', label: 'Características' },
+			{ key: 'requisitos', label: 'Requisitos' },
+			{ key: 'modelado', label: 'Modelado' },
+			{ key: 'implementacion', label: 'Implementación' },
 		],
-		provider: 'OpenAI',
 	};
 
 	return (
-		<div className='bg-green-500'>
-			<MainNavbar {...props} />
-			{children}
+		<div className='min-h-screen min-w-full max-h-screen'>
+			<MainNavbar {...props}>{children}</MainNavbar>
 		</div>
 	);
 }
