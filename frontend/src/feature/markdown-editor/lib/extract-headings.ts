@@ -17,16 +17,20 @@ export function extractHeadings(markdown: string): HeadingItem[] {
 
 	const headings: HeadingItem[] = [];
 
-	visit(tree, 'heading', (node: any) => {
-		const text = node.children
-			.filter((child: any) => child.type === 'text')
-			.map((child: any) => child.value)
+	visit(tree, 'heading', (node: unknown) => {
+		const headingNode = node as {
+			depth: number;
+			children: Array<{ type: string; value?: string }>;
+		};
+		const text = headingNode.children
+			.filter((child) => child.type === 'text')
+			.map((child) => child.value || '')
 			.join('');
 
 		headings.push({
 			id: slugify(text),
 			text,
-			depth: node.depth,
+			depth: headingNode.depth,
 		});
 	});
 

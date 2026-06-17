@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import Discovery from './icons/Discovery';
 import { getStyleIconStatus } from '../lib/get-status-color';
@@ -39,18 +39,11 @@ interface MainNavbarProps {
 export function MainNavbar({
 	children,
 	project,
-	phases,
 	onBackToHub,
-	onOpenPalette,
 	onOpenApiKeys,
 }: MainNavbarProps) {
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const router = useRouter();
-	const pathname = usePathname();
-	const params = useParams<{ projectId?: string }>() ?? {};
-	const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
-	const projectPhases = phases;
-
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
 		if (onBackToHub) {
@@ -61,12 +54,6 @@ export function MainNavbar({
 		router.push('/');
 	};
 
-	const handleOpenPalette = () => {
-		if (onOpenPalette) {
-			onOpenPalette();
-		}
-	};
-
 	const handleOpenApiKeys = () => {
 		setAvatarOpen(false);
 		if (onOpenApiKeys) {
@@ -75,23 +62,6 @@ export function MainNavbar({
 		}
 
 		router.push('/profile');
-	};
-
-	const getPhaseHref = (phase: ProjectPhase) => {
-		if (phase.href) {
-			return phase.href;
-		}
-
-		if (!projectId) {
-			return '/';
-		}
-
-		return `/proyecto/${projectId}/${phase.key}`;
-	};
-
-	const isPhaseActive = (phase: ProjectPhase) => {
-		const href = getPhaseHref(phase);
-		return pathname === href || pathname?.endsWith(`/${phase.key}`);
 	};
 
 	const colors = getStyleIconStatus('completed');

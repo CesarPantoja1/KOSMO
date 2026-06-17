@@ -10,7 +10,6 @@ import {
 	toolbarPlugin,
 	UndoRedo,
 	BoldItalicUnderlineToggles,
-	CreateLink,
 	ListsToggle,
 	BlockTypeSelect,
 } from '@mdxeditor/editor';

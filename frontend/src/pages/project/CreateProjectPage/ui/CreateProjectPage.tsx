@@ -1,7 +1,6 @@
 'use client';
 
 import { ButtonMD } from '@/shared/ui';
-import { Metadata } from 'next';
 import { useRouter } from 'next/navigation';
 
 const CreateProjectPage = () => {
