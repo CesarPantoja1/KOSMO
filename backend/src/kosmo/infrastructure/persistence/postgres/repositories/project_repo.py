@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.document import ProjectPhase, ProjectStatus
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ProjectRepository
 from kosmo.infrastructure.persistence.postgres.models import ProjectModel
@@ -107,7 +107,7 @@ class SqlAlchemyProjectRepository(ProjectRepository):
             name=model.name,
             slug=model.slug,
             description=model.description,
-            owner_id=model.owner_id,
+            owner_id=UserId(model.owner_id),
             current_phase=ProjectPhase(model.current_phase),
             status=ProjectStatus(model.status),
             created_at=model.created_at,

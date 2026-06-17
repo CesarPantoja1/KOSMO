@@ -1694,6 +1694,7 @@ dependencies = [
     { name = "ruamel-yaml" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
+    { name = "ulid-py" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1732,6 +1733,7 @@ requires-dist = [
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.49" },
     { name = "structlog", specifier = ">=25.5.0" },
+    { name = "ulid-py", specifier = ">=1.1.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.46.0" },
 ]
 
@@ -3831,6 +3833,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/f5/cd531b2d15a671a40c0f66cf06bc3570a12cd56eef98960068ebbad1bf5a/tzdata-2026.1.tar.gz", hash = "sha256:67658a1903c75917309e753fdc349ac0efd8c27db7a0cb406a25be4840f87f98", size = 197639, upload-time = "2026-04-03T11:25:22.002Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/70/d460bd685a170790ec89317e9bd33047988e4bce507b831f5db771e142de/tzdata-2026.1-py2.py3-none-any.whl", hash = "sha256:4b1d2be7ac37ceafd7327b961aa3a54e467efbdb563a23655fbfe0d39cfc42a9", size = 348952, upload-time = "2026-04-03T11:25:20.313Z" },
+]
+
+[[package]]
+name = "ulid-py"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/53/d14a8ec344048e21431821cb49e9a6722384f982b889c2dd449428dbdcc1/ulid-py-1.1.0.tar.gz", hash = "sha256:dc6884be91558df077c3011b9fb0c87d1097cb8fc6534b11f310161afd5738f0", size = 22514, upload-time = "2020-09-15T15:35:09.414Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/7c/a12c879fe6c2b136a718c142115ff99397fbf62b4929d970d58ae386d55f/ulid_py-1.1.0-py2.py3-none-any.whl", hash = "sha256:b56a0f809ef90d6020b21b89a87a48edc7c03aea80e5ed5174172e82d76e3987", size = 25753, upload-time = "2020-09-15T15:35:08.075Z" },
 ]
 
 [[package]]

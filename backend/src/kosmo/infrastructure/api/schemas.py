@@ -367,6 +367,67 @@ class OAuthErrorResponse(BaseModel):
     )
 
 
+class CreateProjectRequest(BaseModel):
+    """Payload para crear un nuevo proyecto en KOSMO."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Nombre del proyecto.",
+        examples=["Mi Proyecto"],
+    )
+    description: str = Field(
+        default="",
+        min_length=0,
+        max_length=2000,
+        description="Descripción del proyecto.",
+        examples=["Proyecto de ejemplo para KOSMO"],
+    )
+
+
+class ProjectResponse(BaseModel):
+    """Representación pública de un proyecto."""
+
+    id: str = Field(
+        description="Identificador único del proyecto.",
+        examples=["prj_abc123def456"],
+    )
+    name: str = Field(
+        description="Nombre del proyecto.",
+        examples=["Mi Proyecto"],
+    )
+    slug: str = Field(
+        description="Slug único del proyecto generado a partir del nombre.",
+        examples=["mi-proyecto"],
+    )
+    description: str = Field(
+        description="Descripción del proyecto.",
+        examples=["Proyecto de ejemplo para KOSMO"],
+    )
+    owner_id: str = Field(
+        description="Identificador del usuario propietario.",
+        examples=["usr_abc123"],
+    )
+    current_phase: str = Field(
+        description="Fase actual del proyecto.",
+        examples=["descubrimiento"],
+    )
+    status: str = Field(
+        description="Estado del proyecto.",
+        examples=["en_proceso"],
+    )
+    created_at: datetime = Field(
+        description="Timestamp ISO-8601 (UTC) de creación del proyecto.",
+        examples=["2026-06-16T10:00:00Z"],
+    )
+    updated_at: datetime = Field(
+        description="Timestamp ISO-8601 (UTC) de última modificación.",
+        examples=["2026-06-16T10:00:00Z"],
+    )
+
+
 class HttpErrorResponse(BaseModel):
     """Respuesta de error HTTP genérica para errores de infraestructura (4xx/5xx).
 
