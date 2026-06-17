@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from kosmo.contracts.sdd.ids import ProjectId
+    from kosmo.contracts.sdd.document import RichTextDocument
+    from kosmo.contracts.sdd.feature import Feature
+    from kosmo.contracts.sdd.ids import FeatureId, ProjectId
     from kosmo.contracts.sdd.project import Project
 
 
@@ -17,3 +19,29 @@ class ProjectRepository(Protocol):
     async def list_by_owner(self, owner_id: str) -> list[Project]: ...
 
     async def save(self, project: Project) -> Project: ...
+
+
+class FeatureRepository(Protocol):
+    async def by_id(self, feature_id: FeatureId) -> Feature | None: ...
+
+    async def list_by_project(self, project_id: ProjectId) -> list[Feature]: ...
+
+    async def save(self, feature: Feature) -> Feature: ...
+
+    async def save_many(self, features: list[Feature]) -> list[Feature]: ...
+
+    async def next_number(self, project_id: ProjectId) -> int: ...
+
+
+class DocumentRepository(Protocol):
+    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None: ...
+
+    async def save_discovery(
+        self, project_id: ProjectId, document: RichTextDocument
+    ) -> RichTextDocument: ...
+
+    async def get_requirements(self, feature_id: FeatureId) -> RichTextDocument | None: ...
+
+    async def save_requirements(
+        self, feature_id: FeatureId, document: RichTextDocument
+    ) -> RichTextDocument: ...

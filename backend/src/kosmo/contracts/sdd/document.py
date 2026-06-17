@@ -101,11 +101,11 @@ class ProjectStatus(StrEnum):
 
 
 class SpecPhase(StrEnum):
-    descubrimiento = "descubrimiento"
-    caracteristicas = "caracteristicas"
-    requisitos = "requisitos"
-    modelo = "modelo"
-    implementacion = "implementacion"
+    DESCUBRIMIENTO = "descubrimiento"
+    CARACTERISTICAS = "caracteristicas"
+    REQUISITOS = "requisitos"
+    MODELO = "modelo"
+    IMPLEMENTACION = "implementacion"
 
 
 class EARSPatternLabel(StrEnum):
