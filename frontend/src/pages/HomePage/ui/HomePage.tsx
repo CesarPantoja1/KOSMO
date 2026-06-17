@@ -2,6 +2,7 @@ import { ButtonLG, ButtonMD, ButtonSM } from '@/shared/ui';
 import { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Cards, Clock, List } from './icons';
 
 export const metadata: Metadata = {
 	title: 'KOSMO',
@@ -29,6 +30,10 @@ export function HomePage() {
 							Aprobar
 						</div>
 					</div>
+					<Cards color='text-base-600' />
+					<List color='text-base-600' />
+					<Clock color='text-base-600' />
+
 					<ButtonSM variant='destructive'>Eliminarrrrrrrrrrr</ButtonSM>
 					<ButtonLG variant='ai' icon={<span>✨</span>}>
 						Generar
@@ -56,14 +61,14 @@ export function HomePage() {
 				<div className='flex flex-col gap-4 text-base font-medium sm:flex-row'>
 					<Link
 						className='flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]'
-						href='project/1/discovery'
+						href='crear-proyecto'
 						rel='noopener noreferrer'
 					>
 						Proyecto 1
 					</Link>
 					<Link
 						className='flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]'
-						href='project/2/discovery'
+						href='crear-proyecto'
 						rel='noopener noreferrer'
 					>
 						Proyecto 2

@@ -4,6 +4,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
+import Discovery from './icons/Discovery';
+import { getStyleIconStatus } from '../lib/get-status-color';
+import WizardItem from './WizardItem';
+import {
+	Characteristics,
+	ComputerDesktop,
+	Home,
+	Implementation,
+	Modeling,
+	Requirements,
+	Right,
+	Sidebar,
+	UserCircle,
+} from './icons';
+
 type ProjectPhase = {
 	key: string;
 	label: string;
@@ -15,18 +30,11 @@ interface MainNavbarProps {
 	project: {
 		name: string;
 	};
-	phases?: ProjectPhase[];
+	phases: ProjectPhase[];
 	onBackToHub?: () => void;
 	onOpenPalette?: () => void;
 	onOpenApiKeys?: () => void;
 }
-
-const defaultPhases: ProjectPhase[] = [
-	{ key: 'requirements', label: 'Requirements' },
-	{ key: 'discovery', label: 'Discovery' },
-	{ key: 'idea', label: 'Idea' },
-	{ key: 'modeling', label: 'Modeling' },
-];
 
 export function MainNavbar({
 	children,
@@ -41,7 +49,7 @@ export function MainNavbar({
 	const pathname = usePathname();
 	const params = useParams<{ projectId?: string }>() ?? {};
 	const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
-	const projectPhases = phases?.length ? phases : defaultPhases;
+	const projectPhases = phases;
 
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
@@ -78,7 +86,7 @@ export function MainNavbar({
 			return '/';
 		}
 
-		return `/project/${projectId}/${phase.key}`;
+		return `/proyecto/${projectId}/${phase.key}`;
 	};
 
 	const isPhaseActive = (phase: ProjectPhase) => {
@@ -86,19 +94,32 @@ export function MainNavbar({
 		return pathname === href || pathname?.endsWith(`/${phase.key}`);
 	};
 
+	const colors = getStyleIconStatus('completed');
+
 	return (
-		<header className='flex h-screen max-h-screen'>
-			<div className='flex-2/12 max-h-screen p-4 bg-green-700'>
-				<div className='flex flex-col '>
-					<span>KOSMO</span>
-					<button className='text-base' onClick={handleBackToHub}>
-						HOME
+		<header className='flex h-screen max-h-screen overflow-hidden'>
+			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-primary-50'>
+				<div className='relative flex py-5 justify-center bg-primary-100'>
+					<button
+						className='text-2xl font-semibold text-base-50 cursor-pointer'
+						onClick={handleBackToHub}
+					>
+						KOSMO
 					</button>
-					<hr />
-					<div className='flex justify-between gap-2'>
-						<h2>Proyectos</h2>
-						<button>+</button>
+					<div className='absolute right-1 top-0 bottom-0 flex items-center justify-center'>
+						<Sidebar size={38} color='text-base-50' />
 					</div>
+				</div>
+				<hr />
+				<div className='flex justify-between gap-2'>
+					<h2>Proyectos</h2>
+					<Link
+						className='flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]'
+						href='/crear-proyecto'
+						rel='noopener noreferrer'
+					>
+						+
+					</Link>
 				</div>
 
 				<div className='flex flex-col align-top flex-1'>
@@ -111,7 +132,7 @@ export function MainNavbar({
 						className='btn btn-ghost h-7 px-2 text-xs font-semibold text-text-primary hover:text-text-primary'
 						onClick={() => setAvatarOpen(false)}
 					>
-						{project.name}
+						<ComputerDesktop color='text-base-600' /> {project.name}
 					</button>
 				</div>
 
@@ -121,12 +142,12 @@ export function MainNavbar({
 					<div className='relative'>
 						<button
 							type='button'
-							className='flex h-7 w-7 items-center justify-center rounded-full border-2 border-accent-primary bg-blue-50 text-[11px] font-bold text-accent-primary shadow-sm transition hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50'
+							className='flex items-center justify-center rounded-full border'
 							onClick={() => setAvatarOpen((value) => !value)}
 							aria-haspopup='menu'
 							aria-expanded={avatarOpen}
 						>
-							M
+							<UserCircle color='text-base-600' />
 						</button>
 
 						{avatarOpen && (
@@ -146,32 +167,52 @@ export function MainNavbar({
 				</div>
 			</div>
 
-			<div className='flex-10/12 max-h-screen relative overflow-y-auto p-4 bg-red-400'>
-				<div className='sticky top-0 left-0 max-h-screen '>
-					<div className='flex items-center gap-2 p-2'>HOla</div>
-					<nav className='mx-2 flex-1 items-center justify-center gap-1 bg-indigo-400'>
-						{projectPhases.map((phase) => {
-							const href = getPhaseHref(phase);
-							const active = isPhaseActive(phase);
-
-							return (
-								<Link
-									key={phase.key}
-									href={href}
-									className={`btn h-8 px-3 text-xs transition-colors ${
-										active
-											? 'bg-bg-subtle text-text-primary border-border-strong'
-											: 'btn-ghost text-text-secondary'
-									}`}
-									aria-current={active ? 'page' : undefined}
-								>
-									{phase.label}
-								</Link>
-							);
-						})}
+			<div className='flex w-10/12 min-h-0 flex-col overflow-hidden'>
+				<div className='z-50 shrink-0'>
+					<div className='flex items-center gap-2 p-2'>
+						<Home size={35} color='text-base-600' />
+						<Right size={25} color='text-base-600' />
+						Inicio
+					</div>
+					<nav className='flex justify-between px-16 py-3'>
+						<WizardItem
+							href='/proyecto/descubrimiento'
+							icon={<Discovery color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Descubrimiento'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/caracteristicas'
+							icon={<Characteristics color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Características'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/requisitos'
+							icon={<Requirements color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Requisitos'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/modelo'
+							icon={<Modeling color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Modelo'
+							labelStyles={colors.labelStyles}
+						/>
+						<WizardItem
+							href='/proyecto/codigo'
+							icon={<Implementation color={colors.iconStyles} />}
+							iconContainerStyles={colors.iconContainer}
+							label='Código'
+							labelStyles={colors.labelStyles}
+						/>
 					</nav>
 				</div>
-				<main>{children}</main>
+				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
 		</header>
 	);

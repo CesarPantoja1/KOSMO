@@ -82,4 +82,5 @@
 
 body {
 	font-family: var(--font-geist), sans-serif;
+	background-color: var(--color-base-50);
 }

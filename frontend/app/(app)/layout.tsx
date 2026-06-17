@@ -4,17 +4,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 	const props = {
 		project: { name: 'Ferreteria' },
 		phases: [
-			{ key: 'discovery', label: 'Descubrimiento' },
-			{ key: 'characteristics', label: 'Características' },
-			{ key: 'requirements', label: 'Requisitos' },
-			{ key: 'modeling', label: 'Modelado' },
-			{ key: 'prototype', label: 'Prototipo' },
-			{ key: 'implementation', label: 'Implementación' },
+			{ key: 'descubrimiento', label: 'Descubrimiento' },
+			{ key: 'caracteristicas', label: 'Características' },
+			{ key: 'requisitos', label: 'Requisitos' },
+			{ key: 'modelado', label: 'Modelado' },
+			{ key: 'implementacion', label: 'Implementación' },
 		],
 	};
 
 	return (
-		<div className='min-h-screen min-w-full max-h-screen bg-blue-500'>
+		<div className='min-h-screen min-w-full max-h-screen'>
 			<MainNavbar {...props}>{children}</MainNavbar>
 		</div>
 	);
