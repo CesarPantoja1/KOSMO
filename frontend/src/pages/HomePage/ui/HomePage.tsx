@@ -1,11 +1,10 @@
 'use client';
 
-import { ButtonLG, ButtonMD, ButtonSM, Plus } from '@/shared/ui';
+import { Plus } from '@/shared/ui';
 
-import Image from 'next/image';
 import Link from 'next/link';
-import { Cards, Clock, List } from './icons';
 import { useState } from 'react';
+import { Cards, Clock, List } from './icons';
 
 const stylesButtonToggle = {
 	on: {

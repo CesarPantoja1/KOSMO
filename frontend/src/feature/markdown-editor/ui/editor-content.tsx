@@ -1,18 +1,17 @@
 'use client';
 
 import {
+	BlockTypeSelect,
+	BoldItalicUnderlineToggles,
 	headingsPlugin,
 	listsPlugin,
+	ListsToggle,
 	markdownShortcutPlugin,
 	MDXEditor,
 	quotePlugin,
 	thematicBreakPlugin,
 	toolbarPlugin,
 	UndoRedo,
-	BoldItalicUnderlineToggles,
-	CreateLink,
-	ListsToggle,
-	BlockTypeSelect,
 } from '@mdxeditor/editor';
 
 import '@mdxeditor/editor/style.css';
@@ -24,11 +23,11 @@ interface Props {
 
 export function EditorContent({ markdown, onChange }: Props) {
 	return (
-		<div className='flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-snow'>
+		<div className='flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-base-300'>
 			<MDXEditor
 				markdown={markdown}
 				onChange={onChange}
-				contentEditableClassName='prose dark:prose-invert max-w-none px-10 py-20 focus:outline-none overflow-y-auto'
+				contentEditableClassName='prose max-w-none px-10 py-20 bg-base-50 focus:outline-none overflow-y-auto'
 				plugins={[
 					headingsPlugin(),
 					listsPlugin(),
@@ -36,6 +35,7 @@ export function EditorContent({ markdown, onChange }: Props) {
 					thematicBreakPlugin(),
 					markdownShortcutPlugin(),
 					toolbarPlugin({
+						toolbarClassName: 'bg-base-300',
 						toolbarContents: () => (
 							<>
 								<UndoRedo />

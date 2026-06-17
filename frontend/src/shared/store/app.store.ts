@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { create } from 'zustand';
 
 interface AppState {
@@ -20,3 +21,5 @@ export const initializeProject = {
 	created_at: '2026-06-17T16:58:09.529601Z',
 	updated_at: '2026-06-17T16:58:09.529606Z',
 };
+
+const [isProyectosOpen, setIsProyectosOpen] = useState(false);

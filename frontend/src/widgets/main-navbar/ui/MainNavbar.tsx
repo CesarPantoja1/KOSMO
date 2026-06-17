@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-import Discovery from './icons/Discovery';
 import { getStyleIconStatus } from '../lib/get-status-color';
 import WizardItem from './WizardItem';
 import {
@@ -18,6 +17,7 @@ import {
 	Sidebar,
 	UserCircle,
 } from './icons';
+import Discovery from './icons/Discovery';
 
 type ProjectPhase = {
 	key: string;
@@ -30,7 +30,7 @@ interface MainNavbarProps {
 	project: {
 		name: string;
 	};
-	phases: ProjectPhase[];
+
 	onBackToHub?: () => void;
 	onOpenPalette?: () => void;
 	onOpenApiKeys?: () => void;
@@ -39,7 +39,7 @@ interface MainNavbarProps {
 export function MainNavbar({
 	children,
 	project,
-	phases,
+
 	onBackToHub,
 	onOpenApiKeys,
 }: MainNavbarProps) {
@@ -48,7 +48,6 @@ export function MainNavbar({
 	const pathname = usePathname();
 	const params = useParams<{ projectId?: string }>() ?? {};
 	const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
-	const projectPhases = phases;
 
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
@@ -210,7 +209,7 @@ export function MainNavbar({
 						</nav>
 					)}
 				</div>
-				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
+				<main className='min-h-0 flex-1 overflow-hidden px-8'>{children}</main>
 			</div>
 		</header>
 	);

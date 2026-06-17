@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useForm, useController } from 'react-hook-form';
+import { useProjectStore } from '@/entities/project/model/store';
+import { Ai } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useProjectStore } from '@/entities/project/model/store';
-import { ButtonMD, Ai, ButtonSM } from '@/shared/ui';
-import { CharacterCounter } from './CharacterCounter';
+import { useCallback, useState } from 'react';
+import { useController, useForm } from 'react-hook-form';
 import { createProject } from '../api/create-project';
 import { projectSchema, type ProjectFormData } from '../lib/schema';
+import { CharacterCounter } from './CharacterCounter';
 
 const emojiRegex = /\p{Extended_Pictographic}/gu;
 
