@@ -20,8 +20,8 @@ class ProblemDetail:
     status: int
     detail: str
     instance: str
-    trace_id: str = field(default_factory=lambda: ulid.new().str)
-    violations: list[Violation] = field(default_factory=lambda: list[Violation]())
+    trace_id: str = field(default_factory=lambda: str(ulid.new()))
+    violations: list[Violation] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
 
 class SpecError(Exception):

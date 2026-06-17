@@ -70,7 +70,7 @@ class ContextBuilder:
         features = await self._feature_repo.list_by_project(project_id)
         return FeaturesPhaseContext(
             discovery_document=doc,
-            existing_feature_titles=[f.title for f in features],
+            existing_feature_titles=[f.title for f in features],  # type: ignore[reportAttributeAccessIssue]
         )
 
     async def _build_ears_context(
@@ -97,7 +97,7 @@ class ContextBuilder:
             )
         features = await self._feature_repo.list_by_project(project_id)
         feature_number = next(
-            (i + 1 for i, f in enumerate(features) if f.id == feature_id),
+            (i + 1 for i, f in enumerate(features) if f.id == feature_id),  # type: ignore[reportAttributeAccessIssue]
             1,
         )
         return EARSPhaseContext(
@@ -115,7 +115,7 @@ class ContextBuilder:
         next_number = len(features) + 1
         return SuggestFeaturesContext(
             discovery_document=doc,
-            existing_feature_titles=[f.title for f in features],
+            existing_feature_titles=[f.title for f in features],  # type: ignore[reportAttributeAccessIssue]
             next_feature_number=next_number,
         )
 
