@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from kosmo.application.auth import (
     AuthorizeWithPkce,
@@ -12,9 +17,19 @@ from kosmo.application.auth import (
     RevokeSession,
     VerifyAccessToken,
 )
+from kosmo.application.projects import (
+    CreateProjectUseCase,
+    GetProjectUseCase,
+    ListProjectsUseCase,
+)
 from kosmo.config import Settings
+from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
-from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyUserRepository
+from kosmo.infrastructure.persistence.postgres.repositories import (
+    SqlAlchemyAuditEventSink,
+    SqlAlchemyProjectRepository,
+    SqlAlchemyUserRepository,
+)
 from kosmo.infrastructure.persistence.redis import (
     RedisAuthorizationCodeStore,
     RedisLoginAttemptStore,
@@ -38,6 +53,7 @@ class AuthComponents:
     secret_cipher: SecretCipher
     user_repository: UserRepository
     login_attempt_store: LoginAttemptStore
+    audit_sink: AuditEventSink
     register_user: RegisterUser
     authorize_with_pkce: AuthorizeWithPkce
     exchange_authorization_code: ExchangeAuthorizationCode
@@ -45,6 +61,24 @@ class AuthComponents:
     verify_access_token: VerifyAccessToken
     refresh_token_pair: RefreshTokenPair
     revoke_session: RevokeSession
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectComponents:
+    create_project: CreateProjectUseCase
+    get_project: GetProjectUseCase
+    list_projects: ListProjectsUseCase
+
+
+def build_project_components(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> ProjectComponents:
+    project_repository = SqlAlchemyProjectRepository(session_factory)
+    return ProjectComponents(
+        create_project=CreateProjectUseCase(project_repository=project_repository),
+        get_project=GetProjectUseCase(project_repository=project_repository),
+        list_projects=ListProjectsUseCase(project_repository=project_repository),
+    )
 
 
 def build_auth_components(settings: Settings) -> AuthComponents:
@@ -80,6 +114,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
     )
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     user_repository = SqlAlchemyUserRepository(session_factory)
+    audit_sink = SqlAlchemyAuditEventSink(session_factory)
 
     password_hasher = Argon2idPasswordHasher(
         Argon2idParameters(
@@ -99,15 +134,18 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         secret_cipher=secret_cipher,
         user_repository=user_repository,
         login_attempt_store=login_attempt_store,
+        audit_sink=audit_sink,
         register_user=RegisterUser(
             user_repository=user_repository,
             password_hasher=password_hasher,
+            audit_sink=audit_sink,
         ),
         authorize_with_pkce=AuthorizeWithPkce(
             user_repository=user_repository,
             password_hasher=password_hasher,
             authorization_code_store=authorization_code_store,
             login_attempt_store=login_attempt_store,
+            audit_sink=audit_sink,
         ),
         exchange_authorization_code=ExchangeAuthorizationCode(
             authorization_code_store=authorization_code_store,
@@ -116,7 +154,12 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         issue_token_pair=issue_token_pair,
         verify_access_token=VerifyAccessToken(verifier=verifier, revocation_store=token_store),
         refresh_token_pair=RefreshTokenPair(
-            issuer=issuer, verifier=verifier, revocation_store=token_store
+            issuer=issuer,
+            verifier=verifier,
+            revocation_store=token_store,
+            audit_sink=audit_sink,
         ),
-        revoke_session=RevokeSession(verifier=verifier, revocation_store=token_store),
+        revoke_session=RevokeSession(
+            verifier=verifier, revocation_store=token_store, audit_sink=audit_sink
+        ),
     )

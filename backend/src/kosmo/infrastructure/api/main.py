@@ -5,11 +5,13 @@ from typing import Any, cast
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from kosmo.config import settings
-from kosmo.infrastructure.api.composition import build_auth_components
+from kosmo.infrastructure.api.composition import build_auth_components, build_project_components
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
+from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
@@ -25,6 +27,14 @@ _OPENAPI_TAGS = [
             "``code_verifier`` efímero, solicita un ``authorization_code`` en ``/authorize``, "
             "lo intercambia por tokens JWT en ``/token`` y los renueva con ``/refresh``. "
             "Todos los endpoints protegidos requieren ``Authorization: Bearer <access_token>``."
+        ),
+    },
+    {
+        "name": "projects",
+        "description": (
+            "Gestión de proyectos. Permite crear, listar y consultar proyectos "
+            "asociados al usuario autenticado. Cada proyecto agrupa el ciclo "
+            "completo de especificación, modelado y generación de artefactos."
         ),
     },
     {
@@ -145,6 +155,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.user_repository = components.user_repository
     app.state.redis = components.redis
     app.state.db_engine = components.db_engine
+
+    session_factory = async_sessionmaker(components.db_engine, expire_on_commit=False)
+    project_components = build_project_components(session_factory)
+    app.state.create_project = project_components.create_project
+    app.state.get_project = project_components.get_project
+    app.state.list_projects = project_components.list_projects
+
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
         yield
@@ -177,6 +194,7 @@ app.add_middleware(
 app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(auth_router)
+app.include_router(projects_router)
 app.include_router(schemas_router)
 
 
@@ -215,7 +233,7 @@ def _custom_openapi() -> dict[str, Any]:
 
     # Registrar HttpErrorResponse en components/schemas
     http_error_schema = HttpErrorResponse.model_json_schema()
-    
+
     components: dict[str, Any] = schema.setdefault("components", {})
     schemas: dict[str, Any] = components.setdefault("schemas", {})
     schemas["HttpErrorResponse"] = http_error_schema

@@ -2,6 +2,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
     AccountLockedError,
     AuthorizationCode,
@@ -23,6 +24,7 @@ class AuthorizeWithPkce:
     password_hasher: PasswordHasher
     authorization_code_store: AuthorizationCodeStore
     login_attempt_store: LoginAttemptStore
+    audit_sink: AuditEventSink
     code_ttl_seconds: int = _AUTHORIZATION_CODE_TTL_SECONDS
 
     @traced("auth.login")
@@ -38,6 +40,15 @@ class AuthorizeWithPkce:
 
         remaining = await self.login_attempt_store.lockout_seconds(normalized_email)
         if remaining is not None:
+            await self.audit_sink.record(
+                AuditEvent(
+                    event_type="auth.account_locked",
+                    outcome=AuditOutcome.FAILURE,
+                    occurred_at=datetime.now(UTC),
+                    actor_email=normalized_email,
+                    metadata={"seconds_remaining": remaining},
+                )
+            )
             raise AccountLockedError(remaining)
 
         try:
@@ -62,9 +73,27 @@ class AuthorizeWithPkce:
             )
             await self.authorization_code_store.store(entry)
             await self.login_attempt_store.clear(normalized_email)
+            await self.audit_sink.record(
+                AuditEvent(
+                    event_type="auth.login",
+                    outcome=AuditOutcome.SUCCESS,
+                    occurred_at=datetime.now(UTC),
+                    actor_id=user.id,
+                    actor_email=normalized_email,
+                )
+            )
             record_auth_event("login_success", user_id=user.id)
             return entry
         except InvalidCredentialsError:
             await self.login_attempt_store.record_failure(normalized_email)
+            await self.audit_sink.record(
+                AuditEvent(
+                    event_type="auth.login",
+                    outcome=AuditOutcome.FAILURE,
+                    occurred_at=datetime.now(UTC),
+                    actor_email=normalized_email,
+                    metadata={"reason": "invalid_credentials"},
+                )
+            )
             record_auth_event("login_failure")
             raise

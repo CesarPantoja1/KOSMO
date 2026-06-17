@@ -19,6 +19,7 @@ from kosmo.application.auth import (  # noqa: E402
     RevokeSession,
     VerifyAccessToken,
 )
+from kosmo.contracts.audit import AuditEvent  # noqa: E402
 from kosmo.contracts.auth import (  # noqa: E402
     AuthorizationCode,
     RefreshConsumeResult,
@@ -159,6 +160,14 @@ class InMemoryLoginAttemptStore:
         return _LOCKOUT_SECONDS if count >= _MAX_FAILURES else None
 
 
+class InMemoryAuditEventSink:
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    async def record(self, event: AuditEvent) -> None:
+        self.events.append(event)
+
+
 @pytest.fixture
 def client() -> TestClient:
     settings = JwtSettings(
@@ -177,16 +186,20 @@ def client() -> TestClient:
     code_store = InMemoryAuthorizationCodeStore()
     token_store = InMemoryStore()
     attempt_store = InMemoryLoginAttemptStore()
+    audit_sink = InMemoryAuditEventSink()
 
     issue_token_pair = IssueTokenPair(issuer=issuer, revocation_store=token_store)
 
     app = FastAPI()
-    app.state.register_user = RegisterUser(user_repository=user_repository, password_hasher=hasher)
+    app.state.register_user = RegisterUser(
+        user_repository=user_repository, password_hasher=hasher, audit_sink=audit_sink
+    )
     app.state.authorize_with_pkce = AuthorizeWithPkce(
         user_repository=user_repository,
         password_hasher=hasher,
         authorization_code_store=code_store,
         login_attempt_store=attempt_store,
+        audit_sink=audit_sink,
     )
     app.state.exchange_authorization_code = ExchangeAuthorizationCode(
         authorization_code_store=code_store,
@@ -197,9 +210,14 @@ def client() -> TestClient:
         verifier=verifier, revocation_store=token_store
     )
     app.state.refresh_token_pair = RefreshTokenPair(
-        issuer=issuer, verifier=verifier, revocation_store=token_store
+        issuer=issuer,
+        verifier=verifier,
+        revocation_store=token_store,
+        audit_sink=audit_sink,
     )
-    app.state.revoke_session = RevokeSession(verifier=verifier, revocation_store=token_store)
+    app.state.revoke_session = RevokeSession(
+        verifier=verifier, revocation_store=token_store, audit_sink=audit_sink
+    )
     app.include_router(auth_router)
     app.include_router(schemas_router)
     return TestClient(app)

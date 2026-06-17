@@ -21,7 +21,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         request_id = uuid.uuid4().hex
-        structlog.contextvars.bind_contextvars(request_id=request_id)
+        client = request.client
+        ip_address = client.host if client is not None else None
+        user_agent = request.headers.get("user-agent")
+        structlog.contextvars.bind_contextvars(
+            request_id=request_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
         method = request.method
         path = request.url.path
