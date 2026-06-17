@@ -2,37 +2,34 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
+type Theme = 'light' | 'dark';
+
 interface ThemeContextType {
-	theme: 'light' | 'dark';
+	theme: Theme;
 	toggleTheme: () => void;
-	setTheme: (theme: 'light' | 'dark') => void;
+	setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const getInitialTheme = (): Theme => {
+	if (typeof window === 'undefined') {
+		return 'light';
+	}
+
+	const storedTheme = localStorage.getItem('theme');
+	if (storedTheme === 'light' || storedTheme === 'dark') {
+		return storedTheme;
+	}
+
+	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-	const [theme, setThemeState] = useState<'light' | 'dark'>('light');
-	const [mounted, setMounted] = useState(false);
-
-	// Initialize theme from localStorage or system preference
-	useEffect(() => {
-		const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-
-		if (storedTheme) {
-			setThemeState(storedTheme);
-		} else {
-			// Default to light theme or detect from system
-			const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-			setThemeState(prefersDark ? 'dark' : 'light');
-		}
-
-		setMounted(true);
-	}, []);
+	const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
 	// Apply theme to DOM
 	useEffect(() => {
-		if (!mounted) return;
-
 		const html = document.documentElement;
 
 		if (theme === 'dark') {
@@ -44,20 +41,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 		}
 
 		localStorage.setItem('theme', theme);
-	}, [theme, mounted]);
+	}, [theme]);
 
 	const toggleTheme = () => {
 		setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
 	};
 
-	const setTheme = (newTheme: 'light' | 'dark') => {
+	const setTheme = (newTheme: Theme) => {
 		setThemeState(newTheme);
 	};
-
-	// Prevent hydration mismatch by not rendering until mounted
-	if (!mounted) {
-		return <>{children}</>;
-	}
 
 	return (
 		<ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

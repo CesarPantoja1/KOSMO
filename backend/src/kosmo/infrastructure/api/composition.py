@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from kosmo.application.auth import (
     AuthorizeWithPkce,
@@ -12,11 +17,17 @@ from kosmo.application.auth import (
     RevokeSession,
     VerifyAccessToken,
 )
+from kosmo.application.projects import (
+    CreateProjectUseCase,
+    GetProjectUseCase,
+    ListProjectsUseCase,
+)
 from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
+    SqlAlchemyProjectRepository,
     SqlAlchemyUserRepository,
 )
 from kosmo.infrastructure.persistence.redis import (
@@ -50,6 +61,24 @@ class AuthComponents:
     verify_access_token: VerifyAccessToken
     refresh_token_pair: RefreshTokenPair
     revoke_session: RevokeSession
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectComponents:
+    create_project: CreateProjectUseCase
+    get_project: GetProjectUseCase
+    list_projects: ListProjectsUseCase
+
+
+def build_project_components(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> ProjectComponents:
+    project_repository = SqlAlchemyProjectRepository(session_factory)
+    return ProjectComponents(
+        create_project=CreateProjectUseCase(project_repository=project_repository),
+        get_project=GetProjectUseCase(project_repository=project_repository),
+        list_projects=ListProjectsUseCase(project_repository=project_repository),
+    )
 
 
 def build_auth_components(settings: Settings) -> AuthComponents:
