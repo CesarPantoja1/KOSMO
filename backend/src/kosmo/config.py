@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # API
     api_version: str = "v1"
     cors_allowed_origins: str = "http://localhost:3000"
+    auth_disabled: bool = False
 
     # Observabilidad
     logfire_token: SecretStr | None = None

@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from kosmo.application.auth import VerifyAccessToken
+from kosmo.config import settings
 from kosmo.contracts.auth import (
     AuthError,
     MissingTokenError,
@@ -24,6 +25,8 @@ async def get_principal(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
     verify: Annotated[VerifyAccessToken, Depends(_verify_use_case)],
 ) -> Principal:
+    if settings.auth_disabled:
+        return Principal(subject="dev_user", scopes=frozenset({"*"}))
     if credentials is None:
         raise _to_http(MissingTokenError("Missing bearer token"))
     try:
