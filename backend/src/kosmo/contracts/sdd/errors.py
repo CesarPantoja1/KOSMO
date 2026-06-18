@@ -20,7 +20,13 @@ class ProblemDetail:
     status: int
     detail: str
     instance: str
-    trace_id: str = field(default_factory=lambda: str(ulid.new()))
+    trace_id: str = field(
+        default_factory=lambda: (
+            str(getattr(ulid, "new")())  # noqa: B009
+            if hasattr(ulid, "new")
+            else str(getattr(ulid, "ULID")())  # noqa: B009
+        )
+    )
     violations: list[Violation] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
 
