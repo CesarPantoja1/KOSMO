@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { createProject } from '../api/create-project';
+import { generateDiscovery } from '@/pages/project/DiscoveryPage/api/api';
+import LoadingDiscovery from '@/pages/project/DiscoveryPage/ui/LoadingDiscovery';
 import { projectSchema, type ProjectFormData } from '../lib/schema';
 import { CharacterCounter } from './CharacterCounter';
 
@@ -64,6 +66,15 @@ const CreateProjectForm = () => {
 				const project = await createProject(data);
 				setProjectId(project.id);
 				setProjectState(project);
+
+				// Generar el descubrimiento automáticamente con IA
+				try {
+					await generateDiscovery(project.id);
+				} catch (genErr) {
+					console.error('Error generando descubrimiento:', genErr);
+					// Navega igual aunque falle la generación
+				}
+
 				router.replace('/proyecto/descubrimiento');
 			} catch {
 				setIsSubmitting(false);
@@ -73,6 +84,8 @@ const CreateProjectForm = () => {
 	);
 
 	return (
+		<>
+		{isSubmitting && <LoadingDiscovery />}
 		<form
 			onSubmit={handleSubmit(onSubmit)}
 			className='flex-1 min-h-0 flex flex-col gap-2.5'
@@ -142,6 +155,7 @@ const CreateProjectForm = () => {
 				</div>
 			</div>
 		</form>
+		</>
 	);
 };
 

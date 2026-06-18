@@ -200,7 +200,7 @@ export function HomePage() {
 									<div className='p-1 px-3 bg-primary-50 rounded-sm flex justify-center items-center gap-2.5'>
 										<Clock size={16} color='text-primary-100' />
 										<div className='justify-start text-primary-100 text-sm font-medium'>
-											{(project as any).status || 'En progreso'}
+											{project.status || 'En progreso'}
 										</div>
 									</div>
 								</div>

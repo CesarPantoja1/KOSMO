@@ -65,6 +65,8 @@ exclude = [
     "**/.venv",
 ]
 pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

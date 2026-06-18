@@ -203,10 +203,7 @@ def build_pipeline_components(
         model_name = settings.llm_model
 
         # Build the fully-qualified model identifier for PydanticAI
-        if ":" not in model_name:
-            pydantic_ai_model = f"{provider}:{model_name}"
-        else:
-            pydantic_ai_model = model_name
+        pydantic_ai_model = f"{provider}:{model_name}" if ":" not in model_name else model_name
 
         # Set the API key as environment variable for the provider
         import os

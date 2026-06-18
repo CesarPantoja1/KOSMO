@@ -13,6 +13,7 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 
 	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setMounted(true);
 		if (isAuthDisabled) {
 			initMockUser();
@@ -22,7 +23,7 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 	useEffect(() => {
 		if (!mounted) return;
 		
-		if (!isAuthDisabled && !accessToken && !pathname.startsWith('/login') && !pathname.startsWith('/register')) {
+		if (!isAuthDisabled && !accessToken && pathname && !pathname.startsWith('/login') && !pathname.startsWith('/register')) {
 			// router.push('/login');
 		}
 	}, [accessToken, pathname, router, isAuthDisabled, mounted]);

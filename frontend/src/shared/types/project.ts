@@ -6,4 +6,6 @@ export interface Project {
 	owner_id: string;
 	created_at: string;
 	updated_at: string;
+	current_phase?: string;
+	status?: string;
 }
