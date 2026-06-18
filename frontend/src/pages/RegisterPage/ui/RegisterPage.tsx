@@ -51,9 +51,10 @@ const RegisterPage = () => {
 			setTimeout(() => {
 				router.push('/login');
 			}, 2000);
-		} catch (err: any) {
+		} catch (err) {
+			const errorMsg = err instanceof Error ? err.message : 'Error al registrar usuario';
 			console.error('Error al registrar:', err);
-			setError(err.message || 'Error al registrar usuario');
+			setError(errorMsg);
 		} finally {
 			setIsLoading(false);
 		}

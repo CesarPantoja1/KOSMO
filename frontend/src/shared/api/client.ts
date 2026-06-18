@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/auth.store';
 import { TokenPairResponse } from './auth';
 
 let isRefreshing = false;
-let failedQueue: { resolve: (value?: unknown) => void; reject: (reason?: any) => void }[] = [];
+let failedQueue: { resolve: (value?: unknown) => void; reject: (reason?: unknown) => void }[] = [];
 
 const processQueue = (error: Error | null, token: string | null = null) => {
 	failedQueue.forEach((prom) => {
@@ -90,7 +90,7 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 		try {
 			const data = await res.json();
 			if (data.detail) message = data.detail;
-		} catch (e) {}
+		} catch {}
 		const error = new Error(message) as Error & { status?: number };
 		error.status = res.status;
 		throw error;

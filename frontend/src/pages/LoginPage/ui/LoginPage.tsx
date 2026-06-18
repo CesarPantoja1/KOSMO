@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 
 const LoginPage = () => {
 	const router = useRouter();
-	const { setTokens, setUser, accessToken } = useAuthStore();
+	const { accessToken } = useAuthStore();
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [error, setError] = useState('');
@@ -34,9 +34,10 @@ const LoginPage = () => {
 			// Simulación
 			await new Promise(r => setTimeout(r, 1000));
 			router.push('/proyecto');
-		} catch (err: any) {
+		} catch (err) {
+			const errorMsg = err instanceof Error ? err.message : 'Error al iniciar sesión';
 			console.error('Error al iniciar sesión:', err);
-			setError(err.message || 'Error al iniciar sesión');
+			setError(errorMsg);
 		} finally {
 			setIsLoading(false);
 		}

@@ -28,8 +28,10 @@ const DiscoveryPage = () => {
 			try {
 				const data = await getDiscovery(currentProject.id);
 				setMarkdown(data.content);
-			} catch (err: any) {
-				if (err.status === 404 || (err.message && err.message.includes('404')) || (err.message && err.message.includes('no existe'))) {
+			} catch (err) {
+				const errorStatus = err && typeof err === 'object' && 'status' in err ? (err as { status: unknown }).status : undefined;
+				const errorMessage = err instanceof Error ? err.message : '';
+				if (errorStatus === 404 || errorMessage.includes('404') || errorMessage.includes('no existe')) {
 					// No discovery yet
 					setMarkdown('## Visión del producto\n\nAún no hay descubrimiento para este proyecto.');
 				} else {
