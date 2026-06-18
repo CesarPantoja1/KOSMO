@@ -16,11 +16,14 @@ class GuardrailResult:
 
 # Secciones que debe tener el documento de descubrimiento
 DISCOVERY_SECTIONS: list[str] = [
-    "Vision del Producto",
-    "Problema que Resuelve",
-    "Publico Objetivo",
+    "Visión",
+    "Espacio de problema",
+    "Actores",
     "Propuesta de Valor",
-    "Contexto del Negocio",
+    "Casos de Uso",
+    "Capacidades Principales",
+    "Reglas de Negocio",
+    "Atributos de Calidad",
 ]
 
 # Términos técnicos que la IA tiene prohibido usar en la visión del producto.
