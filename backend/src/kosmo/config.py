@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     redis_url: SecretStr
 
     # LLM BYOK
-    llm_provider: Literal["anthropic", "openai", "gemini", "noop"]
+    llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
     llm_model: str
     llm_api_key: SecretStr | None = None
 
