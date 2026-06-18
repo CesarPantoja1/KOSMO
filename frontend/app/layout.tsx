@@ -1,6 +1,5 @@
 import './globals.css';
 import localFont from 'next/font/local';
-import { MSWProvider } from './providers/msw-provider';
 import { ThemeProvider } from 'app/providers/theme-provider';
 
 const geistSans = localFont({
@@ -25,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 		<html lang='es' className={geistSans.variable}>
 			<body>
 				<ThemeProvider>
-					<MSWProvider>{children}</MSWProvider>
+					{children}
 				</ThemeProvider>
 			</body>
 		</html>

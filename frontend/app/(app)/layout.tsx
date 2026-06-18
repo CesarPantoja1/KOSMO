@@ -1,8 +1,14 @@
-import { MainNavbar } from '@/widgets/main-navbar/ui/MainNavbar';
+'use client';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+import { MainNavbar } from '@/widgets/main-navbar/ui/MainNavbar';
+import { AuthGuard } from '@/shared/ui/AuthGuard';
+import { useAppStore } from '@/shared/store/app.store';
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+	const { currentProject } = useAppStore();
+
 	const props = {
-		project: { name: 'Ferreteria' },
+		project: currentProject || { name: 'Sin Proyecto' },
 		phases: [
 			{ key: 'descubrimiento', label: 'Descubrimiento' },
 			{ key: 'caracteristicas', label: 'Características' },
@@ -13,8 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 	};
 
 	return (
-		<div className='min-h-screen min-w-full max-h-screen'>
-			<MainNavbar {...props}>{children}</MainNavbar>
-		</div>
+		<AuthGuard>
+			<div className='min-h-screen min-w-full max-h-screen'>
+				<MainNavbar {...props}>{children}</MainNavbar>
+			</div>
+		</AuthGuard>
 	);
 }

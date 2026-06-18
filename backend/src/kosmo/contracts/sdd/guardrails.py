@@ -3,83 +3,75 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(frozen=True)
 class GuardrailViolation:
-    message: str
+    term: str
+    context: str
+    section: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class GuardrailResult:
-    passed: bool = True
-    violations: list[GuardrailViolation] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    is_valid: bool
+    violations: list[GuardrailViolation] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+    @property
+    def error_messages(self) -> list[str]:
+        return [
+            f'Termino prohibido "{v.term}" encontrado en {v.section}: {v.context}'
+            for v in self.violations
+        ]
 
 
-# Secciones que debe tener el documento de descubrimiento
 DISCOVERY_SECTIONS: list[str] = [
-    "Vision del Producto",
-    "Problema que Resuelve",
-    "Publico Objetivo",
-    "Propuesta de Valor",
-    "Contexto del Negocio",
+    "Visión del producto",
+    "Espacio del problema",
+    "Actores",
+    "Propuesta de valor",
+    "Casos de uso",
+    "Capacidades principales",
+    "Reglas de negocio",
+    "Atributos de calidad",
+    "Alcance",
 ]
 
-# Términos técnicos que la IA tiene prohibido usar en la visión del producto.
-# Son reemplazados automáticamente por output_guardrails.auto_repair_technical_terms.
 PROHIBITED_TERMS: list[str] = [
-    # Infraestructura y arquitectura
+    "API",
+    "api",
     "base de datos",
     "database",
-    "SQL",
-    "NoSQL",
-    "API",
-    "REST",
-    "GraphQL",
     "microservicio",
-    "microservices",
+    "microservicios",
+    "endpoint",
+    "endpoints",
     "servidor",
     "server",
-    "frontend",
-    "backend",
+    "lenguaje de programacion",
     "framework",
-    "librería",
-    "library",
-    "cloud",
-    "nube",
-    "docker",
-    "kubernetes",
-    "contenedor",
-    "container",
-    "repositorio",
-    "repository",
-    # Conceptos de desarrollo
-    "endpoint",
-    "payload",
-    "token",
-    "JWT",
-    "OAuth",
-    "autenticación",
-    "authentication",
-    "middleware",
+    "protocolo",
+    "protocolos",
+    "arquitectura",
+    "deployment",
     "deploy",
-    "despliegue",
-    "pipeline",
-    "CI/CD",
-    "DevOps",
-    "compilar",
-    "compile",
-    "runtime",
-    "caché",
+    "Docker",
+    "docker",
+    "cloud",
+    "SQL",
+    "HTTP",
+    "REST",
+    "GraphQL",
+    "microservice",
+    "backend",
+    "frontend",
     "cache",
-    "log",
-    "logging",
-    # Lenguajes y plataformas
-    "Python",
-    "JavaScript",
-    "TypeScript",
-    "React",
-    "Next.js",
-    "FastAPI",
-    "PostgreSQL",
-    "MongoDB",
+    "caché",
     "Redis",
+    "redis",
+    "MongoDB",
+    "PostgreSQL",
+    "Kubernetes",
+    "K8s",
+    "AWS",
+    "GCP",
+    "Azure",
 ]

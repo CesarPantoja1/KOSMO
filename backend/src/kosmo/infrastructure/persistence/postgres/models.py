@@ -70,3 +70,20 @@ class ProjectModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class DiscoveryDocumentModel(Base):
+    __tablename__ = "discovery"
+
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        nullable=False,
+    )
+    markdown: Mapped[str] = mapped_column(Text(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

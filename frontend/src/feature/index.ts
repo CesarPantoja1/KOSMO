@@ -1,1 +1,4 @@
-export { MarkdownEditor } from './markdown-editor/ui/markdown-editor';
+export {
+	MarkdownEditor,
+	type MarkdownEditorHandle,
+} from './markdown-editor/ui/markdown-editor';

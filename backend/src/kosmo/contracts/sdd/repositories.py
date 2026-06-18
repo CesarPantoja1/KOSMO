@@ -45,3 +45,9 @@ class DocumentRepository(Protocol):
     async def save_requirements(
         self, feature_id: FeatureId, document: RichTextDocument
     ) -> RichTextDocument: ...
+
+
+class RequirementRepository(Protocol):
+    async def by_feature_id(self, feature_id: FeatureId) -> str | None: ...
+
+    async def save(self, feature_id: FeatureId, markdown: str) -> None: ...

@@ -2,7 +2,7 @@ import { CreateProjectForm } from './CreateProjectForm';
 
 const CreateProjectPage = () => {
 	return (
-		<div className='p-8 flex flex-col gap-2.5 h-full'>
+		<div className='flex flex-col py-8 px-0.5 gap-2.5 h-full'>
 			<div className='flex flex-col justify-start items-start gap-2.5'>
 				<h1 className='text-base-800 text-3xl font-bold'>Crear Proyecto</h1>
 				<p className='text-base-800 text-lg'>

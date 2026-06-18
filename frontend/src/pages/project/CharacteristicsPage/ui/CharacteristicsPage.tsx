@@ -1,9 +1,8 @@
-import { MarkdownEditor } from '@/feature';
 import { ButtonMD } from '@/shared/ui';
-import { Metadata } from 'next';
-import Trash from './icons/Trash';
-import { Edith, Search } from './icons';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
+import { Metadata } from 'next';
+import { Edith, Search } from './icons';
+import Trash from './icons/Trash';
 
 const metadata: Metadata = {
 	title: 'Características - KOSMO',

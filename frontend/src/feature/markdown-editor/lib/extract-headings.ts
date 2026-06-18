@@ -1,6 +1,7 @@
-import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 import { visit } from 'unist-util-visit';
+import type { Heading, Text } from 'mdast';
 
 import { HeadingItem } from '../types/heading';
 
@@ -17,10 +18,10 @@ export function extractHeadings(markdown: string): HeadingItem[] {
 
 	const headings: HeadingItem[] = [];
 
-	visit(tree, 'heading', (node: any) => {
+	visit(tree, 'heading', (node: Heading) => {
 		const text = node.children
-			.filter((child: any) => child.type === 'text')
-			.map((child: any) => child.value)
+			.filter((child): child is Text => child.type === 'text')
+			.map((child) => child.value)
 			.join('');
 
 		headings.push({

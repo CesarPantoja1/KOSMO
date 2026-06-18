@@ -1,1 +1,1 @@
-export { DiscoveryPage as default, metadata } from '@/pages/project/DiscoveryPage';
+export { DiscoveryPage as default } from '@/pages/project/DiscoveryPage';

@@ -7,6 +7,7 @@ from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
     AuthorizeRequest,
     CreateProjectRequest,
+    DiscoveryResponse,
     LogoutRequest,
     OAuthErrorResponse,
     PrincipalView,
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/api/v1/schemas", tags=["schemas"])
 
 _REGISTRY: dict[str, type[BaseModel]] = {
     "CreateProjectRequest": CreateProjectRequest,
+    "DiscoveryResponse": DiscoveryResponse,
     "ProjectResponse": ProjectResponse,
     "RegisterRequest": RegisterRequest,
     "AuthorizeRequest": AuthorizeRequest,

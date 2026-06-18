@@ -1,20 +1,24 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useForm, useController } from 'react-hook-form';
+import { useProjectStore } from '@/entities/project/model/store';
+import { useAppStore } from '@/shared/store/app.store';
+import { Ai } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useProjectStore } from '@/entities/project/model/store';
-import { ButtonMD, Ai, ButtonSM } from '@/shared/ui';
-import { CharacterCounter } from './CharacterCounter';
+import { useCallback, useState } from 'react';
+import { useController, useForm } from 'react-hook-form';
 import { createProject } from '../api/create-project';
+import { generateDiscovery } from '@/pages/project/DiscoveryPage/api/api';
+import LoadingDiscovery from '@/pages/project/DiscoveryPage/ui/LoadingDiscovery';
 import { projectSchema, type ProjectFormData } from '../lib/schema';
+import { CharacterCounter } from './CharacterCounter';
 
 const emojiRegex = /\p{Extended_Pictographic}/gu;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
 	const setProjectId = useProjectStore((s) => s.setProjectId);
+	const setProjectState = useAppStore((s) => s.setProjectState);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const {
@@ -59,17 +63,29 @@ const CreateProjectForm = () => {
 		async (data: ProjectFormData) => {
 			setIsSubmitting(true);
 			try {
-				const { id } = await createProject(data);
-				setProjectId(id);
+				const project = await createProject(data);
+				setProjectId(project.id);
+				setProjectState(project);
+
+				// Generar el descubrimiento automáticamente con IA
+				try {
+					await generateDiscovery(project.id);
+				} catch (genErr) {
+					console.error('Error generando descubrimiento:', genErr);
+					// Navega igual aunque falle la generación
+				}
+
 				router.replace('/proyecto/descubrimiento');
 			} catch {
 				setIsSubmitting(false);
 			}
 		},
-		[router, setProjectId],
+		[router, setProjectId, setProjectState],
 	);
 
 	return (
+		<>
+		{isSubmitting && <LoadingDiscovery />}
 		<form
 			onSubmit={handleSubmit(onSubmit)}
 			className='flex-1 min-h-0 flex flex-col gap-2.5'
@@ -139,6 +155,7 @@ const CreateProjectForm = () => {
 				</div>
 			</div>
 		</form>
+		</>
 	);
 };
 

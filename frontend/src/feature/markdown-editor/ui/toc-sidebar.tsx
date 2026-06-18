@@ -27,12 +27,12 @@ export function TocSidebar({ headings, activeId }: Props) {
 
 	return (
 		<aside
-			className='sticky top-0 h-full shrink-0 overflow-y-auto border-r bg-snow transition-all duration-300'
+			className='sticky top-0 h-full shrink-0 overflow-y-auto bg-base-100 transition-all duration-300 pt-1'
 			style={{ width: isOpen ? 280 : 48 }}
 		>
 			{isOpen ? (
 				<>
-					<div className='mb-6 flex items-center justify-between pt-4 px-4'>
+					<div className='mb-6 flex items-center justify-between px-4'>
 						<h2 className='text-lg font-semibold uppercase tracking-wide'>Contenido</h2>
 						<button onClick={() => setIsOpen(false)} className='cursor-pointer'>
 							<CloseMarkdownContent />
@@ -61,7 +61,7 @@ export function TocSidebar({ headings, activeId }: Props) {
 					</nav>
 				</>
 			) : (
-				<div className='flex justify-center pt-4'>
+				<div className='flex justify-center'>
 					<button onClick={() => setIsOpen(true)} className='cursor-pointer'>
 						<OpenMarkdownContent />
 					</button>

@@ -42,13 +42,14 @@ class Settings(BaseSettings):
     redis_url: SecretStr
 
     # LLM BYOK
-    llm_provider: Literal["anthropic", "openai", "gemini", "noop"]
+    llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
     llm_model: str
     llm_api_key: SecretStr | None = None
 
     # API
     api_version: str = "v1"
     cors_allowed_origins: str = "http://localhost:3000"
+    auth_disabled: bool = False
 
     # Observabilidad
     logfire_token: SecretStr | None = None

@@ -1,22 +1,38 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { Project } from '@/shared/types/project';
 
 interface AppState {
 	initialized: boolean;
 	setInitialized: (v: boolean) => void;
+	currentProject: Project | null;
+	setCurrentProject: (project: Project) => void;
+	clearCurrentProject: () => void;
+	setProjectState: (project: Project) => void;
+	resetProjectState: () => void;
+	isProyectosOpen: boolean;
+	setIsProyectosOpen: (v: boolean) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-	initialized: false,
-	setInitialized: (v) => set({ initialized: v }),
-}));
-
-export const initializeProject = {
-	id: 'prj_18932d32f480431ca6799211d9d4871d',
-	name: 'Ferreteria',
-	slug: 'ferreteria',
-	description:
-		'App integral para la gestión de inventario y sucursales para una ferreteria',
-	owner_id: '43668b2b-79ac-4603-9b2b-cc385c150285',
-	created_at: '2026-06-17T16:58:09.529601Z',
-	updated_at: '2026-06-17T16:58:09.529606Z',
-};
+export const useAppStore = create<AppState>()(
+	persist(
+		(set) => ({
+			initialized: false,
+			setInitialized: (v) => set({ initialized: v }),
+			currentProject: null,
+			setCurrentProject: (project) => set({ currentProject: project }),
+			clearCurrentProject: () => set({ currentProject: null, isProyectosOpen: false }),
+			setProjectState: (project) => set({ currentProject: project, isProyectosOpen: true }),
+			resetProjectState: () => set({ currentProject: null, isProyectosOpen: false }),
+			isProyectosOpen: false,
+			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),
+		}),
+		{
+			name: 'kosmo-app-store',
+			partialize: (state) => ({
+				currentProject: state.currentProject,
+				isProyectosOpen: state.isProyectosOpen,
+			}),
+		},
+	),
+);
