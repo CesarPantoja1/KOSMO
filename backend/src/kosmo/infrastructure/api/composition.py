@@ -17,6 +17,11 @@ from kosmo.application.auth import (
     RevokeSession,
     VerifyAccessToken,
 )
+from kosmo.application.discovery import (
+    GenerateDiscoveryUseCase,
+    GetDiscoveryUseCase,
+    SaveDiscoveryUseCase,
+)
 from kosmo.application.projects import (
     CreateProjectUseCase,
     GetProjectUseCase,
@@ -231,4 +236,29 @@ def build_pipeline_components(
         context_builder=context_builder,
         agent=agent,
         orchestrator=orchestrator,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DiscoveryComponents:
+    generate_discovery: GenerateDiscoveryUseCase
+    get_discovery: GetDiscoveryUseCase
+    save_discovery: SaveDiscoveryUseCase
+
+
+def build_discovery_components(
+    session_factory: async_sessionmaker[AsyncSession],
+    pipeline: PipelineComponents,
+) -> DiscoveryComponents:
+    project_repo = SqlAlchemyProjectRepository(session_factory)
+    document_repo = SqlAlchemyDocumentRepository(session_factory)
+    return DiscoveryComponents(
+        generate_discovery=GenerateDiscoveryUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            context_builder=pipeline.context_builder,
+            agent=pipeline.agent,
+        ),
+        get_discovery=GetDiscoveryUseCase(document_repo=document_repo),
+        save_discovery=SaveDiscoveryUseCase(document_repo=document_repo),
     )

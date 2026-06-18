@@ -8,9 +8,15 @@ from fastapi.openapi.utils import get_openapi
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from kosmo.config import settings
-from kosmo.infrastructure.api.composition import build_auth_components, build_project_components
+from kosmo.infrastructure.api.composition import (
+    build_auth_components,
+    build_discovery_components,
+    build_pipeline_components,
+    build_project_components,
+)
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
+from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
@@ -35,6 +41,17 @@ _OPENAPI_TAGS = [
             "Gestión de proyectos. Permite crear, listar y consultar proyectos "
             "asociados al usuario autenticado. Cada proyecto agrupa el ciclo "
             "completo de especificación, modelado y generación de artefactos."
+        ),
+    },
+    {
+        "name": "discovery",
+        "description": (
+            "Generación de documentos de descubrimiento mediante IA. "
+            "Permite generar, consultar y actualizar el documento de visión "
+            "de producto de un proyecto. El documento se estructura en 8 "
+            "secciones obligatorias que cubren visión, problema, actores, "
+            "propuesta de valor, casos de uso, capacidades, reglas de negocio "
+            "y atributos de calidad."
         ),
     },
     {
@@ -162,6 +179,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.get_project = project_components.get_project
     app.state.list_projects = project_components.list_projects
 
+    pipeline_components = build_pipeline_components(settings, session_factory)
+    discovery_components = build_discovery_components(session_factory, pipeline_components)
+    app.state.generate_discovery = discovery_components.generate_discovery
+    app.state.get_discovery = discovery_components.get_discovery
+    app.state.save_discovery = discovery_components.save_discovery
+
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
         yield
@@ -195,6 +218,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(auth_router)
 app.include_router(projects_router)
+app.include_router(discovery_router)
 app.include_router(schemas_router)
 
 

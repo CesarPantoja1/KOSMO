@@ -431,3 +431,23 @@ class HttpErrorResponse(BaseModel):
         description="Mensaje descriptivo del error de infraestructura.",
         examples=["Error interno del servidor. Por favor contacte al soporte."],
     )
+
+
+class DiscoveryResponse(BaseModel):
+    """Documento de descubrimiento de un proyecto.
+
+    Coincide con la interfaz DiscoveryResponse del frontend.
+    """
+
+    id: str = Field(
+        description="Identificador del documento de descubrimiento.",
+        examples=["doc_prj_abc123def456"],
+    )
+    project_id: str = Field(
+        description="Identificador del proyecto al que pertenece el documento.",
+        examples=["prj_abc123def456"],
+    )
+    content: str = Field(
+        description="Contenido del documento en formato Markdown.",
+        examples=["## Visión\n..."],
+    )
