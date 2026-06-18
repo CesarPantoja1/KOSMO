@@ -1,146 +1,134 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from kosmo.contracts.pipeline.orchestrator_ports import (
-    PhaseMode,
-    ToolDefinition,
-)
-from kosmo.contracts.pipeline.phase_contexts import (
-    DiscoveryPhaseContext,
-    EARSPhaseContext,
-    FeaturesPhaseContext,
-    SuggestFeaturesContext,
-)
-from kosmo.contracts.pipeline.phase_outputs import (
-    ValidationResult,
-)
+from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
+from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
+from kosmo.contracts.pipeline.phase_outputs import ValidationResult
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.guardrails import (
-    DISCOVERY_SECTIONS,
-)
-from kosmo.domain.sdd.output_guardrails import (
-    detect_technical_terms,
+from kosmo.domain.pipeline.phase_validators.discovery_validator import (
+    validate_discovery_quality,
+    validate_discovery_structure,
 )
 
+_DISCOVERY_SYSTEM_PROMPT = (
+    "Eres un analista de negocio sénior. Aplicás ReAct internamente.\n"
+    "Generá el documento directamente, sin texto introductorio.\n"
+    "La primera línea del documento debe ser '## Visión del producto'.\n"
+    "No uses formato de historia de usuario (Como... quiero... para...).\n"
+    "No menciones tecnología ni implementación.\n"
+    "Todo en español con tildes correctas.\n\n"
+    "## Visión del producto\n\n"
+    "[Párrafo de 2-4 oraciones. Describe qué hace el producto, para quién,\n"
+    "y cuál es su propósito central.]\n\n"
+    "## Espacio del problema\n\n"
+    "[Describe el problema de negocio que resuelve. Quiénes lo sufren.\n"
+    "Consecuencias de no resolverlo.]\n\n"
+    "## Actores\n\n"
+    "[Lista de actores. Formato: '- **Actor:** descripción de su rol e interés.']\n\n"
+    "## Propuesta de valor\n\n"
+    "[Para cada actor, su beneficio concreto. Formato:\n"
+    "'- **Para Actor:** beneficio concreto.']\n\n"
+    "## Casos de uso\n\n"
+    "[Casos de uso resumidos, una línea por caso. Formato numerado:\n"
+    "'1. **Nombre del caso:** descripción breve de la interacción.'\n"
+    "Mínimo 4. Cada actor debe aparecer en al menos uno.]\n\n"
+    "## Capacidades principales\n\n"
+    "[Lista de funcionalidades clave. Formato:\n"
+    "'- **Capacidad:** descripción breve de lo que permite.']\n\n"
+    "## Reglas de negocio\n\n"
+    "[Reglas verificables. Formato: '1. Condición específica y verificable.'\n"
+    "Mínimo 4.]\n\n"
+    "## Atributos de calidad\n\n"
+    "[Requisitos no funcionales en lenguaje de negocio. Formato:\n"
+    "'- **Atributo:** descripción medible desde perspectiva del usuario.']\n\n"
+    "## Alcance\n\n"
+    "*Incluido:*\n"
+    "- Ítem incluido\n\n"
+    "*Excluido:*\n"
+    "- Ítem excluido (mínimo 3)\n\n"
+    "*Futuro potencial:*\n"
+    "- Mejora futura\n\n"
+    "REGLAS DE GENERACIÓN (no incluir en el documento):\n"
+    "- PROHIBIDO: API, base de datos, microservicios, endpoints, servidores, "
+    "lenguajes, frameworks, protocolos, arquitectura, deployment, Docker, "
+    "cloud, SQL, HTTP, REST, GraphQL, backend, frontend, cache, Redis, "
+    "MongoDB, PostgreSQL, Kubernetes, AWS, GCP, Azure.\n"
+    "- NO generes texto antes de '## Visión del producto'.\n"
+    "- Cada sección con contenido sustancial.\n"
+    "- Casos de uso resumidos, una línea por caso.\n"
+    "- Reglas de negocio verificables, no ambiguas.\n"
+    "- Al menos 3 exclusiones explícitas en Alcance.\n"
+    "- NUNCA uses formato 'Como... quiero... para...'.\n"
+    "- NO incluyas esta sección de instrucciones en tu respuesta.\n"
+    "- Tu respuesta debe contener ÚNICAMENTE las 9 secciones del documento,\n"
+    "  comenzando con '## Visión del producto' y terminando con '## Alcance'.\n"
+)
 
-class DiscoveryMode(PhaseMode):
-    """Modo de fase para la etapa de Descubrimiento del pipeline KOSMO.
 
-    Define las instrucciones que guían a la IA para generar un documento
-    de visión de producto estructurado con 8 secciones obligatorias,
-    reglas de formato, prohibiciones de contenido técnico y criterios
-    mínimos de completitud.
-    """
-
+class DiscoveryMode:
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.DESCUBRIMIENTO
 
     @property
     def system_prompt(self) -> str:
-        sections_desc = "\n".join(
-            f"{i}. **{s}** — desarrollá esta sección con al menos 2 o 3 oraciones sustantivas."
-            for i, s in enumerate(DISCOVERY_SECTIONS, 1)
-        )
-        return (
-            "Eres un analista de negocio experto y estratega de producto.\n\n"
-            "Tu tarea es generar un Documento de Visión de Producto estructurado "
-            "en formato Markdown, basado en el nombre y la descripción del proyecto "
-            "que el usuario te proporcionará.\n\n"
-            "## Reglas de contenido\n\n"
-            "- Usá exclusivamente **lenguaje de negocio**, centrado en el valor "
-            "para el usuario, los objetivos comerciales y el dominio del problema.\n"
-            "- **PROHIBIDO** mencionar tecnologías, bases de datos, lenguajes de "
-            "programación, frameworks, protocolos, infraestructura, arquitectura "
-            "de software o cualquier término técnico de implementación.\n"
-            "- Cada sección debe contener al menos **2 o 3 oraciones** con "
-            "información sustantiva y específica del proyecto, no genérica.\n"
-            "- Redactá en **español** profesional.\n"
-            "- Evitá listas genéricas sin contexto; cada afirmación debe estar "
-            "anclada en el dominio del proyecto.\n\n"
-            "## Estructura obligatoria\n\n"
-            "El documento debe incluir exactamente estas 8 secciones con "
-            "títulos de nivel 2 (##):\n\n"
-            f"{sections_desc}\n\n"
-            "## Formato de salida\n\n"
-            "Respondé **ÚNICAMENTE** con un objeto JSON válido con esta "
-            "estructura exacta:\n\n"
-            '```json\n'
-            '{"document": "## Visión\\n...\\n\\n'
-            '## Espacio de problema\\n...\\n\\n'
-            '## Actores\\n...\\n\\n'
-            '## Propuesta de Valor\\n...\\n\\n'
-            '## Casos de Uso\\n...\\n\\n'
-            '## Capacidades Principales\\n...\\n\\n'
-            '## Reglas de Negocio\\n...\\n\\n'
-            '## Atributos de Calidad\\n..."}\n'
-            '```\n\n'
-            "El campo `document` debe contener el Markdown completo del "
-            "documento. No incluyas texto fuera del JSON."
-        )
+        return _DISCOVERY_SYSTEM_PROMPT
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
-        return []
+        return [
+            ToolDefinition(
+                name="validate_discovery_structure",
+                description="Verifica que el documento tiene 9 secciones con contenido mínimo",
+            ),
+            ToolDefinition(
+                name="validate_discovery_quality",
+                description="Detecta jerga técnica, secciones vacías, términos prohibidos",
+            ),
+        ]
 
-    def build_user_prompt(
-        self,
-        context: (
-            DiscoveryPhaseContext
-            | FeaturesPhaseContext
-            | EARSPhaseContext
-            | SuggestFeaturesContext
-        ),
-    ) -> str:
-        if isinstance(context, DiscoveryPhaseContext):
-            return (
-                f"Nombre del Proyecto: {context.project_name}\n"
-                f"Descripción: {context.project_description}\n\n"
-                "Generá el Documento de Visión de Producto completo "
-                "siguiendo las instrucciones del sistema."
-            )
-        return (
-            "Generá el Documento de Visión de Producto completo "
-            "siguiendo las instrucciones del sistema."
-        )
+    def build_user_prompt(self, context: DiscoveryPhaseContext) -> str:
+        parts = [
+            "## Proyecto\n",
+            f"**Nombre:** {context.project_name}",
+            f"**Descripción:** {context.project_description}",
+        ]
+        if context.user_preferences:
+            prefs = "\n".join(f"- {p.rule_text}" for p in context.user_preferences)
+            parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
+        return "\n".join(parts)
 
     def validate_output(self, output: Any) -> ValidationResult:
-        text = self._extract_text(output)
-        errors: list[str] = []
-        warnings: list[str] = []
+        from kosmo.domain.sdd.document_converters import markdown_to_document
+        from kosmo.domain.sdd.output_guardrails import auto_repair_technical_terms
 
-        if not text.strip():
+        raw_text: str = ""
+        if isinstance(output, dict) and "document" in output:
+            raw_text = str(output["document"])  # type: ignore[reportUnknownArgumentType]
+        elif isinstance(output, dict) and "raw_text" in output:
+            raw_text = str(output["raw_text"])  # type: ignore[reportUnknownArgumentType]
+        elif isinstance(output, str):
+            raw_text = output
+        else:
             return ValidationResult(
                 is_valid=False,
-                errors=["El documento generado está vacío."],
+                errors=["Formato de salida no reconocido"],
             )
 
-        for section in DISCOVERY_SECTIONS:
-            if not self._has_section(text, section):
-                errors.append(f"Falta la sección obligatoria: '{section}'.")
-            else:
-                section_content = self._extract_section_content(text, section)
-                if len(section_content.split()) < 10:
-                    warnings.append(
-                        f"La sección '{section}' tiene menos de 10 palabras; "
-                        "posiblemente no cumple con el mínimo de completitud."
-                    )
+        raw_text = auto_repair_technical_terms(raw_text)
+        doc = markdown_to_document(raw_text)
 
-        guardrail_result = detect_technical_terms(text)
-        if not guardrail_result.passed:
-            for v in guardrail_result.violations:
-                errors.append(v.message)
+        structure_result = validate_discovery_structure(doc)
+        quality_result = validate_discovery_quality(doc)
 
-        quality_score = 1.0 - (len(errors) * 0.15 + len(warnings) * 0.05)
-        quality_score = max(0.0, min(1.0, quality_score))
+        all_errors = structure_result.errors + quality_result.errors
+        all_warnings = structure_result.warnings + quality_result.warnings
 
         return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings,
-            quality_score=quality_score,
+            is_valid=len(all_errors) == 0,
+            errors=all_errors,
+            warnings=all_warnings,
         )
 
     def build_retry_prompt(
@@ -149,46 +137,14 @@ class DiscoveryMode(PhaseMode):
         errors: list[str],
         retry_count: int,
     ) -> str:
-        errors_text = "\n".join(f"  - {e}" for e in errors)
+        error_list = "\n".join(f"- {e}" for e in errors)
         return (
-            f"⚠️ INTENTO DE CORRECCIÓN #{retry_count + 1}\n\n"
-            f"El documento generado anteriormente NO pasó la validación. "
-            f"Errores encontrados:\n\n"
-            f"{errors_text}\n\n"
             f"{original_prompt}\n\n"
-            "Corregí todos los errores listados arriba y generá nuevamente "
-            "el documento completo. Respondé solo con el JSON."
+            f"## Correcciones necesarias (intento {retry_count})\n\n"
+            f"El documento generado tiene los siguientes problemas:\n\n"
+            f"{error_list}\n\n"
+            f"Corrige estos problemas y genera el documento completo nuevamente.\n"
+            f"Recordá: no escribas texto introductorio, comenzá directamente con "
+            f"'## Visión del producto'. Los casos de uso deben ser resumidos, "
+            f"una línea por caso."
         )
-
-    @staticmethod
-    def _extract_text(output: object) -> str:
-        if isinstance(output, str):
-            return output
-        if isinstance(output, dict):
-            raw: dict[str, Any] = output  # type: ignore[assignment]
-            for key in ("document", "raw_text"):
-                value = raw.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value
-            try:
-                return json.dumps(raw)
-            except (TypeError, ValueError):
-                return str(raw)
-        return str(output)
-
-    @staticmethod
-    def _has_section(text: str, section_name: str) -> bool:
-        import re
-
-        pattern = rf"##\s+{re.escape(section_name)}\b"
-        return bool(re.search(pattern, text, re.IGNORECASE))
-
-    @staticmethod
-    def _extract_section_content(text: str, section_name: str) -> str:
-        import re
-
-        pattern = rf"##\s+{re.escape(section_name)}\b(.*?)(?=##\s+\S|\Z)"
-        match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
-        if match is None:
-            return ""
-        return match.group(1).strip()
