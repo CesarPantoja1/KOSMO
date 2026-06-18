@@ -164,23 +164,10 @@ async def save_discovery(
 
 
 def _document_to_markdown(doc: RichTextDocument) -> str:
-    lines: list[str] = []
-    for node in doc.nodes:
-        if node.type == "heading" and node.heading:
-            lines.append(f"{'#' * node.heading.level} {node.heading.text}")
-        elif node.content:
-            lines.append(node.content)
-    return "\n\n".join(lines)
+    from kosmo.domain.sdd.document_converters import document_to_markdown
+    return document_to_markdown(doc)
 
 
 def _markdown_to_document(content: str) -> RichTextDocument:
-    from kosmo.contracts.sdd.document import DocumentNode
-
-    return RichTextDocument(
-        nodes=[
-            DocumentNode(
-                type="paragraph",
-                content=content,
-            )
-        ]
-    )
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+    return markdown_to_document(content)

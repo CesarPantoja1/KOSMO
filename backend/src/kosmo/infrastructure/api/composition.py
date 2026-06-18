@@ -198,7 +198,31 @@ def build_pipeline_components(
     if settings.llm_provider.lower() == "noop":
         llm_client: LLMClient = NoopLLMClient()
     else:
-        llm_client = PydanticAILLMClient(model=settings.llm_model)
+        # PydanticAI expects model in "provider:model_name" format
+        provider = settings.llm_provider.lower()
+        model_name = settings.llm_model
+
+        # Build the fully-qualified model identifier for PydanticAI
+        if ":" not in model_name:
+            pydantic_ai_model = f"{provider}:{model_name}"
+        else:
+            pydantic_ai_model = model_name
+
+        # Set the API key as environment variable for the provider
+        import os
+        if settings.llm_api_key:
+            api_key_value = settings.llm_api_key.get_secret_value()
+            _provider_env_map = {
+                "openai": "OPENAI_API_KEY",
+                "anthropic": "ANTHROPIC_API_KEY",
+                "gemini": "GEMINI_API_KEY",
+                "deepseek": "DEEPSEEK_API_KEY",
+            }
+            env_var = _provider_env_map.get(provider)
+            if env_var and not os.environ.get(env_var):
+                os.environ[env_var] = api_key_value
+
+        llm_client = PydanticAILLMClient(model=pydantic_ai_model)
 
     # 2. Instanciar los repositorios disponibles
     project_repo = SqlAlchemyProjectRepository(session_factory)

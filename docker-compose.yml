@@ -50,6 +50,7 @@ services:
       PORT: "8000"
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
       DEV_GENERATE_SECRETS: ${DEV_GENERATE_SECRETS:-1}
+      AUTH_DISABLED: "true"
 
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}
       MONGO_URL: mongodb://${MONGO_USER:-kosmo}:${MONGO_PASSWORD:-kosmo}@mongodb:27017/${MONGO_DB:-kosmo_agent_memory}?authSource=admin
