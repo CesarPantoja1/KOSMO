@@ -2,7 +2,10 @@
 
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { Ai } from '@/shared/ui';
-import { useRef, useState } from 'react';
+import { useAppStore } from '@/shared/store/app.store';
+import { useRef, useState, useEffect } from 'react';
+import { getDiscovery } from '../api/api';
+import LoadingDiscovery from './LoadingDiscovery';
 
 const MockMD = `## Visión del producto
 Una aplicación que permite a grupos de amigos o roomies registrar gastos compartidos, calcular balances automáticos y sugerir la forma más eficiente de liquidar deudas, eliminando conflictos y confusiones en la gestión del dinero común.
@@ -74,6 +77,27 @@ En grupos de convivencia o viajes, dividir gastos como alquiler, comida o servic
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
 	const [markdown, setMarkdown] = useState(MockMD);
+	const currentProject = useAppStore((s) => s.currentProject);
+	const [isLoading, setIsLoading] = useState(!!currentProject);
+
+	useEffect(() => {
+		if (!currentProject) return;
+
+		const fetchDiscovery = async () => {
+			setIsLoading(true);
+			try {
+				const data = await getDiscovery(currentProject.id);
+				setMarkdown(data.content);
+			} catch {
+				await new Promise((resolve) => setTimeout(resolve, 10000));
+				setMarkdown(MockMD);
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		fetchDiscovery();
+	}, [currentProject]);
 
 	const handleSave = () => {
 		if (editorRef.current?.isDirty) {
@@ -83,33 +107,36 @@ const DiscoveryPage = () => {
 	};
 
 	return (
-		<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
-			<div className='flex flex-col gap-3'>
-				<div className='flex flex-col'>
-					<h3 className='text-base-800 text-3xl font-bold'>
-						Descripción general del producto
-					</h3>
-					<p className='text-base-600 mt-2'>
-						Visualiza y valida las especificaciones técnicas base de tu proyecto.
-					</p>
-				</div>
-				<div className='flex justify-end gap-3'>
-					<button
-						className='px-3.5 py-1.5 bg-primary-100 text-base-50 rounded-sm'
-						onClick={handleSave}
-					>
-						Guardar
-					</button>
+		<>
+			{isLoading && <LoadingDiscovery />}
+			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
+				<div className='flex flex-col gap-3'>
+					<div className='flex flex-col'>
+						<h3 className='text-base-800 text-3xl font-bold'>
+							Descripción general del producto
+						</h3>
+						<p className='text-base-600 mt-2'>
+							Visualiza y valida las especificaciones técnicas base de tu proyecto.
+						</p>
+					</div>
+					<div className='flex justify-end gap-3'>
+						<button
+							className='px-3.5 py-1.5 bg-primary-100 text-base-50 rounded-sm'
+							onClick={handleSave}
+						>
+							Guardar
+						</button>
 
-					<button className='flex justify-center items-center px-3.5 py-1.5 gap-3 rounded-sm bg-ai text-base-50 '>
-						<Ai size={20} color='text-base-50' />
-						<span className='text-center font-semibold'>Generar características</span>
-					</button>
+						<button className='flex justify-center items-center px-3.5 py-1.5 gap-3 rounded-sm bg-ai text-base-50 '>
+							<Ai size={20} color='text-base-50' />
+							<span className='text-center font-semibold'>Generar características</span>
+						</button>
+					</div>
 				</div>
+
+				<MarkdownEditor ref={editorRef} markdown={markdown} onChange={setMarkdown} />
 			</div>
-
-			<MarkdownEditor ref={editorRef} markdown={markdown} onChange={setMarkdown} />
-		</div>
+		</>
 	);
 };
 

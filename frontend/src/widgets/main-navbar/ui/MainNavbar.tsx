@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { useAppStore } from '@/shared/store/app.store';
+
 import { getStyleIconStatus } from '../lib/get-status-color';
+import { ProjectStatus } from '../types/status';
 import WizardItem from './WizardItem';
 import {
 	Characteristics,
@@ -18,12 +21,6 @@ import {
 	UserCircle,
 } from './icons';
 import Discovery from './icons/Discovery';
-
-type ProjectPhase = {
-	key: string;
-	label: string;
-	href?: string;
-};
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -46,11 +43,26 @@ export function MainNavbar({
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
-	const params = useParams<{ projectId?: string }>() ?? {};
-	const projectId = typeof params.projectId === 'string' ? params.projectId : undefined;
+
+	const isProyectosOpen = useAppStore((s) => s.isProyectosOpen);
+	const currentProject = useAppStore((s) => s.currentProject);
+	const resetProjectState = useAppStore((s) => s.resetProjectState);
+
+	const phaseItems = [
+		{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'Descubrimiento' },
+		{
+			href: '/proyecto/caracteristicas',
+			Icon: Characteristics,
+			label: 'Características',
+		},
+		{ href: '/proyecto/requisitos', Icon: Requirements, label: 'Requisitos' },
+		{ href: '/proyecto/modelo', Icon: Modeling, label: 'Modelo' },
+		{ href: '/proyecto/codigo', Icon: Implementation, label: 'Código' },
+	] as const;
 
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
+		resetProjectState();
 		if (onBackToHub) {
 			onBackToHub();
 			return;
@@ -68,27 +80,6 @@ export function MainNavbar({
 
 		router.push('/profile');
 	};
-
-	const getPhaseHref = (phase: ProjectPhase) => {
-		if (phase.href) {
-			return phase.href;
-		}
-
-		if (!projectId) {
-			return '/';
-		}
-
-		return `/proyecto/${projectId}/${phase.key}`;
-	};
-
-	const isPhaseActive = (phase: ProjectPhase) => {
-		const href = getPhaseHref(phase);
-		return pathname === href || pathname?.endsWith(`/${phase.key}`);
-	};
-
-	const colors = getStyleIconStatus('completed');
-
-	const [isProyectosOpen, setIsProyectosOpen] = useState(false);
 
 	return (
 		<header className='flex h-screen max-h-screen overflow-hidden'>
@@ -126,7 +117,8 @@ export function MainNavbar({
 						className='btn btn-ghost h-7 px-2 text-xs font-semibold text-text-primary hover:text-text-primary'
 						onClick={() => setAvatarOpen(false)}
 					>
-						<ComputerDesktop color='text-base-600' /> {project.name}
+						<ComputerDesktop color='text-base-600' />{' '}
+						{currentProject?.name ?? project.name}
 					</button>
 				</div>
 
@@ -161,55 +153,34 @@ export function MainNavbar({
 				</div>
 			</div>
 
-			<div className='flex w-10/12 min-h-0 flex-col overflow-hidden'>
+			<div className='flex w-10/12 min-h-0 flex-col overflow-hidden mx-8'>
 				<div className='z-50 shrink-0'>
-					<div className='flex items-center gap-2 p-2'>
-						<Home size={35} color='text-base-600' />
-						<Right size={25} color='text-base-600' />
-						Inicio
+					<div className='flex items-center gap-1 py-3'>
+						<Home size={32} color='text-base-600' />
+						<Right size={28} color='text-base-600' />
+						<span className='text-base-600 text-xl font-medium'>Descripción</span>
 					</div>
 
 					{isProyectosOpen && (
-						<nav className='flex justify-between px-16 py-3'>
-							<WizardItem
-								href='/proyecto/descubrimiento'
-								icon={<Discovery color={colors.iconStyles} />}
-								iconContainerStyles={colors.iconContainer}
-								label='Descubrimiento'
-								labelStyles={colors.labelStyles}
-							/>
-							<WizardItem
-								href='/proyecto/caracteristicas'
-								icon={<Characteristics color={colors.iconStyles} />}
-								iconContainerStyles={colors.iconContainer}
-								label='Características'
-								labelStyles={colors.labelStyles}
-							/>
-							<WizardItem
-								href='/proyecto/requisitos'
-								icon={<Requirements color={colors.iconStyles} />}
-								iconContainerStyles={colors.iconContainer}
-								label='Requisitos'
-								labelStyles={colors.labelStyles}
-							/>
-							<WizardItem
-								href='/proyecto/modelo'
-								icon={<Modeling color={colors.iconStyles} />}
-								iconContainerStyles={colors.iconContainer}
-								label='Modelo'
-								labelStyles={colors.labelStyles}
-							/>
-							<WizardItem
-								href='/proyecto/codigo'
-								icon={<Implementation color={colors.iconStyles} />}
-								iconContainerStyles={colors.iconContainer}
-								label='Código'
-								labelStyles={colors.labelStyles}
-							/>
+						<nav className='flex justify-between px-16 py-3 bg-base-100 outline outline-1 outline-base-300 rounded-sm'>
+							{phaseItems.map(({ href, Icon, label }) => {
+								const status: ProjectStatus = pathname === href ? 'active' : 'disable';
+								const colors = getStyleIconStatus(status);
+								return (
+									<WizardItem
+										key={href}
+										href={href}
+										icon={<Icon color={colors.iconStyles} />}
+										iconContainerStyles={colors.iconContainer}
+										label={label}
+										labelStyles={colors.labelStyles}
+									/>
+								);
+							})}
 						</nav>
 					)}
 				</div>
-				<main className='min-h-0 flex-1 overflow-hidden px-8'>{children}</main>
+				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
 		</header>
 	);

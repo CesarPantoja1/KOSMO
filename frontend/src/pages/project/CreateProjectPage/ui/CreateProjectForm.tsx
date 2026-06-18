@@ -1,6 +1,7 @@
 'use client';
 
 import { useProjectStore } from '@/entities/project/model/store';
+import { useAppStore } from '@/shared/store/app.store';
 import { Ai } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
@@ -15,6 +16,7 @@ const emojiRegex = /\p{Extended_Pictographic}/gu;
 const CreateProjectForm = () => {
 	const router = useRouter();
 	const setProjectId = useProjectStore((s) => s.setProjectId);
+	const setProjectState = useAppStore((s) => s.setProjectState);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const {
@@ -59,14 +61,15 @@ const CreateProjectForm = () => {
 		async (data: ProjectFormData) => {
 			setIsSubmitting(true);
 			try {
-				const { id } = await createProject(data);
-				setProjectId(id);
+				const project = await createProject(data);
+				setProjectId(project.id);
+				setProjectState(project);
 				router.replace('/proyecto/descubrimiento');
 			} catch {
 				setIsSubmitting(false);
 			}
 		},
-		[router, setProjectId],
+		[router, setProjectId, setProjectState],
 	);
 
 	return (
