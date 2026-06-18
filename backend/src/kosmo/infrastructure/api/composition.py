@@ -25,10 +25,22 @@ from kosmo.application.projects import (
 from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
+from kosmo.contracts.llm.ports import LLMClient
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.repositories import FeatureRepository
+from kosmo.domain.pipeline.context_builder import ContextBuilder
+from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
+from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
+from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
+from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
+from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyProjectRepository,
     SqlAlchemyUserRepository,
+)
+from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
+    SqlAlchemyDocumentRepository,
 )
 from kosmo.infrastructure.persistence.redis import (
     RedisAuthorizationCodeStore,
@@ -162,4 +174,61 @@ def build_auth_components(settings: Settings) -> AuthComponents:
         revoke_session=RevokeSession(
             verifier=verifier, revocation_store=token_store, audit_sink=audit_sink
         ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineComponents:
+    llm_client: LLMClient
+    context_builder: ContextBuilder
+    agent: KOSMOAgent
+    orchestrator: SequentialOrchestrator
+
+
+def build_pipeline_components(
+    settings: Settings,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> PipelineComponents:
+    # 1. Seleccionar el adaptador LLM según la configuración
+    if settings.llm_provider.lower() == "noop":
+        llm_client: LLMClient = NoopLLMClient()
+    else:
+        llm_client = PydanticAILLMClient(model=settings.llm_model)
+
+    # 2. Instanciar los repositorios disponibles
+    project_repo = SqlAlchemyProjectRepository(session_factory)
+    document_repo = SqlAlchemyDocumentRepository(session_factory)
+    
+    # FeatureRepository no está implementado aún (HU-05)
+    feature_repo: FeatureRepository = None  # type: ignore[reportAssignmentType]
+
+    # 3. Construir el constructor de contexto
+    context_builder = ContextBuilder(
+        document_repo=document_repo,
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+    )
+
+    # 4. Configurar modos de fase
+    modes = {
+        SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
+    }
+
+    # 5. Instanciar el agente KOSMO
+    agent = KOSMOAgent(
+        llm_client=llm_client,
+        context_builder=context_builder,
+        modes=modes,  # type: ignore[reportArgumentType]
+    )
+
+    # 6. Instanciar el orquestador secuencial
+    orchestrator = SequentialOrchestrator()
+
+    # (Aquí se instanciarán y retornarán los casos de uso a medida que se implementen)
+
+    return PipelineComponents(
+        llm_client=llm_client,
+        context_builder=context_builder,
+        agent=agent,
+        orchestrator=orchestrator,
     )
