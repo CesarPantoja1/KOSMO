@@ -7,10 +7,12 @@ const WizardItem = ({
 	iconContainerStyles,
 	label,
 	labelStyles,
+	onClick,
 }: ItemWizardProps) => {
 	return (
 		<Link
 			href={href}
+			onClick={onClick}
 			className='relative h-24 flex-none flex flex-col items-center justify-start text-center'
 		>
 			<span

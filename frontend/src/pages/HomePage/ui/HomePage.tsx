@@ -34,9 +34,10 @@ type viewStyles = {
 export function HomePage() {
 	const router = useRouter();
 	const { setProjectState } = useAppStore();
+	const resetProjectState = useAppStore((s) => s.resetProjectState);
 	const [projects, setProjects] = useState<Project[]>([]);
 	const [loading, setLoading] = useState(true);
-	
+
 	const [isViewCardOn, setIsViewCardOn] = useState(true);
 	const [stylesToogleView, setStylesToogleView] = useState<viewStyles>({
 		list: stylesButtonToggle.off,
@@ -54,8 +55,9 @@ export function HomePage() {
 				setLoading(false);
 			}
 		};
+		resetProjectState();
 		fetchProjects();
-	}, []);
+	}, [resetProjectState]);
 
 	const handleProjectClick = (project: Project) => {
 		setProjectState(project);
@@ -145,12 +147,12 @@ export function HomePage() {
 							>
 								<div className='self-stretch flex flex-col justify-start items-start gap-3.5'>
 									<div className='self-stretch h-8 relative'>
-										<div className="left-0 top-0 absolute justify-start text-black text-2xl font-semibold truncate w-full">
+										<div className='left-0 top-0 absolute justify-start text-black text-2xl font-semibold truncate w-full'>
 											{project.name}
 										</div>
 									</div>
 									<div className='self-stretch inline-flex justify-start items-center gap-2.5 line-clamp-2'>
-										<div className="justify-start text-base-600 text-base font-normal">
+										<div className='justify-start text-base-600 text-base font-normal'>
 											{project.description || 'Sin descripción'}
 										</div>
 									</div>
@@ -161,22 +163,24 @@ export function HomePage() {
 				) : (
 					<div className='bg-base-50 flex flex-col gap-2.5'>
 						<div className='self-stretch px-3 py-2 bg-base-100 border-b border-emerald-800 inline-flex justify-between items-start'>
-							<div className="justify-start text-base-600 text-2xl font-semibold flex-1">
+							<div className='justify-start text-base-600 text-2xl font-semibold flex-1'>
 								Proyecto
 							</div>
-							<div className="w-40 justify-start text-base-600 text-2xl font-semibold">
+							<div className='w-40 justify-start text-base-600 text-2xl font-semibold'>
 								Fase Actual
 							</div>
-							<div className="justify-start text-base-600 text-2xl font-semibold w-40 text-center">
+							<div className='justify-start text-base-600 text-2xl font-semibold w-40 text-center'>
 								Estado
 							</div>
-							<div className="justify-end text-base-600 text-2xl font-semibold w-40 text-right">
+							<div className='justify-end text-base-600 text-2xl font-semibold w-40 text-right'>
 								Creado
 							</div>
 						</div>
-						
+
 						{projects.length === 0 && (
-							<div className="p-4 text-center text-base-600">No tienes proyectos creados.</div>
+							<div className='p-4 text-center text-base-600'>
+								No tienes proyectos creados.
+							</div>
 						)}
 
 						{projects.map((project) => (

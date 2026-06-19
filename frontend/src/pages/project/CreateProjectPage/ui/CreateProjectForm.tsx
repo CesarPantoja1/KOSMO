@@ -2,7 +2,7 @@
 
 import { useProjectStore } from '@/entities/project/model/store';
 import { useAppStore } from '@/shared/store/app.store';
-import { Ai } from '@/shared/ui';
+import { Ai, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
@@ -13,7 +13,7 @@ import LoadingDiscovery from '@/pages/project/DiscoveryPage/ui/LoadingDiscovery'
 import { projectSchema, type ProjectFormData } from '../lib/schema';
 import { CharacterCounter } from './CharacterCounter';
 
-const emojiRegex = /\p{Extended_Pictographic}/gu;
+const alphaRegex = /[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
@@ -43,7 +43,7 @@ const CreateProjectForm = () => {
 
 	const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		let value = e.target.value;
-		value = value.replace(emojiRegex, '');
+		value = value.replace(alphaRegex, '');
 		if (value.length > 25) {
 			value = value.slice(0, 25);
 		}
@@ -52,7 +52,7 @@ const CreateProjectForm = () => {
 
 	const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		let value = e.target.value;
-		value = value.replace(emojiRegex, '');
+		value = value.replace(alphaRegex, '');
 		if (value.length > 1000) {
 			value = value.slice(0, 1000);
 		}
@@ -72,11 +72,13 @@ const CreateProjectForm = () => {
 					await generateDiscovery(project.id);
 				} catch (genErr) {
 					console.error('Error generando descubrimiento:', genErr);
-					// Navega igual aunque falle la generación
+					toast.warning('No se pudo generar el descubrimiento automáticamente');
 				}
 
 				router.replace('/proyecto/descubrimiento');
-			} catch {
+			} catch (err) {
+				const message = err instanceof Error ? err.message : 'Error al crear el proyecto';
+				toast.error(message);
 				setIsSubmitting(false);
 			}
 		},

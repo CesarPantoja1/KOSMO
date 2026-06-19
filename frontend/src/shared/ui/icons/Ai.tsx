@@ -7,7 +7,7 @@ const Ai = ({ size = 32, color = 'text-ai' }: Props) => {
 	return (
 		<svg
 			xmlns='http://www.w3.org/2000/svg'
-			viewBox='0 0 32 32'
+			viewBox='0 0 24 24'
 			width={size}
 			height={size}
 			className={`fill-current ${color}`}

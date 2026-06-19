@@ -13,6 +13,7 @@ export const projectSchema = z.object({
     .string()
     .min(50, 'Mínimo 50 caracteres')
     .max(1000, 'Máximo 1000 caracteres')
+    .regex(/^[a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+$/, 'Solo se permiten letras y espacios')
     .refine((val) => !hasEmoji(val), 'No se permiten emojis'),
 })
 
