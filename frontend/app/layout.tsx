@@ -1,6 +1,7 @@
 import './globals.css';
 import localFont from 'next/font/local';
 import { ThemeProvider } from 'app/providers/theme-provider';
+import { ToasterProvider } from '@/shared/ui/toast';
 
 const geistSans = localFont({
 	src: [
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			<body>
 				<ThemeProvider>
 					{children}
+					<ToasterProvider />
 				</ThemeProvider>
 			</body>
 		</html>
