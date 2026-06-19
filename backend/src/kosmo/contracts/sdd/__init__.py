@@ -1,3 +1,4 @@
+from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import (
     ApiKey,
     AuditId,
@@ -14,6 +15,7 @@ from kosmo.contracts.sdd.project import Project
 __all__ = [
     "ApiKey",
     "AuditId",
+    "Feature",
     "FeatureId",
     "PipelineId",
     "Project",
