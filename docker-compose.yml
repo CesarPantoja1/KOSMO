@@ -79,6 +79,11 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-kosmo-backend}
       OTEL_ENVIRONMENT: ${OTEL_ENVIRONMENT:-development}
       PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+    command: sh -c "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload"
     depends_on:
       postgres:
         condition: service_healthy
