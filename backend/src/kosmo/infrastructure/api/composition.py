@@ -32,7 +32,6 @@ from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.repositories import FeatureRepository
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
@@ -190,6 +189,19 @@ class PipelineComponents:
     orchestrator: SequentialOrchestrator
 
 
+def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
+    if provider == "deepseek":
+        from pydantic_ai.models.openai import OpenAIChatModel
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        return OpenAIChatModel(
+            model,
+            provider=OpenAIProvider(base_url="https://api.deepseek.com", api_key=api_key),
+        )
+
+    return f"{provider}:{model}"
+
+
 def build_pipeline_components(
     settings: Settings,
     session_factory: async_sessionmaker[AsyncSession],
@@ -198,41 +210,17 @@ def build_pipeline_components(
     if settings.llm_provider.lower() == "noop":
         llm_client: LLMClient = NoopLLMClient()
     else:
-        # PydanticAI expects model in "provider:model_name" format
-        provider = settings.llm_provider.lower()
-        model_name = settings.llm_model
-
-        # Build the fully-qualified model identifier for PydanticAI
-        pydantic_ai_model = f"{provider}:{model_name}" if ":" not in model_name else model_name
-
-        # Set the API key as environment variable for the provider
-        import os
-        if settings.llm_api_key:
-            api_key_value = settings.llm_api_key.get_secret_value()
-            _provider_env_map = {
-                "openai": "OPENAI_API_KEY",
-                "anthropic": "ANTHROPIC_API_KEY",
-                "gemini": "GEMINI_API_KEY",
-                "deepseek": "DEEPSEEK_API_KEY",
-            }
-            env_var = _provider_env_map.get(provider)
-            if env_var and not os.environ.get(env_var):
-                os.environ[env_var] = api_key_value
-
-        llm_client = PydanticAILLMClient(model=pydantic_ai_model)
+        api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else None
+        model = _build_pydantic_ai_model(settings.llm_provider, settings.llm_model, api_key)
+        llm_client = PydanticAILLMClient(model=model)
 
     # 2. Instanciar los repositorios disponibles
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
-    
-    # FeatureRepository no está implementado aún (HU-05)
-    feature_repo: FeatureRepository = None  # type: ignore[reportAssignmentType]
 
-    # 3. Construir el constructor de contexto
     context_builder = ContextBuilder(
         document_repo=document_repo,
         project_repo=project_repo,
-        feature_repo=feature_repo,
     )
 
     # 4. Configurar modos de fase
