@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, Text, func, text
+from sqlalchemy import DateTime, Integer, String, Text, func, text
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -64,6 +64,27 @@ class ProjectModel(Base):
     owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     current_phase: Mapped[str] = mapped_column(String(32), nullable=False, default="descubrimiento")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="en_proceso")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class FeatureModel(Base):
+    __tablename__ = "features"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text(), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text(), nullable=False, default="")
+    inferred_from: Mapped[dict[str, Any]] = mapped_column(
+        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
