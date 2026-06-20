@@ -1,1 +1,1 @@
-export { CharacteristicsPage, metadata } from './ui/CharacteristicsPage';
+export { CharacteristicsPage } from './ui/CharacteristicsPage';

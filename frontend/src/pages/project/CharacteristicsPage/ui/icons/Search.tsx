@@ -15,7 +15,7 @@ const Search = ({ size = 32, color }: props) => {
 			strokeLinejoin='round'
 			stroke='currentColor'
 			strokeWidth={1.5}
-			className={`stroke-current cursor-pointer ${color}`}
+			className={`stroke-current ${color}`}
 		>
 			<path
 				strokeLinecap='round'
