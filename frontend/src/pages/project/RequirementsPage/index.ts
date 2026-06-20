@@ -1,1 +1,1 @@
-export { RequirementsPage, metadata } from './ui/RequirementsPage';
+export { RequirementsPage } from './ui/RequirementsPage';

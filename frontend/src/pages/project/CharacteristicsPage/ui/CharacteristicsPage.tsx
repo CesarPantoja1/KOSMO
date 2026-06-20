@@ -1,13 +1,13 @@
 'use client';
 
-import { useAppStore } from '@/shared/store/app.store';
+import { useAppStore } from 'app/store/app.store';
 import { Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { addCharacteristics, getCharacteristics } from '../api/api';
-import type { AlternativeCharacteristic, Characteristic } from '../api/types';
+import { addCharacteristics, getCharacteristics } from '@/entities/characteristic';
+import type { AlternativeCharacteristic, Characteristic } from '@/entities/characteristic';
 import CardCharacterist from './CardCharacterist';
 import CharacteristicModal from './CharacteristicModal';
 import Search from './Search';

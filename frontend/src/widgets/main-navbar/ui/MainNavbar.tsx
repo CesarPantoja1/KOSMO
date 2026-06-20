@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import { useAppStore } from '@/shared/store/app.store';
+import { useAppStore } from 'app/store/app.store';
 
 import { getStyleIconStatus } from '../lib/get-status-color';
 import { ProjectStatus } from '../types/status';

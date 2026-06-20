@@ -1,7 +1,7 @@
 'use client';
 
 import { MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
-import { useAppStore } from '@/shared/store/app.store';
+import { useAppStore } from 'app/store/app.store';
 import { Ai, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -136,7 +136,7 @@ const DiscoveryPage = () => {
 			)}
 
 			{isLoading && <LoadingDiscovery />}
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
+			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4'>
 				<div className='flex flex-col gap-3'>
 					<div className='flex flex-col'>
 						<h3 className='text-base-800 text-3xl font-bold'>
@@ -167,7 +167,9 @@ const DiscoveryPage = () => {
 				</div>
 
 				{!isLoading && (
-					<MarkdownEditor ref={editorRef} markdown={markdown} onChange={setMarkdown} />
+					<div className='flex-1 min-h-0'>
+						<MarkdownEditor ref={editorRef} markdown={markdown} onChange={setMarkdown} />
+					</div>
 				)}
 			</div>
 		</>

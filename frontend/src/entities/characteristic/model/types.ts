@@ -3,6 +3,7 @@ export interface Characteristic {
   code: string
   title: string
   description: string
+  requirements: string
 }
 
 export interface AlternativeCharacteristic {

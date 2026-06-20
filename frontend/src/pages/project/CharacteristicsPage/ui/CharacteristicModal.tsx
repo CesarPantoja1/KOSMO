@@ -1,7 +1,7 @@
 import { Close, Load } from '@/shared/ui';
 import { useState, useEffect } from 'react';
-import { getAlternativeCharacteristics } from '../api/api';
-import type { AlternativeCharacteristic } from '../api/types';
+import { getAlternativeCharacteristics } from '@/entities/characteristic';
+import type { AlternativeCharacteristic } from '@/entities/characteristic';
 
 type Props = {
 	projectId: string;

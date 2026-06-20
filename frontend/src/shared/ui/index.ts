@@ -1,6 +1,3 @@
-// Theme Provider
-export { ThemeProvider, useTheme } from '../../../app/providers/theme-provider';
-
 // Buttons
 export { ButtonSM, ButtonMD, ButtonLG } from './button';
 

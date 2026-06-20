@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api';
-import { Project } from '@/shared/types/project';
+import type { Project } from '../model/types';
 
 export const projectsApi = {
 	getProjects: async (): Promise<Project[]> => {

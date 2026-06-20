@@ -1,7 +1,7 @@
-import './globals.css';
-import localFont from 'next/font/local';
-import { ThemeProvider } from 'app/providers/theme-provider';
+import { ThemeProvider } from '@/shared/ui/ThemeProvider';
 import { ToasterProvider } from '@/shared/ui/toast';
+import localFont from 'next/font/local';
+import './globals.css';
 
 const geistSans = localFont({
 	src: [

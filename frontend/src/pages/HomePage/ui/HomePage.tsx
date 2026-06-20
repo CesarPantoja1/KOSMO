@@ -6,8 +6,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Cards, Clock, List } from './icons';
 import { projectsApi } from '@/entities/project/api/projects-api';
-import { useAppStore } from '@/shared/store/app.store';
-import { Project } from '@/shared/types/project';
+import { useAppStore } from 'app/store/app.store';
+import { Project } from '@/entities/project/model/types';
 
 const stylesButtonToggle = {
 	on: {

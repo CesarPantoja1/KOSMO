@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Project } from '@/shared/types/project';
+import type { Project } from '@/entities/project/model/types';
 
 interface AppState {
 	initialized: boolean;
