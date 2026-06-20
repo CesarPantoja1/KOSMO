@@ -24,29 +24,15 @@ import Discovery from './icons/Discovery';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
-	project: {
-		name: string;
-	};
-
-	onBackToHub?: () => void;
-	onOpenPalette?: () => void;
-	onOpenApiKeys?: () => void;
 }
 
-export function MainNavbar({
-	children,
-	project,
-
-	onBackToHub,
-	onOpenApiKeys,
-}: MainNavbarProps) {
+export function MainNavbar({ children }: MainNavbarProps) {
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
 
 	const isProyectosOpen = useAppStore((s) => s.isProyectosOpen);
 	const currentProject = useAppStore((s) => s.currentProject);
-	const resetProjectState = useAppStore((s) => s.resetProjectState);
 
 	const phaseItems = [
 		{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'Descubrimiento' },
@@ -62,23 +48,22 @@ export function MainNavbar({
 
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
-		resetProjectState();
-		if (onBackToHub) {
-			onBackToHub();
+
+		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
+		if (hasUnsavedChanges) {
+			setPendingNavigationPath('/proyecto');
 			return;
 		}
 
 		router.push('/proyecto');
 	};
 
-	const handleOpenApiKeys = () => {
-		setAvatarOpen(false);
-		if (onOpenApiKeys) {
-			onOpenApiKeys();
-			return;
+	const handleWizardClick = (href: string) => (e: React.MouseEvent) => {
+		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
+		if (hasUnsavedChanges) {
+			e.preventDefault();
+			setPendingNavigationPath(href);
 		}
-
-		router.push('/profile');
 	};
 
 	return (
@@ -117,8 +102,7 @@ export function MainNavbar({
 						className='btn btn-ghost h-7 px-2 text-xs font-semibold text-text-primary hover:text-text-primary'
 						onClick={() => setAvatarOpen(false)}
 					>
-						<ComputerDesktop color='text-base-600' />{' '}
-						{currentProject?.name ?? project.name}
+						<ComputerDesktop color='text-base-600' /> {currentProject?.name}
 					</button>
 				</div>
 
@@ -138,7 +122,10 @@ export function MainNavbar({
 
 						{avatarOpen && (
 							<div className='anim-fade-in absolute right-0 top-[120%] z-50 min-w-44 overflow-hidden rounded-md border border-border-default bg-bg-base shadow-lg'>
-								<DropdownItem label='Bóveda de API Keys' onClick={handleOpenApiKeys} />
+								<DropdownItem
+									label='Bóveda de API Keys'
+									onClick={() => setAvatarOpen(false)}
+								/>
 								<DropdownItem
 									label='Configuración'
 									onClick={() => setAvatarOpen(false)}
@@ -162,7 +149,7 @@ export function MainNavbar({
 					</div>
 
 					{isProyectosOpen && (
-						<nav className='flex justify-between px-16 py-3 bg-base-100 outline outline-1 outline-base-300 rounded-sm'>
+						<nav className='flex justify-between px-16 py-3 mx-0.5 bg-base-50 outline outline-base-300 rounded-sm'>
 							{phaseItems.map(({ href, Icon, label }) => {
 								const status: ProjectStatus = pathname === href ? 'active' : 'disable';
 								const colors = getStyleIconStatus(status);
@@ -174,6 +161,7 @@ export function MainNavbar({
 										iconContainerStyles={colors.iconContainer}
 										label={label}
 										labelStyles={colors.labelStyles}
+										onClick={handleWizardClick(href)}
 									/>
 								);
 							})}

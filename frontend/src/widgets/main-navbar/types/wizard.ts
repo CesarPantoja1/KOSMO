@@ -4,4 +4,5 @@ export type ItemWizardProps = {
 	iconContainerStyles: string;
 	label: string;
 	labelStyles: string;
+	onClick?: (e: React.MouseEvent) => void;
 };
