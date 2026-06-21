@@ -4,9 +4,23 @@ type Props = {
   code: string
   title: string
   description: string
+  searchQuery?: string
 }
 
-const CardCharacterist = ({ code, title, description }: Props) => {
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const highlightTitle = (title: string, query: string) => {
+	if (!query) return title
+	const escaped = escapeRegex(query)
+	const parts = title.split(new RegExp(`(${escaped})`, 'gi'))
+	return parts.map((part, i) =>
+		part.toLowerCase() === query.toLowerCase()
+			? <span key={i} className='text-primary-800'>{part}</span>
+			: part,
+	)
+}
+
+const CardCharacterist = ({ code, title, description, searchQuery = '' }: Props) => {
 	return (
 		<div className='outline outline-base-300 m-0.5 px-8 py-4 inline-flex justify-start items-center gap-7 hover:shadow-md'>
 			<div className='w-14 inline-flex flex-col text-xl font-semibold justify-center items-center gap-2.5'>
@@ -14,7 +28,7 @@ const CardCharacterist = ({ code, title, description }: Props) => {
 			</div>
 			<div className='flex-1 inline-flex flex-col justify-center gap-2.5'>
 				<h3 className='text-primary-100 text-xl font-semibold'>
-					{title}
+					{highlightTitle(title, searchQuery)}
 				</h3>
 				<p>
 					{description}

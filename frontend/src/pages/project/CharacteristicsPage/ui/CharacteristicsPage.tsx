@@ -19,6 +19,7 @@ const CharacteristicsPage = () => {
 	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [showModal, setShowModal] = useState(false);
+	const [searchQuery, setSearchQuery] = useState('');
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -41,6 +42,12 @@ const CharacteristicsPage = () => {
 
 		fetchData();
 	}, [currentProject, router]);
+
+	const filtered = searchQuery.trim()
+		? characteristics.filter((c) =>
+			c.title.toLowerCase().includes(searchQuery.toLowerCase()),
+		)
+		: characteristics;
 
 	const handleApply = async (selected: AlternativeCharacteristic[]) => {
 		if (!currentProject) return;
@@ -72,7 +79,7 @@ const CharacteristicsPage = () => {
 			</div>
 
 			<div className='h-10 inline-flex justify-between items-center gap-4'>
-				<Search />
+				<Search value={searchQuery} onChange={setSearchQuery} />
 				<div className='flex justify-end items-center gap-4'>
 					<button
 						onClick={() => setShowModal(true)}
@@ -113,12 +120,13 @@ const CharacteristicsPage = () => {
 
 			{!isLoading && (
 				<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
-					{characteristics.map((c) => (
+					{filtered.map((c) => (
 						<CardCharacterist
 							key={c.id}
 							code={c.code}
 							title={c.title}
 							description={c.description}
+							searchQuery={searchQuery}
 						/>
 					))}
 				</div>

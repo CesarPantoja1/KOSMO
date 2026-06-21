@@ -120,6 +120,7 @@ const RequirementsPage = () => {
 			setSavedContent(content);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
+			console.log(_err);
 		} finally {
 			setIsGenerating(false);
 		}
@@ -142,6 +143,7 @@ const RequirementsPage = () => {
 			toast.success('Requisitos guardados con éxito.');
 		} catch (_err) {
 			toast.error('Error al guardar los requisitos');
+			console.log(_err);
 		}
 	};
 
