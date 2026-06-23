@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from kosmo.contracts.sdd.guardrails import (
     PROHIBITED_TERMS,
     GuardrailResult,
@@ -22,10 +24,11 @@ _TECH_REPLACEMENTS: dict[str, str] = {
 
 def detect_technical_terms(text: str, section: str = "") -> GuardrailResult:
     violations: list[GuardrailViolation] = []
-    text_lower = text.lower()
     for term in PROHIBITED_TERMS:
-        if term.lower() in text_lower:
-            idx = text_lower.index(term.lower())
+        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        match = pattern.search(text)
+        if match:
+            idx = match.start()
             start = max(0, idx - 30)
             end = min(len(text), idx + len(term) + 30)
             context = text[start:end]

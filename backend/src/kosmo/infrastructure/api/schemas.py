@@ -501,14 +501,13 @@ class FeatureSuggestionItem(BaseModel):
     title: str
     description: str
     rationale: str
+    inferred_from: list[str] = Field(default_factory=list)
 
 
 class SaveSelectedFeaturesRequest(BaseModel):
     """Payload para guardar características seleccionadas."""
 
-    features: list[FeatureSuggestionItem] = Field(
-        description="Lista de características a guardar."
-    )
+    features: list[FeatureSuggestionItem] = Field(description="Lista de características a guardar.")
 
 
 class FeatureSuggestionResponse(BaseModel):
