@@ -1,6 +1,6 @@
 'use client';
 
-import { useTheme } from '@/shared/ui';
+import { useTheme } from './ThemeProvider';
 
 /**
  * Example Theme Toggle component showing how to use useTheme hook

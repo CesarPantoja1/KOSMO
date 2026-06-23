@@ -69,9 +69,7 @@ async def generate_discovery(
     use_case: Annotated[GenerateDiscoveryUseCase, Depends(_generate_discovery)],
 ) -> DiscoveryResponse:
     try:
-        output = await use_case.execute(
-            GenerateDiscoveryInput(project_id=ProjectId(project_id))
-        )
+        output = await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId(project_id)))
     except LLMInvocationError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -110,9 +108,7 @@ async def get_discovery(
     use_case: Annotated[GetDiscoveryUseCase, Depends(_get_discovery)],
 ) -> DiscoveryResponse:
     try:
-        output = await use_case.execute(
-            GetDiscoveryInput(project_id=ProjectId(project_id))
-        )
+        output = await use_case.execute(GetDiscoveryInput(project_id=ProjectId(project_id)))
     except DocumentNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -165,9 +161,11 @@ async def save_discovery(
 
 def _document_to_markdown(doc: RichTextDocument) -> str:
     from kosmo.domain.sdd.document_converters import document_to_markdown
+
     return document_to_markdown(doc)
 
 
 def _markdown_to_document(content: str) -> RichTextDocument:
     from kosmo.domain.sdd.document_converters import markdown_to_document
+
     return markdown_to_document(content)

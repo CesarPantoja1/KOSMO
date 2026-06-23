@@ -27,22 +27,22 @@ export function TocSidebar({ headings, activeId }: Props) {
 
 	return (
 		<aside
-			className='sticky top-0 h-full shrink-0 overflow-y-auto bg-base-100 transition-all duration-300 pt-1'
+			className='sticky top-0 h-full shrink-0 flex flex-col bg-base-100 transition-all duration-300 pt-1'
 			style={{ width: isOpen ? 280 : 48 }}
 		>
 			{isOpen ? (
 				<>
-					<div className='mb-6 flex items-center justify-between px-4'>
+					<div className='mb-6 flex items-center justify-between px-4 shrink-0'>
 						<h2 className='text-lg font-semibold uppercase tracking-wide'>Contenido</h2>
 						<button onClick={() => setIsOpen(false)} className='cursor-pointer'>
 							<CloseMarkdownContent />
 						</button>
 					</div>
 
-					<nav className='space-y-1 px-4'>
-						{headings.map((heading) => (
+					<nav className='space-y-1 px-4 flex-1 overflow-y-auto'>
+						{headings.map((heading, index) => (
 							<button
-								key={heading.id}
+								key={index}
 								onClick={() => handleScroll(heading.id)}
 								className={clsx(
 									'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors cursor-pointer',

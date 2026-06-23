@@ -11,12 +11,14 @@ from kosmo.config import settings
 from kosmo.infrastructure.api.composition import (
     build_auth_components,
     build_discovery_components,
+    build_features_components,
     build_pipeline_components,
     build_project_components,
 )
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
+from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
@@ -52,6 +54,15 @@ _OPENAPI_TAGS = [
             "secciones obligatorias que cubren visión, problema, actores, "
             "propuesta de valor, casos de uso, capacidades, reglas de negocio "
             "y atributos de calidad."
+        ),
+    },
+    {
+        "name": "features",
+        "description": (
+            "Generación y gestión de características del producto software mediante IA. "
+            "Permite generar características a partir del documento de descubrimiento, "
+            "sugerir nuevas características no duplicadas, listar las existentes y "
+            "guardar las seleccionadas por el usuario."
         ),
     },
     {
@@ -181,9 +192,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     pipeline_components = build_pipeline_components(settings, session_factory)
     discovery_components = build_discovery_components(session_factory, pipeline_components)
+    features_components = build_features_components(session_factory, pipeline_components)
     app.state.generate_discovery = discovery_components.generate_discovery
     app.state.get_discovery = discovery_components.get_discovery
     app.state.save_discovery = discovery_components.save_discovery
+    app.state.generate_features = features_components.generate_features
+    app.state.suggest_features = features_components.suggest_features
+    app.state.save_selected_features = features_components.save_selected_features
+    app.state.feature_repo = features_components.feature_repo
 
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
@@ -219,6 +235,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(discovery_router)
+app.include_router(features_router)
 app.include_router(schemas_router)
 
 

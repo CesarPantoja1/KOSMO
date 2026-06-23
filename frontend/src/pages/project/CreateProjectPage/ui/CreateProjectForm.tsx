@@ -1,7 +1,7 @@
 'use client';
 
 import { useProjectStore } from '@/entities/project/model/store';
-import { useAppStore } from '@/shared/store/app.store';
+import { useAppStore } from 'app/store/app.store';
 import { Ai, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';

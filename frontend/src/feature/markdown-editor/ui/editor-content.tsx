@@ -23,11 +23,11 @@ interface Props {
 
 export function EditorContent({ markdown, onChange }: Props) {
 	return (
-		<div className='flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-base-300'>
+		<div className='flex-1 min-h-0 overflow-y-auto'>
 			<MDXEditor
 				markdown={markdown}
 				onChange={onChange}
-				contentEditableClassName='prose max-w-none px-10 py-20 bg-base-50 focus:outline-none overflow-y-auto'
+				contentEditableClassName='prose max-w-none px-10 py-20 bg-base-50 focus:outline-none'
 				plugins={[
 					headingsPlugin(),
 					listsPlugin(),
@@ -41,7 +41,6 @@ export function EditorContent({ markdown, onChange }: Props) {
 								<UndoRedo />
 								<BoldItalicUnderlineToggles />
 								<BlockTypeSelect />
-								{/* <CreateLink /> */}
 								<ListsToggle />
 							</>
 						),

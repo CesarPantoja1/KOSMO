@@ -10,7 +10,7 @@ const Close = ({ size = 32, color }: props) => {
 			viewBox='0 0 24 24'
 			width={size}
 			height={size}
-			className={`fill-current cursor-pointer ${color}`}
+			className={`fill-current ${color}`}
 		>
 			<path
 				fillRule='evenodd'

@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api';
-import { Project } from '@/shared/types/project';
+import type { Project } from '@/entities/project/model/types';
 
 interface CreateProjectBody {
 	name: string;

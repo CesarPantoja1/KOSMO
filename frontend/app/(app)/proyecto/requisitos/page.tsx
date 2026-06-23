@@ -1,1 +1,1 @@
-export { RequirementsPage as default, metadata } from '@/pages/project/RequirementsPage';
+export { RequirementsPage as default } from '@/pages/project/RequirementsPage';
