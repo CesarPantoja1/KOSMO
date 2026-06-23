@@ -54,7 +54,11 @@ const CharacteristicsPage = () => {
 		try {
 			const newChars = await addCharacteristics(
 				currentProject.id,
-				selected.map((s) => ({ title: s.title, description: s.description })),
+				selected.map((s) => ({
+					title: s.title,
+					description: s.description,
+					rationale: s.rationale,
+				})),
 			);
 			setCharacteristics((prev) => [...prev, ...newChars]);
 			setShowModal(false);
@@ -123,7 +127,7 @@ const CharacteristicsPage = () => {
 					{filtered.map((c) => (
 						<CardCharacterist
 							key={c.id}
-							code={c.code}
+							displayId={c.display_id}
 							title={c.title}
 							description={c.description}
 							searchQuery={searchQuery}

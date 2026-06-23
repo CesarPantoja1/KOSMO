@@ -1,14 +1,21 @@
-import type { Characteristic, AlternativeCharacteristic } from '../model/types';
+import { apiClient } from '@/shared/api';
+import { USE_CHARACTERISTIC_MOCKS } from '../config';
+import type { AlternativeCharacteristic, Characteristic } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let mockCharacteristics: Characteristic[] = [
+const mockCharacteristics: Characteristic[] = [
 	{
 		id: '1',
-		code: 'C01',
+		project_id: '',
+		number: 1,
 		title: 'Administración de Perfiles y Permisos de Usuario',
+		slug: 'administracion-de-perfiles-y-permisos-de-usuario',
 		description:
 			'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+		rationale: '',
+		inferred_from: [],
+		display_id: 'C01',
 		requirements:
 			'## Ubiquitous\n' +
 			'- The system shall always require authentication before granting access to any module.\n' +
@@ -22,94 +29,137 @@ let mockCharacteristics: Characteristic[] = [
 	},
 	{
 		id: '2',
-		code: 'C02',
+		project_id: '',
+		number: 2,
 		title: 'Gestión de Inventario',
+		slug: 'gestion-de-inventario',
 		description:
 			'Control de stock, entradas y salidas de productos, alertas de inventario bajo y registro de movimientos con trazabilidad.',
+		rationale: '',
+		inferred_from: [],
+		display_id: 'C02',
 		requirements: '',
 	},
 	{
 		id: '3',
-		code: 'C03',
+		project_id: '',
+		number: 3,
 		title: 'Módulo de Ventas',
+		slug: 'modulo-de-ventas',
 		description:
 			'Registro de ventas con cálculo automático de impuestos, descuentos y múltiples métodos de pago. Genera facturas electrónicas y tickets.',
+		rationale: '',
+		inferred_from: [],
+		display_id: 'C03',
 		requirements: '',
 	},
 	{
 		id: '4',
-		code: 'C04',
+		project_id: '',
+		number: 4,
 		title: 'Reportes y Dashboard',
+		slug: 'reportes-y-dashboard',
 		description:
 			'Visualización de indicadores clave como ventas diarias, productos más vendidos, márgenes de ganancia y tendencias de consumo.',
+		rationale: '',
+		inferred_from: [],
+		display_id: 'C04',
 		requirements: '',
 	},
 ];
 
-const mockAlternatives: AlternativeCharacteristic[] = [
+const mockSuggestions: AlternativeCharacteristic[] = [
 	{
-		id: 'a1',
+		id: 'sug_1',
+		number: 1,
 		title: 'Notificaciones y Alertas',
 		description:
 			'Sistema de notificaciones push y por correo electrónico para alertar sobre eventos críticos como stock bajo, ventas grandes o vencimiento de productos.',
+		rationale: '',
+		inferred_from: [],
 	},
 	{
-		id: 'a2',
+		id: 'sug_2',
+		number: 2,
 		title: 'Gestión de Clientes y Proveedores',
 		description:
 			'Registro y administración de clientes y proveedores con historial de compras, créditos, estados de cuenta y datos de contacto.',
+		rationale: '',
+		inferred_from: [],
 	},
 	{
-		id: 'a3',
+		id: 'sug_3',
+		number: 3,
 		title: 'Módulo de Caja Diaria',
 		description:
 			'Apertura y cierre de caja, control de ingresos y egresos, arqueo de caja y conciliación con ventas del día.',
+		rationale: '',
+		inferred_from: [],
 	},
 ];
 
-export const getCharacteristics = async (
+let mockStore = [...mockCharacteristics];
+
+//
+// MOCK implementations
+//
+
+const mockGetCharacteristics = async (
 	_projectId: string,
 ): Promise<Characteristic[]> => {
 	await delay(800);
-	return [...mockCharacteristics];
+	return [...mockStore];
 };
 
-export const getAlternativeCharacteristics = async (
+const mockGenerateCharacteristics = async (
+	_projectId: string,
+): Promise<Characteristic[]> => {
+	await delay(2000);
+	return [...mockStore];
+};
+
+const mockGetAlternativeCharacteristics = async (
 	_projectId: string,
 ): Promise<AlternativeCharacteristic[]> => {
 	await delay(800);
-	return [...mockAlternatives];
+	return [...mockSuggestions];
 };
 
-export const addCharacteristics = async (
+const mockAddCharacteristics = async (
 	_projectId: string,
-	items: { title: string; description: string }[],
+	items: { title: string; description: string; rationale: string }[],
 ): Promise<Characteristic[]> => {
 	await delay(600);
+	const startNum = mockStore.length + 1;
 	const newChars: Characteristic[] = items.map((item, i) => ({
 		id: String(Date.now() + i),
-		code: `C${String(mockCharacteristics.length + i + 1).padStart(2, '0')}`,
+		project_id: _projectId,
+		number: startNum + i,
 		title: item.title,
+		slug: item.title.toLowerCase().replace(/\s+/g, '-'),
 		description: item.description,
+		rationale: item.rationale,
+		inferred_from: [],
+		display_id: `C${String(startNum + i).padStart(2, '0')}`,
 		requirements: '',
 	}));
-	mockCharacteristics = [...mockCharacteristics, ...newChars];
+	mockStore = [...mockStore, ...newChars];
 	return newChars;
 };
 
-export const saveCharacteristicRequirements = async (
+const mockSaveCharacteristicRequirements = async (
 	_projectId: string,
 	characteristicId: string,
 	content: string,
 ): Promise<void> => {
 	await delay(500);
-	const idx = mockCharacteristics.findIndex((c) => c.id === characteristicId);
+	const idx = mockStore.findIndex((c) => c.id === characteristicId);
 	if (idx !== -1) {
-		mockCharacteristics[idx] = { ...mockCharacteristics[idx], requirements: content };
+		mockStore[idx] = { ...mockStore[idx], requirements: content };
 	}
 };
 
-export const generateCharacteristicRequirements = async (
+const mockGenerateCharacteristicRequirements = async (
 	_projectId: string,
 	_characteristicId: string,
 ): Promise<string> => {
@@ -126,4 +176,175 @@ export const generateCharacteristicRequirements = async (
 		'**Unwanted behaviour**\n' +
 		'- If a network timeout occurs during a write operation, the system shall roll back the transaction and notify the user.'
 	);
+};
+
+//
+// REAL API implementations
+//
+
+interface FeatureResponse {
+	id: string;
+	project_id: string;
+	number: number;
+	title: string;
+	slug: string;
+	description: string;
+	rationale: string;
+	inferred_from: string[];
+	display_id: string;
+}
+
+interface FeatureSuggestionResponse {
+	number: number;
+	title: string;
+	description: string;
+	rationale: string;
+	inferred_from: string[];
+}
+
+const mapFeatureResponse = (f: FeatureResponse): Characteristic => ({
+	id: f.id,
+	project_id: f.project_id,
+	number: f.number,
+	title: f.title,
+	slug: f.slug,
+	description: f.description,
+	rationale: f.rationale,
+	inferred_from: f.inferred_from,
+	display_id: f.display_id,
+	requirements: '',
+});
+
+const mapSuggestionResponse = (s: FeatureSuggestionResponse, _index: number): AlternativeCharacteristic => ({
+	id: `sug_${s.number}`,
+	number: s.number,
+	title: s.title,
+	description: s.description,
+	rationale: s.rationale,
+	inferred_from: s.inferred_from,
+});
+
+const realGetCharacteristics = async (
+	projectId: string,
+): Promise<Characteristic[]> => {
+	const data = await apiClient<FeatureResponse[]>(
+		`/api/v1/projects/${projectId}/features`,
+		{ method: 'GET' },
+	);
+	return data.map(mapFeatureResponse);
+};
+
+const realGenerateCharacteristics = async (
+	projectId: string,
+): Promise<Characteristic[]> => {
+	const data = await apiClient<FeatureResponse[]>(
+		`/api/v1/projects/${projectId}/features`,
+		{ method: 'POST' },
+	);
+	return data.map(mapFeatureResponse);
+};
+
+const realGetAlternativeCharacteristics = async (
+	projectId: string,
+): Promise<AlternativeCharacteristic[]> => {
+	const data = await apiClient<FeatureSuggestionResponse[]>(
+		`/api/v1/projects/${projectId}/features/suggest`,
+		{ method: 'POST' },
+	);
+	return data.map(mapSuggestionResponse);
+};
+
+const realAddCharacteristics = async (
+	projectId: string,
+	items: { title: string; description: string; rationale: string }[],
+): Promise<Characteristic[]> => {
+	const data = await apiClient<FeatureResponse[]>(
+		`/api/v1/projects/${projectId}/features/save`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				features: items.map((item) => ({
+					title: item.title,
+					description: item.description,
+					rationale: item.rationale,
+				})),
+			}),
+		},
+	);
+	return data.map(mapFeatureResponse);
+};
+
+const realSaveCharacteristicRequirements = async (
+	_projectId: string,
+	_characteristicId: string,
+	_content: string,
+): Promise<void> => {
+	await delay(500);
+};
+
+const realGenerateCharacteristicRequirements = async (
+	_projectId: string,
+	_characteristicId: string,
+): Promise<string> => {
+	await delay(2000);
+	return '';
+};
+
+//
+// Exported functions (switch based on config)
+//
+
+const isUsingMocks = () => USE_CHARACTERISTIC_MOCKS;
+
+export const getCharacteristics = async (
+	projectId: string,
+): Promise<Characteristic[]> => {
+	return isUsingMocks()
+		? mockGetCharacteristics(projectId)
+		: realGetCharacteristics(projectId);
+};
+
+export const generateCharacteristics = async (
+	projectId: string,
+): Promise<Characteristic[]> => {
+	return isUsingMocks()
+		? mockGenerateCharacteristics(projectId)
+		: realGenerateCharacteristics(projectId);
+};
+
+export const getAlternativeCharacteristics = async (
+	projectId: string,
+): Promise<AlternativeCharacteristic[]> => {
+	return isUsingMocks()
+		? mockGetAlternativeCharacteristics(projectId)
+		: realGetAlternativeCharacteristics(projectId);
+};
+
+export const addCharacteristics = async (
+	projectId: string,
+	items: { title: string; description: string; rationale: string }[],
+): Promise<Characteristic[]> => {
+	return isUsingMocks()
+		? mockAddCharacteristics(projectId, items)
+		: realAddCharacteristics(projectId, items);
+};
+
+export const saveCharacteristicRequirements = async (
+	projectId: string,
+	characteristicId: string,
+	content: string,
+): Promise<void> => {
+	return isUsingMocks()
+		? mockSaveCharacteristicRequirements(projectId, characteristicId, content)
+		: realSaveCharacteristicRequirements(projectId, characteristicId, content);
+};
+
+export const generateCharacteristicRequirements = async (
+	projectId: string,
+	characteristicId: string,
+): Promise<string> => {
+	return isUsingMocks()
+		? mockGenerateCharacteristicRequirements(projectId, characteristicId)
+		: realGenerateCharacteristicRequirements(projectId, characteristicId);
 };

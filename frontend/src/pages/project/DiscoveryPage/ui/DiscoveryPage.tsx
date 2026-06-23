@@ -4,11 +4,11 @@ import { MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
 import { Ai, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getDiscovery, saveDiscovery } from '../api/api';
+import { generateCharacteristics } from '@/entities/characteristic';
 import LoadingDiscovery from './LoadingDiscovery';
 import ModalConfimLeave from './ModalConfimLeave';
-import Link from 'next/link';
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -16,6 +16,7 @@ const DiscoveryPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const [isLoading, setIsLoading] = useState(!!currentProject);
 	const [isSaving, setIsSaving] = useState(false);
+	const [isGenerating, setIsGenerating] = useState(false);
 	const savedContentRef = useRef('');
 	const router = useRouter();
 
@@ -89,25 +90,46 @@ const DiscoveryPage = () => {
 		}
 	};
 
-	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
+	const handleNextLink = async () => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
 		if (hasUnsavedChanges) {
-			e.preventDefault();
-			setPendingNavigationPath(href);
+			setPendingNavigationPath('caracteristicas');
+			return;
+		}
+		await generateAndNavigate();
+	};
+
+	const generateAndNavigate = async () => {
+		if (!currentProject) return;
+
+		setIsGenerating(true);
+		try {
+			await generateCharacteristics(currentProject.id);
+			router.push('caracteristicas');
+		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : 'Error al generar las características';
+			toast.error(message);
+		} finally {
+			setIsGenerating(false);
 		}
 	};
 
-	const confirmLeave = useCallback(() => {
+	const confirmLeave = async () => {
 		const path = pendingNavigationPath;
 		setPendingNavigationPath(null);
 		setHasUnsavedChanges(false);
 		if (!path) return;
-		router.push(path);
-	}, [pendingNavigationPath, setPendingNavigationPath, setHasUnsavedChanges, router]);
+		if (path === 'caracteristicas') {
+			await generateAndNavigate();
+		} else {
+			router.push(path);
+		}
+	};
 
-	const cancelLeave = useCallback(() => {
+	const cancelLeave = () => {
 		setPendingNavigationPath(null);
-	}, [setPendingNavigationPath]);
+	};
 
 	useEffect(() => {
 		if (hasUnsavedChanges) {
@@ -155,14 +177,16 @@ const DiscoveryPage = () => {
 							{isSaving ? 'Guardando...' : 'Guardar'}
 						</button>
 
-						<Link
-							href='caracteristicas'
-							onClick={handleNextLink('caracteristicas')}
+						<button
+							onClick={handleNextLink}
+							disabled={isGenerating}
 							className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
 						>
 							<Ai size={20} color='text-base-50' />
-							<span className='text-center font-semibold'> Generar características</span>
-						</Link>
+							<span className='text-center font-semibold'>
+								{isGenerating ? 'Generando...' : 'Generar características'}
+							</span>
+						</button>
 					</div>
 				</div>
 

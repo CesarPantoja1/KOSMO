@@ -308,7 +308,7 @@ const RequirementsPage = () => {
 												isSelected ? 'text-base-950' : 'text-base-600'
 											}`}
 										>
-											{c.code}
+											{c.display_id}
 										</span>
 										<p
 											className={`flex-1 justify-start text-base font-normal truncate ${
@@ -351,7 +351,7 @@ const RequirementsPage = () => {
 							<div className='flex flex-col flex-1 min-h-0 gap-4'>
 								<div className='inline-flex justify-start gap-2.5 items-center'>
 									<span className='self-stretch text-center justify-center text-lg font-medium leading-8'>
-										{selectedCharacteristic.code}
+										{selectedCharacteristic.display_id}
 									</span>
 									<span className='justify-center text-primary-100 text-lg font-bold'>
 										{selectedCharacteristic.title}
