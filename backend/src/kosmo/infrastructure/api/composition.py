@@ -22,6 +22,11 @@ from kosmo.application.discovery import (
     GetDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
+from kosmo.application.features import (
+    GenerateFeaturesUseCase,
+    SaveSelectedFeaturesUseCase,
+    SuggestFeaturesUseCase,
+)
 from kosmo.application.projects import (
     CreateProjectUseCase,
     GetProjectUseCase,
@@ -45,6 +50,9 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
 )
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
+)
+from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
+    SqlAlchemyFeatureRepository,
 )
 from kosmo.infrastructure.persistence.redis import (
     RedisAuthorizationCodeStore,
@@ -270,4 +278,38 @@ def build_discovery_components(
         ),
         get_discovery=GetDiscoveryUseCase(document_repo=document_repo),
         save_discovery=SaveDiscoveryUseCase(document_repo=document_repo),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class FeaturesComponents:
+    generate_features: GenerateFeaturesUseCase
+    suggest_features: SuggestFeaturesUseCase
+    save_selected_features: SaveSelectedFeaturesUseCase
+    feature_repo: SqlAlchemyFeatureRepository
+
+
+def build_features_components(
+    session_factory: async_sessionmaker[AsyncSession],
+    pipeline: PipelineComponents,
+) -> FeaturesComponents:
+    document_repo = SqlAlchemyDocumentRepository(session_factory)
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    project_repo = SqlAlchemyProjectRepository(session_factory)
+    return FeaturesComponents(
+        generate_features=GenerateFeaturesUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            feature_repo=feature_repo,
+            llm_client=pipeline.llm_client,
+        ),
+        suggest_features=SuggestFeaturesUseCase(
+            document_repo=document_repo,
+            feature_repo=feature_repo,
+            llm_client=pipeline.llm_client,
+        ),
+        save_selected_features=SaveSelectedFeaturesUseCase(
+            feature_repo=feature_repo,
+        ),
+        feature_repo=feature_repo,
     )
