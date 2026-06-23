@@ -15,9 +15,7 @@ _PHASE_ORDER: list[SpecPhase] = [
     SpecPhase.IMPLEMENTACION,
 ]
 
-_PHASE_INDEX: dict[SpecPhase, int] = {
-    phase: idx for idx, phase in enumerate(_PHASE_ORDER)
-}
+_PHASE_INDEX: dict[SpecPhase, int] = {phase: idx for idx, phase in enumerate(_PHASE_ORDER)}
 
 
 class SequentialOrchestrator:
