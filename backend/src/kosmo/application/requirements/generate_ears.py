@@ -10,10 +10,10 @@ from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,
     GenerationMetadata,
 )
-from kosmo.contracts.sdd.ears import EARSRequirement, EARSPattern
 from kosmo.contracts.sdd.document import AcceptanceCriterion
+from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
 from kosmo.contracts.sdd.errors import LLMInvocationError
-from kosmo.contracts.sdd.ids import ProjectId, FeatureId, RequirementId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId
 from kosmo.contracts.sdd.repositories import (
     DocumentRepository,
     FeatureRepository,
@@ -68,8 +68,8 @@ class GenerateEARSUseCase:
     async def execute(self, input_data: GenerateEARSInput) -> GenerateEARSOutput:
         from kosmo.contracts.sdd.errors import (
             DocumentNotFoundError,
-            ProjectNotFoundError,
             FeatureNotFoundError,
+            ProjectNotFoundError,
         )
 
         project = await self._project_repo.by_id(input_data.project_id)
@@ -122,7 +122,9 @@ class GenerateEARSUseCase:
 
                 if validation.is_valid:
                     reqs_data = self._extract_requirements_list(generated_content)
-                    requirements = self._build_requirements(reqs_data, input_data.feature_id, feature.number)
+                    requirements = self._build_requirements(
+                        reqs_data, input_data.feature_id, feature.number
+                    )
 
                     markdown_str = self._requirements_to_markdown(requirements)
                     await self._requirement_repo.save(input_data.feature_id, markdown_str)
@@ -197,14 +199,14 @@ class GenerateEARSUseCase:
         feature_number: int,
     ) -> list[EARSRequirement]:
         requirements: list[EARSRequirement] = []
-        
+
         for i, item in enumerate(reqs_data, start=1):
             pattern_str = item.get("pattern", "ubiquitous")
             try:
                 pattern = EARSPattern(pattern_str.lower())
             except ValueError:
                 pattern = EARSPattern.ubiquitous
-                
+
             raw_ac = item.get("acceptance_criteria", [])
             criteria = []
             if isinstance(raw_ac, list):
@@ -217,7 +219,7 @@ class GenerateEARSUseCase:
                                 then=str(ac.get("then", "")),
                             )
                         )
-            
+
             requirements.append(
                 EARSRequirement(
                     id=RequirementId(IdGenerator.generate("req")),
@@ -230,7 +232,9 @@ class GenerateEARSUseCase:
                     response=str(item.get("response", "")),
                     source_statement=str(item.get("source_statement", "")),
                     rationale=str(item.get("rationale", "")),
-                    traceability=item.get("traceability", []) if isinstance(item.get("traceability"), list) else [],
+                    traceability=item.get("traceability", [])
+                    if isinstance(item.get("traceability"), list)
+                    else [],
                     acceptance_criteria=criteria,
                 )
             )
@@ -250,7 +254,7 @@ class GenerateEARSUseCase:
             stmt = r.source_statement.replace("|", "\\|")
             rationale = r.rationale.replace("|", "\\|")
             lines.append(f"| **{r.display_id}** | {r.pattern.value} | {stmt} | {rationale} |")
-        
+
         lines.append("")
         lines.append("### Criterios de Aceptación")
         lines.append("")
@@ -263,7 +267,7 @@ class GenerateEARSUseCase:
                     lines.append(f"- **Cuando**: {ac.when}")
                     lines.append(f"- **Entonces**: {ac.then}")
                 lines.append("")
-        
+
         return "\n".join(lines).strip()
 
 
@@ -281,7 +285,7 @@ class GetRequirementsUseCase:
         self._requirement_repo = requirement_repo
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> str | None:
-        from kosmo.contracts.sdd.errors import ProjectNotFoundError, FeatureNotFoundError
+        from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 
         project = await self._project_repo.by_id(project_id)
         if project is None:

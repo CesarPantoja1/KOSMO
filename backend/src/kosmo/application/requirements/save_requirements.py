@@ -22,7 +22,7 @@ class SaveRequirementsUseCase:
         self._requirement_repo = requirement_repo
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId, markdown: str) -> None:
-        from kosmo.contracts.sdd.errors import ProjectNotFoundError, FeatureNotFoundError
+        from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 
         project = await self._project_repo.by_id(project_id)
         if project is None:
