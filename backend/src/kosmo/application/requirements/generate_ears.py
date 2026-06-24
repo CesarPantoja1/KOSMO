@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
@@ -208,17 +208,21 @@ class GenerateEARSUseCase:
                 pattern = EARSPattern.ubiquitous
 
             raw_ac = item.get("acceptance_criteria", [])
-            criteria = []
+            criteria: list[AcceptanceCriterion] = []
             if isinstance(raw_ac, list):
-                for ac in raw_ac:
+                for ac in cast("list[Any]", raw_ac):
                     if isinstance(ac, dict):
+                        ac_dict = cast("dict[str, Any]", ac)
                         criteria.append(
                             AcceptanceCriterion(
-                                given=str(ac.get("given", "")),
-                                when=str(ac.get("when", "")),
-                                then=str(ac.get("then", "")),
+                                given=str(ac_dict.get("given", "")),
+                                when=str(ac_dict.get("when", "")),
+                                then=str(ac_dict.get("then", "")),
                             )
                         )
+
+            raw_trace = item.get("traceability", [])
+            traceability: list[str] = cast("list[str]", raw_trace) if isinstance(raw_trace, list) else []
 
             requirements.append(
                 EARSRequirement(
@@ -232,9 +236,7 @@ class GenerateEARSUseCase:
                     response=str(item.get("response", "")),
                     source_statement=str(item.get("source_statement", "")),
                     rationale=str(item.get("rationale", "")),
-                    traceability=item.get("traceability", [])
-                    if isinstance(item.get("traceability"), list)
-                    else [],
+                    traceability=traceability,
                     acceptance_criteria=criteria,
                 )
             )

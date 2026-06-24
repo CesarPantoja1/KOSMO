@@ -23,4 +23,4 @@ class IdGenerator:
             raise ValueError(
                 f"Entidad desconocida: {entity}. Valores validos: {sorted(_PREFIX_MAP.keys())}"
             )
-        return f"{prefix}{ulid.new()}"
+        return f"{prefix}{ulid.new()}"  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
