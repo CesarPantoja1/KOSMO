@@ -222,7 +222,9 @@ class GenerateEARSUseCase:
                         )
 
             raw_trace = item.get("traceability", [])
-            traceability: list[str] = cast("list[str]", raw_trace) if isinstance(raw_trace, list) else []
+            traceability: list[str] = (
+                cast("list[str]", raw_trace) if isinstance(raw_trace, list) else []
+            )
 
             requirements.append(
                 EARSRequirement(
