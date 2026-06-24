@@ -89,7 +89,9 @@ async def test_suggest_features_raises_when_discovery_not_found() -> None:
     # Arrange
     doc_repo: Any = InMemoryDocumentRepository()
     feat_repo: Any = InMemoryFeatureRepository()
-    llm_client: Any = MockLLMClient(response=LLMResponse(text="{}", usage=LLMUsage(total_tokens=0), model="mock"))
+    llm_client: Any = MockLLMClient(
+        response=LLMResponse(text="{}", usage=LLMUsage(total_tokens=0), model="mock")
+    )
     use_case = SuggestFeaturesUseCase(
         document_repo=doc_repo,
         feature_repo=feat_repo,
@@ -135,7 +137,9 @@ async def test_suggest_features_returns_suggestions_from_llm() -> None:
             }
         ]
     }"""
-    llm_client: Any = MockLLMClient(response=LLMResponse(text=llm_json, usage=LLMUsage(total_tokens=100), model="mock"))
+    llm_client: Any = MockLLMClient(
+        response=LLMResponse(text=llm_json, usage=LLMUsage(total_tokens=100), model="mock")
+    )
     use_case = SuggestFeaturesUseCase(
         document_repo=doc_repo,
         feature_repo=feat_repo,
@@ -183,7 +187,9 @@ async def test_suggest_features_excludes_existing_titles() -> None:
             }
         ]
     }"""
-    llm_client: Any = MockLLMClient(response=LLMResponse(text=llm_json, usage=LLMUsage(total_tokens=100), model="mock"))
+    llm_client: Any = MockLLMClient(
+        response=LLMResponse(text=llm_json, usage=LLMUsage(total_tokens=100), model="mock")
+    )
     use_case = SuggestFeaturesUseCase(
         document_repo=doc_repo,
         feature_repo=feat_repo,
