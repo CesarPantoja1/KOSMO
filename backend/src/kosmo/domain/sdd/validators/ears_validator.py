@@ -73,8 +73,8 @@ def validate_ears_syntax(requirements: list[Any]) -> ValidationResult:
         display_id = _get_display_id(req)
 
         if pattern == EARSPattern.ubiquitous and not _UBIQUITOUS_RE.match(stmt):
-            errors.append(
-                f"{display_id}: Sintaxis ubiquitous incorrecta. "
+            warnings.append(
+                f"{display_id}: Posible sintaxis ubiquitous incorrecta. "
                 f"Esperado: '{EARSPattern_SYNTAX[EARSPattern.ubiquitous]}'. "
                 f"Obtenido: '{stmt[:80]}'"
             )

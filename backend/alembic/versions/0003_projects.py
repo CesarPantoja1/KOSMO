@@ -51,9 +51,7 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_projects_owner_id", "projects", ["owner_id"], unique=False)
-    op.create_index(
-        "ix_projects_owner_slug", "projects", ["owner_id", "slug"], unique=True
-    )
+    op.create_index("ix_projects_owner_slug", "projects", ["owner_id", "slug"], unique=True)
 
 
 def downgrade() -> None:

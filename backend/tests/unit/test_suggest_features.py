@@ -204,3 +204,52 @@ async def test_suggest_features_excludes_existing_titles() -> None:
     # Assert
     assert "Autenticación de usuarios" in result.excluded_titles
     assert result.suggestions[0].number == 2
+
+
+@pytest.mark.asyncio
+async def test_suggest_features_strips_identifier_prefix_from_title() -> None:
+    # Arrange
+    doc_repo: Any = InMemoryDocumentRepository()
+    feat_repo: Any = InMemoryFeatureRepository()
+    project_id = ProjectId("prj_strip123")
+
+    await doc_repo.save_discovery(project_id, _make_discovery_document())
+
+    llm_json = """{
+        "suggestions": [
+            {
+                "title": "C01 Autenticación de usuarios",
+                "description": "Login con OAuth2",
+                "rationale": "Seguridad",
+                "inferred_from": []
+            },
+            {
+                "title": "C02: Gestión de permisos",
+                "description": "RBAC",
+                "rationale": "Autorización",
+                "inferred_from": []
+            },
+            {
+                "title": "C03 - Notificaciones por email",
+                "description": "Emails automáticos",
+                "rationale": "Comunicación",
+                "inferred_from": []
+            }
+        ]
+    }"""
+    llm_client: Any = MockLLMClient(
+        response=LLMResponse(text=llm_json, usage=LLMUsage(total_tokens=100), model="mock")
+    )
+    use_case = SuggestFeaturesUseCase(
+        document_repo=doc_repo,
+        feature_repo=feat_repo,
+        llm_client=llm_client,
+    )
+
+    # Act
+    result = await use_case.execute(SuggestFeaturesInput(project_id=project_id))
+
+    # Assert
+    assert result.suggestions[0].title == "Autenticación de usuarios"
+    assert result.suggestions[1].title == "Gestión de permisos"
+    assert result.suggestions[2].title == "Notificaciones por email"

@@ -117,7 +117,7 @@ export function HomePage() {
 				{loading ? (
 					<div>Cargando proyectos...</div>
 				) : isViewCardOn ? (
-					<div className='bg-base-50 flex gap-4 flex-wrap'>
+					<div className='flex gap-4 flex-wrap'>
 						<Link
 							href='/crear-proyecto'
 							className='w-96 h-40 px-5 pt-7 pb-2.5 bg-base-50 rounded-sm shadow-[0px_4px_8px_0px_rgba(0,0,0,0.20)] outline outline-1 outline-offset-[-1px] outline-black inline-flex flex-col justify-start items-start gap-4 overflow-hidden'

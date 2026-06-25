@@ -18,10 +18,47 @@ def _normalize_text(text: str) -> set[str]:
     # Tokenizar y filtrar stopwords comunes en español
     words = text.split()
     stopwords = {
-        "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "al", "y", "o", "e",
-        "u", "en", "para", "por", "con", "sin", "sobre", "tras", "desde", "hasta", "que", "es",
-        "son", "este", "esta", "estos", "estas", "como", "quiero", "sistema", "usuario",
-        "permite", "debe", "poder", "funcionalidad", "caracteristica", "proyecto",
+        "el",
+        "la",
+        "los",
+        "las",
+        "un",
+        "una",
+        "unos",
+        "unas",
+        "de",
+        "del",
+        "al",
+        "y",
+        "o",
+        "e",
+        "u",
+        "en",
+        "para",
+        "por",
+        "con",
+        "sin",
+        "sobre",
+        "tras",
+        "desde",
+        "hasta",
+        "que",
+        "es",
+        "son",
+        "este",
+        "esta",
+        "estos",
+        "estas",
+        "como",
+        "quiero",
+        "sistema",
+        "usuario",
+        "permite",
+        "debe",
+        "poder",
+        "funcionalidad",
+        "caracteristica",
+        "proyecto",
     }
     return {w for w in words if len(w) > 2 and w not in stopwords}
 
@@ -82,8 +119,7 @@ def validate_feature_structure(features: Any) -> ValidationResult:
 
         # Si hay errores críticos de estructura, saltar validación detallada de este elemento
         if any(
-            f not in feat
-            for f in ["number", "title", "description", "rationale", "inferred_from"]
+            f not in feat for f in ["number", "title", "description", "rationale", "inferred_from"]
         ):
             continue
 
@@ -111,9 +147,7 @@ def validate_feature_structure(features: Any) -> ValidationResult:
                 f"La descripción en la característica '{title}' debe ser un texto no vacío."
             )
         elif len(desc_val.strip()) < 20:
-            errors.append(
-                f"La descripción de '{title}' es demasiado corta (mínimo 20 caracteres)."
-            )
+            errors.append(f"La descripción de '{title}' es demasiado corta (mínimo 20 caracteres).")
 
         if not isinstance(rationale_val, str) or not rationale_val.strip():
             errors.append(
@@ -236,9 +270,7 @@ def validate_feature_uniqueness(
 
     # 2. Comparar generadas contra existentes
     if existing_titles:
-        normalized_existing = [
-            (t, _normalize_text(t)) for t in existing_titles
-        ]
+        normalized_existing = [(t, _normalize_text(t)) for t in existing_titles]
         for title_gen, gen_words in normalized_titles:
             for title_exist, exist_words in normalized_existing:
                 sim = _jaccard_similarity(gen_words, exist_words)

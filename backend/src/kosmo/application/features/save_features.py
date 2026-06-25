@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -9,6 +10,12 @@ from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature, SuggestFeat
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository
+
+_FEATURE_ID_PREFIX = re.compile(r"^\s*C\d+[\s:.–—-]+")
+
+
+def _strip_feature_id_prefix(title: str) -> str:
+    return _FEATURE_ID_PREFIX.sub("", title).strip()
 
 
 @dataclass(frozen=True)
@@ -83,8 +90,9 @@ class SuggestFeaturesUseCase:
             suggest_prompt += f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
 
         suggest_prompt += (
-            f"\n\nLa primera sugerencia será C{next_number:02d}."
-            f"\nGenerá exactamente 3 sugerencias. "
+            '\n\nEl campo "title" debe contener ÚNICAMENTE el nombre de la '
+            "característica, sin prefijos ni identificadores tipo C01, C02, etc."
+            "\nGenerá exactamente 3 sugerencias. "
             "Nada de texto antes o después del JSON."
         )
 
@@ -135,7 +143,7 @@ class SuggestFeaturesUseCase:
                 continue
             item: dict[str, object] = item_  # type: ignore[reportUnknownVariableType]
             number = next_number + i
-            title = str(item.get("title", f"Característica {number}"))
+            title = _strip_feature_id_prefix(str(item.get("title", f"Característica {number}")))
             inferred_from_raw = item.get("inferred_from", [])
             inferred_from: list[str] = (
                 [str(x) for x in inferred_from_raw]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
@@ -174,7 +182,7 @@ class SaveSelectedFeaturesUseCase:
 
         features: list[Feature] = []
         for item in input_data.features:
-            title = str(item.get("title", f"Característica {next_num}"))
+            title = _strip_feature_id_prefix(str(item.get("title", f"Característica {next_num}")))
             inferred_raw = cast("list[Any]", item.get("inferred_from", []))
             inferred: list[str] = [str(x) for x in inferred_raw] if inferred_raw else []
             features.append(
