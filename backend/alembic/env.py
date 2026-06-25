@@ -3,6 +3,7 @@ import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy import pool
@@ -22,9 +23,27 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+def _normalize_database_url(raw_url: str) -> str:
+    if raw_url.startswith("postgresql://"):
+        raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    parsed = urlsplit(raw_url)
+    if (
+        parsed.scheme == "postgresql+asyncpg"
+        and parsed.hostname is not None
+        and parsed.hostname.endswith(".pooler.supabase.com")
+        and parsed.port == 6543
+    ):
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.setdefault("prepared_statement_cache_size", "0")
+        raw_url = urlunsplit(parsed._replace(query=urlencode(query)))
+
+    return raw_url
+
+
 _db_url_env = os.getenv("DATABASE_URL")
 if _db_url_env:
-    config.set_main_option("sqlalchemy.url", _db_url_env)
+    config.set_main_option("sqlalchemy.url", _normalize_database_url(_db_url_env))
 
 target_metadata = Base.metadata
 
