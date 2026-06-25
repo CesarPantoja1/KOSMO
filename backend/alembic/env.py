@@ -36,6 +36,7 @@ def _normalize_database_url(raw_url: str) -> str:
         and parsed.port == 6543
     ):
         query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.setdefault("statement_cache_size", "0")
         query.setdefault("prepared_statement_cache_size", "0")
         raw_url = urlunsplit(parsed._replace(query=urlencode(query)))
 
