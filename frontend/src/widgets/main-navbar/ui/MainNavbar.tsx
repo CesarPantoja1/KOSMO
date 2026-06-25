@@ -135,6 +135,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						</button>
 					</div>
 				</div>
+				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
 
 			<main className='flex w-10/12 min-h-0 flex-col overflow-hidden mx-8'>
