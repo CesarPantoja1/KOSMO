@@ -1,7 +1,7 @@
 'use client';
 import { useState, KeyboardEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
-import type { UmlNode as UmlFlowNode, UmlItem, Visibility } from '../model/types';
+import type { UmlFlowNode, UmlItem, Visibility } from '../model/types';
 
 interface UmlRowProps {
 	item: UmlItem;

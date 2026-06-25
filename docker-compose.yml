@@ -1,31 +1,39 @@
-# =============================================================================
-# KOSMO — docker-compose.yml
-# -----------------------------------------------------------------------------
-# Servicios:
-#   - frontend  (Next.js / Bun)
-#   - backend   (FastAPI + uv)
-#   - postgres  (pgvector/pgvector:pg17)
-#   - mongodb   (mongo:7)
-#   - redis     (redis:7-alpine)
-# =============================================================================
+# KOSMO local development stack.
+#
+# Services:
+# - frontend: Next.js + Bun
+# - backend: FastAPI + uvicorn
+# - postgres: pgvector/Postgres for relational data and vector support
+# - mongodb: agent memory database
+# - redis: auth/session/rate-limit cache
 
 services:
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: kosmo-frontend:dev
     container_name: kosmo-frontend
+    init: true
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-KOSMO}
+      NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-development}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true
-    command: sh -c "bun install --frozen-lockfile; bun run dev"
+      - frontend_node_modules:/app/node_modules
+      - frontend_next_cache:/app/.next
+    command: sh -c "rm -rf .next/cache && bun install --frozen-lockfile && bun run dev --hostname 0.0.0.0"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
   backend:
     build:
@@ -35,22 +43,47 @@ services:
     container_name: kosmo-backend
     init: true
     ports:
-      - "8000:8000"
-    env_file:
-      - ./backend/.env
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
-      # Overrides para resolución por nombre de servicio dentro de la red de compose
+      ENV: ${ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      PORT: "8000"
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
+      DEV_GENERATE_SECRETS: ${DEV_GENERATE_SECRETS:-1}
+      AUTH_DISABLED: "true"
+
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}
       MONGO_URL: mongodb://${MONGO_USER:-kosmo}:${MONGO_PASSWORD:-kosmo}@mongodb:27017/${MONGO_DB:-kosmo_agent_memory}?authSource=admin
       REDIS_URL: redis://redis:6379/0
-      JWT_PRIVATE_KEY_PATH: /app/.secrets/jwt_private.pem
-      JWT_PUBLIC_KEY_PATH: /app/.secrets/jwt_public.pem
-      OTEL_SERVICE_NAME: kosmo-backend
-      OTEL_ENVIRONMENT: ${ENVIRONMENT:-development}
+
+      JWT_PRIVATE_KEY_PATH: /tmp/kosmo-secrets/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /tmp/kosmo-secrets/jwt_public.pem
+      FERNET_MASTER_KEY: ${FERNET_MASTER_KEY:-qn9GZmTM--RH5MVh3kLmyS-oeHYCmnYCVPW9BRFLuik=}
+      JWT_ALGORITHM: RS256
+      JWT_ISSUER: ${JWT_ISSUER:-kosmo}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-kosmo-api}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-604800}
+
+      ARGON2_MEMORY_KIB: ${ARGON2_MEMORY_KIB:-65536}
+      ARGON2_TIME_COST: ${ARGON2_TIME_COST:-3}
+      ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-4}
+
+      LLM_PROVIDER: ${LLM_PROVIDER:-noop}
+      LLM_MODEL: ${LLM_MODEL:-noop}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+
+      API_VERSION: ${API_VERSION:-v1}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-kosmo-backend}
+      OTEL_ENVIRONMENT: ${OTEL_ENVIRONMENT:-development}
       PYTHONUNBUFFERED: "1"
     volumes:
-      # Claves RS256 SOLO LECTURA — nunca dentro de la imagen
-      - ./backend/.secrets:/app/.secrets:ro
+      - ./backend/src:/app/src
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+    command: sh -c "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload"
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,8 +99,8 @@ services:
         - "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3); sys.exit(0 if r.status==200 else 1)"
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 40s
     restart: unless-stopped
 
   postgres:
@@ -83,7 +116,7 @@ services:
       - kosmo_postgres_data:/var/lib/postgresql/data
       - ./backend/docker/postgres/init-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kosmo} -d ${POSTGRES_DB:-kosmo_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -96,6 +129,7 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-kosmo}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-kosmo}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-kosmo_agent_memory}
     ports:
       - "${MONGO_PORT:-27017}:27017"
     volumes:
@@ -112,7 +146,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 15s
+      start_period: 20s
     restart: unless-stopped
 
   redis:
@@ -132,9 +166,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  frontend_node_modules:
+  frontend_next_cache:
   kosmo_postgres_data:
-    name: kosmo_postgres_data
   kosmo_mongodb_data:
-    name: kosmo_mongodb_data
   kosmo_redis_data:
-    name: kosmo_redis_data

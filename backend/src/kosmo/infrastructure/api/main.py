@@ -5,11 +5,21 @@ from typing import Any, cast
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from kosmo.config import settings
-from kosmo.infrastructure.api.composition import build_auth_components
+from kosmo.infrastructure.api.composition import (
+    build_auth_components,
+    build_discovery_components,
+    build_features_components,
+    build_pipeline_components,
+    build_project_components,
+)
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
+from kosmo.infrastructure.api.routers.discovery import router as discovery_router
+from kosmo.infrastructure.api.routers.features import router as features_router
+from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
@@ -25,6 +35,34 @@ _OPENAPI_TAGS = [
             "``code_verifier`` efímero, solicita un ``authorization_code`` en ``/authorize``, "
             "lo intercambia por tokens JWT en ``/token`` y los renueva con ``/refresh``. "
             "Todos los endpoints protegidos requieren ``Authorization: Bearer <access_token>``."
+        ),
+    },
+    {
+        "name": "projects",
+        "description": (
+            "Gestión de proyectos. Permite crear, listar y consultar proyectos "
+            "asociados al usuario autenticado. Cada proyecto agrupa el ciclo "
+            "completo de especificación, modelado y generación de artefactos."
+        ),
+    },
+    {
+        "name": "discovery",
+        "description": (
+            "Generación de documentos de descubrimiento mediante IA. "
+            "Permite generar, consultar y actualizar el documento de visión "
+            "de producto de un proyecto. El documento se estructura en 8 "
+            "secciones obligatorias que cubren visión, problema, actores, "
+            "propuesta de valor, casos de uso, capacidades, reglas de negocio "
+            "y atributos de calidad."
+        ),
+    },
+    {
+        "name": "features",
+        "description": (
+            "Generación y gestión de características del producto software mediante IA. "
+            "Permite generar características a partir del documento de descubrimiento, "
+            "sugerir nuevas características no duplicadas, listar las existentes y "
+            "guardar las seleccionadas por el usuario."
         ),
     },
     {
@@ -131,26 +169,54 @@ _GLOBAL_RESPONSES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
-    components = build_auth_components(settings)
-    app.state.register_user = components.register_user
-    app.state.login_attempt_store = components.login_attempt_store
-    app.state.authorize_with_pkce = components.authorize_with_pkce
-    app.state.exchange_authorization_code = components.exchange_authorization_code
-    app.state.issue_token_pair = components.issue_token_pair
-    app.state.verify_access_token = components.verify_access_token
-    app.state.refresh_token_pair = components.refresh_token_pair
-    app.state.revoke_session = components.revoke_session
-    app.state.password_hasher = components.password_hasher
-    app.state.secret_cipher = components.secret_cipher
-    app.state.user_repository = components.user_repository
-    app.state.redis = components.redis
-    app.state.db_engine = components.db_engine
-    instrument_app(settings, app=app, db_engine=components.db_engine)
+    auth_components = None
+    if settings.auth_disabled:
+        db_engine = create_async_engine(
+            settings.database_url.get_secret_value(),
+            pool_pre_ping=True,
+        )
+        app.state.redis = None
+    else:
+        auth_components = build_auth_components(settings)
+        app.state.register_user = auth_components.register_user
+        app.state.login_attempt_store = auth_components.login_attempt_store
+        app.state.authorize_with_pkce = auth_components.authorize_with_pkce
+        app.state.exchange_authorization_code = auth_components.exchange_authorization_code
+        app.state.issue_token_pair = auth_components.issue_token_pair
+        app.state.verify_access_token = auth_components.verify_access_token
+        app.state.refresh_token_pair = auth_components.refresh_token_pair
+        app.state.revoke_session = auth_components.revoke_session
+        app.state.password_hasher = auth_components.password_hasher
+        app.state.secret_cipher = auth_components.secret_cipher
+        app.state.user_repository = auth_components.user_repository
+        app.state.redis = auth_components.redis
+        db_engine = auth_components.db_engine
+
+    app.state.db_engine = db_engine
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    project_components = build_project_components(session_factory)
+    app.state.create_project = project_components.create_project
+    app.state.get_project = project_components.get_project
+    app.state.list_projects = project_components.list_projects
+
+    pipeline_components = build_pipeline_components(settings, session_factory)
+    discovery_components = build_discovery_components(session_factory, pipeline_components)
+    features_components = build_features_components(session_factory, pipeline_components)
+    app.state.generate_discovery = discovery_components.generate_discovery
+    app.state.get_discovery = discovery_components.get_discovery
+    app.state.save_discovery = discovery_components.save_discovery
+    app.state.generate_features = features_components.generate_features
+    app.state.suggest_features = features_components.suggest_features
+    app.state.save_selected_features = features_components.save_selected_features
+    app.state.feature_repo = features_components.feature_repo
+
+    instrument_app(settings, app=app, db_engine=db_engine)
     try:
         yield
     finally:
-        await components.redis.aclose()
-        await components.db_engine.dispose()
+        if auth_components is not None:
+            await auth_components.redis.aclose()
+        await db_engine.dispose()
 
 
 app = FastAPI(
@@ -176,7 +242,11 @@ app.add_middleware(
 )
 app.add_middleware(RequestLoggingMiddleware)
 
-app.include_router(auth_router)
+if not settings.auth_disabled:
+    app.include_router(auth_router)
+app.include_router(projects_router)
+app.include_router(discovery_router)
+app.include_router(features_router)
 app.include_router(schemas_router)
 
 
@@ -215,7 +285,7 @@ def _custom_openapi() -> dict[str, Any]:
 
     # Registrar HttpErrorResponse en components/schemas
     http_error_schema = HttpErrorResponse.model_json_schema()
-    
+
     components: dict[str, Any] = schema.setdefault("components", {})
     schemas: dict[str, Any] = components.setdefault("schemas", {})
     schemas["HttpErrorResponse"] = http_error_schema

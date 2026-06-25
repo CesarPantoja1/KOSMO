@@ -6,10 +6,16 @@ from pydantic import BaseModel
 from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
     AuthorizeRequest,
+    CreateProjectRequest,
+    DiscoveryResponse,
+    FeatureResponse,
+    FeatureSuggestionResponse,
     LogoutRequest,
     OAuthErrorResponse,
     PrincipalView,
+    ProjectResponse,
     RegisterRequest,
+    SaveSelectedFeaturesRequest,
     TokenExchangeRequest,
     TokenPairResponse,
     TokenRefreshRequest,
@@ -20,6 +26,11 @@ router = APIRouter(prefix="/api/v1/schemas", tags=["schemas"])
 
 
 _REGISTRY: dict[str, type[BaseModel]] = {
+    "CreateProjectRequest": CreateProjectRequest,
+    "DiscoveryResponse": DiscoveryResponse,
+    "FeatureResponse": FeatureResponse,
+    "FeatureSuggestionResponse": FeatureSuggestionResponse,
+    "ProjectResponse": ProjectResponse,
     "RegisterRequest": RegisterRequest,
     "AuthorizeRequest": AuthorizeRequest,
     "AuthorizationCodeResponse": AuthorizationCodeResponse,
@@ -28,6 +39,7 @@ _REGISTRY: dict[str, type[BaseModel]] = {
     "LogoutRequest": LogoutRequest,
     "TokenPairResponse": TokenPairResponse,
     "PrincipalView": PrincipalView,
+    "SaveSelectedFeaturesRequest": SaveSelectedFeaturesRequest,
     "UserPublic": UserPublic,
     "OAuthErrorResponse": OAuthErrorResponse,
 }

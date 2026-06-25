@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
     PasswordHasher,
     User,
@@ -15,6 +16,7 @@ from kosmo.contracts.telemetry import record_auth_event, traced
 class RegisterUser:
     user_repository: UserRepository
     password_hasher: PasswordHasher
+    audit_sink: AuditEventSink
 
     @traced("auth.register")
     async def execute(self, *, email: str, password: str) -> User:
@@ -29,5 +31,14 @@ class RegisterUser:
             created_at=datetime.now(UTC),
         )
         await self.user_repository.create(user)
+        await self.audit_sink.record(
+            AuditEvent(
+                event_type="auth.register",
+                outcome=AuditOutcome.SUCCESS,
+                occurred_at=datetime.now(UTC),
+                actor_id=user.id,
+                actor_email=normalized_email,
+            )
+        )
         record_auth_event("register_success", user_id=user.id)
         return user

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
     InvalidTokenError,
     Principal,
@@ -70,6 +71,7 @@ class RefreshTokenPair:
     issuer: TokenIssuer
     verifier: TokenVerifier
     revocation_store: TokenRevocationStore
+    audit_sink: AuditEventSink
 
     @traced("auth.token_refresh")
     async def execute(self, refresh_token: str, *, scopes: frozenset[str]) -> TokenPair:
@@ -80,6 +82,15 @@ class RefreshTokenPair:
                 family_id=claims.family_id
             ):
                 await self.revocation_store.revoke_family(family_id=claims.family_id)
+                await self.audit_sink.record(
+                    AuditEvent(
+                        event_type="auth.token_reused",
+                        outcome=AuditOutcome.FAILURE,
+                        occurred_at=datetime.now(UTC),
+                        actor_id=claims.subject,
+                        metadata={"reason": "refresh_token_reused"},
+                    )
+                )
                 raise TokenReusedError("Refresh token reusado, sesión revocada")
             raise InvalidTokenError("Refresh token not recognized")
         if consumed.subject != claims.subject:
@@ -108,6 +119,14 @@ class RefreshTokenPair:
             ttl_seconds=_seconds_until(new_refresh.expires_at),
             family_id=family,
         )
+        await self.audit_sink.record(
+            AuditEvent(
+                event_type="auth.token_refresh",
+                outcome=AuditOutcome.SUCCESS,
+                occurred_at=datetime.now(UTC),
+                actor_id=claims.subject,
+            )
+        )
         record_auth_event("token_refresh", user_id=claims.subject)
         return TokenPair(access=access, refresh=new_refresh)
 
@@ -116,6 +135,7 @@ class RefreshTokenPair:
 class RevokeSession:
     verifier: TokenVerifier
     revocation_store: TokenRevocationStore
+    audit_sink: AuditEventSink
 
     @traced("auth.logout")
     async def execute(self, *, access_token: str, refresh_token: str | None = None) -> None:
@@ -131,4 +151,12 @@ class RevokeSession:
             await self.revocation_store.revoke_refresh(jti=refresh_claims.jti)
             if refresh_claims.family_id is not None:
                 await self.revocation_store.revoke_family(family_id=refresh_claims.family_id)
+        await self.audit_sink.record(
+            AuditEvent(
+                event_type="auth.logout",
+                outcome=AuditOutcome.SUCCESS,
+                occurred_at=datetime.now(UTC),
+                actor_id=access_claims.subject,
+            )
+        )
         record_auth_event("logout", user_id=access_claims.subject)

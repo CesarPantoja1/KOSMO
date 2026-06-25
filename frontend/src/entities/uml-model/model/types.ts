@@ -23,7 +23,7 @@ export interface UmlNodeData extends Record<string, unknown> {
 	values?: string[];
 }
 
-export type UmlNode = Node<UmlNodeData>;
+export type UmlFlowNode = Node<UmlNodeData>;
 
 export type UmlRelationType =
 	| 'association'

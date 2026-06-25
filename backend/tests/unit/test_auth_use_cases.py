@@ -17,6 +17,7 @@ from kosmo.application.auth import (  # noqa: E402
     RevokeSession,
     VerifyAccessToken,
 )
+from kosmo.contracts.audit import AuditEvent  # noqa: E402
 from kosmo.contracts.auth import (  # noqa: E402
     InvalidTokenError,
     IssuedToken,
@@ -103,6 +104,14 @@ class InMemoryStore:
                 del self.refresh[jti]
 
 
+class InMemoryAuditEventSink:
+    def __init__(self) -> None:
+        self.events: list[AuditEvent] = []
+
+    async def record(self, event: AuditEvent) -> None:
+        self.events.append(event)
+
+
 def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
     settings = JwtSettings(
         algorithm="RS256",
@@ -135,9 +144,10 @@ async def test_issue_then_verify_returns_principal() -> None:
 async def test_revoked_access_rejected() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
+    audit_sink = InMemoryAuditEventSink()
     issue = IssueTokenPair(issuer=issuer, revocation_store=store)
     verify = VerifyAccessToken(verifier=verifier, revocation_store=store)
-    revoke = RevokeSession(verifier=verifier, revocation_store=store)
+    revoke = RevokeSession(verifier=verifier, revocation_store=store, audit_sink=audit_sink)
 
     pair = await issue.execute(subject="user-1", scopes=frozenset())
     await revoke.execute(access_token=pair.access.token, refresh_token=pair.refresh.token)
@@ -151,8 +161,11 @@ async def test_revoked_access_rejected() -> None:
 async def test_refresh_rotates_pair() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
+    audit_sink = InMemoryAuditEventSink()
     issue = IssueTokenPair(issuer=issuer, revocation_store=store)
-    refresh_uc = RefreshTokenPair(issuer=issuer, verifier=verifier, revocation_store=store)
+    refresh_uc = RefreshTokenPair(
+        issuer=issuer, verifier=verifier, revocation_store=store, audit_sink=audit_sink
+    )
 
     original = await issue.execute(subject="user-1", scopes=frozenset({"read"}))
     rotated = await refresh_uc.execute(original.refresh.token, scopes=frozenset({"read"}))
@@ -169,8 +182,11 @@ async def test_refresh_rotates_pair() -> None:
 async def test_access_token_used_as_refresh_is_rejected() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
+    audit_sink = InMemoryAuditEventSink()
     issue = IssueTokenPair(issuer=issuer, revocation_store=store)
-    refresh_uc = RefreshTokenPair(issuer=issuer, verifier=verifier, revocation_store=store)
+    refresh_uc = RefreshTokenPair(
+        issuer=issuer, verifier=verifier, revocation_store=store, audit_sink=audit_sink
+    )
 
     pair = await issue.execute(subject="user-1", scopes=frozenset())
 

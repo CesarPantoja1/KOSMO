@@ -367,6 +367,59 @@ class OAuthErrorResponse(BaseModel):
     )
 
 
+class CreateProjectRequest(BaseModel):
+    """Payload para crear un nuevo proyecto en KOSMO."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Nombre del proyecto.",
+        examples=["Mi Proyecto"],
+    )
+    description: str = Field(
+        default="",
+        min_length=0,
+        max_length=2000,
+        description="Descripción del proyecto.",
+        examples=["Proyecto de ejemplo para KOSMO"],
+    )
+
+
+class ProjectResponse(BaseModel):
+    """Representación pública de un proyecto."""
+
+    id: str = Field(
+        description="Identificador único del proyecto.",
+        examples=["prj_abc123def456"],
+    )
+    name: str = Field(
+        description="Nombre del proyecto.",
+        examples=["Mi Proyecto"],
+    )
+    slug: str = Field(
+        description="Slug único del proyecto generado a partir del nombre.",
+        examples=["mi-proyecto"],
+    )
+    description: str = Field(
+        description="Descripción del proyecto.",
+        examples=["Proyecto de ejemplo para KOSMO"],
+    )
+    owner_id: str = Field(
+        description="Identificador del usuario propietario.",
+        examples=["usr_abc123"],
+    )
+    created_at: datetime = Field(
+        description="Timestamp ISO-8601 (UTC) de creación del proyecto.",
+        examples=["2026-06-16T10:00:00Z"],
+    )
+    updated_at: datetime = Field(
+        description="Timestamp ISO-8601 (UTC) de última modificación.",
+        examples=["2026-06-16T10:00:00Z"],
+    )
+
+
 class HttpErrorResponse(BaseModel):
     """Respuesta de error HTTP genérica para errores de infraestructura (4xx/5xx).
 
@@ -377,4 +430,94 @@ class HttpErrorResponse(BaseModel):
     detail: str = Field(
         description="Mensaje descriptivo del error de infraestructura.",
         examples=["Error interno del servidor. Por favor contacte al soporte."],
+    )
+
+
+class DiscoveryResponse(BaseModel):
+    """Documento de descubrimiento de un proyecto.
+
+    Coincide con la interfaz DiscoveryResponse del frontend.
+    """
+
+    id: str = Field(
+        description="Identificador del documento de descubrimiento.",
+        examples=["doc_prj_abc123def456"],
+    )
+    project_id: str = Field(
+        description="Identificador del proyecto al que pertenece el documento.",
+        examples=["prj_abc123def456"],
+    )
+    content: str = Field(
+        description="Contenido del documento en formato Markdown.",
+        examples=["## Visión\n..."],
+    )
+
+
+class FeatureResponse(BaseModel):
+    """Característica del producto software."""
+
+    id: str = Field(
+        description="Identificador único de la característica.",
+        examples=["feat_abc123"],
+    )
+    project_id: str = Field(
+        description="Identificador del proyecto al que pertenece.",
+        examples=["prj_abc123def456"],
+    )
+    number: int = Field(
+        description="Número secuencial de la característica.",
+        examples=[1],
+    )
+    title: str = Field(
+        description="Título de la característica.",
+        examples=["Gestión de catálogo de productos"],
+    )
+    slug: str = Field(
+        description="Slug de la característica generado a partir del título.",
+        examples=["gestion-de-catalogo-de-productos"],
+    )
+    description: str = Field(
+        description="Descripción detallada de la característica.",
+        examples=["Permite a los usuarios administrar el catálogo..."],
+    )
+    rationale: str = Field(
+        description="Justificación de negocio de la característica.",
+        examples=["Es necesaria para que los administradores puedan..."],
+    )
+    inferred_from: list[str] = Field(
+        default_factory=list,
+        description="Secciones del descubrimiento de las que se infiere.",
+        examples=[["Casos de uso", "Capacidades principales"]],
+    )
+    display_id: str = Field(
+        description="Identificador visible para el usuario (ej: C01).",
+        examples=["C01"],
+    )
+
+
+class FeatureSuggestionItem(BaseModel):
+    """Una sugerencia individual de característica."""
+
+    title: str
+    description: str
+    rationale: str
+    inferred_from: list[str] = Field(default_factory=list)
+
+
+class SaveSelectedFeaturesRequest(BaseModel):
+    """Payload para guardar características seleccionadas."""
+
+    features: list[FeatureSuggestionItem] = Field(description="Lista de características a guardar.")
+
+
+class FeatureSuggestionResponse(BaseModel):
+    """Respuesta con una sugerencia de característica."""
+
+    number: int = Field(description="Número sugerido para la característica.")
+    title: str = Field(description="Título sugerido.")
+    description: str = Field(description="Descripción sugerida.")
+    rationale: str = Field(description="Justificación sugerida.")
+    inferred_from: list[str] = Field(
+        default_factory=list,
+        description="Secciones del descubrimiento de las que se infiere.",
     )

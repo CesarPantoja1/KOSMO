@@ -119,7 +119,7 @@ Lenguaje Natural → Requisitos EARS → Modelos Arquitectónicos → Código Fu
 
 El proyecto sigue una metodología ágil basada en Scrum, con entregas incrementales organizadas en sprints quincenales y automatización completa del ciclo de integración y despliegue mediante GitHub Actions.
 
-## Estado del Proyecto
+## Estado del Proyecto 
 
 Actualmente en desarrollo de la versión 1.0, enfocada en la generación asistida por IA de requisitos estructurados y modelos arquitectónicos con trazabilidad bidireccional.
 

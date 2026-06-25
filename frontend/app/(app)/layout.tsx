@@ -1,21 +1,14 @@
+'use client';
+
+import { AuthGuard } from '@/shared/ui/AuthGuard';
 import { MainNavbar } from '@/widgets/main-navbar/ui/MainNavbar';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-	const props = {
-		project: { name: 'Proyecto Ejemplo' },
-		phases: [
-			{ key: 'idea', label: 'Idea' },
-			{ key: 'discovery', label: 'Discovery' },
-			{ key: 'requirements', label: 'Requirements' },
-			{ key: 'modeling', label: 'Modeling' },
-		],
-		provider: 'OpenAI',
-	};
-
+export default function AppLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<div className='bg-green-500'>
-			<MainNavbar {...props} />
-			{children}
-		</div>
+		<AuthGuard>
+			<div className='min-h-screen min-w-full max-h-screen'>
+				<MainNavbar>{children}</MainNavbar>
+			</div>
+		</AuthGuard>
 	);
 }

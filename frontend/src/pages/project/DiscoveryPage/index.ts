@@ -1,1 +1,1 @@
-export { DiscoveryPage, metadata } from './ui/DiscoveryPage';
+export { DiscoveryPage } from './ui/DiscoveryPage';
