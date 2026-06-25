@@ -5,7 +5,7 @@ from typing import Any, cast
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from kosmo.config import settings
 from kosmo.infrastructure.api.composition import (
@@ -169,22 +169,31 @@ _GLOBAL_RESPONSES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
-    components = build_auth_components(settings)
-    app.state.register_user = components.register_user
-    app.state.login_attempt_store = components.login_attempt_store
-    app.state.authorize_with_pkce = components.authorize_with_pkce
-    app.state.exchange_authorization_code = components.exchange_authorization_code
-    app.state.issue_token_pair = components.issue_token_pair
-    app.state.verify_access_token = components.verify_access_token
-    app.state.refresh_token_pair = components.refresh_token_pair
-    app.state.revoke_session = components.revoke_session
-    app.state.password_hasher = components.password_hasher
-    app.state.secret_cipher = components.secret_cipher
-    app.state.user_repository = components.user_repository
-    app.state.redis = components.redis
-    app.state.db_engine = components.db_engine
+    auth_components = None
+    if settings.auth_disabled:
+        db_engine = create_async_engine(
+            settings.database_url.get_secret_value(),
+            pool_pre_ping=True,
+        )
+        app.state.redis = None
+    else:
+        auth_components = build_auth_components(settings)
+        app.state.register_user = auth_components.register_user
+        app.state.login_attempt_store = auth_components.login_attempt_store
+        app.state.authorize_with_pkce = auth_components.authorize_with_pkce
+        app.state.exchange_authorization_code = auth_components.exchange_authorization_code
+        app.state.issue_token_pair = auth_components.issue_token_pair
+        app.state.verify_access_token = auth_components.verify_access_token
+        app.state.refresh_token_pair = auth_components.refresh_token_pair
+        app.state.revoke_session = auth_components.revoke_session
+        app.state.password_hasher = auth_components.password_hasher
+        app.state.secret_cipher = auth_components.secret_cipher
+        app.state.user_repository = auth_components.user_repository
+        app.state.redis = auth_components.redis
+        db_engine = auth_components.db_engine
 
-    session_factory = async_sessionmaker(components.db_engine, expire_on_commit=False)
+    app.state.db_engine = db_engine
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     project_components = build_project_components(session_factory)
     app.state.create_project = project_components.create_project
     app.state.get_project = project_components.get_project
@@ -201,12 +210,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.save_selected_features = features_components.save_selected_features
     app.state.feature_repo = features_components.feature_repo
 
-    instrument_app(settings, app=app, db_engine=components.db_engine)
+    instrument_app(settings, app=app, db_engine=db_engine)
     try:
         yield
     finally:
-        await components.redis.aclose()
-        await components.db_engine.dispose()
+        if auth_components is not None:
+            await auth_components.redis.aclose()
+        await db_engine.dispose()
 
 
 app = FastAPI(
@@ -232,7 +242,8 @@ app.add_middleware(
 )
 app.add_middleware(RequestLoggingMiddleware)
 
-app.include_router(auth_router)
+if not settings.auth_disabled:
+    app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
