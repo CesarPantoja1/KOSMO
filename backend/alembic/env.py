@@ -23,6 +23,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+
 def _normalize_database_url(raw_url: str) -> str:
     if raw_url.startswith("postgresql://"):
         raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
