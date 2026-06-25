@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # API
     api_version: str = "v1"
-    cors_allowed_origins: str = "http://localhost:3000"
+    cors_allowed_origins: str = "*"
     auth_disabled: bool = False
 
     # Observabilidad
