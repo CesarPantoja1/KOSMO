@@ -252,7 +252,7 @@ class GenerateEARSUseCase:
     @staticmethod
     def _requirements_to_markdown(reqs: list[EARSRequirement]) -> str:
         blocks = [
-            f"**{r.display_id}  {_ears_pattern_label(r.pattern)}**\n\n{r.source_statement.strip()}"
+            f"### {r.display_id}  {_ears_pattern_label(r.pattern)}\n\n{r.source_statement.strip()}"
             for r in reqs
         ]
         return "\n\n".join(blocks).strip()

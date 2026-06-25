@@ -436,7 +436,95 @@ async def test_generate_ears_persists_requirements_markdown() -> None:
     # Assert
     saved = await requirement_repo.by_feature_id(FeatureId("feat_ears05"))
     assert saved is not None
-    assert "**REQ-1.1  Ubiquitous**" in saved
-    assert "**REQ-1.2  Event-Driven**" in saved
+    assert "### REQ-1.1  Ubiquitous" in saved
+    assert "### REQ-1.2  Event-Driven" in saved
     assert "El sistema shall registrar la operación del usuario" in saved
     assert "Criterios de Aceptación" not in saved
+
+
+STRICT_FAILING_EARS_JSON = """```json
+{
+  "requirements": [
+    {
+      "pattern": "ubiquitous",
+      "source_statement": "El inventario siempre será auditado por la plataforma",
+      "rationale": "Trazabilidad",
+      "feature_number": 6,
+      "requirement_number": 1
+    },
+    {
+      "pattern": "event_driven",
+      "source_statement": "Cuando se confirme una venta, el sistema debe seguir el protocolo",
+      "rationale": "Registro",
+      "feature_number": 6,
+      "requirement_number": 2
+    },
+    {
+      "pattern": "state_driven",
+      "source_statement": "Mientras la sesión esté activa, el sistema debe mantener el contexto",
+      "rationale": "Contexto",
+      "feature_number": 6,
+      "requirement_number": 3
+    }
+  ]
+}
+```"""
+
+
+@pytest.mark.asyncio
+async def test_generate_ears_succeeds_despite_syntax_and_leak_warnings() -> None:
+    # El output tiene un ubiquitous que no matchea la regex estricta y el término
+    # "protocolo": antes eran errores duros (502). Ahora son warnings y debe persistir.
+    project_repo: Any = InMemoryProjectRepository()
+    feature_repo: Any = InMemoryFeatureRepository()
+    document_repo: Any = InMemoryDocumentRepository()
+    requirement_repo: Any = InMemoryRequirementRepository()
+    llm_client = MockLLMClient(response_text=STRICT_FAILING_EARS_JSON)
+
+    use_case = GenerateEARSUseCase(
+        project_repo=project_repo,
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        llm_client=llm_client,
+    )
+
+    project = Project(
+        id=ProjectId("prj_ears06"),
+        name="Test Project",
+        slug="test-project",
+        description="Test",
+        owner_id=UserId("usr_ears06"),
+    )
+    await project_repo.save(project)
+
+    feature = Feature(
+        id=FeatureId("feat_ears06"),
+        number=6,
+        title="Kardex",
+        slug="kardex",
+        description="Movimientos de inventario",
+        project_id=project.id,
+    )
+    await feature_repo.save(feature)
+
+    await document_repo.save_discovery(project.id, RichTextDocument(nodes=[]))
+
+    input_data = GenerateEARSInput(
+        project_id=ProjectId("prj_ears06"),
+        feature_id=FeatureId("feat_ears06"),
+    )
+
+    # Act
+    with patch("kosmo.application.requirements.generate_ears.IdGenerator") as mock_id_generator:
+        mock_id_generator.generate.return_value = "req_01HT1234567890"
+        result = await use_case.execute(input_data)
+
+    # Assert
+    assert isinstance(result, GenerateEARSOutput)
+    assert result.phase_output.validation_result.is_valid is True
+    assert result.phase_output.generation_metadata.llm_calls == 1
+    assert len(result.requirements) == 3
+    saved = await requirement_repo.by_feature_id(FeatureId("feat_ears06"))
+    assert saved is not None
+    assert "REQ-6.1" in saved
