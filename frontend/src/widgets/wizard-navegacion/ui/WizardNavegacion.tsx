@@ -33,15 +33,25 @@ export function WizardNavegacion() {
 	if (!isProyectosOpen) return null;
 
 	return (
-		<nav className='flex justify-between px-16 py-3 mx-0.5 mt-3 bg-base-50 outline outline-base-300 rounded-sm'>
-			{phaseItems.map(({ href, Icon, label }) => {
-				const status: ProjectStatus = pathname === href ? 'active' : 'disable';
+		<nav className='flex justify-between px-16 py-4 mb-2 bg-base-50 border-b border-base-200'>
+			{phaseItems.map(({ href, Icon, label }, index) => {
+				const activeIndex = phaseItems.findIndex((item) => (pathname || '').startsWith(item.href));
+				
+				let status: ProjectStatus = 'disable';
+				if (activeIndex !== -1) {
+					if (index === activeIndex) {
+						status = 'active';
+					} else if (index < activeIndex) {
+						status = 'completed';
+					}
+				}
+
 				const colors = getStyleIconStatus(status);
 				return (
 					<WizardItem
 						key={href}
 						href={href}
-						icon={<Icon color={colors.iconStyles} />}
+						icon={<Icon size={28} color={colors.iconStyles} />}
 						iconContainerStyles={colors.iconContainer}
 						label={label}
 						labelStyles={colors.labelStyles}
