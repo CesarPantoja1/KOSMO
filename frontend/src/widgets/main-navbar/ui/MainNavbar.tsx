@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useAppStore } from 'app/store/app.store';
 
@@ -12,6 +12,7 @@ import WizardItem from './WizardItem';
 import {
 	Characteristics,
 	ComputerDesktop,
+	Folder,
 	Home,
 	Implementation,
 	Modeling,
@@ -21,15 +22,32 @@ import {
 	UserCircle,
 } from './icons';
 import Discovery from './icons/Discovery';
+import { ArrowRight } from '@/shared/ui';
+import { Project, projectsApi } from '@/entities/project';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
 }
 
 export function MainNavbar({ children }: MainNavbarProps) {
+	const { setProjectState } = useAppStore();
+	const [projects, setProjects] = useState<Project[]>([]);
+
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
+
+	useEffect(() => {
+		const fetchProjects = async () => {
+			try {
+				const data = await projectsApi.getProjects();
+				setProjects(data);
+			} catch (error) {
+				console.error('Failed to load projects', error);
+			}
+		};
+		fetchProjects();
+	}, []);
 
 	const isProyectosOpen = useAppStore((s) => s.isProyectosOpen);
 	const currentProject = useAppStore((s) => s.currentProject);
@@ -66,6 +84,11 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		}
 	};
 
+	const handleProjectClick = (project: Project) => {
+		setProjectState(project);
+		router.push('/proyecto/descubrimiento');
+	};
+
 	return (
 		<header className='flex h-screen max-h-screen overflow-hidden'>
 			<div className='flex w-2/12 max-h-screen flex-col overflow-y-auto bg-base-200'>
@@ -76,71 +99,46 @@ export function MainNavbar({ children }: MainNavbarProps) {
 					>
 						KOSMO
 					</button>
-					<div className='absolute right-1 top-0 bottom-0 flex items-center justify-center'>
+					<button className='absolute right-1 top-0 bottom-0 flex items-center justify-center'>
 						<Sidebar size={38} color='text-base-50' />
-					</div>
+					</button>
 				</div>
-				<hr />
-				<div className='flex justify-between gap-2'>
-					<h2>Proyectos</h2>
-					<Link
-						className='flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]'
-						href='/crear-proyecto'
-						rel='noopener noreferrer'
-					>
-						+
-					</Link>
-				</div>
+				<h2 className='text-primary-100 text-2xl font-semibold p-2 border-b border-base-800'>
+					Proyectos
+				</h2>
 
-				<div className='flex flex-col align-top flex-1'>
-					<span className='text-base text-border-default' aria-hidden='true'>
-						Recientes
-					</span>
-
+				<div className='flex flex-col flex-1 p-2'>
+					{/* Listar todos los proyectos */}
+					<Folder
+						size={32}
+						color='text-primary-100 absolute left-1 top-0 bottom-0 m-auto'
+					/>
 					<button
 						type='button'
-						className='btn btn-ghost h-7 px-2 text-xs font-semibold text-text-primary hover:text-text-primary'
-						onClick={() => setAvatarOpen(false)}
+						className='flex items-center px-3.5 py-2.5 gap-2 cursor-pointer bg-base-300 text-base-800'
+						onClick={() => handleProjectClick(currentProject!)}
 					>
-						<ComputerDesktop color='text-base-600' /> {currentProject?.name}
+						<ComputerDesktop color='text-base-600' />
+						<span className='flex-1 text-left'>{currentProject?.name}</span>
+						<Right size={24} color='text-base-600' />
 					</button>
 				</div>
 
-				<div className='flex items-center gap-2'>
-					<span className='chip hidden bg-bg-subtle text-text-secondary sm:inline-flex'></span>
-
-					<div className='relative'>
-						<button
-							type='button'
-							className='flex items-center justify-center rounded-full border'
-							onClick={() => setAvatarOpen((value) => !value)}
-							aria-haspopup='menu'
-							aria-expanded={avatarOpen}
-						>
-							<UserCircle color='text-base-600' />
+				<div className='pl-2 pt-8 border-t border-base-600 inline-flex justify-start items-start gap-3'>
+					<UserCircle size={40} color='text-base-600' />
+					<div className='w-40 pb-2 inline-flex flex-col justify-center items-start'>
+						<h4 className="justify-start text-base-800 text-2xl font-semibold font-['Geist']">
+							Carlos Yupa
+						</h4>
+						<button className="justify-start text-base-600 text-base font-normal font-['Geist']">
+							Salir
 						</button>
-
-						{avatarOpen && (
-							<div className='anim-fade-in absolute right-0 top-[120%] z-50 min-w-44 overflow-hidden rounded-md border border-border-default bg-bg-base shadow-lg'>
-								<DropdownItem
-									label='Bóveda de API Keys'
-									onClick={() => setAvatarOpen(false)}
-								/>
-								<DropdownItem
-									label='Configuración'
-									onClick={() => setAvatarOpen(false)}
-								/>
-								<DropdownItem
-									label='Cerrar sesión'
-									onClick={() => setAvatarOpen(false)}
-								/>
-							</div>
-						)}
 					</div>
 				</div>
+				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
 
-			<div className='flex w-10/12 min-h-0 flex-col overflow-hidden mx-8'>
+			<main className='flex w-10/12 min-h-0 flex-col overflow-hidden mx-8'>
 				<div className='z-50 shrink-0'>
 					<div className='flex items-center gap-1 py-3'>
 						<Home size={32} color='text-base-600' />
@@ -149,7 +147,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 					</div>
 
 					{isProyectosOpen && (
-						<nav className='flex justify-between px-16 py-3 mx-0.5 bg-base-50 outline outline-base-300 rounded-sm'>
+						<nav className='flex justify-between px-16 py-3 mx-0.5 mt-3 bg-base-50 outline outline-base-300 rounded-sm'>
 							{phaseItems.map(({ href, Icon, label }) => {
 								const status: ProjectStatus = pathname === href ? 'active' : 'disable';
 								const colors = getStyleIconStatus(status);
@@ -168,8 +166,8 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						</nav>
 					)}
 				</div>
-				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
-			</div>
+				<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
+			</main>
 		</header>
 	);
 }
