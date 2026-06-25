@@ -73,9 +73,14 @@ class Settings(BaseSettings):
         parsed = urlsplit(raw_value)
         if (
             parsed.scheme == "postgresql+asyncpg"
-            and parsed.hostname is not None
-            and parsed.hostname.endswith(".pooler.supabase.com")
-            and parsed.port == 6543
+            and (
+                (parsed.hostname is not None and (
+                    parsed.hostname.endswith(".pooler.supabase.com")
+                    or parsed.hostname.endswith(".supabase.co")
+                    or "pooler" in parsed.hostname
+                ))
+                or parsed.port == 6543
+            )
         ):
             query = dict(parse_qsl(parsed.query, keep_blank_values=True))
             query.setdefault("prepared_statement_cache_size", "0")
