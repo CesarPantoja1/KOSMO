@@ -27,10 +27,6 @@ def _get_project(request: Request) -> GetProjectUseCase:
     return request.app.state.get_project
 
 
-def _list_projects(request: Request) -> ListProjectsUseCase:
-    return request.app.state.list_projects
-
-
 @router.post(
     "",
     summary="Crear nuevo proyecto",
@@ -88,25 +84,6 @@ async def create_project(
         },
     },
 )
-async def list_projects(
-    principal: Annotated[Principal, Depends(get_principal)],
-    use_case: Annotated[ListProjectsUseCase, Depends(_list_projects)],
-) -> list[ProjectResponse]:
-    projects = await use_case.execute(owner_id=UserId(principal.subject))
-    return [
-        ProjectResponse(
-            id=p.id,
-            name=p.name,
-            slug=p.slug,
-            description=p.description,
-            owner_id=p.owner_id,
-            created_at=p.created_at,
-            updated_at=p.updated_at,
-        )
-        for p in projects
-    ]
-
-
 @router.get(
     "/{project_id}",
     summary="Obtener proyecto por ID",
