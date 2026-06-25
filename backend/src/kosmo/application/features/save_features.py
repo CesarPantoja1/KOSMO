@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any, cast
 
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature, SuggestFeaturesOutput
@@ -18,7 +19,7 @@ class SuggestFeaturesInput:
 @dataclass(frozen=True)
 class SaveSelectedFeaturesInput:
     project_id: ProjectId
-    features: list[dict[str, str]]
+    features: list[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -44,23 +45,17 @@ class SuggestFeaturesUseCase:
         self._feature_repo = feature_repo
         self._llm_client = llm_client
 
-    async def execute(
-        self, input_data: SuggestFeaturesInput
-    ) -> SuggestFeaturesOutput:
+    async def execute(self, input_data: SuggestFeaturesInput) -> SuggestFeaturesOutput:
         from kosmo.contracts.sdd.errors import DocumentNotFoundError
 
-        discovery_doc = await self._document_repo.get_discovery(
-            input_data.project_id
-        )
+        discovery_doc = await self._document_repo.get_discovery(input_data.project_id)
         if discovery_doc is None:
             raise DocumentNotFoundError(
                 document_type="discovery",
                 instance=f"/api/v1/projects/{input_data.project_id}/features/suggest",
             )
 
-        existing_features = await self._feature_repo.list_by_project(
-            input_data.project_id
-        )
+        existing_features = await self._feature_repo.list_by_project(input_data.project_id)
         existing_titles = [f.title for f in existing_features]
         next_number = len(existing_features) + 1
 
@@ -70,7 +65,7 @@ class SuggestFeaturesUseCase:
             "características ya existentes. Tu tarea es sugerir EXACTAMENTE 3 nuevas\n"
             "características que NO dupliquen las ya existentes.\n\n"
             "Respondé ÚNICAMENTE con JSON:\n"
-            '```json\n'
+            "```json\n"
             '{"suggestions": [\n'
             '  {"title": "...", "description": "...", "rationale": "...",\n'
             '   "inferred_from": ["..."]}\n'
@@ -85,9 +80,7 @@ class SuggestFeaturesUseCase:
 
         if existing_titles:
             titles = ", ".join(existing_titles)
-            suggest_prompt += (
-                f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
-            )
+            suggest_prompt += f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
 
         suggest_prompt += (
             f"\n\nLa primera sugerencia será C{next_number:02d}."
@@ -109,9 +102,7 @@ class SuggestFeaturesUseCase:
         return SuggestFeaturesOutput(
             suggestions=suggestions,
             excluded_titles=existing_titles,
-            domain_inferred=(
-                discovery_doc.sections[0].text if discovery_doc.sections else ""
-            ),
+            domain_inferred=(discovery_doc.sections[0].text if discovery_doc.sections else ""),
         )
 
     @staticmethod
@@ -128,9 +119,7 @@ class SuggestFeaturesUseCase:
             return {"suggestions": []}
 
     @staticmethod
-    def _parse_suggestions(
-        data: object, next_number: int
-    ) -> list[SuggestedFeature]:
+    def _parse_suggestions(data: object, next_number: int) -> list[SuggestedFeature]:
         suggestions: list[SuggestedFeature] = []
         items: list[object] = []
 
@@ -176,20 +165,18 @@ class SaveSelectedFeaturesUseCase:
     def __init__(self, feature_repo: FeatureRepository) -> None:
         self._feature_repo = feature_repo
 
-    async def execute(
-        self, input_data: SaveSelectedFeaturesInput
-    ) -> SaveSelectedFeaturesOutput:
+    async def execute(self, input_data: SaveSelectedFeaturesInput) -> SaveSelectedFeaturesOutput:
         from kosmo.contracts.sdd.ids import FeatureId
         from kosmo.domain.sdd.id_generator import IdGenerator
 
-        existing = await self._feature_repo.list_by_project(
-            input_data.project_id
-        )
+        existing = await self._feature_repo.list_by_project(input_data.project_id)
         next_num = max((f.number for f in existing), default=0) + 1
 
         features: list[Feature] = []
         for item in input_data.features:
-            title = item.get("title", f"Característica {next_num}")
+            title = str(item.get("title", f"Característica {next_num}"))
+            inferred_raw = cast("list[Any]", item.get("inferred_from", []))
+            inferred: list[str] = [str(x) for x in inferred_raw] if inferred_raw else []
             features.append(
                 Feature(
                     id=FeatureId(IdGenerator.generate("feature")),
@@ -197,9 +184,9 @@ class SaveSelectedFeaturesUseCase:
                     number=next_num,
                     title=title,
                     slug=title.lower().replace(" ", "-"),
-                    description=item.get("description", ""),
-                    rationale=item.get("rationale", ""),
-                    inferred_from=[],
+                    description=str(item.get("description", "")),
+                    rationale=str(item.get("rationale", "")),
+                    inferred_from=inferred,
                 )
             )
             next_num += 1

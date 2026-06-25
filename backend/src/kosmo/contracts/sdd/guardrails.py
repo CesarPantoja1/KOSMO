@@ -37,7 +37,6 @@ DISCOVERY_SECTIONS: list[str] = [
 
 PROHIBITED_TERMS: list[str] = [
     "API",
-    "api",
     "base de datos",
     "database",
     "microservicio",
@@ -54,7 +53,6 @@ PROHIBITED_TERMS: list[str] = [
     "deployment",
     "deploy",
     "Docker",
-    "docker",
     "cloud",
     "SQL",
     "HTTP",
@@ -66,7 +64,6 @@ PROHIBITED_TERMS: list[str] = [
     "cache",
     "caché",
     "Redis",
-    "redis",
     "MongoDB",
     "PostgreSQL",
     "Kubernetes",

@@ -8,6 +8,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import 
 from kosmo.infrastructure.persistence.postgres.repositories.project_repo import (
     SqlAlchemyProjectRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import (
+    SqlAlchemyRequirementRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.users import SqlAlchemyUserRepository
 
 __all__ = [
@@ -15,5 +18,6 @@ __all__ = [
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyFeatureRepository",
     "SqlAlchemyProjectRepository",
+    "SqlAlchemyRequirementRepository",
     "SqlAlchemyUserRepository",
 ]

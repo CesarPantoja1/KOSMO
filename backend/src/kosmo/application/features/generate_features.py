@@ -58,9 +58,7 @@ class GenerateFeaturesUseCase:
         self._feature_repo = feature_repo
         self._llm_client = llm_client
 
-    async def execute(
-        self, input_data: GenerateFeaturesInput
-    ) -> GenerateFeaturesOutput:
+    async def execute(self, input_data: GenerateFeaturesInput) -> GenerateFeaturesOutput:
         from kosmo.contracts.sdd.errors import (
             DocumentNotFoundError,
             ProjectNotFoundError,
@@ -73,18 +71,14 @@ class GenerateFeaturesUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features",
             )
 
-        discovery_doc = await self._document_repo.get_discovery(
-            input_data.project_id
-        )
+        discovery_doc = await self._document_repo.get_discovery(input_data.project_id)
         if discovery_doc is None:
             raise DocumentNotFoundError(
                 document_type="discovery",
                 instance=f"/api/v1/projects/{input_data.project_id}/features",
             )
 
-        existing_features = await self._feature_repo.list_by_project(
-            input_data.project_id
-        )
+        existing_features = await self._feature_repo.list_by_project(input_data.project_id)
         existing_titles = [f.title for f in existing_features]
 
         mode = FeaturesMode()
@@ -139,9 +133,7 @@ class GenerateFeaturesUseCase:
                     )
 
                 last_errors = validation.errors
-                user_prompt = mode.build_retry_prompt(
-                    user_prompt, last_errors, attempt + 1
-                )
+                user_prompt = mode.build_retry_prompt(user_prompt, last_errors, attempt + 1)
 
             raise LLMInvocationError(
                 detail=(
@@ -201,7 +193,11 @@ class GenerateFeaturesUseCase:
                     project_id=project_id,
                     number=int(item.get("number", next_num)),
                     title=str(item.get("title", f"Característica {next_num}")),
-                    slug=str(item.get("slug", "")),
+                    slug=(
+                        str(item.get("title", f"caracteristica-{next_num}"))
+                        .lower()
+                        .replace(" ", "-")
+                    ),
                     description=str(item.get("description", "")),
                     rationale=str(item.get("rationale", "")),
                     inferred_from=(

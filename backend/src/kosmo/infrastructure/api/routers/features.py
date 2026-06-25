@@ -80,9 +80,7 @@ async def generate_features(
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
 ) -> list[FeatureResponse]:
     try:
-        output = await use_case.execute(
-            GenerateFeaturesInput(project_id=ProjectId(project_id))
-        )
+        output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
     except (ProjectNotFoundError, DocumentNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -149,9 +147,7 @@ async def suggest_features(
     use_case: Annotated[SuggestFeaturesUseCase, Depends(_suggest_features)],
 ) -> list[FeatureSuggestionResponse]:
     try:
-        output = await use_case.execute(
-            SuggestFeaturesInput(project_id=ProjectId(project_id))
-        )
+        output = await use_case.execute(SuggestFeaturesInput(project_id=ProjectId(project_id)))
     except DocumentNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -193,11 +189,12 @@ async def save_selected_features(
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[SaveSelectedFeaturesUseCase, Depends(_save_selected_features)],
 ) -> list[FeatureResponse]:
-    items: list[dict[str, str]] = [
+    items: list[dict[str, object]] = [
         {
             "title": f.title,
             "description": f.description,
             "rationale": f.rationale,
+            "inferred_from": f.inferred_from,
         }
         for f in payload.features
     ]

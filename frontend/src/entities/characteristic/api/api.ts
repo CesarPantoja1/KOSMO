@@ -127,7 +127,7 @@ const mockGetAlternativeCharacteristics = async (
 
 const mockAddCharacteristics = async (
 	_projectId: string,
-	items: { title: string; description: string; rationale: string }[],
+	items: { title: string; description: string; rationale: string; inferred_from?: string[] }[],
 ): Promise<Characteristic[]> => {
 	await delay(600);
 	const startNum = mockStore.length + 1;
@@ -139,7 +139,7 @@ const mockAddCharacteristics = async (
 		slug: item.title.toLowerCase().replace(/\s+/g, '-'),
 		description: item.description,
 		rationale: item.rationale,
-		inferred_from: [],
+		inferred_from: item.inferred_from ?? [],
 		display_id: `C${String(startNum + i).padStart(2, '0')}`,
 		requirements: '',
 	}));
@@ -256,7 +256,7 @@ const realGetAlternativeCharacteristics = async (
 
 const realAddCharacteristics = async (
 	projectId: string,
-	items: { title: string; description: string; rationale: string }[],
+	items: { title: string; description: string; rationale: string; inferred_from?: string[] }[],
 ): Promise<Characteristic[]> => {
 	const data = await apiClient<FeatureResponse[]>(
 		`/api/v1/projects/${projectId}/features/save`,
@@ -268,6 +268,7 @@ const realAddCharacteristics = async (
 					title: item.title,
 					description: item.description,
 					rationale: item.rationale,
+					inferred_from: item.inferred_from ?? [],
 				})),
 			}),
 		},
@@ -323,7 +324,7 @@ export const getAlternativeCharacteristics = async (
 
 export const addCharacteristics = async (
 	projectId: string,
-	items: { title: string; description: string; rationale: string }[],
+	items: { title: string; description: string; rationale: string; inferred_from?: string[] }[],
 ): Promise<Characteristic[]> => {
 	return isUsingMocks()
 		? mockAddCharacteristics(projectId, items)

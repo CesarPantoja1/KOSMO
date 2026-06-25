@@ -58,6 +58,7 @@ const CharacteristicsPage = () => {
 					title: s.title,
 					description: s.description,
 					rationale: s.rationale,
+					inferred_from: s.inferred_from,
 				})),
 			);
 			setCharacteristics((prev) => [...prev, ...newChars]);

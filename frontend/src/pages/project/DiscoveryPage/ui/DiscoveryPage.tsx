@@ -72,22 +72,28 @@ const DiscoveryPage = () => {
 		fetchDiscovery();
 	}, [currentProject, router]);
 
-	const handleSave = async () => {
-		if (!currentProject) return;
+	const doSave = async (silent = false): Promise<boolean> => {
+		if (!currentProject) return false;
 
 		setIsSaving(true);
 		try {
 			await saveDiscovery(currentProject.id, markdown);
 			savedContentRef.current = markdown;
 			setHasUnsavedChangesLocal(false);
-			toast.success('Cambios guardados con éxito.');
+			if (!silent) toast.success('Cambios guardados con éxito.');
+			return true;
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : 'No se pudo guardar los cambios';
 			toast.error(message);
+			return false;
 		} finally {
 			setIsSaving(false);
 		}
+	};
+
+	const handleSave = () => {
+		doSave(false);
 	};
 
 	const handleNextLink = async () => {
@@ -118,11 +124,15 @@ const DiscoveryPage = () => {
 	const confirmLeave = async () => {
 		const path = pendingNavigationPath;
 		setPendingNavigationPath(null);
-		setHasUnsavedChanges(false);
 		if (!path) return;
 		if (path === 'caracteristicas') {
-			await generateAndNavigate();
+			const saved = await doSave(true);
+			setHasUnsavedChanges(false);
+			if (saved) {
+				await generateAndNavigate();
+			}
 		} else {
+			setHasUnsavedChanges(false);
 			router.push(path);
 		}
 	};

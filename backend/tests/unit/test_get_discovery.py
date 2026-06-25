@@ -37,7 +37,9 @@ class InMemoryDocumentRepository:
         return None
 
     async def save_requirements(
-        self, feature_id: Any, document: RichTextDocument  # noqa: ARG002
+        self,
+        feature_id: Any,  # noqa: ARG002
+        document: RichTextDocument,  # noqa: ARG002
     ) -> RichTextDocument:
         return document
 
