@@ -92,12 +92,35 @@ jobs:
         run: |
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
           test -f .vercel/.env.production.local || (echo "::error::Vercel production env was not pulled" && exit 1)
-          grep -q '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local || (echo "::error::Missing NEXT_PUBLIC_API_URL in Vercel production environment variables" && exit 1)
-          if grep '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local | grep -q 'localhost'; then
-            echo "::error::NEXT_PUBLIC_API_URL in Vercel production points to localhost"
+          api_url="$(grep '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
+          if [ -z "$api_url" ]; then
+            echo "::error::Missing or empty NEXT_PUBLIC_API_URL in Vercel production environment variables"
             exit 1
           fi
+          case "$api_url" in
+            http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*)
+              echo "::error::NEXT_PUBLIC_API_URL in Vercel production points to a loopback address"
+              exit 1
+              ;;
+            https://*)
+              ;;
+            *)
+              echo "::error::NEXT_PUBLIC_API_URL must be an https:// URL"
+              exit 1
+              ;;
+          esac
+          if [ "$api_url" != "https://kosmo-backend.onrender.com" ]; then
+            echo "::warning::NEXT_PUBLIC_API_URL is $api_url; expected https://kosmo-backend.onrender.com"
+          fi
+          if grep -R "localhost:8000" .next/static >/dev/null 2>&1; then
+            echo "::error::Previous build artifacts contain localhost; cleaning .next"
+            rm -rf .next
+          fi
           vercel build --prod --token="$VERCEL_TOKEN"
+          if grep -R "localhost:8000" .vercel/output/static .next/static >/dev/null 2>&1; then
+            echo "::error::Production frontend bundle still contains localhost:8000"
+            exit 1
+          fi
           vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
         working-directory: ./frontend
         env:
