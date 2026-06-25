@@ -1,16 +1,17 @@
 type props = {
 	size?: number;
 	color: string;
+	className?: string;
 };
 
-const UserCircle = ({ size = 32, color }: props) => {
+const UserCircle = ({ size = 32, color, className = '' }: props) => {
 	return (
 		<svg
 			xmlns='http://www.w3.org/2000/svg'
 			viewBox='0 0 24 24'
 			width={size}
 			height={size}
-			className={`fill-current cursor-pointer ${color}`}
+			className={`fill-current cursor-pointer ${color} ${className}`}
 		>
 			<path
 				fillRule='evenodd'
