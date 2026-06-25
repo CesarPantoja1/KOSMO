@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { MarkdownEditor } from '@/feature';
 import { Ai, ArrowRight, toast } from '@/shared/ui';
@@ -11,6 +11,7 @@ import { useAppStore } from 'app/store/app.store';
 import type { Characteristic } from '@/entities/characteristic';
 import {
 	generateCharacteristicRequirements,
+	getCharacteristicRequirements,
 	getCharacteristics,
 	saveCharacteristicRequirements,
 } from '@/entities/characteristic';
@@ -30,7 +31,7 @@ const RequirementsPage = () => {
 
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
-	const selectedCharRef = useRef<string | null>(null);
+	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
 
@@ -69,12 +70,42 @@ const RequirementsPage = () => {
 	}, [currentProject, router]);
 
 	useEffect(() => {
-		if (!selectedCharacteristic) return;
-		if (selectedCharRef.current === selectedCharacteristic.id) return;
-		selectedCharRef.current = selectedCharacteristic.id;
-		setMarkdown(selectedCharacteristic.requirements);
-		setSavedContent(selectedCharacteristic.requirements);
-	}, [selectedCharacteristic]);
+		if (!selectedId || !currentProject) return;
+
+		let cancelled = false;
+		const projectId = currentProject.id;
+		const characteristicId = selectedId;
+
+		const load = async () => {
+			setIsLoadingRequirements(true);
+			setMarkdown('');
+			setSavedContent('');
+			try {
+				const content = await getCharacteristicRequirements(
+					projectId,
+					characteristicId,
+				);
+				if (cancelled) return;
+				setCharacteristics((prev) =>
+					prev.map((c) =>
+						c.id === characteristicId ? { ...c, requirements: content } : c,
+					),
+				);
+				setMarkdown(content);
+				setSavedContent(content);
+			} catch {
+				if (!cancelled) toast.error('Error al cargar los requisitos');
+			} finally {
+				if (!cancelled) setIsLoadingRequirements(false);
+			}
+		};
+
+		load();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedId, currentProject]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
@@ -347,7 +378,13 @@ const RequirementsPage = () => {
 							</div>
 						)}
 
-						{selectedCharacteristic && selectedCharacteristic.requirements && (
+						{selectedCharacteristic && isLoadingRequirements && (
+							<div className='flex flex-1 items-center justify-center'>
+								<span className='text-base-600 text-lg'>Cargando requisitos...</span>
+							</div>
+						)}
+
+						{selectedCharacteristic && !isLoadingRequirements && selectedCharacteristic.requirements && (
 							<div className='flex flex-col flex-1 min-h-0 gap-4'>
 								<div className='inline-flex justify-start gap-2.5 items-center'>
 									<span className='self-stretch text-center justify-center text-lg font-medium leading-8'>
@@ -366,7 +403,7 @@ const RequirementsPage = () => {
 							</div>
 						)}
 
-						{selectedCharacteristic && !selectedCharacteristic.requirements && (
+						{selectedCharacteristic && !isLoadingRequirements && !selectedCharacteristic.requirements && (
 							<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
 								<Ai color='text-ai' size={70} />
 

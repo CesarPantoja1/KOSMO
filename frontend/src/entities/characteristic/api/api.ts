@@ -178,6 +178,15 @@ const mockGenerateCharacteristicRequirements = async (
 	);
 };
 
+const mockGetCharacteristicRequirements = async (
+	_projectId: string,
+	characteristicId: string,
+): Promise<string> => {
+	await delay(400);
+	const found = mockStore.find((c) => c.id === characteristicId);
+	return found?.requirements ?? '';
+};
+
 //
 // REAL API implementations
 //
@@ -276,20 +285,56 @@ const realAddCharacteristics = async (
 	return data.map(mapFeatureResponse);
 };
 
+interface GenerateRequirementsResponse {
+	feature_id: string;
+	feature_number: number;
+	requirements_markdown: string;
+	total: number;
+}
+
 const realSaveCharacteristicRequirements = async (
-	_projectId: string,
-	_characteristicId: string,
-	_content: string,
+	projectId: string,
+	characteristicId: string,
+	content: string,
 ): Promise<void> => {
-	await delay(500);
+	await apiClient<{ feature_id: string; message: string }>(
+		`/api/v1/features/${characteristicId}/requirements`,
+		{
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ project_id: projectId, markdown: content }),
+		},
+	);
 };
 
 const realGenerateCharacteristicRequirements = async (
-	_projectId: string,
-	_characteristicId: string,
+	projectId: string,
+	characteristicId: string,
 ): Promise<string> => {
-	await delay(2000);
-	return '';
+	const data = await apiClient<GenerateRequirementsResponse>(
+		`/api/v1/features/${characteristicId}/requirements/generate`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ project_id: projectId }),
+		},
+	);
+	return data.requirements_markdown;
+};
+
+interface GetRequirementsResponse {
+	document_markdown: string;
+}
+
+const realGetCharacteristicRequirements = async (
+	projectId: string,
+	characteristicId: string,
+): Promise<string> => {
+	const data = await apiClient<GetRequirementsResponse>(
+		`/api/v1/features/${characteristicId}/requirements?project_id=${encodeURIComponent(projectId)}`,
+		{ method: 'GET' },
+	);
+	return data.document_markdown;
 };
 
 //
@@ -348,4 +393,13 @@ export const generateCharacteristicRequirements = async (
 	return isUsingMocks()
 		? mockGenerateCharacteristicRequirements(projectId, characteristicId)
 		: realGenerateCharacteristicRequirements(projectId, characteristicId);
+};
+
+export const getCharacteristicRequirements = async (
+	projectId: string,
+	characteristicId: string,
+): Promise<string> => {
+	return isUsingMocks()
+		? mockGetCharacteristicRequirements(projectId, characteristicId)
+		: realGetCharacteristicRequirements(projectId, characteristicId);
 };

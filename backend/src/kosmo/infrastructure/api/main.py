@@ -14,12 +14,14 @@ from kosmo.infrastructure.api.composition import (
     build_features_components,
     build_pipeline_components,
     build_project_components,
+    build_requirements_components,
 )
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
+from kosmo.infrastructure.api.routers.requirements import router as requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
@@ -63,6 +65,14 @@ _OPENAPI_TAGS = [
             "Permite generar características a partir del documento de descubrimiento, "
             "sugerir nuevas características no duplicadas, listar las existentes y "
             "guardar las seleccionadas por el usuario."
+        ),
+    },
+    {
+        "name": "requirements",
+        "description": (
+            "Generación y gestión de requisitos EARS por característica mediante IA. "
+            "Permite generar requisitos a partir del documento de descubrimiento y la "
+            "característica seleccionada, consultarlos y actualizar su contenido en Markdown."
         ),
     },
     {
@@ -210,6 +220,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.save_selected_features = features_components.save_selected_features
     app.state.feature_repo = features_components.feature_repo
 
+    requirements_components = build_requirements_components(session_factory, pipeline_components)
+    app.state.generate_ears = requirements_components.generate_ears
+    app.state.get_requirements = requirements_components.get_requirements
+    app.state.save_requirements = requirements_components.save_requirements
+
     instrument_app(settings, app=app, db_engine=db_engine)
     try:
         yield
@@ -247,6 +262,7 @@ if not settings.auth_disabled:
 app.include_router(projects_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
+app.include_router(requirements_router)
 app.include_router(schemas_router)
 
 
