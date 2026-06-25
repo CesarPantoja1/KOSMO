@@ -91,6 +91,12 @@ jobs:
       - name: Deploy frontend to Vercel
         run: |
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          test -f .vercel/.env.production.local || (echo "::error::Vercel production env was not pulled" && exit 1)
+          grep -q '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local || (echo "::error::Missing NEXT_PUBLIC_API_URL in Vercel production environment variables" && exit 1)
+          if grep '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local | grep -q 'localhost'; then
+            echo "::error::NEXT_PUBLIC_API_URL in Vercel production points to localhost"
+            exit 1
+          fi
           vercel build --prod --token="$VERCEL_TOKEN"
           vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
         working-directory: ./frontend
