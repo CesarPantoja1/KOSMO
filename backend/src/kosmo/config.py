@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Literal, Self
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     jwt_public_key_pem: SecretStr | None = None
     jwt_private_key_path: str | None = None
     jwt_public_key_path: str | None = None
-    fernet_master_key: SecretStr
+    fernet_master_key: SecretStr | None = None
 
     # JWT
     jwt_algorithm: Literal["RS256"] = "RS256"
@@ -38,8 +39,8 @@ class Settings(BaseSettings):
 
     # DSN de persistencia
     database_url: SecretStr
-    mongo_url: SecretStr
-    redis_url: SecretStr
+    mongo_url: SecretStr | None = None
+    redis_url: SecretStr | None = None
 
     # LLM BYOK
     llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
@@ -67,13 +68,27 @@ class Settings(BaseSettings):
             return value
 
         if raw_value.startswith("postgresql://"):
-            return raw_value.replace("postgresql://", "postgresql+asyncpg://", 1)
+            raw_value = raw_value.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-        return value
+        parsed = urlsplit(raw_value)
+        if (
+            parsed.scheme == "postgresql+asyncpg"
+            and parsed.hostname is not None
+            and parsed.hostname.endswith(".pooler.supabase.com")
+            and parsed.port == 6543
+        ):
+            query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            query.setdefault("prepared_statement_cache_size", "0")
+            raw_value = urlunsplit(parsed._replace(query=urlencode(query)))
+
+        return raw_value
 
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:
         """Resuelve el contenido PEM: variable de entorno → lectura de archivo."""
+        if self.auth_disabled:
+            return self
+
         if self.jwt_private_key_pem is None:
             if self.jwt_private_key_path is None:
                 raise ValueError("Debe configurar JWT_PRIVATE_KEY_PEM o JWT_PRIVATE_KEY_PATH")
@@ -85,6 +100,12 @@ class Settings(BaseSettings):
                 raise ValueError("Debe configurar JWT_PUBLIC_KEY_PEM o JWT_PUBLIC_KEY_PATH")
             pem = Path(self.jwt_public_key_path).read_text(encoding="utf-8")
             self.jwt_public_key_pem = SecretStr(pem)
+
+        if self.fernet_master_key is None:
+            raise ValueError("Debe configurar FERNET_MASTER_KEY cuando AUTH_DISABLED=false")
+
+        if self.redis_url is None:
+            raise ValueError("Debe configurar REDIS_URL cuando AUTH_DISABLED=false")
 
         return self
 

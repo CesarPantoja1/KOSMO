@@ -1,37 +1,74 @@
 name: Continuous Deployment
 
 on:
-  workflow_run:
-    workflows:
-      - Continuous Integration
+  pull_request:
     types:
-      - completed
+      - closed
     branches:
       - main
-      - develop
 
 concurrency:
-  group: cd-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: true
+  group: cd-production
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  deploy-frontend:
+  migrate-database:
     if: >-
       ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push'
+        github.event.pull_request.merged == true &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.pull_request.head.ref == 'develop'
       }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'preview' }}
+    environment: production
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
-      - name: Checkout repository
+      - name: Checkout merged commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Validate database secret
+        run: test -n "$DATABASE_URL" || (echo "::error::Missing SUPABASE_DATABASE_URL secret" && exit 1)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+      - name: Apply Alembic migrations
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+  deploy-frontend:
+    needs:
+      - migrate-database
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -53,51 +90,53 @@ jobs:
 
       - name: Deploy frontend to Vercel
         run: |
-          if [ "$DEPLOY_BRANCH" = "main" ]; then
-            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-            vercel build --prod --token="$VERCEL_TOKEN"
-            vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
-          else
-            vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
-            vercel build --token="$VERCEL_TOKEN"
-            vercel deploy --prebuilt --token="$VERCEL_TOKEN"
-          fi
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
         working-directory: ./frontend
         env:
-          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   deploy-backend:
-    if: >-
-      ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push'
-      }}
+    needs:
+      - migrate-database
     runs-on: ubuntu-latest
-    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'staging' }}
+    environment: production
 
     steps:
-      - name: Trigger Render deploy
+      - name: Validate Render secrets
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            if [ "$DEPLOY_BRANCH" = "develop" ]; then
-              echo "::notice::Missing RENDER_STAGING_DEPLOY_HOOK_URL; skipping staging backend deploy."
-              exit 0
-            fi
-
-            echo "::error::Missing RENDER_DEPLOY_HOOK_URL secret"
-            exit 1
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+            exit 0
           fi
 
-          separator="?"
-          case "$RENDER_DEPLOY_HOOK_URL" in
-            *\?*) separator="&" ;;
-          esac
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::notice::Using RENDER_DEPLOY_HOOK_URL fallback. Prefer RENDER_API_KEY and RENDER_SERVICE_ID to deploy the exact merge commit."
+            exit 0
+          fi
 
-          curl --fail --request POST "${RENDER_DEPLOY_HOOK_URL}${separator}ref=${DEPLOY_SHA}"
+          echo "::error::Missing Render deployment secrets. Set RENDER_API_KEY + RENDER_SERVICE_ID, or RENDER_DEPLOY_HOOK_URL."
+          exit 1
         env:
-          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-          RENDER_DEPLOY_HOOK_URL: ${{ github.event.workflow_run.head_branch == 'main' && secrets.RENDER_DEPLOY_HOOK_URL || secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+
+      - name: Trigger Render deploy
+        run: |
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+            curl --fail --request POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+              --header "Authorization: Bearer ${RENDER_API_KEY}" \
+              --header "Content-Type: application/json" \
+              --data "{\"commitId\":\"${DEPLOY_SHA}\",\"clearCache\":\"do_not_clear\"}"
+            exit 0
+          fi
+
+          curl --fail --request POST "$RENDER_DEPLOY_HOOK_URL"
+        env:
+          DEPLOY_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}

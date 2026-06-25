@@ -116,6 +116,8 @@ def build_project_components(
 def build_auth_components(settings: Settings) -> AuthComponents:
     assert settings.jwt_private_key_pem is not None
     assert settings.jwt_public_key_pem is not None
+    assert settings.redis_url is not None
+    assert settings.fernet_master_key is not None
 
     jwt_settings = JwtSettings(
         algorithm=settings.jwt_algorithm,
