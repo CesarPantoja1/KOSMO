@@ -16,8 +16,6 @@ interface AppState {
 	setHasUnsavedChanges: (v: boolean) => void;
 	pendingNavigationPath: string | null;
 	setPendingNavigationPath: (v: string | null) => void;
-	hasRequirements: Record<string, boolean>;
-	setHasRequirements: (id: string, has: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -43,15 +41,12 @@ export const useAppStore = create<AppState>()(
 			setHasUnsavedChanges: (v) => set({ hasUnsavedChanges: v }),
 			pendingNavigationPath: null,
 			setPendingNavigationPath: (v) => set({ pendingNavigationPath: v }),
-			hasRequirements: {},
-			setHasRequirements: (id, has) => set((state) => ({ hasRequirements: { ...state.hasRequirements, [id]: has } })),
 		}),
 		{
 			name: 'kosmo-app-store',
 			partialize: (state) => ({
 				currentProject: state.currentProject,
 				isProyectosOpen: state.isProyectosOpen,
-				hasRequirements: state.hasRequirements,
 			}),
 		},
 	),

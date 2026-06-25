@@ -12,10 +12,7 @@ const Search = ({ value, onChange }: Props) => {
 			<input
 				type='text'
 				value={value}
-				onChange={(e) => {
-					const val = e.target.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g, '');
-					onChange(val);
-				}}
+				onChange={(e) => onChange(e.target.value)}
 				className='w-xl px-2 py-1.5 focus:outline-none font-semibold'
 				placeholder='Buscar Característica'
 			/>

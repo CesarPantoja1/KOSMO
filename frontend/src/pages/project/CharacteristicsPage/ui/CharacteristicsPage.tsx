@@ -125,23 +125,15 @@ const CharacteristicsPage = () => {
 
 			{!isLoading && (
 				<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
-					{filtered.length === 0 && searchQuery.trim() ? (
-						<div className='outline outline-base-300 m-0.5 px-8 py-16 flex flex-col justify-center items-center gap-4'>
-							<p className='text-base-600 text-lg font-medium text-center'>
-								No se encontraron características que coincidan con su búsqueda
-							</p>
-						</div>
-					) : (
-						filtered.map((c) => (
-							<CardCharacterist
-								key={c.id}
-								displayId={c.display_id}
-								title={c.title}
-								description={c.description}
-								searchQuery={searchQuery}
-							/>
-						))
-					)}
+					{filtered.map((c) => (
+						<CardCharacterist
+							key={c.id}
+							displayId={c.display_id}
+							title={c.title}
+							description={c.description}
+							searchQuery={searchQuery}
+						/>
+					))}
 				</div>
 			)}
 

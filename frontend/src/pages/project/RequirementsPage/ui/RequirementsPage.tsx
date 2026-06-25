@@ -17,7 +17,6 @@ import {
 } from '@/entities/characteristic';
 
 import { CursorClickFill } from './icons';
-import { Requirements } from '@/widgets/main-navbar/ui/icons';
 import LoadingRequirements from './LoadingRequirements';
 import ModalConfirmLeave from './ModalConfirmLeave';
 
@@ -39,8 +38,6 @@ const RequirementsPage = () => {
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
-	const hasRequirements = useAppStore((s) => s.hasRequirements);
-	const setHasRequirements = useAppStore((s) => s.setHasRequirements);
 
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
@@ -89,9 +86,6 @@ const RequirementsPage = () => {
 					characteristicId,
 				);
 				if (cancelled) return;
-				if (content) {
-					setHasRequirements(characteristicId, true);
-				}
 				setCharacteristics((prev) =>
 					prev.map((c) =>
 						c.id === characteristicId ? { ...c, requirements: content } : c,
@@ -148,9 +142,6 @@ const RequirementsPage = () => {
 				selectedCharacteristic.id,
 				content,
 			);
-			if (content) {
-				setHasRequirements(selectedCharacteristic.id, true);
-			}
 			setCharacteristics((prev) =>
 				prev.map((c) =>
 					c.id === selectedCharacteristic.id ? { ...c, requirements: content } : c,
@@ -174,9 +165,6 @@ const RequirementsPage = () => {
 				selectedCharacteristic.id,
 				markdown,
 			);
-			if (markdown) {
-				setHasRequirements(selectedCharacteristic.id, true);
-			}
 			setSavedContent(markdown);
 			setCharacteristics((prev) =>
 				prev.map((c) =>
@@ -233,35 +221,38 @@ const RequirementsPage = () => {
 
 	if (isLoading) {
 		return (
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex justify-between items-start'>
-					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-							de cada función de la lista.
-						</p>
-					</div>
-					<div className='inline-flex justify-end items-start gap-3 mt-2'>
-						<button
-							disabled
-							className='px-5 py-2 cursor-pointer rounded-sm disabled:opacity-50 bg-base-600 text-base-50 font-medium inline-flex items-center gap-2'
-						>
-							Guardar
-						</button>
-						<Link
-							href='modelo'
-							onClick={(e) => e.preventDefault()}
-							className='px-5 py-2 inline-flex gap-2 items-center cursor-pointer text-base-50 bg-ai rounded-sm font-medium'
-						>
-							Modelado
-							<ArrowRight color='text-base-50' size={24} />
-						</Link>
-					</div>
-				</div>
+			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
+				<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
 
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<div className='w-[22rem] pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
+				<p className='text-base-800 text-lg'>
+					Usa el asistente de IA para desglosar y estructurar los requisitos específicos
+					de cada función de la lista.
+				</p>
+
+				<div className='inline-flex justify-end items-start gap-2.5'>
+					<button
+						onClick={handleSave}
+						disabled={!selectedCharacteristic || !hasUnsavedChanges}
+						className={`px-5 py-1 cursor-pointer rounded-sm disabled:opacity-50 ${
+							hasUnsavedChanges
+								? 'bg-primary-100 text-base-50'
+								: 'bg-base-600 text-base-50'
+						}`}
+					>
+						Guardar
+					</button>
+
+					<Link
+						href='modelo'
+						onClick={handleNextLink('modelo')}
+						className='px-5 py-1 inline-flex gap-2.5 cursor-pointer text-base-50 bg-ai rounded-sm hover:bg-ai/90 transition-colors duration-200'
+					>
+						<ArrowRight color='text-base-50' size={24} />
+						Modelado
+					</Link>
+				</div>
+				<div className='flex gap-1 flex-1 min-h-0 pb-4'>
+					<div className='w-80 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
 						<div className='h-7 bg-base-200 rounded w-48' />
 						{[1, 2, 3, 4].map((i) => (
 							<div key={i} className='h-14 bg-base-200 rounded' />
@@ -288,46 +279,44 @@ const RequirementsPage = () => {
 
 			{isGenerating && <LoadingRequirements />}
 
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex justify-between items-start'>
-					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-							de cada función de la lista.
-						</p>
-					</div>
-					<div className='inline-flex justify-end items-start gap-3 mt-2'>
-						<button
-							onClick={handleSave}
-							disabled={!selectedCharacteristic || !hasUnsavedChanges}
-							className={`px-5 py-2 cursor-pointer rounded-sm disabled:opacity-50 font-medium inline-flex items-center gap-2 ${
-								hasUnsavedChanges
-									? 'bg-primary-100 text-base-50 hover:bg-primary-100/90'
-									: 'bg-base-600 text-base-50'
-							}`}
-						>
-							Guardar
-						</button>
+			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-1'>
+				<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
 
-						<Link
-							href='modelo'
-							onClick={handleNextLink('modelo')}
-							className='px-5 py-2 inline-flex gap-2 items-center cursor-pointer text-base-50 bg-ai rounded-sm hover:bg-ai/90 transition-colors duration-200 font-medium'
-						>
-							Modelado
-							<ArrowRight color='text-base-50' size={24} />
-						</Link>
-					</div>
+				<p className='text-base-800 text-lg'>
+					Usa el asistente de IA para desglosar y estructurar los requisitos específicos
+					de cada función de la lista.
+				</p>
+
+				<div className='inline-flex justify-end items-start gap-2.5'>
+					<button
+						onClick={handleSave}
+						disabled={!selectedCharacteristic || !hasUnsavedChanges}
+						className={`px-5 py-1 cursor-pointer rounded-sm disabled:opacity-50 ${
+							hasUnsavedChanges
+								? 'bg-primary-100 text-base-50'
+								: 'bg-base-600 text-base-50'
+						}`}
+					>
+						Guardar
+					</button>
+
+					<Link
+						href='modelo'
+						onClick={handleNextLink('modelo')}
+						className='px-5 py-1 inline-flex gap-2.5 cursor-pointer text-base-50 bg-ai rounded-sm hover:bg-ai/90 transition-colors duration-200'
+					>
+						<ArrowRight color='text-base-50' size={24} />
+						Modelado
+					</Link>
 				</div>
 
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<aside className='w-[22rem] pt-3 bg-base-100/50 rounded-sm flex flex-col'>
-						<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
+				<div className='flex gap-1 flex-1 min-h-0 pb-4'>
+					<aside className='w-80 pt-2 bg-base-100/50 rounded-sm inline-flex flex-col justify-start items-start'>
+						<h3 className='text-primary-100 text-xl font-semibold px-3 pb-2'>
 							Lista de Características
 						</h3>
 
-						<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
+						<div className='self-stretch flex-1 px-1 flex flex-col justify-start items-start gap-1 overflow-y-auto'>
 							{characteristics.length === 0 && (
 								<p className='text-base-600 text-sm px-3 py-2'>
 									No hay características disponibles.
@@ -339,30 +328,28 @@ const RequirementsPage = () => {
 									<button
 										key={c.id}
 										onClick={() => handleSelectCharacteristic(c.id)}
-										className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors ${
+										className={`self-stretch p-2.5 inline-flex justify-start items-center gap-2.5 text-left cursor-pointer transition-colors ${
 											isSelected
-												? 'bg-primary-100/10 border-l-4 border-primary-100'
+												? 'border-l-4 border-base-950 bg-base-200/50'
 												: 'border-l-4 border-transparent hover:bg-base-200/30'
 										}`}
 									>
 										<span
-											className={`text-base font-bold mt-0.5 shrink-0 ${
-												isSelected ? 'text-base-800' : 'text-base-800'
+											className={`justify-start text-lg font-medium ${
+												isSelected ? 'text-base-950' : 'text-base-600'
 											}`}
 										>
 											{c.display_id}
 										</span>
 										<p
-											className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
-												isSelected ? 'text-primary-100' : 'text-base-600'
+											className={`flex-1 justify-start text-base font-normal truncate ${
+												isSelected ? 'text-base-950' : 'text-base-600'
 											}`}
 										>
 											{c.title}
 										</p>
-										{(c.requirements || hasRequirements[c.id]) && (
-											<div className='shrink-0 mt-0.5'>
-												<Requirements size={20} color={isSelected ? 'text-primary-100' : 'text-base-600'} />
-											</div>
+										{c.requirements && (
+											<span className='w-2 h-2 rounded-full bg-status-success shrink-0' />
 										)}
 									</button>
 								);
@@ -370,7 +357,7 @@ const RequirementsPage = () => {
 						</div>
 					</aside>
 
-					<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
+					<div className='flex-1 flex flex-col gap-5 pl-2.5 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
 						{!selectedCharacteristic && (
 							<div className='flex flex-col items-center justify-center h-full gap-3'>
 								<CursorClickFill color='text-base-800' size={70} />
@@ -399,20 +386,18 @@ const RequirementsPage = () => {
 
 						{selectedCharacteristic && !isLoadingRequirements && selectedCharacteristic.requirements && (
 							<div className='flex flex-col flex-1 min-h-0 gap-4'>
-								<div className='flex flex-col gap-2 px-2'>
-									<div className='inline-flex justify-start gap-3 items-center'>
-										<span className='text-2xl font-bold text-base-800'>
-											{selectedCharacteristic.display_id}
-										</span>
-										<span className='text-2xl font-bold text-primary-100'>
-											{selectedCharacteristic.title}
-										</span>
-									</div>
-									<p className='text-base-600 text-base'>
-										{selectedCharacteristic.description}
-									</p>
+								<div className='inline-flex justify-start gap-2.5 items-center'>
+									<span className='self-stretch text-center justify-center text-lg font-medium leading-8'>
+										{selectedCharacteristic.display_id}
+									</span>
+									<span className='justify-center text-primary-100 text-lg font-bold'>
+										{selectedCharacteristic.title}
+									</span>
 								</div>
-								<div className='flex-1 min-h-0 mt-2'>
+								<p className='text-base-800 text-base'>
+									{selectedCharacteristic.description}
+								</p>
+								<div className='flex-1 min-h-0'>
 									<MarkdownEditor markdown={markdown} onChange={setMarkdown} />
 								</div>
 							</div>
@@ -426,7 +411,7 @@ const RequirementsPage = () => {
 									Sin requisitos generados
 								</span>
 
-								<p className='text-base-800 text-lg text-center'>
+								<p className='text-base-800 text-lg'>
 									Esta característica aún no tiene requisitos asociados. Haz clic en el
 									botón <span className='text-xl font-bold'>Generar </span>
 									para generarlos automáticamente basados en la descripción.
@@ -434,7 +419,7 @@ const RequirementsPage = () => {
 
 								<button
 									onClick={handleGenerate}
-									className='px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
+									className='px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm'
 								>
 									Generar
 								</button>

@@ -108,6 +108,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 
 		return (
 			<div className='flex h-full min-h-0 overflow-hidden'>
+				<TocSidebar headings={headings} activeId={activeId} />
 				<section className='relative flex min-h-0 flex-1 overflow-hidden'>
 					<EditorContent markdown={localMarkdown} onChange={handleChange} />
 				</section>
