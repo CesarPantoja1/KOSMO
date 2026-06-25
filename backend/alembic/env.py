@@ -41,7 +41,7 @@ def _normalize_database_url(raw_url: str) -> str:
         )
     ):
         query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-        query.setdefault("statement_cache_size", "0")
+        query.pop("statement_cache_size", None)
         query.setdefault("prepared_statement_cache_size", "0")
         raw_url = urlunsplit(parsed._replace(query=urlencode(query)))
 
@@ -96,6 +96,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"statement_cache_size": 0},
     )
 
     async with connectable.connect() as connection:
