@@ -31,9 +31,14 @@ def _normalize_database_url(raw_url: str) -> str:
     parsed = urlsplit(raw_url)
     if (
         parsed.scheme == "postgresql+asyncpg"
-        and parsed.hostname is not None
-        and parsed.hostname.endswith(".pooler.supabase.com")
-        and parsed.port == 6543
+        and (
+            (parsed.hostname is not None and (
+                parsed.hostname.endswith(".pooler.supabase.com")
+                or parsed.hostname.endswith(".supabase.co")
+                or "pooler" in parsed.hostname
+            ))
+            or parsed.port == 6543
+        )
     ):
         query = dict(parse_qsl(parsed.query, keep_blank_values=True))
         query.setdefault("statement_cache_size", "0")
