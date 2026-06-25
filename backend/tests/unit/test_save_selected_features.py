@@ -117,3 +117,25 @@ async def test_save_selected_features_returns_saved_features() -> None:
     assert saved.title == "Feature Persistida"
     assert saved.description == "Descripción persistida"
     assert saved.rationale == "Justificación"
+
+
+@pytest.mark.asyncio
+async def test_save_selected_features_strips_identifier_prefix() -> None:
+    # Arrange
+    repository: Any = InMemoryFeatureRepository()
+    use_case = SaveSelectedFeaturesUseCase(feature_repo=repository)
+    project_id = ProjectId("prj_strip456")
+
+    input_data = SaveSelectedFeaturesInput(
+        project_id=project_id,
+        features=[
+            {"title": "C03 Feature Limpia", "description": "Desc"},
+        ],
+    )
+
+    # Act
+    result = await use_case.execute(input_data)
+
+    # Assert
+    assert result.features[0].title == "Feature Limpia"
+    assert result.features[0].slug == "feature-limpia"

@@ -436,6 +436,7 @@ async def test_generate_ears_persists_requirements_markdown() -> None:
     # Assert
     saved = await requirement_repo.by_feature_id(FeatureId("feat_ears05"))
     assert saved is not None
-    assert "Requisitos EARS" in saved
-    assert "REQ-1.1" in saved
-    assert "REQ-1.2" in saved
+    assert "**REQ-1.1  Ubiquitous**" in saved
+    assert "**REQ-1.2  Event-Driven**" in saved
+    assert "El sistema shall registrar la operación del usuario" in saved
+    assert "Criterios de Aceptación" not in saved
