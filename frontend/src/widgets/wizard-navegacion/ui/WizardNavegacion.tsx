@@ -35,7 +35,7 @@ export function WizardNavegacion() {
 	return (
 		<nav className='flex justify-between px-16 py-4 mb-2 bg-base-50 border-b border-base-200'>
 			{phaseItems.map(({ href, Icon, label }, index) => {
-				const activeIndex = phaseItems.findIndex((item) => pathname.startsWith(item.href));
+				const activeIndex = phaseItems.findIndex((item) => (pathname || '').startsWith(item.href));
 				
 				let status: ProjectStatus = 'disable';
 				if (activeIndex !== -1) {

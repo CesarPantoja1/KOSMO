@@ -146,7 +146,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						<Home size={20} color='text-base-600' />
 						<Right size={16} color='text-base-600' />
 						<span className='text-base-600 text-sm font-medium capitalize'>
-							{pathname.split('/').pop()}
+							{pathname?.split('/').pop() || ''}
 						</span>
 					</div>
 
