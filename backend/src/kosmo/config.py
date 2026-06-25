@@ -83,6 +83,7 @@ class Settings(BaseSettings):
             )
         ):
             query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            query.setdefault("statement_cache_size", "0")
             query.setdefault("prepared_statement_cache_size", "0")
             raw_value = urlunsplit(parsed._replace(query=urlencode(query)))
 
