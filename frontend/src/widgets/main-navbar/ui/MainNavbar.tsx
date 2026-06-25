@@ -135,7 +135,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						</button>
 					</div>
 				</div>
-				<main className='min-h-0 flex-1 overflow-hidden'>{children}</main>
 			</div>
 
 			<main className='flex w-10/12 min-h-0 flex-col overflow-hidden mx-8'>
@@ -169,31 +168,5 @@ export function MainNavbar({ children }: MainNavbarProps) {
 				<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
 			</main>
 		</header>
-	);
-}
-
-interface DropdownItemProps {
-	label: string;
-	onClick: () => void;
-}
-
-function DropdownItem({ label, onClick }: DropdownItemProps) {
-	return (
-		<button
-			className='btn btn-ghost'
-			type='button'
-			style={{
-				width: '100%',
-				justifyContent: 'flex-start',
-				borderRadius: 0,
-				height: 32,
-				padding: '0 12px',
-				fontSize: 13,
-				gap: 8,
-			}}
-			onClick={onClick}
-		>
-			{label}
-		</button>
 	);
 }
