@@ -78,7 +78,7 @@ COPY --chown=kosmo:kosmo alembic.ini ./alembic.ini
 COPY --chown=kosmo:kosmo alembic ./alembic
 COPY --chown=kosmo:kosmo src ./src
 COPY --chown=kosmo:kosmo entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
 USER kosmo:kosmo
 
