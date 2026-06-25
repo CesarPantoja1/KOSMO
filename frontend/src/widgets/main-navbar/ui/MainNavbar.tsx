@@ -6,9 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { useAppStore } from 'app/store/app.store';
 
-import { getStyleIconStatus } from '../lib/get-status-color';
-import { ProjectStatus } from '../types/status';
-import WizardItem from './WizardItem';
+import { WizardNavegacion } from '@/widgets/wizard-navegacion';
 import {
 	Characteristics,
 	ComputerDesktop,
@@ -52,17 +50,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const isProyectosOpen = useAppStore((s) => s.isProyectosOpen);
 	const currentProject = useAppStore((s) => s.currentProject);
 
-	const phaseItems = [
-		{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'Descubrimiento' },
-		{
-			href: '/proyecto/caracteristicas',
-			Icon: Characteristics,
-			label: 'Características',
-		},
-		{ href: '/proyecto/requisitos', Icon: Requirements, label: 'Requisitos' },
-		{ href: '/proyecto/modelo', Icon: Modeling, label: 'Modelo' },
-		{ href: '/proyecto/codigo', Icon: Implementation, label: 'Código' },
-	] as const;
 
 	const handleBackToHub = () => {
 		setAvatarOpen(false);
@@ -76,13 +63,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		router.push('/proyecto');
 	};
 
-	const handleWizardClick = (href: string) => (e: React.MouseEvent) => {
-		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
-		if (hasUnsavedChanges) {
-			e.preventDefault();
-			setPendingNavigationPath(href);
-		}
-	};
+
 
 	const handleProjectClick = (project: Project) => {
 		setProjectState(project);
@@ -145,25 +126,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						<span className='text-base-600 text-xl font-medium'>Descripción</span>
 					</div>
 
-					{isProyectosOpen && (
-						<nav className='flex justify-between px-16 py-3 mx-0.5 mt-3 bg-base-50 outline outline-base-300 rounded-sm'>
-							{phaseItems.map(({ href, Icon, label }) => {
-								const status: ProjectStatus = pathname === href ? 'active' : 'disable';
-								const colors = getStyleIconStatus(status);
-								return (
-									<WizardItem
-										key={href}
-										href={href}
-										icon={<Icon color={colors.iconStyles} />}
-										iconContainerStyles={colors.iconContainer}
-										label={label}
-										labelStyles={colors.labelStyles}
-										onClick={handleWizardClick(href)}
-									/>
-								);
-							})}
-						</nav>
-					)}
+					<WizardNavegacion />
 				</div>
 				<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
 			</main>
