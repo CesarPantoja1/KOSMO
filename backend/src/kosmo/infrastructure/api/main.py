@@ -184,6 +184,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         db_engine = create_async_engine(
             settings.database_url.get_secret_value(),
             pool_pre_ping=True,
+            connect_args={"statement_cache_size": 0},
         )
         app.state.redis = None
     else:

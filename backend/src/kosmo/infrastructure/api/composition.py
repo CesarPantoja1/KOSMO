@@ -145,6 +145,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
     db_engine = create_async_engine(
         settings.database_url.get_secret_value(),
         pool_pre_ping=True,
+        connect_args={"statement_cache_size": 0},
     )
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     user_repository = SqlAlchemyUserRepository(session_factory)
