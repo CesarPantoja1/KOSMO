@@ -228,7 +228,7 @@ class GenerateEARSUseCase:
 
             requirements.append(
                 EARSRequirement(
-                    id=RequirementId(IdGenerator.generate("req")),
+                    id=RequirementId(IdGenerator.generate("requirement")),
                     feature_id=feature_id,
                     feature_number=feature_number,
                     requirement_number=i,
