@@ -8,3 +8,4 @@ export { default as Home } from './Home';
 export { default as Right } from './Right';
 export { default as UserCircle } from './UserCircle';
 export { default as ComputerDesktop } from './ComputerDesktop';
+export { default as Folder } from './Folder';
