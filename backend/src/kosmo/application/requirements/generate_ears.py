@@ -24,6 +24,10 @@ from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 
+def _ears_pattern_label(pattern: EARSPattern) -> str:
+    return "-".join(word.capitalize() for word in pattern.value.split("_"))
+
+
 @dataclass(frozen=True)
 class GenerateEARSInput:
     project_id: ProjectId
@@ -247,32 +251,11 @@ class GenerateEARSUseCase:
 
     @staticmethod
     def _requirements_to_markdown(reqs: list[EARSRequirement]) -> str:
-        lines = [
-            "## Requisitos EARS",
-            "",
-            "| ID | Categoría | Requisito (Source Statement) | Justificación |",
-            "|---|---|---|---|",
+        blocks = [
+            f"**{r.display_id}  {_ears_pattern_label(r.pattern)}**\n\n{r.source_statement.strip()}"
+            for r in reqs
         ]
-        for r in reqs:
-            # Escape pipes to avoid breaking the markdown table
-            stmt = r.source_statement.replace("|", "\\|")
-            rationale = r.rationale.replace("|", "\\|")
-            lines.append(f"| **{r.display_id}** | {r.pattern.value} | {stmt} | {rationale} |")
-
-        lines.append("")
-        lines.append("### Criterios de Aceptación")
-        lines.append("")
-        for r in reqs:
-            if r.acceptance_criteria:
-                lines.append(f"#### {r.display_id}")
-                for idx, ac in enumerate(r.acceptance_criteria, 1):
-                    lines.append(f"**Criterio {idx}:**")
-                    lines.append(f"- **Dado**: {ac.given}")
-                    lines.append(f"- **Cuando**: {ac.when}")
-                    lines.append(f"- **Entonces**: {ac.then}")
-                lines.append("")
-
-        return "\n".join(lines).strip()
+        return "\n\n".join(blocks).strip()
 
 
 class GetRequirementsUseCase:

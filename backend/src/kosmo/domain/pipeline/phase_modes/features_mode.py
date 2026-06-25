@@ -45,13 +45,13 @@ _FEATURES_SYSTEM_PROMPT = (
     "texto de introducción ni de conclusión:\n"
     "```json\n"
     "{\n"
-    "  \"features\": [\n"
+    '  "features": [\n'
     "    {\n"
-    "      \"number\": 1,\n"
-    "      \"title\": \"Nombre de la característica\",\n"
-    "      \"description\": \"Descripción detallada...\",\n"
-    "      \"rationale\": \"Justificación detallada...\",\n"
-    "      \"inferred_from\": [\"Sección A\", \"Sección B\"]\n"
+    '      "number": 1,\n'
+    '      "title": "Nombre de la característica",\n'
+    '      "description": "Descripción detallada...",\n'
+    '      "rationale": "Justificación detallada...",\n'
+    '      "inferred_from": ["Sección A", "Sección B"]\n'
     "    }\n"
     "  ]\n"
     "}\n"

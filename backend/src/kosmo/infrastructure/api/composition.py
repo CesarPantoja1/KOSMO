@@ -32,6 +32,11 @@ from kosmo.application.projects import (
     GetProjectUseCase,
     ListProjectsUseCase,
 )
+from kosmo.application.requirements import (
+    GenerateEARSUseCase,
+    GetRequirementsUseCase,
+    SaveRequirementsUseCase,
+)
 from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
@@ -53,6 +58,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.document_repo import
 )
 from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
+)
+from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import (
+    SqlAlchemyRequirementRepository,
 )
 from kosmo.infrastructure.persistence.redis import (
     RedisAuthorizationCodeStore,
@@ -312,4 +320,40 @@ def build_features_components(
             feature_repo=feature_repo,
         ),
         feature_repo=feature_repo,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RequirementsComponents:
+    generate_ears: GenerateEARSUseCase
+    get_requirements: GetRequirementsUseCase
+    save_requirements: SaveRequirementsUseCase
+
+
+def build_requirements_components(
+    session_factory: async_sessionmaker[AsyncSession],
+    pipeline: PipelineComponents,
+) -> RequirementsComponents:
+    project_repo = SqlAlchemyProjectRepository(session_factory)
+    document_repo = SqlAlchemyDocumentRepository(session_factory)
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    return RequirementsComponents(
+        generate_ears=GenerateEARSUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            llm_client=pipeline.llm_client,
+        ),
+        get_requirements=GetRequirementsUseCase(
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+        ),
+        save_requirements=SaveRequirementsUseCase(
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+        ),
     )
