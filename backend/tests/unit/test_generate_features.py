@@ -62,7 +62,9 @@ class InMemoryDocumentRepository:
         return None
 
     async def save_requirements(
-        self, feature_id: Any, document: RichTextDocument  # noqa: ARG002
+        self,
+        feature_id: Any,  # noqa: ARG002
+        document: RichTextDocument,  # noqa: ARG002
     ) -> RichTextDocument:
         return document
 
@@ -255,7 +257,9 @@ async def test_generate_features_raises_when_llm_fails() -> None:
 
     class FailingLLMClient:
         async def complete(
-            self, prompt: PromptTemplate, **kwargs: Any  # noqa: ARG002
+            self,
+            prompt: PromptTemplate,  # noqa: ARG002
+            **kwargs: Any,  # noqa: ARG002
         ) -> LLMResponse:
             raise RuntimeError("LLM service unavailable")
 

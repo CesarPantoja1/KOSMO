@@ -67,7 +67,9 @@ class InMemoryDocumentRepository:
         return None
 
     async def save_requirements(
-        self, feature_id: Any, document: RichTextDocument  # noqa: ARG002
+        self,
+        feature_id: Any,  # noqa: ARG002
+        document: RichTextDocument,  # noqa: ARG002
     ) -> RichTextDocument:
         return document
 
@@ -85,7 +87,9 @@ class MockContextBuilder:
     context: DiscoveryPhaseContext
 
     async def build_context(
-        self, project_id: ProjectId, phase: SpecPhase  # noqa: ARG002
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,  # noqa: ARG002
     ) -> DiscoveryPhaseContext:
         return self.context
 
@@ -184,7 +188,9 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
 
     class FailingAgent:
         async def execute(
-            self, phase: SpecPhase, context: Any  # noqa: ARG002
+            self,
+            phase: SpecPhase,  # noqa: ARG002
+            context: Any,  # noqa: ARG002
         ) -> DiscoveryPhaseOutput:
             raise RuntimeError("LLM service unavailable")
 

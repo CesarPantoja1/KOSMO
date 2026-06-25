@@ -34,6 +34,8 @@ _FERNET_KEY: str = urlsafe_b64encode(token_bytes(32)).decode()
 _TEST_DEFAULTS: dict[str, str] = {
     "ENV": "development",
     "LOG_LEVEL": "DEBUG",
+    # Auth real en tests: el bypass de dev (.env AUTH_DISABLED=true) no debe filtrarse aquí.
+    "AUTH_DISABLED": "false",
     # Llaves criptográficas inyectadas como texto PEM, no como rutas de archivo.
     "JWT_PRIVATE_KEY_PEM": _PRIVATE_KEY_PEM,
     "JWT_PUBLIC_KEY_PEM": _PUBLIC_KEY_PEM,

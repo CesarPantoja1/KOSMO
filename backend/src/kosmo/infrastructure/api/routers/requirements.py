@@ -36,9 +36,7 @@ class SaveRequirementsRequest(BaseModel):
     markdown: str
 
 
-async def _resolve_feature_id(
-    request: Request, project_id: str, id_or_slug: str
-) -> FeatureId:
+async def _resolve_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
     if id_or_slug.startswith("feat_"):
         return FeatureId(id_or_slug)
 
@@ -57,8 +55,7 @@ async def _resolve_feature_id(
     "/generate",
     summary="Generar requisitos EARS",
     description=(
-        "Genera requisitos utilizando el estándar EARS para la "
-        "característica especificada."
+        "Genera requisitos utilizando el estándar EARS para la característica especificada."
     ),
     status_code=status.HTTP_200_OK,
 )
@@ -101,8 +98,7 @@ async def generate_requirements(
     "",
     summary="Obtener requisitos de una característica",
     description=(
-        "Recupera los requisitos en formato Markdown asociados a la "
-        "característica especificada."
+        "Recupera los requisitos en formato Markdown asociados a la característica especificada."
     ),
 )
 async def get_requirements(
