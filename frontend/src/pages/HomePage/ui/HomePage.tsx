@@ -161,58 +161,82 @@ export function HomePage() {
 						))}
 					</div>
 				) : (
-					<div className='bg-base-50 flex flex-col gap-2.5'>
-						<div className='self-stretch px-3 py-2 bg-base-100 border-b border-emerald-800 inline-flex justify-between items-start'>
-							<div className='justify-start text-base-600 text-2xl font-semibold flex-1'>
-								Proyecto
-							</div>
-							<div className='w-40 justify-start text-base-600 text-2xl font-semibold'>
-								Fase Actual
-							</div>
-							<div className='justify-start text-base-600 text-2xl font-semibold w-40 text-center'>
-								Estado
-							</div>
-							<div className='justify-end text-base-600 text-2xl font-semibold w-40 text-right'>
-								Creado
-							</div>
-						</div>
+					<div className='bg-base-100/15 flex flex-col gap-2.5'>
+						<table className='w-full'>
+							<thead>
+								<tr className='bg-base-100 border-b border-primary-800'>
+									<th className='px-3 py-2 text-left text-base-600 text-2xl font-semibold'>
+										Proyecto
+									</th>
+									<th className='w-40 px-3 py-2 text-left text-base-600 text-2xl font-semibold'>
+										Fase Actual
+									</th>
+									<th className='w-40 px-3 py-2 text-center text-base-600 text-2xl font-semibold'>
+										Estado
+									</th>
+									<th className='w-40 px-3 py-2 text-right text-base-600 text-2xl font-semibold'>
+										Creado
+									</th>
+								</tr>
+							</thead>
 
-						{projects.length === 0 && (
-							<div className='p-4 text-center text-base-600'>
-								No tienes proyectos creados.
-							</div>
-						)}
+							<tbody>
+								{projects.length === 0 && (
+									<tr>
+										<td colSpan={4} className='p-4 bg-white text-center text-base-600'>
+											No tienes proyectos creados.
+										</td>
+									</tr>
+								)}
 
-						{projects.map((project) => (
-							<div
-								key={project.id}
-								onClick={() => handleProjectClick(project)}
-								className='p-3 bg-white border-b border-emerald-800 flex justify-between items-center overflow-hidden cursor-pointer hover:bg-gray-50 transition-all'
-							>
-								<div className='flex flex-col gap-1.5 flex-1 pr-4'>
-									<div className='justify-start text-base-950 text-base font-medium truncate'>
-										{project.name}
-									</div>
-									<div className='justify-start text-base-600 text-sm font-normal truncate'>
-										{project.description || 'Sin descripción'}
-									</div>
-								</div>
-								<div className='justify-start text-base-600 text-base font-normal w-40 capitalize'>
-									{project.current_phase || 'Descubrimiento'}
-								</div>
-								<div className='w-40 flex justify-center'>
-									<div className='p-1 px-3 bg-primary-50 rounded-sm flex justify-center items-center gap-2.5'>
-										<Clock size={16} color='text-primary-100' />
-										<div className='justify-start text-primary-100 text-sm font-medium'>
-											{project.status || 'En progreso'}
-										</div>
-									</div>
-								</div>
-								<div className='text-base-600 text-sm font-normal w-40 text-right'>
-									{new Date(project.created_at).toLocaleDateString()}
-								</div>
+								{projects.map((project) => (
+									<tr
+										key={project.id}
+										onClick={() => handleProjectClick(project)}
+										className='cursor-pointer border-b border-primary-800 bg-white transition-all'
+									>
+										<td className='p-3'>
+											<div className='flex flex-col gap-1.5'>
+												<div className='text-base-950 text-base font-medium truncate'>
+													{project.name}
+												</div>
+												<div className='text-base-600 text-sm truncate'>
+													{project.description || 'Sin descripción'}
+												</div>
+											</div>
+										</td>
+
+										<td className='w-40 p-3 text-base-600 text-base capitalize'>
+											{project.current_phase || 'Descubrimiento'}
+										</td>
+
+										<td className='w-40 p-3'>
+											<div className='flex justify-center'>
+												<div className='p-1 px-3 bg-primary-50 rounded-sm flex items-center gap-2.5'>
+													<Clock size={16} color='text-primary-100' />
+													<span className='text-primary-100 text-sm font-medium'>
+														{project.status || 'En progreso'}
+													</span>
+												</div>
+											</div>
+										</td>
+
+										<td className='w-40 p-3 text-right text-base-600 text-sm'>
+											<time dateTime={project.created_at}>
+												{new Date(project.created_at).toLocaleDateString()}
+											</time>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+
+						<Link href='/crear-proyecto' className='p-3 inline-flex items-center gap-3'>
+							<div className='p-1 rounded-sm outline outline-base-600'>
+								<Plus color='text-base-600' />
 							</div>
-						))}
+							<span className='text-base-950 text-xl'>Crear nuevo proyecto</span>
+						</Link>
 					</div>
 				)}
 			</div>
