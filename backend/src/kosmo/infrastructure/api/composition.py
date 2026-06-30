@@ -41,11 +41,19 @@ from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
-from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.pipeline.phase_outputs import (
+    ValidationResult,
+)
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
+from kosmo.domain.pipeline.phase_validators.discovery_validator import (
+    validate_discovery_quality,
+    validate_discovery_structure,
+)
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
+from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.postgres.repositories import (
@@ -206,6 +214,7 @@ class PipelineComponents:
     context_builder: ContextBuilder
     agent: KOSMOAgent
     orchestrator: SequentialOrchestrator
+    tool_registry: ToolRegistry
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -247,10 +256,25 @@ def build_pipeline_components(
         SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
     }
 
-    # 5. Instanciar el agente KOSMO
+    # 5. Configurar el registro de herramientas con los validadores existentes
+    tool_registry = ToolRegistry()
+    tool_registry.register(
+        "validate_discovery_structure",
+        lambda inp: _adapt_validation_result(
+            validate_discovery_structure(_markdown_input(inp))
+        ),
+    )
+    tool_registry.register(
+        "validate_discovery_quality",
+        lambda inp: _adapt_validation_result(
+            validate_discovery_quality(_markdown_input(inp))
+        ),
+    )
+
+    # 6. Instanciar el agente KOSMO con el registro de herramientas
     agent = KOSMOAgent(
         llm_client=llm_client,
-        context_builder=context_builder,
+        registry=tool_registry,
         modes=modes,  # type: ignore[reportArgumentType]
     )
 
@@ -264,6 +288,7 @@ def build_pipeline_components(
         context_builder=context_builder,
         agent=agent,
         orchestrator=orchestrator,
+        tool_registry=tool_registry,
     )
 
 
@@ -360,3 +385,14 @@ def build_requirements_components(
             requirement_repo=requirement_repo,
         ),
     )
+
+
+def _markdown_input(inp: dict[str, object]) -> RichTextDocument:
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    raw = inp.get("document", inp.get("text", ""))
+    return markdown_to_document(str(raw))
+
+
+def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
+    return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}
