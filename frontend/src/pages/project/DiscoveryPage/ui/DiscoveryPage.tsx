@@ -15,7 +15,6 @@ const DiscoveryPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const currentProject = useAppStore((s) => s.currentProject);
 	const [isLoading, setIsLoading] = useState(!!currentProject);
-	const [isSaving, setIsSaving] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const savedContentRef = useRef('');
 	const router = useRouter();
@@ -72,28 +71,23 @@ const DiscoveryPage = () => {
 		fetchDiscovery();
 	}, [currentProject, router]);
 
-	const doSave = async (silent = false): Promise<boolean> => {
+	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
 
-		setIsSaving(true);
+		const savingToast = toast.info('Guardando...');
+
 		try {
 			await saveDiscovery(currentProject.id, markdown);
 			savedContentRef.current = markdown;
 			setHasUnsavedChangesLocal(false);
-			if (!silent) toast.success('Cambios guardados con éxito.');
+			toast.close(savingToast);
+			toast.success('Guardado');
 			return true;
-		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : 'No se pudo guardar los cambios';
-			toast.error(message);
+		} catch {
+			toast.close(savingToast);
+			toast.error('No se pudo guardar');
 			return false;
-		} finally {
-			setIsSaving(false);
 		}
-	};
-
-	const handleSave = () => {
-		doSave(false);
 	};
 
 	const handleNextLink = async () => {
@@ -126,7 +120,7 @@ const DiscoveryPage = () => {
 		setPendingNavigationPath(null);
 		if (!path) return;
 		if (path === 'caracteristicas') {
-			const saved = await doSave(true);
+			const saved = await doSave();
 			setHasUnsavedChanges(false);
 			if (saved) {
 				await generateAndNavigate();
@@ -161,6 +155,17 @@ const DiscoveryPage = () => {
 		return () => window.removeEventListener('popstate', handler);
 	}, [hasUnsavedChanges, setPendingNavigationPath]);
 
+	useEffect(() => {
+		if (markdown === savedContentRef.current) return;
+
+		const timer = setTimeout(() => {
+			doSave();
+		}, 3000);
+
+		return () => clearTimeout(timer);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [markdown]);
+
 	return (
 		<>
 			{pendingNavigationPath && (
@@ -179,14 +184,6 @@ const DiscoveryPage = () => {
 						</p>
 					</div>
 					<div className='flex justify-end gap-3'>
-						<button
-							className='px-3.5 py-1.5 cursor-pointer bg-primary-100 text-base-50 rounded-sm hover:bg-primary-100/90 disabled:opacity-50'
-							onClick={handleSave}
-							disabled={isSaving}
-						>
-							{isSaving ? 'Guardando...' : 'Guardar'}
-						</button>
-
 						<button
 							onClick={handleNextLink}
 							disabled={isGenerating}

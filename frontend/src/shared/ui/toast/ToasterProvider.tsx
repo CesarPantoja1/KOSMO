@@ -82,7 +82,7 @@ function ToastItem({ toastItem }: { toastItem: { toast: QueuedToast<ToastContent
 						{content.message}
 					</Text>
 				</UNSTABLE_ToastContent>
-				<Button slot='close' className=''>
+				<Button slot='close' className='cursor-pointer'>
 					<Close color='text-base-50' size={24} />
 				</Button>
 			</div>
