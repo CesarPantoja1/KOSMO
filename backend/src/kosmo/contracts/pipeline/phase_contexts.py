@@ -15,6 +15,13 @@ class DiscoveryPhaseContext:
 
 
 @dataclass(frozen=True)
+class DiscoveryRefinePhaseContext:
+    current_document: RichTextDocument
+    user_instructions: str
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+
+@dataclass(frozen=True)
 class FeaturesPhaseContext:
     discovery_document: RichTextDocument
     existing_feature_titles: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
