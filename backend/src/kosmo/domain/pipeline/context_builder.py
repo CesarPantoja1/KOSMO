@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
+from kosmo.contracts.pipeline.phase_contexts import (
+    DiscoveryPhaseContext,
+    DiscoveryRefinePhaseContext,
+)
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
@@ -41,4 +44,23 @@ class ContextBuilder:
         return DiscoveryPhaseContext(
             project_name=project.name,
             project_description=project.description,
+        )
+
+    async def build_discovery_refine_context(
+        self,
+        project_id: ProjectId,
+        user_instructions: str,
+    ) -> DiscoveryRefinePhaseContext:
+        from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
+
+        current_document = await self._document_repo.get_discovery(project_id)
+        if current_document is None:
+            raise PhaseTransitionError(
+                detail="No existe un documento de descubrimiento previo para refinar.",
+                instance="/pipeline/discovery/refine",
+            )
+
+        return DiscoveryRefinePhaseContext(
+            current_document=current_document,
+            user_instructions=user_instructions,
         )
