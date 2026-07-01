@@ -22,6 +22,8 @@ const DiscoveryPage = () => {
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
+	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
+	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
 
@@ -173,33 +175,46 @@ const DiscoveryPage = () => {
 			)}
 
 			{isLoading && <LoadingDiscovery />}
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4'>
+
+			<div
+				className={`flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
+			>
 				<div className='flex flex-col gap-3'>
 					<div className='flex flex-col'>
 						<h3 className='text-base-800 text-3xl font-bold'>
-							Descripción general del producto
+							Descubrimiento del proyecto
 						</h3>
 						<p className='text-base-600 mt-2'>
-							Visualiza y valida las especificaciones técnicas base de tu proyecto.
+							Identificar y documentar la información estratégica del proyecto para
+							comprender el problema, el contexto y el alcance del negocio.
 						</p>
 					</div>
-					<div className='flex justify-end gap-3'>
-						<button
-							onClick={handleNextLink}
-							disabled={isGenerating}
-							className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
-						>
-							<Ai size={20} color='text-base-50' />
-							<span className='text-center font-semibold'>
-								{isGenerating ? 'Generando...' : 'Generar características'}
-							</span>
-						</button>
-					</div>
+					{!isEditorMaximized && (
+						<div className='flex justify-end gap-3'>
+							<button
+								onClick={handleNextLink}
+								disabled={isGenerating}
+								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+							>
+								<Ai size={20} color='text-base-50' />
+								<span className='text-center font-semibold'>
+									{isGenerating ? 'Generando...' : 'Generar características'}
+								</span>
+							</button>
+						</div>
+					)}
 				</div>
 
 				{!isLoading && (
 					<div className='flex-1 min-h-0'>
-						<MarkdownEditor ref={editorRef} markdown={markdown} onChange={setMarkdown} />
+						<MarkdownEditor
+							ref={editorRef}
+							markdown={markdown}
+							onChange={setMarkdown}
+							isMaximized={isEditorMaximized}
+							onMaximize={() => setEditorMaximized(true)}
+							onMinimize={() => setEditorMaximized(false)}
+						/>
 					</div>
 				)}
 			</div>

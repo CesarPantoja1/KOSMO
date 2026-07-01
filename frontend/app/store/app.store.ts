@@ -18,6 +18,8 @@ interface AppState {
 	setPendingNavigationPath: (v: string | null) => void;
 	hasRequirements: Record<string, boolean>;
 	setHasRequirements: (id: string, has: boolean) => void;
+	isEditorMaximized: boolean;
+	setEditorMaximized: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -45,6 +47,8 @@ export const useAppStore = create<AppState>()(
 			setPendingNavigationPath: (v) => set({ pendingNavigationPath: v }),
 			hasRequirements: {},
 			setHasRequirements: (id, has) => set((state) => ({ hasRequirements: { ...state.hasRequirements, [id]: has } })),
+			isEditorMaximized: false,
+			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
 		}),
 		{
 			name: 'kosmo-app-store',

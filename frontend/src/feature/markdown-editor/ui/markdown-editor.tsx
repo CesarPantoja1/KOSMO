@@ -14,6 +14,9 @@ export interface MarkdownEditorHandle {
 interface Props {
 	markdown: string;
 	onChange?: (markdown: string) => void;
+	isMaximized?: boolean;
+	onMaximize?: () => void;
+	onMinimize?: () => void;
 }
 
 function slugify(text: string) {
@@ -25,7 +28,10 @@ function slugify(text: string) {
 }
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
-	function MarkdownEditor({ markdown, onChange }, ref) {
+	function MarkdownEditor(
+		{ markdown, onChange, isMaximized, onMaximize, onMinimize },
+		ref,
+	) {
 		const [localMarkdown, setLocalMarkdown] = useState(markdown);
 		const [activeId, setActiveId] = useState('');
 		const prevMarkdownRef = useRef(markdown);
@@ -108,7 +114,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 			<div className='flex h-full min-h-0 overflow-hidden'>
 				<TocSidebar headings={headings} activeId={activeId} />
 				<section className='relative flex min-h-0 flex-1 overflow-hidden'>
-					<EditorContent ref={editorRef} markdown={localMarkdown} onChange={handleChange} />
+					<EditorContent
+						ref={editorRef}
+						markdown={localMarkdown}
+						onChange={handleChange}
+						isMaximized={isMaximized}
+						onMaximize={onMaximize}
+						onMinimize={onMinimize}
+					/>
 				</section>
 			</div>
 		);
