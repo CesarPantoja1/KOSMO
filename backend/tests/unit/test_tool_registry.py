@@ -107,3 +107,149 @@ def test_tool_registry_describe_tools_handles_empty_list() -> None:
 
     # Assert
     assert "No hay herramientas" in description
+
+
+@pytest.mark.unit
+def test_register_with_definition_and_execute_with_valid_params() -> None:
+    definition = ToolDefinition(
+        name="adder",
+        description="Suma dos numeros",
+        parameters={
+            "type": "object",
+            "properties": {
+                "a": {"type": "number"},
+                "b": {"type": "number"},
+            },
+            "required": ["a", "b"],
+        },
+    )
+
+    registry = ToolRegistry()
+    registry.register_with_definition(
+        "adder",
+        lambda inp: {"result": inp["a"] + inp["b"]},
+        definition,
+    )
+
+    result = registry.execute("adder", {"a": 2, "b": 3})
+
+    assert result == {"result": 5}
+
+
+@pytest.mark.unit
+def test_execute_with_missing_required_param_returns_error() -> None:
+    definition = ToolDefinition(
+        name="adder",
+        description="Suma dos numeros",
+        parameters={
+            "type": "object",
+            "properties": {
+                "a": {"type": "number"},
+                "b": {"type": "number"},
+            },
+            "required": ["a", "b"],
+        },
+    )
+
+    registry = ToolRegistry()
+    registry.register_with_definition(
+        "adder",
+        lambda inp: {"result": inp.get("a", 0) + inp.get("b", 0)},
+        definition,
+    )
+
+    result = registry.execute("adder", {"a": 2})
+
+    assert "error" in result
+    assert "b" in result["error"]
+
+
+@pytest.mark.unit
+def test_execute_with_wrong_type_param_returns_error() -> None:
+    definition = ToolDefinition(
+        name="adder",
+        description="Suma dos numeros",
+        parameters={
+            "type": "object",
+            "properties": {
+                "a": {"type": "number"},
+                "b": {"type": "number"},
+            },
+            "required": ["a", "b"],
+        },
+    )
+
+    registry = ToolRegistry()
+    registry.register_with_definition(
+        "adder",
+        lambda inp: {"result": inp.get("a", 0) + inp.get("b", 0)},
+        definition,
+    )
+
+    result = registry.execute("adder", {"a": 2, "b": "tres"})
+
+    assert "error" in result
+    assert "b" in result["error"]
+
+
+@pytest.mark.unit
+def test_execute_without_definition_skips_validation() -> None:
+    registry = ToolRegistry()
+    registry.register("echo", lambda inp: {"result": inp.get("text", "")})
+
+    result = registry.execute("echo", {"text": "hola"})
+
+    assert result == {"result": "hola"}
+
+
+@pytest.mark.unit
+def test_validate_parameters_valid_json_string_input() -> None:
+    definition = ToolDefinition(
+        name="analyser",
+        description="Analiza documento",
+        parameters={
+            "type": "object",
+            "properties": {
+                "document": {"type": "string"},
+            },
+            "required": ["document"],
+        },
+    )
+
+    registry = ToolRegistry()
+    registry.register_with_definition(
+        "analyser",
+        lambda inp: {"ok": True, "doc": inp["document"]},
+        definition,
+    )
+
+    result = registry.execute("analyser", '{"document": "contenido markdown"}')
+
+    assert result == {"ok": True, "doc": "contenido markdown"}
+
+
+@pytest.mark.unit
+def test_validate_parameters_rejects_invalid_json_against_schema() -> None:
+    definition = ToolDefinition(
+        name="analyser",
+        description="Analiza documento",
+        parameters={
+            "type": "object",
+            "properties": {
+                "document": {"type": "string"},
+            },
+            "required": ["document"],
+        },
+    )
+
+    registry = ToolRegistry()
+    registry.register_with_definition(
+        "analyser",
+        lambda inp: {"ok": True, "doc": inp.get("document", "")},
+        definition,
+    )
+
+    result = registry.execute("analyser", {"wrong_key": 123})
+
+    assert "error" in result
+    assert "document" in result["error"]

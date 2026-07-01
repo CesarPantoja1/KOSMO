@@ -52,6 +52,9 @@ from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
+from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
+    validate_business_level,
+)
 from kosmo.domain.pipeline.phase_validators.discovery_validator import (
     validate_discovery_quality,
     validate_discovery_structure,
@@ -274,6 +277,12 @@ def build_pipeline_components(
         "validate_discovery_quality",
         lambda inp: _adapt_validation_result(
             validate_discovery_quality(_markdown_input(inp))
+        ),
+    )
+    tool_registry.register(
+        "validate_business_level",
+        lambda inp: _adapt_validation_result(
+            validate_business_level(_markdown_input(inp))
         ),
     )
 
