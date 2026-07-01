@@ -453,6 +453,22 @@ class DiscoveryResponse(BaseModel):
     )
 
 
+class RefineDiscoveryRequest(BaseModel):
+    """Payload para refinar el documento de descubrimiento mediante IA."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    instructions: str = Field(
+        min_length=1,
+        max_length=500,
+        description=(
+            "Instrucciones de refinamiento que el agente de IA debe aplicar "
+            "sobre el documento de descubrimiento actual."
+        ),
+        examples=["Haz que la visión del producto sea más concisa y enfocada en los resultados."],
+    )
+
+
 class FeatureResponse(BaseModel):
     """Característica del producto software."""
 

@@ -9,15 +9,21 @@ from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
     GetDiscoveryInput,
     GetDiscoveryUseCase,
+    RefineDiscoveryInput,
+    RefineDiscoveryUseCase,
     SaveDiscoveryInput,
     SaveDiscoveryUseCase,
 )
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import RichTextDocument
-from kosmo.contracts.sdd.errors import DocumentNotFoundError, LLMInvocationError
+from kosmo.contracts.sdd.errors import (
+    DocumentNotFoundError,
+    LLMInvocationError,
+    ProjectNotFoundError,
+)
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
-from kosmo.infrastructure.api.schemas import DiscoveryResponse
+from kosmo.infrastructure.api.schemas import DiscoveryResponse, RefineDiscoveryRequest
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/discovery",
@@ -35,6 +41,10 @@ def _get_discovery(request: Request) -> GetDiscoveryUseCase:
 
 def _save_discovery(request: Request) -> SaveDiscoveryUseCase:
     return request.app.state.save_discovery
+
+
+def _refine_discovery(request: Request) -> RefineDiscoveryUseCase:
+    return request.app.state.refine_discovery
 
 
 @router.post(
@@ -156,6 +166,76 @@ async def save_discovery(
         id=str(output.project_id),
         project_id=str(output.project_id),
         content=payload.get("content", ""),
+    )
+
+
+@router.post(
+    "/refine",
+    summary="Refinar documento de descubrimiento con IA",
+    description=(
+        "Refina el documento de descubrimiento de un proyecto aplicando las "
+        "instrucciones proporcionadas por el usuario mediante inteligencia artificial. "
+        "El documento actual se conserva intacto si la IA falla. "
+        "Las instrucciones no pueden exceder los 500 caracteres. "
+        "Requiere autenticación mediante Bearer token."
+    ),
+    response_model=DiscoveryResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Documento de descubrimiento refinado exitosamente.",
+        },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Las instrucciones exceden los 500 caracteres.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de acceso inválido o ausente.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Proyecto no encontrado o sin documento de descubrimiento previo.",
+        },
+        status.HTTP_502_BAD_GATEWAY: {
+            "description": "Error al invocar el servicio de IA.",
+        },
+    },
+)
+async def refine_discovery(
+    project_id: str,
+    payload: Annotated[RefineDiscoveryRequest, Body(...)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[RefineDiscoveryUseCase, Depends(_refine_discovery)],
+) -> DiscoveryResponse:
+    try:
+        output = await use_case.execute(
+            RefineDiscoveryInput(
+                project_id=ProjectId(project_id),
+                instructions=payload.instructions,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+    except DocumentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+    except LLMInvocationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=exc.problem.detail,
+        ) from exc
+    return DiscoveryResponse(
+        id=str(output.project_id),
+        project_id=str(output.project_id),
+        content=_document_to_markdown(output.document),
     )
 
 

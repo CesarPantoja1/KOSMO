@@ -20,6 +20,7 @@ from kosmo.application.auth import (
 from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
     GetDiscoveryUseCase,
+    RefineDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
 from kosmo.application.features import (
@@ -302,6 +303,7 @@ class DiscoveryComponents:
     generate_discovery: GenerateDiscoveryUseCase
     get_discovery: GetDiscoveryUseCase
     save_discovery: SaveDiscoveryUseCase
+    refine_discovery: RefineDiscoveryUseCase
 
 
 def build_discovery_components(
@@ -319,6 +321,12 @@ def build_discovery_components(
         ),
         get_discovery=GetDiscoveryUseCase(document_repo=document_repo),
         save_discovery=SaveDiscoveryUseCase(document_repo=document_repo),
+        refine_discovery=RefineDiscoveryUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            context_builder=pipeline.context_builder,
+            agent=pipeline.agent,
+        ),
     )
 
 
