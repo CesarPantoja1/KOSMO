@@ -11,6 +11,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 
 _REACT_FORMAT_INSTRUCTIONS = (
@@ -43,11 +44,24 @@ class KOSMOAgent:
         registry: ToolRegistry,
         modes: dict[SpecPhase, PhaseMode] | None = None,
         max_iterations: int = 5,
+        skill_registry: SkillRegistry | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._registry = registry
         self._modes: dict[SpecPhase, PhaseMode] = modes or {}
         self._max_iterations = max_iterations
+        self._skill_registry: SkillRegistry | None = skill_registry
+
+    async def execute_with_skill(
+        self,
+        skill_name: str,
+        context: Any,
+    ) -> Any:
+        if self._skill_registry is None:
+            raise ValueError("SkillRegistry no configurado")
+        mode = self._skill_registry.resolve(skill_name)
+        # Reuse el mismo bucle ReAct con el modo resuelto
+        return await self._execute_loop(mode, context)
 
     async def execute(
         self,
@@ -57,7 +71,10 @@ class KOSMOAgent:
         mode = self._modes.get(phase)
         if mode is None:
             raise ValueError(f"No hay modo para la fase {phase.value}")
+        return await self._execute_loop(mode, context)
 
+    async def _execute_loop(self, mode: PhaseMode, context: Any) -> Any:
+        phase = mode.phase_name
         system_prompt = self._build_react_system_prompt(mode)
         base_user_prompt = mode.build_user_prompt(context)
 

@@ -43,13 +43,16 @@ from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
-from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
+from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
+from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
+    DiscoveryRefineMode,
+)
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
@@ -60,6 +63,7 @@ from kosmo.domain.pipeline.phase_validators.discovery_validator import (
     validate_discovery_structure,
 )
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
+from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
@@ -220,8 +224,10 @@ class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
     agent: AgentPort
+    refine_agent: AgentPort
     orchestrator: SequentialOrchestrator
     tool_registry: ToolRegistry
+    skill_registry: SkillRegistry
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -293,7 +299,34 @@ def build_pipeline_components(
         modes=modes,  # type: ignore[reportArgumentType]
     )
 
-    # 6. Instanciar el orquestador secuencial
+    # 7. Instanciar el SkillRegistry y registrar los skills
+    skill_registry = SkillRegistry()
+    skill_registry.register(
+        Skill(
+            name="discovery_generate",
+            description="Genera el documento de descubrimiento desde cero",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DiscoveryMode(),
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="discovery_refine",
+            description="Refina el documento de descubrimiento existente",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DiscoveryRefineMode(),
+        )
+    )
+
+    # 8. Instanciar el agente de refinamiento con DiscoveryRefineMode
+    refine_agent = KOSMOAgent(
+        llm_client=llm_client,
+        registry=tool_registry,
+        modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},
+        skill_registry=skill_registry,
+    )
+
+    # 9. Instanciar el orquestador secuencial
     orchestrator = SequentialOrchestrator()
 
     # (Aquí se instanciarán y retornarán los casos de uso a medida que se implementen)
@@ -302,8 +335,10 @@ def build_pipeline_components(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
+        refine_agent=refine_agent,
         orchestrator=orchestrator,
         tool_registry=tool_registry,
+        skill_registry=skill_registry,
     )
 
 
@@ -334,7 +369,7 @@ def build_discovery_components(
             project_repo=project_repo,
             document_repo=document_repo,
             context_builder=pipeline.context_builder,
-            agent=pipeline.agent,
+            agent=pipeline.refine_agent,
         ),
     )
 

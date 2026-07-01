@@ -25,6 +25,21 @@ class ToolDefinition:
 
 
 @dataclass(frozen=True)
+class Skill:
+    """Habilidad del agente que encapsula un modo de fase con metadatos.
+
+    Cada skill agrupa un PhaseMode con su nombre, descripcion y fase asociada,
+    permitiendo cargar, descargar y resolver habilidades bajo demanda sin
+    modificar el nucleo del agente.
+    """
+
+    name: str
+    description: str
+    phase: SpecPhase
+    mode: PhaseMode
+
+
+@dataclass(frozen=True)
 class ToolResult:
     tool_name: str
     output: Any
