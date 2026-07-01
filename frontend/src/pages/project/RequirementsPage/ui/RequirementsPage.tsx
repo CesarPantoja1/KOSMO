@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { MarkdownEditor } from '@/feature';
-import { Ai, ArrowRight, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
 import type { Characteristic } from '@/entities/characteristic';
@@ -18,7 +18,7 @@ import {
 
 import { CursorClickFill } from './icons';
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
-import LoadingRequirements from './LoadingRequirements';
+
 import ModalConfirmLeave from './ModalConfirmLeave';
 
 const RequirementsPage = () => {
@@ -286,7 +286,7 @@ const RequirementsPage = () => {
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			{isGenerating && <LoadingRequirements />}
+			{isGenerating && <Loading title='Generando requisitos...' description='Desglosando la característica seleccionada en especificaciones técnicas.' />}
 
 			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
 				<div className='flex justify-between items-start'>

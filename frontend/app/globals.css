@@ -80,6 +80,15 @@
 
 	--font-sans: 'Geist', sans-serif;
 	--font-mono: 'Geist Mono', monospace;
+
+	/* Animations */
+	--animate-spin-custom: spin-custom 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes spin-custom {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 body {

@@ -1,6 +1,9 @@
 // Buttons
 export { ButtonSM, ButtonMD, ButtonLG } from './button';
 
+// components
+export { default as Loading } from './Loading';
+
 // icons
 export { default as Ai } from './icons/Ai';
 export { default as ArrowRight } from './icons/ArrowRight';

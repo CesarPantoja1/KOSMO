@@ -1,13 +1,13 @@
 'use client';
 
-import { MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
+import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { getDiscovery, saveDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
-import LoadingDiscovery from './LoadingDiscovery';
+
 import ModalConfimLeave from './ModalConfimLeave';
 
 const DiscoveryPage = () => {
@@ -25,6 +25,7 @@ const DiscoveryPage = () => {
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
 
 	useEffect(() => {
@@ -170,11 +171,13 @@ const DiscoveryPage = () => {
 
 	return (
 		<>
+			{isChatbotOpen && <ChatbotPopup onClose={() => setIsChatbotOpen(false)} />}
+
 			{pendingNavigationPath && (
 				<ModalConfimLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			{isLoading && <LoadingDiscovery />}
+			{isLoading && <Loading title='Generando Descripción General' description='Optimizando la estructura de la Descripción General. Por favor, espera un momento.' />}
 
 			<div
 				className={`flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
@@ -192,14 +195,21 @@ const DiscoveryPage = () => {
 					{!isEditorMaximized && (
 						<div className='flex justify-end gap-3'>
 							<button
-								onClick={handleNextLink}
-								disabled={isGenerating}
+								onClick={() => setIsChatbotOpen(true)}
 								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
 							>
 								<Ai size={20} color='text-base-50' />
+								<span className='text-center font-semibold'>Refinar</span>
+							</button>
+							<button
+								onClick={handleNextLink}
+								disabled={isGenerating}
+								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
+							>
 								<span className='text-center font-semibold'>
-									{isGenerating ? 'Generando...' : 'Generar características'}
+									{isGenerating ? 'Generando...' : 'Ir a características'}
 								</span>
+								<ArrowRight size={20} color='text-base-50' />
 							</button>
 						</div>
 					)}
