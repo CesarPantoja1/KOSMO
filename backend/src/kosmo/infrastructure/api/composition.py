@@ -306,7 +306,7 @@ def build_pipeline_components(
             name="discovery_generate",
             description="Genera el documento de descubrimiento desde cero",
             phase=SpecPhase.DESCUBRIMIENTO,
-            mode=DiscoveryMode(),
+            mode=DiscoveryMode(),  # type: ignore[reportArgumentType]
         )
     )
     skill_registry.register(
@@ -314,7 +314,7 @@ def build_pipeline_components(
             name="discovery_refine",
             description="Refina el documento de descubrimiento existente",
             phase=SpecPhase.DESCUBRIMIENTO,
-            mode=DiscoveryRefineMode(),
+            mode=DiscoveryRefineMode(),  # type: ignore[reportArgumentType]
         )
     )
 
@@ -322,7 +322,7 @@ def build_pipeline_components(
     refine_agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
-        modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},
+        modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},  # type: ignore[reportArgumentType]
         skill_registry=skill_registry,
     )
 
