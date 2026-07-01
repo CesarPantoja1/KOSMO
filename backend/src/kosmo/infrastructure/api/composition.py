@@ -27,6 +27,7 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.application.projects import (
     CreateProjectUseCase,
     GetProjectUseCase,
@@ -41,13 +42,15 @@ from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
+from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
+from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
+from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_validators.discovery_validator import (
     validate_discovery_quality,
     validate_discovery_structure,
@@ -212,7 +215,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
 class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
-    agent: KOSMOAgent
+    agent: AgentPort
     orchestrator: SequentialOrchestrator
     tool_registry: ToolRegistry
 
@@ -254,6 +257,8 @@ def build_pipeline_components(
     # 4. Configurar modos de fase
     modes = {
         SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
+        SpecPhase.CARACTERISTICAS: FeaturesMode(),
+        SpecPhase.REQUISITOS: EARSMode(),
     }
 
     # 5. Configurar el registro de herramientas con los validadores existentes
@@ -337,7 +342,7 @@ def build_features_components(
             project_repo=project_repo,
             document_repo=document_repo,
             feature_repo=feature_repo,
-            llm_client=pipeline.llm_client,
+            agent=pipeline.agent,
         ),
         suggest_features=SuggestFeaturesUseCase(
             document_repo=document_repo,
@@ -372,7 +377,7 @@ def build_requirements_components(
             document_repo=document_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
-            llm_client=pipeline.llm_client,
+            agent=pipeline.agent,
         ),
         get_requirements=GetRequirementsUseCase(
             project_repo=project_repo,

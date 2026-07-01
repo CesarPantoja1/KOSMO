@@ -1,4 +1,5 @@
 from kosmo.contracts.pipeline.orchestrator_ports import (
+    AgentPort,
     AgentStep,
     AgentTrace,
     PhaseMode,
@@ -27,6 +28,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 )
 
 __all__ = [
+    "AgentPort",
     "AgentStep",
     "AgentTrace",
     "DiscoveryPhaseContext",

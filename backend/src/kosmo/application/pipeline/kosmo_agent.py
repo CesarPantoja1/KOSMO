@@ -7,11 +7,10 @@ from typing import Any
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
-    DiscoveryPhaseOutput,
     GenerationMetadata,
     ValidationResult,
 )
-from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 
 _REACT_FORMAT_INSTRUCTIONS = (
@@ -54,7 +53,7 @@ class KOSMOAgent:
         self,
         phase: SpecPhase,
         context: Any,
-    ) -> DiscoveryPhaseOutput:
+    ) -> Any:
         mode = self._modes.get(phase)
         if mode is None:
             raise ValueError(f"No hay modo para la fase {phase.value}")
@@ -111,7 +110,7 @@ class KOSMOAgent:
                         generation_time_ms=total_ms,
                         model_used=llm_response.model,
                     )
-                    return self._build_phase_output(last_output, last_validation, metadata)
+                    return mode.build_output(last_output, last_validation, metadata)
 
                 feedback = (
                     "## Feedback de validacion\n\n"
@@ -153,7 +152,7 @@ class KOSMOAgent:
             tool_results=tool_results_entries,
             generation_time_ms=total_ms,
         )
-        return self._build_phase_output(last_output, last_validation, metadata)
+        return mode.build_output(last_output, last_validation, metadata)
 
     def _build_react_system_prompt(self, mode: PhaseMode) -> str:
         tools_desc = self._registry.describe_tools(mode.available_tools)
@@ -179,28 +178,3 @@ class KOSMOAgent:
                 "output": text,
                 "reasoning": "Respuesta no-JSON, tratada como final",
             }
-
-    def _build_phase_output(
-        self,
-        content: Any,
-        validation: ValidationResult,
-        metadata: GenerationMetadata,
-    ) -> DiscoveryPhaseOutput:
-        doc = self._extract_document(content)
-        return DiscoveryPhaseOutput(
-            discovery_document=doc,
-            validation_result=validation,
-            generation_metadata=metadata,
-        )
-
-    def _extract_document(self, content: Any) -> RichTextDocument:
-        from kosmo.domain.sdd.document_converters import markdown_to_document
-
-        if isinstance(content, str):
-            return markdown_to_document(content)
-        if isinstance(content, dict):
-            text = content.get("document", content.get("raw_text", ""))  # type: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-            if text:
-                return markdown_to_document(str(text))  # type: ignore[reportUnknownArgumentType]
-            return markdown_to_document(str(content))  # type: ignore[reportUnknownArgumentType]
-        return markdown_to_document(str(content))

@@ -11,6 +11,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
+    GenerationMetadata,
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
@@ -83,3 +84,14 @@ class PhaseMode(Protocol):
         errors: list[str],
         retry_count: int,
     ) -> str: ...
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> Any: ...
+
+
+class AgentPort(Protocol):
+    async def execute(self, phase: SpecPhase, context: Any) -> Any: ...
