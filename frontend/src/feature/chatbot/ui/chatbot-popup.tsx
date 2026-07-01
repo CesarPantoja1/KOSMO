@@ -14,9 +14,10 @@ type RefinementFormData = z.infer<typeof refinementSchema>;
 
 interface ChatbotPopupProps {
 	onClose?: () => void;
+	onSubmitInstructions?: (instructions: string) => Promise<void>;
 }
 
-export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
+export const ChatbotPopup = ({ onClose, onSubmitInstructions }: ChatbotPopupProps) => {
 	const { control, handleSubmit } = useForm<RefinementFormData>({
 		mode: 'onChange',
 		resolver: zodResolver(refinementSchema),
@@ -28,6 +29,7 @@ export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
 	} = useController({ name: 'instructions', control });
 
 	const [hasSubmitError, setHasSubmitError] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const charCount = value.length;
 	const isOverLimit = charCount > 500;
@@ -37,12 +39,22 @@ export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
 		if (hasSubmitError) setHasSubmitError(false);
 	};
 
-	const onSubmit = () => {
+	const onSubmit = async () => {
 		if (charCount === 0 || charCount > 500) {
 			setHasSubmitError(true);
 			return;
 		}
-		// TODO: implementar envío
+		
+		if (!onSubmitInstructions) return;
+
+		setIsSubmitting(true);
+		try {
+			await onSubmitInstructions(value);
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	return (
@@ -54,7 +66,7 @@ export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
 						Agente de refinamiento
 					</h4>
 
-					<button type='button' className='cursor-pointer' onClick={onClose}>
+					<button type='button' className='cursor-pointer disabled:opacity-50' onClick={onClose} disabled={isSubmitting}>
 						<Close color='text-base-50' />
 					</button>
 				</div>
@@ -83,6 +95,7 @@ export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
 							value={value}
 							onChange={handleChange}
 							onBlur={onBlur}
+							disabled={isSubmitting}
 							placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
 							className='
             flex-1
@@ -94,6 +107,7 @@ export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
             border-none
             focus:outline-none
             focus:ring-0
+            disabled:opacity-50
           '
 						/>
 
@@ -108,10 +122,11 @@ export const ChatbotPopup = ({ onClose }: ChatbotPopupProps) => {
 
 					<button
 						type='submit'
-						className='flex items-center justify-center gap-2 rounded-sm bg-ai px-4 py-2 text-base-50 cursor-pointer'
+						disabled={isSubmitting || charCount === 0 || isOverLimit}
+						className='flex items-center justify-center gap-2 rounded-sm bg-ai px-4 py-2 text-base-50 cursor-pointer disabled:opacity-50'
 					>
 						<Ai size={20} color='text-base-50' />
-						Refinar
+						{isSubmitting ? 'Refinando...' : 'Refinar'}
 					</button>
 				</form>
 			</div>

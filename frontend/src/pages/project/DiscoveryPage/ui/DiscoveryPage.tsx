@@ -5,7 +5,7 @@ import { useAppStore } from 'app/store/app.store';
 import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery } from '../api/api';
+import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
 
 import ModalConfimLeave from './ModalConfimLeave';
@@ -169,9 +169,25 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
+	const handleRefine = async (instructions: string) => {
+		if (!currentProject) return;
+		try {
+			const data = await refineDiscovery(currentProject.id, instructions);
+			setMarkdown(data.content);
+			savedContentRef.current = data.content;
+			setHasUnsavedChangesLocal(false);
+			toast.success('Documento refinado correctamente');
+			setIsChatbotOpen(false);
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			toast.error(errorMessage);
+			throw err; 
+		}
+	};
+
 	return (
 		<>
-			{isChatbotOpen && <ChatbotPopup onClose={() => setIsChatbotOpen(false)} />}
+			{isChatbotOpen && <ChatbotPopup onClose={() => setIsChatbotOpen(false)} onSubmitInstructions={handleRefine} />}
 
 			{pendingNavigationPath && (
 				<ModalConfimLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
