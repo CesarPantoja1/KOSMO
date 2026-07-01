@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ class GenerateDiscoveryUseCase:
         project_repo: ProjectRepository,
         document_repo: DocumentRepository,
         context_builder: ContextBuilder,
-        agent: KOSMOAgent,
+        agent: AgentPort,
     ) -> None:
         self._project_repo = project_repo
         self._document_repo = document_repo
