@@ -1,13 +1,13 @@
 'use client';
 
-import { MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
+import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery } from '../api/api';
+import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
-import LoadingDiscovery from './LoadingDiscovery';
+
 import ModalConfimLeave from './ModalConfimLeave';
 
 const DiscoveryPage = () => {
@@ -15,7 +15,6 @@ const DiscoveryPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const currentProject = useAppStore((s) => s.currentProject);
 	const [isLoading, setIsLoading] = useState(!!currentProject);
-	const [isSaving, setIsSaving] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const savedContentRef = useRef('');
 	const router = useRouter();
@@ -23,7 +22,10 @@ const DiscoveryPage = () => {
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
+	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
+	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
 
 	useEffect(() => {
@@ -72,28 +74,23 @@ const DiscoveryPage = () => {
 		fetchDiscovery();
 	}, [currentProject, router]);
 
-	const doSave = async (silent = false): Promise<boolean> => {
+	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
 
-		setIsSaving(true);
+		const savingToast = toast.info('Guardando...');
+
 		try {
 			await saveDiscovery(currentProject.id, markdown);
 			savedContentRef.current = markdown;
 			setHasUnsavedChangesLocal(false);
-			if (!silent) toast.success('Cambios guardados con éxito.');
+			toast.close(savingToast);
+			toast.success('Guardado');
 			return true;
-		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : 'No se pudo guardar los cambios';
-			toast.error(message);
+		} catch {
+			toast.close(savingToast);
+			toast.error('No se pudo guardar');
 			return false;
-		} finally {
-			setIsSaving(false);
 		}
-	};
-
-	const handleSave = () => {
-		doSave(false);
 	};
 
 	const handleNextLink = async () => {
@@ -126,7 +123,7 @@ const DiscoveryPage = () => {
 		setPendingNavigationPath(null);
 		if (!path) return;
 		if (path === 'caracteristicas') {
-			const saved = await doSave(true);
+			const saved = await doSave();
 			setHasUnsavedChanges(false);
 			if (saved) {
 				await generateAndNavigate();
@@ -161,48 +158,89 @@ const DiscoveryPage = () => {
 		return () => window.removeEventListener('popstate', handler);
 	}, [hasUnsavedChanges, setPendingNavigationPath]);
 
+	useEffect(() => {
+		if (markdown === savedContentRef.current) return;
+
+		const timer = setTimeout(() => {
+			doSave();
+		}, 3000);
+
+		return () => clearTimeout(timer);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [markdown]);
+
+	const handleRefine = async (instructions: string) => {
+		if (!currentProject) return;
+		try {
+			const data = await refineDiscovery(currentProject.id, instructions);
+			setMarkdown(data.content);
+			savedContentRef.current = data.content;
+			setHasUnsavedChangesLocal(false);
+			toast.success('Documento refinado correctamente');
+			setIsChatbotOpen(false);
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			toast.error(errorMessage);
+			throw err; 
+		}
+	};
+
 	return (
 		<>
+			{isChatbotOpen && <ChatbotPopup onClose={() => setIsChatbotOpen(false)} onSubmitInstructions={handleRefine} />}
+
 			{pendingNavigationPath && (
 				<ModalConfimLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			{isLoading && <LoadingDiscovery />}
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4'>
+			{isLoading && <Loading title='Generando Descripción General' description='Optimizando la estructura de la Descripción General. Por favor, espera un momento.' />}
+
+			<div
+				className={`flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
+			>
 				<div className='flex flex-col gap-3'>
 					<div className='flex flex-col'>
 						<h3 className='text-base-800 text-3xl font-bold'>
-							Descripción general del producto
+							Descubrimiento del proyecto
 						</h3>
 						<p className='text-base-600 mt-2'>
-							Visualiza y valida las especificaciones técnicas base de tu proyecto.
+							Identificar y documentar la información estratégica del proyecto para
+							comprender el problema, el contexto y el alcance del negocio.
 						</p>
 					</div>
-					<div className='flex justify-end gap-3'>
-						<button
-							className='px-3.5 py-1.5 cursor-pointer bg-primary-100 text-base-50 rounded-sm hover:bg-primary-100/90 disabled:opacity-50'
-							onClick={handleSave}
-							disabled={isSaving}
-						>
-							{isSaving ? 'Guardando...' : 'Guardar'}
-						</button>
-
-						<button
-							onClick={handleNextLink}
-							disabled={isGenerating}
-							className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
-						>
-							<Ai size={20} color='text-base-50' />
-							<span className='text-center font-semibold'>
-								{isGenerating ? 'Generando...' : 'Generar características'}
-							</span>
-						</button>
-					</div>
+					{!isEditorMaximized && (
+						<div className='flex justify-end gap-3'>
+							<button
+								onClick={() => setIsChatbotOpen(true)}
+								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+							>
+								<Ai size={20} color='text-base-50' />
+								<span className='text-center font-semibold'>Refinar</span>
+							</button>
+							<button
+								onClick={handleNextLink}
+								disabled={isGenerating}
+								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
+							>
+								<span className='text-center font-semibold'>
+									{isGenerating ? 'Generando...' : 'Ir a características'}
+								</span>
+								<ArrowRight size={20} color='text-base-50' />
+							</button>
+						</div>
+					)}
 				</div>
 
 				{!isLoading && (
 					<div className='flex-1 min-h-0'>
-						<MarkdownEditor ref={editorRef} markdown={markdown} onChange={setMarkdown} />
+						<MarkdownEditor
+							ref={editorRef}
+							markdown={markdown}
+							onChange={setMarkdown}
+							isMaximized={isEditorMaximized}
+							onMaximize={() => setEditorMaximized(true)}
+							onMinimize={() => setEditorMaximized(false)}
+						/>
 					</div>
 				)}
 			</div>

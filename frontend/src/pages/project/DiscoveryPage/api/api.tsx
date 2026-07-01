@@ -22,3 +22,13 @@ export const generateDiscovery = (projectId: string) => {
 		method: 'POST',
 	});
 };
+
+export const refineDiscovery = (projectId: string, instructions: string) => {
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery/refine`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ instructions }),
+	});
+};

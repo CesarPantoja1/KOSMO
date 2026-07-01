@@ -27,6 +27,7 @@
 	--color-status-success: #10b981;
 	--color-status-warning: #f59e0b;
 	--color-status-error: #e11d48;
+	--color-status-info: #3b82f6;
 
 	/* Misc */
 	--color-light-yellow: #ffe1ad;
@@ -79,6 +80,15 @@
 
 	--font-sans: 'Geist', sans-serif;
 	--font-mono: 'Geist Mono', monospace;
+
+	/* Animations */
+	--animate-spin-custom: spin-custom 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes spin-custom {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 body {

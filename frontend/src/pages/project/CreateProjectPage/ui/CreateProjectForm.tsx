@@ -2,14 +2,14 @@
 
 import { useProjectStore } from '@/entities/project/model/store';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, toast } from '@/shared/ui';
+import { Ai, Loading, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { createProject } from '../api/create-project';
 import { generateDiscovery } from '@/pages/project/DiscoveryPage/api/api';
-import LoadingDiscovery from '@/pages/project/DiscoveryPage/ui/LoadingDiscovery';
+
 import { projectSchema, type ProjectFormData } from '../lib/schema';
 import { CharacterCounter } from './CharacterCounter';
 
@@ -87,7 +87,7 @@ const CreateProjectForm = () => {
 
 	return (
 		<>
-		{isSubmitting && <LoadingDiscovery />}
+		{isSubmitting && <Loading title='Generando Descripción General' description='Optimizando la estructura de la Descripción General. Por favor, espera un momento.' />}
 		<form
 			onSubmit={handleSubmit(onSubmit)}
 			className='flex-1 min-h-0 flex flex-col gap-2.5'
