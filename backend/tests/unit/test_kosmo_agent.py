@@ -7,13 +7,13 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
+from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     DiscoveryPhaseOutput,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 
 
