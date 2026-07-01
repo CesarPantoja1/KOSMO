@@ -11,8 +11,13 @@ from kosmo.contracts.pipeline.phase_contexts import (
     FeaturesPhaseContext,
     SuggestFeaturesContext,
 )
-from kosmo.contracts.pipeline.phase_outputs import ValidationResult
+from kosmo.contracts.pipeline.phase_outputs import (
+    FeaturesPhaseOutput,
+    GenerationMetadata,
+    ValidationResult,
+)
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 
 _FEATURES_SYSTEM_PROMPT = (
     "Eres un analista de sistemas y gerente de producto sénior. Tu tarea consiste en descomponer "
@@ -62,6 +67,7 @@ _FEATURES_SYSTEM_PROMPT = (
 class FeaturesMode:
     def __init__(self) -> None:
         self._existing_titles: list[str] = []
+        self._project_id: ProjectId = ProjectId("")
 
     @property
     def phase_name(self) -> SpecPhase:
@@ -76,13 +82,49 @@ class FeaturesMode:
         return [
             ToolDefinition(
                 name="validate_feature_structure",
-                description="Verifica que las características tengan todos los campos y formatos "
-                "correctos",
+                description=(
+                    "Verifica que las caracteristicas tengan todos los campos y formatos correctos"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "features": {
+                            "type": "array",
+                            "description": "Lista de características a validar",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "number": {"type": "integer"},
+                                    "title": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "rationale": {"type": "string"},
+                                    "inferred_from": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                },
+                            },
+                        }
+                    },
+                    "required": ["features"],
+                },
             ),
             ToolDefinition(
                 name="validate_feature_uniqueness",
-                description="Verifica que no existan redundancias ni duplicados entre "
-                "características",
+                description=(
+                    "Verifica que no existan redundancias ni duplicados entre caracteristicas"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "features": {
+                            "type": "array",
+                            "description": "Lista de características a validar",
+                            "items": {"type": "object"},
+                        }
+                    },
+                    "required": ["features"],
+                },
             ),
         ]
 
@@ -106,6 +148,8 @@ class FeaturesMode:
             discovery_md = document_to_markdown(context.discovery_document)
             existing_titles_list = context.existing_feature_titles
             user_prefs = context.user_preferences
+            if isinstance(context, FeaturesPhaseContext):
+                self._project_id = context.project_id
         elif isinstance(context, EARSPhaseContext):
             discovery_md = document_to_markdown(context.discovery_document)
             user_prefs = context.user_preferences
@@ -237,3 +281,64 @@ class FeaturesMode:
             f"Corrige estos problemas y vuelve a generar la lista completa de características "
             f"en formato JSON válido matching el esquema indicado."
         )
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> FeaturesPhaseOutput:
+        from kosmo.contracts.sdd.feature import Feature
+        from kosmo.domain.sdd.id_generator import IdGenerator
+
+        features: list[Feature] = []
+        features_list = self._extract_features_list(raw_output)
+        for item in features_list:
+            title = str(item.get("title", ""))  # type: ignore[reportUnknownMemberType]
+            features.append(
+                Feature(
+                    id=FeatureId(IdGenerator.generate("feature")),
+                    number=int(item.get("number", 0)),  # type: ignore[reportUnknownArgumentType]
+                    title=title,
+                    slug=title.lower().replace(" ", "-"),
+                    description=str(item.get("description", "")),  # type: ignore[reportUnknownArgumentType]
+                    project_id=self._project_id,
+                    rationale=str(item.get("rationale", "")),  # type: ignore[reportUnknownArgumentType]
+                    inferred_from=(
+                        item.get("inferred_from", [])
+                        if isinstance(item.get("inferred_from"), list)
+                        else []  # type: ignore[reportUnknownArgumentType]
+                    ),
+                )
+            )
+        return FeaturesPhaseOutput(
+            features=features,
+            validation_result=validation_result,
+            generation_metadata=metadata,
+        )
+
+    @staticmethod
+    def _extract_features_list(content: Any) -> list[dict[str, Any]]:
+        if isinstance(content, list):
+            result: list[dict[str, Any]] = []
+            for item in cast(list[object], content):
+                if isinstance(item, dict):
+                    feat_dict: dict[str, Any] = {}
+                    for k, v in cast(dict[object, object], item).items():
+                        if isinstance(k, str):
+                            feat_dict[k] = v
+                    result.append(feat_dict)
+            return result
+        if isinstance(content, dict):
+            raw: object = content.get("features", [])  # type: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            if isinstance(raw, list):
+                result: list[dict[str, Any]] = []
+                for item in cast(list[object], raw):
+                    if isinstance(item, dict):
+                        feat_dict: dict[str, Any] = {}
+                        for k, v in cast(dict[object, object], item).items():
+                            if isinstance(k, str):
+                                feat_dict[k] = v
+                        result.append(feat_dict)
+                return result
+        return []

@@ -4,7 +4,11 @@ from typing import Any
 
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
-from kosmo.contracts.pipeline.phase_outputs import ValidationResult
+from kosmo.contracts.pipeline.phase_outputs import (
+    DiscoveryPhaseOutput,
+    GenerationMetadata,
+    ValidationResult,
+)
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.phase_validators.discovery_validator import (
     validate_discovery_quality,
@@ -80,11 +84,37 @@ class DiscoveryMode:
         return [
             ToolDefinition(
                 name="validate_discovery_structure",
-                description="Verifica que el documento tiene 9 secciones con contenido mínimo",
+                description=(
+                    "Verifica que el documento tiene 9 secciones con contenido minimo"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "document": {
+                            "type": "string",
+                            "description": (
+                                "El documento de descubrimiento completo en formato markdown"
+                            ),
+                        }
+                    },
+                    "required": ["document"],
+                },
             ),
             ToolDefinition(
                 name="validate_discovery_quality",
                 description="Detecta jerga técnica, secciones vacías, términos prohibidos",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "document": {
+                            "type": "string",
+                            "description": (
+                                "El documento de descubrimiento a evaluar en formato markdown"
+                            ),
+                        }
+                    },
+                    "required": ["document"],
+                },
             ),
         ]
 
@@ -147,4 +177,25 @@ class DiscoveryMode:
             f"Recordá: no escribas texto introductorio, comenzá directamente con "
             f"'## Visión del producto'. Los casos de uso deben ser resumidos, "
             f"una línea por caso."
+        )
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> DiscoveryPhaseOutput:
+        from kosmo.domain.sdd.document_converters import markdown_to_document
+
+        if isinstance(raw_output, str):
+            doc = markdown_to_document(raw_output)
+        elif isinstance(raw_output, dict):
+            text = str(raw_output.get("document", raw_output.get("raw_text", "")))  # type: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+            doc = markdown_to_document(text)  # type: ignore[reportUnknownArgumentType]
+        else:
+            doc = markdown_to_document(str(raw_output))
+        return DiscoveryPhaseOutput(
+            discovery_document=doc,
+            validation_result=validation_result,
+            generation_metadata=metadata,
         )

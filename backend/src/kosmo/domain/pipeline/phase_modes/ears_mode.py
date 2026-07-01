@@ -4,8 +4,13 @@ from typing import Any, cast
 
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
-from kosmo.contracts.pipeline.phase_outputs import ValidationResult
+from kosmo.contracts.pipeline.phase_outputs import (
+    EARSPhaseOutput,
+    GenerationMetadata,
+    ValidationResult,
+)
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import FeatureId, RequirementId
 from kosmo.domain.sdd.output_guardrails import detect_implementation_leaks
 from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_quality,
@@ -117,6 +122,10 @@ Si detectás una fuga, reemplazala con lenguaje de negocio:
 
 
 class EARSMode:
+    def __init__(self) -> None:
+        self._feature_id: FeatureId = FeatureId("")
+        self._feature_number: int = 0
+
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.REQUISITOS
@@ -131,22 +140,68 @@ class EARSMode:
             ToolDefinition(
                 name="validate_ears_syntax",
                 description="Verifica que cada requisito sigue su patrón EARS",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "requirements": {
+                            "type": "array",
+                            "description": "Lista de requisitos EARS a validar",
+                            "items": {"type": "object"},
+                        }
+                    },
+                    "required": ["requirements"],
+                },
             ),
             ToolDefinition(
                 name="validate_ears_quality",
                 description="Rúbrica 6D de calidad de requisitos",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "requirements": {
+                            "type": "array",
+                            "description": "Lista de requisitos EARS a evaluar",
+                            "items": {"type": "object"},
+                        }
+                    },
+                    "required": ["requirements"],
+                },
             ),
             ToolDefinition(
                 name="detect_implementation_leaks",
                 description="Escanea términos técnicos prohibidos en requisitos",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "requirements": {
+                            "type": "array",
+                            "description": "Lista de requisitos a escanear",
+                            "items": {"type": "object"},
+                        }
+                    },
+                    "required": ["requirements"],
+                },
             ),
             ToolDefinition(
                 name="auto_repair_leaks",
                 description="Reemplaza fugas técnicas con lenguaje de negocio",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "requirements": {
+                            "type": "array",
+                            "description": "Lista de requisitos a reparar",
+                            "items": {"type": "object"},
+                        }
+                    },
+                    "required": ["requirements"],
+                },
             ),
         ]
 
     def build_user_prompt(self, context: EARSPhaseContext) -> str:
+        self._feature_id = context.feature.id
+        self._feature_number = context.feature_number
         parts = ["## Documento de Descubrimiento\n\n"]
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
@@ -203,3 +258,107 @@ class EARSMode:
             f"{error_list}\n\n"
             f"Corregí estos problemas y generá los requisitos nuevamente."
         )
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> EARSPhaseOutput:
+        from kosmo.contracts.sdd.document import AcceptanceCriterion
+        from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
+        from kosmo.domain.sdd.id_generator import IdGenerator
+
+        reqs_data = self._extract_requirements_list(raw_output)
+        requirements: list[EARSRequirement] = []
+
+        for i, item in enumerate(reqs_data, start=1):
+            pattern_str = item.get("pattern", "ubiquitous")  # type: ignore[reportUnknownMemberType]
+            try:
+                pattern = EARSPattern(str(pattern_str).lower())  # type: ignore[reportUnknownArgumentType]
+            except ValueError:
+                pattern = EARSPattern.ubiquitous
+
+            raw_ac = item.get("acceptance_criteria", [])
+            criteria: list[AcceptanceCriterion] = []
+            if isinstance(raw_ac, list):
+                for ac in cast(list[object], raw_ac):
+                    if isinstance(ac, dict):
+                        ac_dict = cast(dict[str, object], ac)
+                        criteria.append(
+                            AcceptanceCriterion(
+                                given=str(ac_dict.get("given", "")),
+                                when=str(ac_dict.get("when", "")),
+                                then=str(ac_dict.get("then", "")),
+                            )
+                        )
+
+            raw_trace = item.get("traceability", [])
+            traceability: list[str] = (
+                [str(t) for t in raw_trace] if isinstance(raw_trace, list)  # type: ignore[reportUnknownVariableType]
+                else []
+            )
+
+            requirements.append(
+                EARSRequirement(
+                    id=RequirementId(IdGenerator.generate("requirement")),
+                    feature_id=self._feature_id,
+                    feature_number=self._feature_number,
+                    requirement_number=i,
+                    pattern=pattern,
+                    trigger=str(item.get("trigger", "")),  # type: ignore[reportUnknownArgumentType]
+                    system=str(item.get("system", "")),  # type: ignore[reportUnknownArgumentType]
+                    response=str(item.get("response", "")),  # type: ignore[reportUnknownArgumentType]
+                    source_statement=str(item.get("source_statement", "")),  # type: ignore[reportUnknownArgumentType]
+                    rationale=str(item.get("rationale", "")),  # type: ignore[reportUnknownArgumentType]
+                    traceability=traceability,
+                    acceptance_criteria=criteria,
+                )
+            )
+
+        markdown_str = self._requirements_to_markdown(requirements)
+
+        return EARSPhaseOutput(
+            feature_id=self._feature_id,
+            feature_number=self._feature_number,
+            requirements=requirements,
+            requirements_markdown=markdown_str,
+            validation_result=validation_result,
+            generation_metadata=metadata,
+        )
+
+    @staticmethod
+    def _extract_requirements_list(content: Any) -> list[dict[str, Any]]:
+        if isinstance(content, dict):
+            raw: object = content.get("requirements", [])  # type: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            if isinstance(raw, list):
+                result: list[dict[str, Any]] = []
+                for item in cast(list[object], raw):
+                    if isinstance(item, dict):
+                        req_dict: dict[str, Any] = {}
+                        for k, v in cast(dict[object, object], item).items():
+                            if isinstance(k, str):
+                                req_dict[k] = v
+                        result.append(req_dict)
+                return result
+        if isinstance(content, list):
+            result: list[dict[str, Any]] = []
+            for item in cast(list[object], content):
+                if isinstance(item, dict):
+                    req_dict: dict[str, Any] = {}
+                    for k, v in cast(dict[object, object], item).items():
+                        if isinstance(k, str):
+                            req_dict[k] = v
+                    result.append(req_dict)
+            return result
+        return []
+
+    @staticmethod
+    def _requirements_to_markdown(reqs: list[Any]) -> str:
+        blocks: list[str] = []
+        for r in reqs:
+            if hasattr(r, "display_id") and hasattr(r, "source_statement"):
+                blocks.append(
+                    f"### {r.display_id}\n\n{r.source_statement.strip()}"
+                )
+        return "\n\n".join(blocks).strip()

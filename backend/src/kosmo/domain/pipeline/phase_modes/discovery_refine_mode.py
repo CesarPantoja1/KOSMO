@@ -4,7 +4,11 @@ from typing import Any
 
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryRefinePhaseContext
-from kosmo.contracts.pipeline.phase_outputs import ValidationResult
+from kosmo.contracts.pipeline.phase_outputs import (
+    DiscoveryPhaseOutput,
+    GenerationMetadata,
+    ValidationResult,
+)
 from kosmo.contracts.sdd.document import SpecPhase
 
 _DISCOVERY_REFINE_SYSTEM_PROMPT = (
@@ -46,6 +50,18 @@ class DiscoveryRefineMode:
                 name="validate_business_level",
                 description="Verifica que el documento refinado se mantenga a nivel de "
                 "negocio, sin jerga técnica ni de implementación",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "document": {
+                            "type": "string",
+                            "description": (
+                                "El documento de descubrimiento refinado en formato markdown"
+                            ),
+                        }
+                    },
+                    "required": ["document"],
+                },
             ),
         ]
 
@@ -103,4 +119,25 @@ class DiscoveryRefineMode:
             f"Corrige estos problemas manteniendo el documento a nivel de negocio, sin "
             f"jerga técnica, y devolvé el documento completo en Markdown sin texto "
             f"introductorio."
+        )
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> DiscoveryPhaseOutput:
+        from kosmo.domain.sdd.document_converters import markdown_to_document
+
+        if isinstance(raw_output, str):
+            doc = markdown_to_document(raw_output)
+        elif isinstance(raw_output, dict):
+            text = str(raw_output.get("document", raw_output.get("raw_text", "")))  # type: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+            doc = markdown_to_document(text)  # type: ignore[reportUnknownArgumentType]
+        else:
+            doc = markdown_to_document(str(raw_output))
+        return DiscoveryPhaseOutput(
+            discovery_document=doc,
+            validation_result=validation_result,
+            generation_metadata=metadata,
         )
