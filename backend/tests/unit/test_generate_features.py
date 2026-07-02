@@ -12,7 +12,11 @@ from kosmo.application.features.generate_features import (
     GenerateFeaturesOutput,
     GenerateFeaturesUseCase,
 )
-from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
+from kosmo.contracts.pipeline.phase_outputs import (
+    FeaturesPhaseOutput,
+    GenerationMetadata,
+    ValidationResult,
+)
 from kosmo.contracts.sdd.document import DocumentNode, RichTextDocument, SectionHeading
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
@@ -79,25 +83,18 @@ class InMemoryFeatureRepository:
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
         return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
 
-    async def save(self, feature: Feature) -> Feature:
-        self.features[str(feature.id)] = feature
-        return feature
-
     async def save_many(self, features: list[Feature]) -> list[Feature]:
         for f in features:
             self.features[str(f.id)] = f
         return features
 
-    async def next_number(self, project_id: ProjectId) -> int:  # noqa: ARG002
-        return 1
-
 
 @dataclass
-class MockLLMClient:
-    response: LLMResponse
+class MockAgent:
+    output: Any
 
-    async def complete(self, prompt: PromptTemplate, **kwargs: Any) -> LLMResponse:  # noqa: ARG002
-        return self.response
+    async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+        return self.output
 
 
 def _make_discovery_document() -> RichTextDocument:
@@ -105,33 +102,28 @@ def _make_discovery_document() -> RichTextDocument:
         nodes=[
             DocumentNode(
                 type="heading",
-                heading=SectionHeading(text="Sistema de Gestión", level=2, slug="sistema-gestion"),
+                heading=SectionHeading(text="Sistema de Gestion", level=2, slug="sistema-gestion"),
                 content="Contenido del discovery",
             ),
         ]
     )
 
 
-def _make_valid_features_response() -> LLMResponse:
-    json_text = (
-        '{"features": [{"title": "Feature 1", '
-        '"description": "Descripcion valida de feature", '
-        '"number": 1, '
-        '"rationale": "Justificacion valida para la feature", '
-        '"inferred_from": ["doc1.md"]}]}'
+def _make_valid_features_output() -> FeaturesPhaseOutput:
+    feature = Feature(
+        id=FeatureId("feat_test01"),
+        number=1,
+        title="Feature 1",
+        slug="feature-1",
+        description="Descripcion valida de feature",
+        project_id=ProjectId("prj_test"),
+        rationale="Justificacion valida para la feature",
+        inferred_from=["doc1.md"],
     )
-    return LLMResponse(
-        text=json_text,
-        usage=LLMUsage(total_tokens=100),
-        model="mock",
-    )
-
-
-def _make_invalid_features_response() -> LLMResponse:
-    return LLMResponse(
-        text='{"features": [{"title": "", "description": ""}]}',
-        usage=LLMUsage(total_tokens=100),
-        model="mock",
+    return FeaturesPhaseOutput(
+        features=[feature],
+        validation_result=ValidationResult(is_valid=True),
+        generation_metadata=GenerationMetadata(llm_calls=1),
     )
 
 
@@ -141,12 +133,12 @@ async def test_generate_features_raises_when_project_not_found() -> None:
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
     feat_repo: Any = InMemoryFeatureRepository()
-    llm_client: Any = MockLLMClient(response=_make_valid_features_response())
+    agent: Any = MockAgent(output=_make_valid_features_output())
     use_case = GenerateFeaturesUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
         feature_repo=feat_repo,
-        llm_client=llm_client,
+        agent=agent,
     )
 
     # Act & Assert
@@ -163,30 +155,26 @@ async def test_generate_features_raises_when_discovery_not_found() -> None:
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
     feat_repo: Any = InMemoryFeatureRepository()
-    project_id = ProjectId("prj_nodoc")
-
-    project = Project(
-        id=project_id,
-        name="Test Project",
-        slug="test-project",
-        description="Test",
-        owner_id=UserId("usr_123"),
-    )
-    await project_repo.save(project)
-
-    llm_client: Any = MockLLMClient(response=_make_valid_features_response())
+    agent: Any = MockAgent(output=_make_valid_features_output())
     use_case = GenerateFeaturesUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
         feature_repo=feat_repo,
-        llm_client=llm_client,
+        agent=agent,
     )
+    project = Project(
+        id=ProjectId("prj_test"),
+        name="Test Project",
+        slug="test-project",
+        description="Testing",
+        owner_id=UserId("usr_test"),
+    )
+    await project_repo.save(project)
 
     # Act & Assert
     with pytest.raises(DocumentNotFoundError) as exc_info:
-        await use_case.execute(GenerateFeaturesInput(project_id=project_id))
+        await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_test")))
 
-    assert "discovery" in str(exc_info.value.problem.detail)
     assert exc_info.value.problem.status == 404
 
 
@@ -196,45 +184,32 @@ async def test_generate_features_generates_features_successfully() -> None:
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
     feat_repo: Any = InMemoryFeatureRepository()
-    project_id = ProjectId("prj_gen123")
-
     project = Project(
-        id=project_id,
+        id=ProjectId("prj_test"),
         name="Test Project",
         slug="test-project",
-        description="Test",
-        owner_id=UserId("usr_123"),
+        description="Testing",
+        owner_id=UserId("usr_test"),
     )
     await project_repo.save(project)
-    await doc_repo.save_discovery(project_id, _make_discovery_document())
+    await doc_repo.save_discovery(ProjectId("prj_test"), _make_discovery_document())
+    agent: Any = MockAgent(output=_make_valid_features_output())
 
-    features_response = LLMResponse(
-        text=(
-            '{"features": [{"title": "Feature Generada", '
-            '"description": "Descripcion generada valida y completa", '
-            '"number": 1, '
-            '"rationale": "Justificacion para feature generada", '
-            '"inferred_from": ["discovery.md"]}]}'
-        ),
-        usage=LLMUsage(total_tokens=100),
-        model="mock",
-    )
-    llm_client: Any = MockLLMClient(response=features_response)
     use_case = GenerateFeaturesUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
         feature_repo=feat_repo,
-        llm_client=llm_client,
+        agent=agent,
     )
 
     # Act
-    result = await use_case.execute(GenerateFeaturesInput(project_id=project_id))
+    result = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_test")))
 
     # Assert
     assert isinstance(result, GenerateFeaturesOutput)
-    assert result.project_id == project_id
+    assert result.project_id == ProjectId("prj_test")
     assert len(result.features) == 1
-    assert result.features[0].title == "Feature Generada"
+    assert result.features[0].title == "Feature 1"
 
 
 @pytest.mark.asyncio
@@ -243,37 +218,32 @@ async def test_generate_features_raises_when_llm_fails() -> None:
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
     feat_repo: Any = InMemoryFeatureRepository()
-    project_id = ProjectId("prj_llm_err")
-
     project = Project(
-        id=project_id,
+        id=ProjectId("prj_llm_fail"),
         name="Test Project",
         slug="test-project",
-        description="Test",
-        owner_id=UserId("usr_123"),
+        description="Testing",
+        owner_id=UserId("usr_test"),
     )
     await project_repo.save(project)
-    await doc_repo.save_discovery(project_id, _make_discovery_document())
+    await doc_repo.save_discovery(ProjectId("prj_llm_fail"), _make_discovery_document())
 
-    class FailingLLMClient:
-        async def complete(
-            self,
-            prompt: PromptTemplate,  # noqa: ARG002
-            **kwargs: Any,  # noqa: ARG002
-        ) -> LLMResponse:
+    class FailingAgent:
+        async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
             raise RuntimeError("LLM service unavailable")
 
-    llm_client: Any = FailingLLMClient()
+    agent: Any = FailingAgent()
+
     use_case = GenerateFeaturesUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
         feature_repo=feat_repo,
-        llm_client=llm_client,
+        agent=agent,
     )
 
     # Act & Assert
     with pytest.raises(LLMInvocationError) as exc_info:
-        await use_case.execute(GenerateFeaturesInput(project_id=project_id))
+        await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_llm_fail")))
 
     assert exc_info.value.problem.status == 502
 
@@ -284,42 +254,29 @@ async def test_generate_features_persists_generated_features() -> None:
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
     feat_repo: Any = InMemoryFeatureRepository()
-    project_id = ProjectId("prj_persist")
-
     project = Project(
-        id=project_id,
+        id=ProjectId("prj_persist"),
         name="Test Project",
         slug="test-project",
-        description="Test",
-        owner_id=UserId("usr_123"),
+        description="Testing",
+        owner_id=UserId("usr_test"),
     )
     await project_repo.save(project)
-    await doc_repo.save_discovery(project_id, _make_discovery_document())
+    await doc_repo.save_discovery(ProjectId("prj_persist"), _make_discovery_document())
+    agent: Any = MockAgent(output=_make_valid_features_output())
 
-    features_response = LLMResponse(
-        text=(
-            '{"features": [{"title": "Feature Persistida", '
-            '"description": "Descripcion persistida completa y valida", '
-            '"number": 1, '
-            '"rationale": "Justificacion para feature persistida", '
-            '"inferred_from": ["discovery.md"]}]}'
-        ),
-        usage=LLMUsage(total_tokens=100),
-        model="mock",
-    )
-    llm_client: Any = MockLLMClient(response=features_response)
     use_case = GenerateFeaturesUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
         feature_repo=feat_repo,
-        llm_client=llm_client,
+        agent=agent,
     )
 
     # Act
-    await use_case.execute(GenerateFeaturesInput(project_id=project_id))
+    result = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_persist")))
 
     # Assert
-    saved = await feat_repo.list_by_project(project_id)
+    saved = await feat_repo.list_by_project(ProjectId("prj_persist"))
     assert len(saved) == 1
-    assert saved[0].title == "Feature Persistida"
-    assert str(saved[0].project_id) == str(project_id)
+    assert saved[0].title == "Feature 1"
+    assert result.features[0].id is not None

@@ -1,74 +1,24 @@
 'use client';
 
-import { useAppStore } from 'app/store/app.store';
-import { Plus, toast } from '@/shared/ui';
+import { Plus } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { addCharacteristics, getCharacteristics } from '@/entities/characteristic';
-import type { AlternativeCharacteristic, Characteristic } from '@/entities/characteristic';
+import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
-import CharacteristicModal from './CharacteristicModal';
 import Search from './Search';
+import CreateCharacteristic from './CreateCharacteristic';
 
 const CharacteristicsPage = () => {
-	const currentProject = useAppStore((s) => s.currentProject);
-	const router = useRouter();
+	const { view, setView, characteristics, isLoading, searchQuery, setSearchQuery, filtered } =
+		useCharacteristicsPage();
 
-	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [showModal, setShowModal] = useState(false);
-	const [searchQuery, setSearchQuery] = useState('');
-
-	useEffect(() => {
-		if (!currentProject) {
-			router.push('/proyecto');
-			return;
-		}
-
-		const fetchData = async () => {
-			try {
-				const data = await getCharacteristics(currentProject.id);
-				setCharacteristics(data);
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : 'Error al cargar las características';
-				toast.error(message);
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		fetchData();
-	}, [currentProject, router]);
-
-	const filtered = searchQuery.trim()
-		? characteristics.filter((c) =>
-			c.title.toLowerCase().includes(searchQuery.toLowerCase()),
-		)
-		: characteristics;
-
-	const handleApply = async (selected: AlternativeCharacteristic[]) => {
-		if (!currentProject) return;
-		try {
-			const newChars = await addCharacteristics(
-				currentProject.id,
-				selected.map((s) => ({
-					title: s.title,
-					description: s.description,
-					rationale: s.rationale,
-					inferred_from: s.inferred_from,
-				})),
-			);
-			setCharacteristics((prev) => [...prev, ...newChars]);
-			setShowModal(false);
-		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : 'Error al agregar características';
-			toast.error(message);
-		}
-	};
+	if (view === 'create') {
+		return (
+			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
+				<CreateCharacteristic onCreated={() => setView('list')} />
+			</div>
+		);
+	}
 
 	return (
 		<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
@@ -87,21 +37,21 @@ const CharacteristicsPage = () => {
 				<Search value={searchQuery} onChange={setSearchQuery} />
 				<div className='flex justify-end items-center gap-4'>
 					<button
-						onClick={() => setShowModal(true)}
-						className='inline-flex px-3.5 py-1.5 cursor-pointer gap-1.5 bg-ai rounded-sm'
+						onClick={() => setView('create')}
+						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
 					>
-						<Plus color='text-base-50' size={24} />
-						<span className='text-center justify-center text-base-50 font-semibold'>
-							Característica
+						<Plus color='text-base-50' size={20} />
+						<span className='text-center justify-center text-base-50'>
+							Nueva Característica
 						</span>
 					</button>
 
 					<Link
 						href='requisitos'
-						className='inline-flex px-3.5 py-1.5 cursor-pointer gap-1.5 bg-ai rounded-sm'
+						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
 					>
-						<ArrowRight color='text-base-50' size={24} />
-						<div className='text-center justify-center text-base-50'>Requisitos</div>
+						<div className='text-center justify-center text-base-50'>Ir a Requisitos</div>
+						<ArrowRight color='text-base-50' size={20} />
 					</Link>
 				</div>
 			</div>
@@ -143,14 +93,6 @@ const CharacteristicsPage = () => {
 						))
 					)}
 				</div>
-			)}
-
-			{showModal && currentProject && (
-				<CharacteristicModal
-					projectId={currentProject.id}
-					onClose={() => setShowModal(false)}
-					onApply={handleApply}
-				/>
 			)}
 		</div>
 	);

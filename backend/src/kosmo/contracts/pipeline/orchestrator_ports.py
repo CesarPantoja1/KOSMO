@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from kosmo.contracts.pipeline.phase_contexts import (
@@ -10,6 +11,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
+    GenerationMetadata,
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
@@ -23,11 +25,52 @@ class ToolDefinition:
 
 
 @dataclass(frozen=True)
+class Skill:
+    """Habilidad del agente que encapsula un modo de fase con metadatos.
+
+    Cada skill agrupa un PhaseMode con su nombre, descripcion y fase asociada,
+    permitiendo cargar, descargar y resolver habilidades bajo demanda sin
+    modificar el nucleo del agente.
+    """
+
+    name: str
+    description: str
+    phase: SpecPhase
+    mode: PhaseMode
+
+
+@dataclass(frozen=True)
 class ToolResult:
     tool_name: str
     output: Any
     is_error: bool = False
     error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class AgentStep:
+    step_number: int
+    reasoning: str = ""
+    action: str | None = None
+    action_input: dict[str, Any] = field(default_factory=dict)  # type: ignore[reportUnknownVariableType]
+    observation: str = ""
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class AgentTrace:
+    steps: list[AgentStep] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None
+
+    @property
+    def step_count(self) -> int:
+        return len(self.steps)
+
+    @property
+    def tool_calls(self) -> int:
+        return sum(1 for s in self.steps if s.action is not None)
 
 
 class PhaseMode(Protocol):
@@ -56,3 +99,14 @@ class PhaseMode(Protocol):
         errors: list[str],
         retry_count: int,
     ) -> str: ...
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> Any: ...
+
+
+class AgentPort(Protocol):
+    async def execute(self, phase: SpecPhase, context: Any) -> Any: ...

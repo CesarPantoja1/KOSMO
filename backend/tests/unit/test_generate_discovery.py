@@ -57,9 +57,7 @@ class InMemoryDocumentRepository:
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
         return self.documents.get(str(project_id))
 
-    async def save_discovery(
-        self, project_id: ProjectId, document: RichTextDocument
-    ) -> RichTextDocument:
+    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
         self.documents[str(project_id)] = document
         return document
 
@@ -153,9 +151,7 @@ async def test_generate_discovery_raises_when_project_not_found() -> None:
     doc_repo: Any = InMemoryDocumentRepository()
     phase_output = _make_phase_output()
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context_builder: Any = MockContextBuilder(
-        context=DiscoveryPhaseContext(project_name="", project_description="")
-    )
+    context_builder: Any = MockContextBuilder(context=DiscoveryPhaseContext(project_name="", project_description=""))
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
@@ -210,6 +206,89 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
         await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId("prj_llm_err")))
 
     assert exc_info.value.problem.status == 502
+
+
+@pytest.mark.asyncio
+async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> None:
+    # Arrange
+    project_repo: Any = InMemoryProjectRepository()
+    doc_repo: Any = InMemoryDocumentRepository()
+    project = Project(
+        id=ProjectId("prj_invalid"),
+        name="Test Project",
+        slug="test-project",
+        description="A test project",
+        owner_id=UserId("usr_123"),
+    )
+    await project_repo.save(project)
+
+    invalid_output = DiscoveryPhaseOutput(
+        discovery_document=RichTextDocument(
+            nodes=[
+                DocumentNode(
+                    type="heading",
+                    heading=SectionHeading(text="Visión del producto", level=2, slug="v"),
+                    content="Contenido incompleto",
+                )
+            ]
+        ),
+        validation_result=ValidationResult(is_valid=False, errors=["Seccion faltante: Metas del producto"]),
+        generation_metadata=GenerationMetadata(llm_calls=8, total_tokens=0),
+    )
+    agent: Any = MockKOSMOAgent(output=invalid_output)
+    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
+    context_builder: Any = MockContextBuilder(context=context)
+
+    use_case = GenerateDiscoveryUseCase(
+        project_repo=project_repo,
+        document_repo=doc_repo,
+        context_builder=context_builder,
+        agent=agent,
+    )
+
+    # Act & Assert
+    with pytest.raises(LLMInvocationError) as exc_info:
+        await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId("prj_invalid")))
+
+    assert "Metas del producto" in exc_info.value.problem.detail
+    assert await doc_repo.get_discovery(ProjectId("prj_invalid")) is None
+
+
+@pytest.mark.asyncio
+async def test_generate_discovery_raises_when_document_is_empty() -> None:
+    # Arrange
+    project_repo: Any = InMemoryProjectRepository()
+    doc_repo: Any = InMemoryDocumentRepository()
+    project = Project(
+        id=ProjectId("prj_empty"),
+        name="Test Project",
+        slug="test-project",
+        description="A test project",
+        owner_id=UserId("usr_123"),
+    )
+    await project_repo.save(project)
+
+    empty_output = DiscoveryPhaseOutput(
+        discovery_document=RichTextDocument(nodes=[]),
+        validation_result=ValidationResult(is_valid=True, errors=[]),
+        generation_metadata=GenerationMetadata(llm_calls=8, total_tokens=0),
+    )
+    agent: Any = MockKOSMOAgent(output=empty_output)
+    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
+    context_builder: Any = MockContextBuilder(context=context)
+
+    use_case = GenerateDiscoveryUseCase(
+        project_repo=project_repo,
+        document_repo=doc_repo,
+        context_builder=context_builder,
+        agent=agent,
+    )
+
+    # Act & Assert
+    with pytest.raises(LLMInvocationError):
+        await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId("prj_empty")))
+
+    assert await doc_repo.get_discovery(ProjectId("prj_empty")) is None
 
 
 @pytest.mark.asyncio

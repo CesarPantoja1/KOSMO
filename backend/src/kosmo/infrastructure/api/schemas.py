@@ -145,8 +145,7 @@ class TokenExchangeRequest(BaseModel):
         min_length=1,
         max_length=256,
         description=(
-            "Código de autorización opaco devuelto por ``/authorize``. "
-            "Es de un solo uso y expira en 5 minutos."
+            "Código de autorización opaco devuelto por ``/authorize``. Es de un solo uso y expira en 5 minutos."
         ),
         examples=["a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"],
     )
@@ -274,9 +273,7 @@ class TokenPairResponse(BaseModel):
     en ``POST /refresh`` para renovar la sesión.
     """
 
-    access: TokenView = Field(
-        description="Token de acceso de corta vida (TTL: 15 minutos). Uso: Authorization header."
-    )
+    access: TokenView = Field(description="Token de acceso de corta vida (TTL: 15 minutos). Uso: Authorization header.")
     refresh: TokenView = Field(
         description=(
             "Token de renovación de larga vida (TTL: 7 días). "
@@ -453,6 +450,22 @@ class DiscoveryResponse(BaseModel):
     )
 
 
+class RefineDiscoveryRequest(BaseModel):
+    """Payload para refinar el documento de descubrimiento mediante IA."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    instructions: str = Field(
+        min_length=1,
+        max_length=500,
+        description=(
+            "Instrucciones de refinamiento que el agente de IA debe aplicar "
+            "sobre el documento de descubrimiento actual."
+        ),
+        examples=["Haz que la visión del producto sea más concisa y enfocada en los resultados."],
+    )
+
+
 class FeatureResponse(BaseModel):
     """Característica del producto software."""
 
@@ -487,7 +500,7 @@ class FeatureResponse(BaseModel):
     inferred_from: list[str] = Field(
         default_factory=list,
         description="Secciones del descubrimiento de las que se infiere.",
-        examples=[["Casos de uso", "Capacidades principales"]],
+        examples=[["Metas del producto", "Actores"]],
     )
     display_id: str = Field(
         description="Identificador visible para el usuario (ej: C01).",

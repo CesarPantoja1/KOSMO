@@ -8,6 +8,11 @@ from kosmo.application.discovery.get_discovery import (
     GetDiscoveryOutput,
     GetDiscoveryUseCase,
 )
+from kosmo.application.discovery.refine_discovery import (
+    RefineDiscoveryInput,
+    RefineDiscoveryOutput,
+    RefineDiscoveryUseCase,
+)
 from kosmo.application.discovery.save_discovery import (
     SaveDiscoveryInput,
     SaveDiscoveryOutput,
@@ -21,6 +26,9 @@ __all__ = [
     "GetDiscoveryInput",
     "GetDiscoveryOutput",
     "GetDiscoveryUseCase",
+    "RefineDiscoveryInput",
+    "RefineDiscoveryOutput",
+    "RefineDiscoveryUseCase",
     "SaveDiscoveryInput",
     "SaveDiscoveryOutput",
     "SaveDiscoveryUseCase",

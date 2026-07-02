@@ -27,6 +27,7 @@ const DiscoveryPage = () => {
 
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
+	const [editorKey, setEditorKey] = useState(0);
 
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
@@ -176,6 +177,7 @@ const DiscoveryPage = () => {
 			setMarkdown(data.content);
 			savedContentRef.current = data.content;
 			setHasUnsavedChangesLocal(false);
+			setEditorKey((prev) => prev + 1);
 			toast.success('Documento refinado correctamente');
 			setIsChatbotOpen(false);
 		} catch (err) {
@@ -234,6 +236,7 @@ const DiscoveryPage = () => {
 				{!isLoading && (
 					<div className='flex-1 min-h-0'>
 						<MarkdownEditor
+							key={editorKey}
 							ref={editorRef}
 							markdown={markdown}
 							onChange={setMarkdown}

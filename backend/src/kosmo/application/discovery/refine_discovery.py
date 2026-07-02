@@ -12,26 +12,28 @@ from kosmo.domain.pipeline.context_builder import ContextBuilder
 
 
 @dataclass(frozen=True)
-class GenerateDiscoveryInput:
+class RefineDiscoveryInput:
     project_id: ProjectId
+    instructions: str
 
 
 @dataclass(frozen=True)
-class GenerateDiscoveryOutput:
+class RefineDiscoveryOutput:
     project_id: ProjectId
     document: RichTextDocument
     phase_output: DiscoveryPhaseOutput
 
 
-class GenerateDiscoveryUseCase:
-    """Caso de uso: genera el documento de descubrimiento mediante IA.
+class RefineDiscoveryUseCase:
+    """Caso de uso: refina un documento de descubrimiento existente mediante IA.
 
-    Orquesta la generación del documento de descubrimiento:
-    1. Verifica que el proyecto existe.
-    2. Construye el contexto de fase mediante el ContextBuilder.
-    3. Delega al KOSMOAgent la generación del documento.
-    4. Persiste el documento resultante en el DocumentRepository.
-    5. Gestiona los fallos del servicio de IA mediante LLMInvocationError.
+    Orquesta el refinamiento:
+    1. Valida que las instrucciones no superen los 500 caracteres.
+    2. Construye el contexto de fase mediante el ContextBuilder (incluye el documento actual).
+    3. Delega al KOSMOAgent el refinamiento usando la fase DESCUBRIMIENTO.
+       El pipeline debe estar configurado para inyectar DiscoveryRefineMode en esta fase.
+    4. Persiste el documento refinado en el DocumentRepository.
+    5. Gestiona los fallos del servicio de IA, conservando el original.
     """
 
     def __init__(
@@ -46,55 +48,52 @@ class GenerateDiscoveryUseCase:
         self._context_builder = context_builder
         self._agent = agent
 
-    async def execute(self, input_data: GenerateDiscoveryInput) -> GenerateDiscoveryOutput:
-        """Ejecuta la generación del documento de descubrimiento.
-
-        Args:
-            input_data: Contiene el project_id del proyecto a procesar.
-
-        Returns:
-            GenerateDiscoveryOutput con el documento generado y los metadatos del agente.
-
-        Raises:
-            LLMInvocationError: Si el servicio de IA falla durante la generación.
-        """
+    async def execute(self, input_data: RefineDiscoveryInput) -> RefineDiscoveryOutput:
         from kosmo.contracts.sdd.errors import ProjectNotFoundError
+
+        if len(input_data.instructions) > 500:
+            raise ValueError("Las instrucciones de refinamiento no pueden exceder los 500 caracteres.")
 
         project = await self._project_repo.by_id(input_data.project_id)
         if project is None:
             raise ProjectNotFoundError(
                 project_id=str(input_data.project_id),
-                instance=f"/api/v1/projects/{input_data.project_id}/discovery",
+                instance=f"/api/v1/projects/{input_data.project_id}/discovery/refine",
             )
 
-        context = await self._context_builder.build_context(
+        context = await self._context_builder.build_discovery_refine_context(
             project_id=input_data.project_id,
-            phase=SpecPhase.DESCUBRIMIENTO,
+            user_instructions=input_data.instructions,
         )
 
         try:
+            # Nota: Usamos SpecPhase.DESCUBRIMIENTO porque el DiscoveryRefineMode
+            # utiliza esta fase por diseño de la arquitectura. El agente instanciado
+            # para este endpoint debe tener registrado DiscoveryRefineMode en esta llave.
             phase_output = await self._agent.execute(
                 phase=SpecPhase.DESCUBRIMIENTO,
                 context=context,
             )
         except Exception as exc:
             raise LLMInvocationError(
-                detail=f"Error al generar el documento de descubrimiento: {exc}",
-                instance=f"/api/v1/projects/{input_data.project_id}/discovery",
+                detail=f"Error al refinar el documento de descubrimiento: {exc}",
+                instance=f"/api/v1/projects/{input_data.project_id}/discovery/refine",
             ) from exc
 
         if not isinstance(phase_output, DiscoveryPhaseOutput):  # type: ignore[reportUnknownMemberType]
             raise LLMInvocationError(
                 detail="El agente no devolvió un DiscoveryPhaseOutput válido.",
-                instance=f"/api/v1/projects/{input_data.project_id}/discovery",
+                instance=f"/api/v1/projects/{input_data.project_id}/discovery/refine",
             )
 
+        # En refinamiento el usuario decide la estructura: solo exigimos nivel de
+        # negocio y que el documento no quede vacío (no se persiste basura).
         validation = phase_output.validation_result
         if not validation.is_valid or phase_output.discovery_document.section_count == 0:
-            detail = "; ".join(validation.errors) or "El documento generado está vacío."
+            detail = "; ".join(validation.errors) or "El documento refinado está vacío."
             raise LLMInvocationError(
-                detail=f"El descubrimiento generado no cumple la estructura de negocio: {detail}",
-                instance=f"/api/v1/projects/{input_data.project_id}/discovery",
+                detail=f"El descubrimiento refinado no se mantiene a nivel de negocio: {detail}",
+                instance=f"/api/v1/projects/{input_data.project_id}/discovery/refine",
             )
 
         document = await self._document_repo.save_discovery(
@@ -102,7 +101,7 @@ class GenerateDiscoveryUseCase:
             document=phase_output.discovery_document,
         )
 
-        return GenerateDiscoveryOutput(
+        return RefineDiscoveryOutput(
             project_id=input_data.project_id,
             document=document,
             phase_output=phase_output,
