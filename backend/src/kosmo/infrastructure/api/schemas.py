@@ -493,14 +493,9 @@ class FeatureResponse(BaseModel):
         description="Descripción detallada de la característica.",
         examples=["Permite a los usuarios administrar el catálogo..."],
     )
-    rationale: str = Field(
-        description="Justificación de negocio de la característica.",
-        examples=["Es necesaria para que los administradores puedan..."],
-    )
-    inferred_from: list[str] = Field(
-        default_factory=list,
-        description="Secciones del descubrimiento de las que se infiere.",
-        examples=[["Metas del producto", "Actores"]],
+    origin: str = Field(
+        description="Justificación de existencia y trazabilidad a secciones del descubrimiento.",
+        examples=["Se deriva de la meta Gestión financiera. Se traza a Metas del producto."],
     )
     display_id: str = Field(
         description="Identificador visible para el usuario (ej: C01).",
@@ -513,8 +508,7 @@ class FeatureSuggestionItem(BaseModel):
 
     title: str
     description: str
-    rationale: str
-    inferred_from: list[str] = Field(default_factory=list)
+    origin: str = ""
 
 
 class SaveSelectedFeaturesRequest(BaseModel):
@@ -529,8 +523,4 @@ class FeatureSuggestionResponse(BaseModel):
     number: int = Field(description="Número sugerido para la característica.")
     title: str = Field(description="Título sugerido.")
     description: str = Field(description="Descripción sugerida.")
-    rationale: str = Field(description="Justificación sugerida.")
-    inferred_from: list[str] = Field(
-        default_factory=list,
-        description="Secciones del descubrimiento de las que se infiere.",
-    )
+    origin: str = Field(description="Justificación y trazabilidad de la característica.")

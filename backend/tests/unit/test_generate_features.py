@@ -115,8 +115,7 @@ def _make_valid_features_output() -> FeaturesPhaseOutput:
         slug="feature-1",
         description="Descripcion valida de feature",
         project_id=ProjectId("prj_test"),
-        rationale="Justificacion valida para la feature",
-        inferred_from=["doc1.md"],
+        origin="Se deriva de las metas. Se traza a Metas del producto.",
     )
     return FeaturesPhaseOutput(
         features=[feature],

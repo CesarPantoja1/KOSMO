@@ -157,8 +157,7 @@ async def suggest_features(
             number=s.number,
             title=s.title,
             description=s.description,
-            rationale=s.rationale,
-            inferred_from=s.inferred_from,
+            origin=s.origin,
         )
         for s in output.suggestions
     ]
@@ -192,8 +191,7 @@ async def save_selected_features(
         {
             "title": f.title,
             "description": f.description,
-            "rationale": f.rationale,
-            "inferred_from": f.inferred_from,
+            "origin": f.origin,
         }
         for f in payload.features
     ]
@@ -207,11 +205,6 @@ async def save_selected_features(
 
 
 def _feature_to_response(f: Any) -> FeatureResponse:
-    inferred: list[str] = (
-        [str(x) for x in f.inferred_from]  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportUnknownArgumentType]
-        if isinstance(f.inferred_from, list)
-        else []
-    )
     return FeatureResponse(
         id=str(f.id),
         project_id=str(f.project_id),
@@ -219,7 +212,6 @@ def _feature_to_response(f: Any) -> FeatureResponse:
         title=f.title,
         slug=f.slug,
         description=f.description,
-        rationale=f.rationale,
-        inferred_from=inferred,
+        origin=f.origin,
         display_id=f.display_id,
     )

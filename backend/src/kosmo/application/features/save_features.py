@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, cast
 
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature, SuggestFeaturesOutput
@@ -62,14 +61,23 @@ class SuggestFeaturesUseCase:
 
         suggest_prompt = (
             "Eres un diseñador de producto experto.\n"
+            "Las Características operan a nivel de usuario: cada característica "
+            "expresa lo que el usuario desea lograr, no lo que el software hace.\n\n"
             "A continuación se presenta un Documento de Descubrimiento y una lista de\n"
             "características ya existentes. Tu tarea es sugerir EXACTAMENTE 3 nuevas\n"
             "características que NO dupliquen las ya existentes.\n\n"
+            "Cada característica tiene cuatro campos:\n"
+            "- 'number': número secuencial entero.\n"
+            "- 'title': máximo seis palabras, acción del usuario, sin software ni "
+            "terminología de negocio abstracta.\n"
+            "- 'description': una a dos oraciones desde la perspectiva del usuario.\n"
+            "- 'origin': justificación de existencia y trazabilidad a secciones del "
+            "Descubrimiento (Visión del producto, Espacio del problema, Actores, "
+            "Propuesta de valor, Metas del producto, Reglas de negocio, Alcance).\n\n"
             "Responde ÚNICAMENTE con JSON:\n"
             "```json\n"
             '{"suggestions": [\n'
-            '  {"title": "...", "description": "...", "rationale": "...",\n'
-            '   "inferred_from": ["..."]}\n'
+            '  {"title": "...", "description": "...", "origin": "..."}\n'
             "]}\n"
             "```\n\n"
         )
@@ -138,19 +146,12 @@ class SuggestFeaturesUseCase:
             item: dict[str, object] = item_  # type: ignore[reportUnknownVariableType]
             number = next_number + i
             title = _strip_feature_id_prefix(str(item.get("title", f"Característica {number}")))
-            inferred_from_raw = item.get("inferred_from", [])
-            inferred_from: list[str] = (
-                [str(x) for x in inferred_from_raw]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-                if isinstance(inferred_from_raw, list)
-                else []
-            )
             suggestions.append(
                 SuggestedFeature(
                     number=number,
                     title=title,
                     description=str(item.get("description", "")),
-                    rationale=str(item.get("rationale", "")),
-                    inferred_from=inferred_from,
+                    origin=str(item.get("origin", "")),
                 )
             )
 
@@ -171,8 +172,6 @@ class SaveSelectedFeaturesUseCase:
         features: list[Feature] = []
         for item in input_data.features:
             title = _strip_feature_id_prefix(str(item.get("title", f"Característica {next_num}")))
-            inferred_raw = cast("list[Any]", item.get("inferred_from", []))
-            inferred: list[str] = [str(x) for x in inferred_raw] if inferred_raw else []
             features.append(
                 Feature(
                     id=FeatureId(IdGenerator.generate("feature")),
@@ -181,8 +180,7 @@ class SaveSelectedFeaturesUseCase:
                     title=title,
                     slug=title.lower().replace(" ", "-"),
                     description=str(item.get("description", "")),
-                    rationale=str(item.get("rationale", "")),
-                    inferred_from=inferred,
+                    origin=str(item.get("origin", "")),
                 )
             )
             next_num += 1

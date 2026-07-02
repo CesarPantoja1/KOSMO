@@ -102,8 +102,7 @@ async def test_save_selected_features_returns_saved_features() -> None:
             {
                 "title": "Feature Persistida",
                 "description": "Descripción persistida",
-                "rationale": "Justificación",
-                "inferred_from": ["src/doc.md"],
+                "origin": "Se traza a Metas del producto.",
             },
         ],
     )
@@ -116,7 +115,7 @@ async def test_save_selected_features_returns_saved_features() -> None:
     assert saved is not None
     assert saved.title == "Feature Persistida"
     assert saved.description == "Descripción persistida"
-    assert saved.rationale == "Justificación"
+    assert saved.origin == "Se traza a Metas del producto."
 
 
 @pytest.mark.asyncio
