@@ -45,11 +45,7 @@ class RichTextDocument:
 
     @property
     def sections(self) -> list[SectionHeading]:
-        return [
-            node.heading
-            for node in self.nodes
-            if node.type == "heading" and node.heading is not None
-        ]
+        return [node.heading for node in self.nodes if node.type == "heading" and node.heading is not None]
 
     @property
     def section_count(self) -> int:
@@ -122,8 +118,6 @@ EARSPattern_SYNTAX: dict[EARSPattern, str] = {
     EARSPattern.event_driven: "CUANDO [evento], [el sistema] shall [comportamiento]",
     EARSPattern.state_driven: "MIENTRAS [estado], [el sistema] shall [comportamiento]",
     EARSPattern.optional: "DONDE [opción], [el sistema] shall [comportamiento]",
-    EARSPattern.unwanted: (
-        "SI [condición no deseada], [el sistema] shall [comportamiento de mitigación]"
-    ),
+    EARSPattern.unwanted: ("SI [condición no deseada], [el sistema] shall [comportamiento de mitigación]"),
     EARSPattern.complex: "MIENTRAS [estado] Y [evento], [el sistema] shall [comportamiento]",
 }

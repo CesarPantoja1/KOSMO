@@ -57,9 +57,7 @@ class SqlAlchemyUserRepository:
 
     async def update_password(self, *, user_id: str, hashed_password: str) -> None:
         async with self._session_factory() as session:
-            result = await session.execute(
-                select(UserModel).where(UserModel.id == UUID(user_id)).with_for_update()
-            )
+            result = await session.execute(select(UserModel).where(UserModel.id == UUID(user_id)).with_for_update())
             row = result.scalar_one_or_none()
             if row is None:
                 return

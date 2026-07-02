@@ -86,10 +86,7 @@ def test_discovery_refine_mode_build_user_prompt_includes_preferences() -> None:
 def test_discovery_refine_mode_validate_output_accepts_business_level_document() -> None:
     # Arrange
     mode = DiscoveryRefineMode()
-    refined = (
-        "## Vision del producto\n\n"
-        "El producto ayuda a las familias a organizar sus gastos compartidos."
-    )
+    refined = "## Vision del producto\n\nEl producto ayuda a las familias a organizar sus gastos compartidos."
 
     # Act
     result = mode.validate_output(refined)
@@ -103,10 +100,7 @@ def test_discovery_refine_mode_validate_output_accepts_business_level_document()
 def test_discovery_refine_mode_validate_output_rejects_technical_terms() -> None:
     # Arrange
     mode = DiscoveryRefineMode()
-    refined = (
-        "## Vision del producto\n\n"
-        "El producto expone una API REST conectada a una base de datos PostgreSQL."
-    )
+    refined = "## Vision del producto\n\nEl producto expone una API REST conectada a una base de datos PostgreSQL."
 
     # Act
     result = mode.validate_output(refined)

@@ -163,9 +163,7 @@ async def test_refresh_rotates_pair() -> None:
     store = InMemoryStore()
     audit_sink = InMemoryAuditEventSink()
     issue = IssueTokenPair(issuer=issuer, revocation_store=store)
-    refresh_uc = RefreshTokenPair(
-        issuer=issuer, verifier=verifier, revocation_store=store, audit_sink=audit_sink
-    )
+    refresh_uc = RefreshTokenPair(issuer=issuer, verifier=verifier, revocation_store=store, audit_sink=audit_sink)
 
     original = await issue.execute(subject="user-1", scopes=frozenset({"read"}))
     rotated = await refresh_uc.execute(original.refresh.token, scopes=frozenset({"read"}))
@@ -184,9 +182,7 @@ async def test_access_token_used_as_refresh_is_rejected() -> None:
     store = InMemoryStore()
     audit_sink = InMemoryAuditEventSink()
     issue = IssueTokenPair(issuer=issuer, revocation_store=store)
-    refresh_uc = RefreshTokenPair(
-        issuer=issuer, verifier=verifier, revocation_store=store, audit_sink=audit_sink
-    )
+    refresh_uc = RefreshTokenPair(issuer=issuer, verifier=verifier, revocation_store=store, audit_sink=audit_sink)
 
     pair = await issue.execute(subject="user-1", scopes=frozenset())
 
@@ -207,9 +203,7 @@ def test_expired_token_raises() -> None:
         refresh_ttl_seconds=-10,
     )
     expired_issuer = JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=expired_settings)
-    expired_token = expired_issuer.issue(
-        subject="user-1", scopes=frozenset(), token_type=TokenType.ACCESS
-    )
+    expired_token = expired_issuer.issue(subject="user-1", scopes=frozenset(), token_type=TokenType.ACCESS)
 
     with pytest.raises(TokenExpiredError):
         verifier.verify(expired_token.token, expected_type=TokenType.ACCESS)

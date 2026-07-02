@@ -35,12 +35,8 @@ class IssueTokenPair:
         family_id: str | None = None,
     ) -> TokenPair:
         family = family_id or uuid4().hex
-        access = self.issuer.issue(
-            subject=subject, scopes=scopes, token_type=TokenType.ACCESS, family_id=family
-        )
-        refresh = self.issuer.issue(
-            subject=subject, scopes=scopes, token_type=TokenType.REFRESH, family_id=family
-        )
+        access = self.issuer.issue(subject=subject, scopes=scopes, token_type=TokenType.ACCESS, family_id=family)
+        refresh = self.issuer.issue(subject=subject, scopes=scopes, token_type=TokenType.REFRESH, family_id=family)
         await self.revocation_store.register_refresh(
             jti=refresh.jti,
             subject=subject,
@@ -59,9 +55,7 @@ class VerifyAccessToken:
         claims = self.verifier.verify(token, expected_type=TokenType.ACCESS)
         if await self.revocation_store.is_access_revoked(jti=claims.jti):
             raise TokenRevokedError("Access token revoked")
-        if claims.family_id is not None and not await self.revocation_store.is_family_alive(
-            family_id=claims.family_id
-        ):
+        if claims.family_id is not None and not await self.revocation_store.is_family_alive(family_id=claims.family_id):
             raise TokenRevokedError("Session revoked")
         return Principal(subject=claims.subject, scopes=claims.scopes)
 
@@ -78,9 +72,7 @@ class RefreshTokenPair:
         claims = self.verifier.verify(refresh_token, expected_type=TokenType.REFRESH)
         consumed = await self.revocation_store.consume_refresh(jti=claims.jti)
         if consumed is None:
-            if claims.family_id is not None and await self.revocation_store.is_family_alive(
-                family_id=claims.family_id
-            ):
+            if claims.family_id is not None and await self.revocation_store.is_family_alive(family_id=claims.family_id):
                 await self.revocation_store.revoke_family(family_id=claims.family_id)
                 await self.audit_sink.record(
                     AuditEvent(

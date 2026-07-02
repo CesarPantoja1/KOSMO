@@ -64,12 +64,8 @@ class ProjectModel(Base):
     owner_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     current_phase: Mapped[str] = mapped_column(String(32), nullable=False, default="descubrimiento")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="en_proceso")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class FeatureModel(Base):
@@ -85,12 +81,8 @@ class FeatureModel(Base):
     inferred_from: Mapped[dict[str, Any]] = mapped_column(
         pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class RequirementModel(Base):
@@ -98,12 +90,8 @@ class RequirementModel(Base):
 
     feature_id: Mapped[str] = mapped_column(String(64), primary_key=True, nullable=False)
     markdown: Mapped[str] = mapped_column(Text(), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class DiscoveryDocumentModel(Base):
@@ -115,9 +103,5 @@ class DiscoveryDocumentModel(Base):
         nullable=False,
     )
     markdown: Mapped[str] = mapped_column(Text(), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

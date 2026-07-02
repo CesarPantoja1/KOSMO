@@ -2,7 +2,7 @@
 
 import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
+import { Ai, ArrowRight, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
@@ -194,8 +194,6 @@ const DiscoveryPage = () => {
 			{pendingNavigationPath && (
 				<ModalConfimLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
-
-			{isLoading && <Loading title='Generando Descripción General' description='Optimizando la estructura de la Descripción General. Por favor, espera un momento.' />}
 
 			<div
 				className={`flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4 ${isEditorMaximized ? 'px-8' : 'px-0'}`}

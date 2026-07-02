@@ -74,10 +74,7 @@ async def create_project(
 @router.get(
     "",
     summary="Listar proyectos del usuario",
-    description=(
-        "Devuelve todos los proyectos del usuario autenticado. "
-        "Requiere autenticación mediante Bearer token."
-    ),
+    description=("Devuelve todos los proyectos del usuario autenticado. Requiere autenticación mediante Bearer token."),
     response_model=list[ProjectResponse],
     responses={
         status.HTTP_200_OK: {
