@@ -112,15 +112,10 @@ def validate_feature_structure(features: Any) -> ValidationResult:
         # 1. Verificar campos requeridos
         for field in ["number", "title", "description", "rationale", "inferred_from"]:
             if field not in feat:
-                errors.append(
-                    f"Característica '{title}' (índice {idx}) no tiene el campo "
-                    f"requerido '{field}'."
-                )
+                errors.append(f"Característica '{title}' (índice {idx}) no tiene el campo requerido '{field}'.")
 
         # Si hay errores críticos de estructura, saltar validación detallada de este elemento
-        if any(
-            f not in feat for f in ["number", "title", "description", "rationale", "inferred_from"]
-        ):
+        if any(f not in feat for f in ["number", "title", "description", "rationale", "inferred_from"]):
             continue
 
         number = feat["number"]
@@ -131,43 +126,27 @@ def validate_feature_structure(features: Any) -> ValidationResult:
 
         # 2. Validar tipos de datos y contenidos mínimos
         if not isinstance(number, int):
-            errors.append(
-                f"El campo 'number' en la característica '{title}' debe ser un número entero."
-            )
+            errors.append(f"El campo 'number' en la característica '{title}' debe ser un número entero.")
 
         if not isinstance(title_val, str) or not title_val.strip():
-            errors.append(
-                f"El campo 'title' en la característica {idx + 1} debe ser un texto no vacío."
-            )
+            errors.append(f"El campo 'title' en la característica {idx + 1} debe ser un texto no vacío.")
         elif len(title_val.strip()) < 3:
             errors.append(f"El título '{title_val}' es demasiado corto (mínimo 3 caracteres).")
 
         if not isinstance(desc_val, str) or not desc_val.strip():
-            errors.append(
-                f"La descripción en la característica '{title}' debe ser un texto no vacío."
-            )
+            errors.append(f"La descripción en la característica '{title}' debe ser un texto no vacío.")
         elif len(desc_val.strip()) < 20:
             errors.append(f"La descripción de '{title}' es demasiado corta (mínimo 20 caracteres).")
 
         if not isinstance(rationale_val, str) or not rationale_val.strip():
-            errors.append(
-                f"La justificación ('rationale') en la característica '{title}' debe "
-                f"ser un texto no vacío."
-            )
+            errors.append(f"La justificación ('rationale') en la característica '{title}' debe ser un texto no vacío.")
         elif len(rationale_val.strip()) < 15:
-            errors.append(
-                f"La justificación de '{title}' es demasiado corta (mínimo 15 caracteres)."
-            )
+            errors.append(f"La justificación de '{title}' es demasiado corta (mínimo 15 caracteres).")
 
         if not isinstance(inferred_val, list):
-            errors.append(
-                f"El campo 'inferred_from' en la característica '{title}' debe ser "
-                f"una lista de textos."
-            )
+            errors.append(f"El campo 'inferred_from' en la característica '{title}' debe ser una lista de textos.")
         elif not inferred_val:
-            errors.append(
-                f"El campo 'inferred_from' en la característica '{title}' no puede estar vacío."
-            )
+            errors.append(f"El campo 'inferred_from' en la característica '{title}' no puede estar vacío.")
         else:
             for item_idx, raw_item in enumerate(cast(list[object], inferred_val)):
                 if not isinstance(raw_item, str):
@@ -190,9 +169,7 @@ def validate_feature_structure(features: Any) -> ValidationResult:
             ("rationale", rationale_val),
         ]:
             if isinstance(field_val, str):
-                tech_result = detect_technical_terms(
-                    field_val, section=f"característica '{title}' ({field_name})"
-                )
+                tech_result = detect_technical_terms(field_val, section=f"característica '{title}' ({field_name})")
                 if not tech_result.is_valid:
                     for violation in tech_result.violations:
                         errors.append(
