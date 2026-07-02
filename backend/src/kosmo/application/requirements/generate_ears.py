@@ -99,9 +99,15 @@ class GenerateEARSUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
             )
 
-        await self._requirement_repo.save(
-            input_data.feature_id, phase_output.requirements_markdown
-        )
+        validation = phase_output.validation_result
+        if not validation.is_valid or not phase_output.requirements:
+            detail = "; ".join(validation.errors) or "No se generaron requisitos."
+            raise LLMInvocationError(
+                detail=f"Los requisitos EARS generados no cumplen la estructura válida: {detail}",
+                instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
+            )
+
+        await self._requirement_repo.save(input_data.feature_id, phase_output.requirements_markdown)
 
         return GenerateEARSOutput(
             project_id=input_data.project_id,
