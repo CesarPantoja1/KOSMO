@@ -20,6 +20,7 @@ from kosmo.application.auth import (
 from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
     GetDiscoveryUseCase,
+    RefineDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
 from kosmo.application.features import (
@@ -27,6 +28,7 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.application.projects import (
     CreateProjectUseCase,
     GetProjectUseCase,
@@ -41,11 +43,28 @@ from kosmo.config import Settings
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
-from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
+from kosmo.contracts.pipeline.phase_outputs import (
+    ValidationResult,
+)
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.domain.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
+from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
+    DiscoveryRefineMode,
+)
+from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
+from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
+from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
+    validate_business_level,
+)
+from kosmo.domain.pipeline.phase_validators.discovery_validator import (
+    validate_discovery_quality,
+    validate_discovery_structure,
+)
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
+from kosmo.domain.pipeline.skill_registry import SkillRegistry
+from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.postgres.repositories import (
@@ -204,8 +223,11 @@ def build_auth_components(settings: Settings) -> AuthComponents:
 class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
-    agent: KOSMOAgent
+    agent: AgentPort
+    refine_agent: AgentPort
     orchestrator: SequentialOrchestrator
+    tool_registry: ToolRegistry
+    skill_registry: SkillRegistry
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -245,16 +267,66 @@ def build_pipeline_components(
     # 4. Configurar modos de fase
     modes = {
         SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
+        SpecPhase.CARACTERISTICAS: FeaturesMode(),
+        SpecPhase.REQUISITOS: EARSMode(),
     }
 
-    # 5. Instanciar el agente KOSMO
+    # 5. Configurar el registro de herramientas con los validadores existentes
+    tool_registry = ToolRegistry()
+    tool_registry.register(
+        "validate_discovery_structure",
+        lambda inp: _adapt_validation_result(
+            validate_discovery_structure(_markdown_input(inp))
+        ),
+    )
+    tool_registry.register(
+        "validate_discovery_quality",
+        lambda inp: _adapt_validation_result(
+            validate_discovery_quality(_markdown_input(inp))
+        ),
+    )
+    tool_registry.register(
+        "validate_business_level",
+        lambda inp: _adapt_validation_result(
+            validate_business_level(_markdown_input(inp))
+        ),
+    )
+
+    # 6. Instanciar el agente KOSMO con el registro de herramientas
     agent = KOSMOAgent(
         llm_client=llm_client,
-        context_builder=context_builder,
+        registry=tool_registry,
         modes=modes,  # type: ignore[reportArgumentType]
     )
 
-    # 6. Instanciar el orquestador secuencial
+    # 7. Instanciar el SkillRegistry y registrar los skills
+    skill_registry = SkillRegistry()
+    skill_registry.register(
+        Skill(
+            name="discovery_generate",
+            description="Genera el documento de descubrimiento desde cero",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DiscoveryMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="discovery_refine",
+            description="Refina el documento de descubrimiento existente",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DiscoveryRefineMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+
+    # 8. Instanciar el agente de refinamiento con DiscoveryRefineMode
+    refine_agent = KOSMOAgent(
+        llm_client=llm_client,
+        registry=tool_registry,
+        modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},  # type: ignore[reportArgumentType]
+        skill_registry=skill_registry,
+    )
+
+    # 9. Instanciar el orquestador secuencial
     orchestrator = SequentialOrchestrator()
 
     # (Aquí se instanciarán y retornarán los casos de uso a medida que se implementen)
@@ -263,7 +335,10 @@ def build_pipeline_components(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
+        refine_agent=refine_agent,
         orchestrator=orchestrator,
+        tool_registry=tool_registry,
+        skill_registry=skill_registry,
     )
 
 
@@ -272,6 +347,7 @@ class DiscoveryComponents:
     generate_discovery: GenerateDiscoveryUseCase
     get_discovery: GetDiscoveryUseCase
     save_discovery: SaveDiscoveryUseCase
+    refine_discovery: RefineDiscoveryUseCase
 
 
 def build_discovery_components(
@@ -289,6 +365,12 @@ def build_discovery_components(
         ),
         get_discovery=GetDiscoveryUseCase(document_repo=document_repo),
         save_discovery=SaveDiscoveryUseCase(document_repo=document_repo),
+        refine_discovery=RefineDiscoveryUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            context_builder=pipeline.context_builder,
+            agent=pipeline.refine_agent,
+        ),
     )
 
 
@@ -312,7 +394,7 @@ def build_features_components(
             project_repo=project_repo,
             document_repo=document_repo,
             feature_repo=feature_repo,
-            llm_client=pipeline.llm_client,
+            agent=pipeline.agent,
         ),
         suggest_features=SuggestFeaturesUseCase(
             document_repo=document_repo,
@@ -347,7 +429,7 @@ def build_requirements_components(
             document_repo=document_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
-            llm_client=pipeline.llm_client,
+            agent=pipeline.agent,
         ),
         get_requirements=GetRequirementsUseCase(
             project_repo=project_repo,
@@ -360,3 +442,14 @@ def build_requirements_components(
             requirement_repo=requirement_repo,
         ),
     )
+
+
+def _markdown_input(inp: dict[str, object]) -> RichTextDocument:
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    raw = inp.get("document", inp.get("text", ""))
+    return markdown_to_document(str(raw))
+
+
+def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
+    return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 
 import structlog
@@ -9,6 +8,7 @@ from opentelemetry import trace
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from ulid import ULID
 
 _logger = structlog.get_logger("kosmo.http")
 _tracer = trace.get_tracer("kosmo.http")
@@ -20,7 +20,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        request_id = uuid.uuid4().hex
+        request_id = ULID().hex
         client = request.client
         ip_address = client.host if client is not None else None
         user_agent = request.headers.get("user-agent")
