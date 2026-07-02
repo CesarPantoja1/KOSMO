@@ -11,10 +11,8 @@ _DISCOVERY_DOC = "\n\n".join(
         "Espacio del problema",
         "Actores",
         "Propuesta de valor",
-        "Casos de uso",
-        "Capacidades principales",
+        "Metas del producto",
         "Reglas de negocio",
-        "Atributos de calidad",
         "Alcance",
     ]
 )

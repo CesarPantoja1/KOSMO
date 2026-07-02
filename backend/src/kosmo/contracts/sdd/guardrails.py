@@ -17,10 +17,7 @@ class GuardrailResult:
 
     @property
     def error_messages(self) -> list[str]:
-        return [
-            f'Termino prohibido "{v.term}" encontrado en {v.section}: {v.context}'
-            for v in self.violations
-        ]
+        return [f'Termino prohibido "{v.term}" encontrado en {v.section}: {v.context}' for v in self.violations]
 
 
 DISCOVERY_SECTIONS: list[str] = [
@@ -28,10 +25,8 @@ DISCOVERY_SECTIONS: list[str] = [
     "Espacio del problema",
     "Actores",
     "Propuesta de valor",
-    "Casos de uso",
-    "Capacidades principales",
+    "Metas del producto",
     "Reglas de negocio",
-    "Atributos de calidad",
     "Alcance",
 ]
 

@@ -32,6 +32,24 @@ def document_to_markdown(doc: RichTextDocument) -> str:
     return "\n\n".join(lines)
 
 
+def coerce_markdown_output(raw_output: object) -> str:
+    """Extrae el markdown de una salida heterogénea del LLM.
+
+    Nunca fabrica basura: una salida ``None`` o de tipo inesperado produce cadena
+    vacía (documento vacío), en lugar de ``str(None)`` -> ``"None"``.
+    """
+    if raw_output is None:
+        return ""
+    if isinstance(raw_output, str):
+        return raw_output
+    if isinstance(raw_output, dict):
+        value = raw_output.get("document")  # type: ignore[reportUnknownMemberType]
+        if value is None:
+            value = raw_output.get("raw_text")  # type: ignore[reportUnknownMemberType]
+        return "" if value is None else str(value)  # type: ignore[reportUnknownArgumentType]
+    return ""
+
+
 def markdown_to_document(markdown: str) -> RichTextDocument:
     nodes: list[DocumentNode] = []
     sections = markdown.split("\n\n")
@@ -106,8 +124,7 @@ def validate_document_structure(
             errors.append(f"Seccion faltante: {section}")
         elif found_sections[section] < min_words_per_section:
             errors.append(
-                f"Seccion '{section}' tiene solo {found_sections[section]} palabras "
-                f"(minimo {min_words_per_section})"
+                f"Seccion '{section}' tiene solo {found_sections[section]} palabras (minimo {min_words_per_section})"
             )
 
     return len(errors) == 0, errors

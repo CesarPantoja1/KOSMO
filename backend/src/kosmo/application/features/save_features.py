@@ -36,12 +36,6 @@ class SaveSelectedFeaturesOutput:
 
 
 class SuggestFeaturesUseCase:
-    """Caso de uso: sugiere características adicionales que no dupliquen las existentes.
-
-    Invoca al LLM para generar 3 sugerencias de características basadas en
-    el documento de descubrimiento, evitando duplicar las que ya existen.
-    """
-
     def __init__(
         self,
         document_repo: DocumentRepository,
@@ -71,7 +65,7 @@ class SuggestFeaturesUseCase:
             "A continuación se presenta un Documento de Descubrimiento y una lista de\n"
             "características ya existentes. Tu tarea es sugerir EXACTAMENTE 3 nuevas\n"
             "características que NO dupliquen las ya existentes.\n\n"
-            "Respondé ÚNICAMENTE con JSON:\n"
+            "Responde ÚNICAMENTE con JSON:\n"
             "```json\n"
             '{"suggestions": [\n'
             '  {"title": "...", "description": "...", "rationale": "...",\n'
@@ -87,19 +81,21 @@ class SuggestFeaturesUseCase:
 
         if existing_titles:
             titles = ", ".join(existing_titles)
-            suggest_prompt += f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
+            suggest_prompt += (
+                f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
+            )
 
         suggest_prompt += (
             '\n\nEl campo "title" debe contener ÚNICAMENTE el nombre de la '
             "característica, sin prefijos ni identificadores tipo C01, C02, etc."
-            "\nGenerá exactamente 3 sugerencias. "
+            "\nGenera exactamente 3 sugerencias. "
             "Nada de texto antes o después del JSON."
         )
 
         llm_response = await self._llm_client.complete(
             prompt=PromptTemplate(
                 system_prompt=suggest_prompt,
-                user_prompt="Generá 3 sugerencias de características.",
+                user_prompt="Genera 3 sugerencias de características.",
             ),
             temperature=0.4,
         )
@@ -110,7 +106,9 @@ class SuggestFeaturesUseCase:
         return SuggestFeaturesOutput(
             suggestions=suggestions,
             excluded_titles=existing_titles,
-            domain_inferred=(discovery_doc.sections[0].text if discovery_doc.sections else ""),
+            domain_inferred=(
+                discovery_doc.sections[0].text if discovery_doc.sections else ""
+            ),
         )
 
     @staticmethod
@@ -143,7 +141,9 @@ class SuggestFeaturesUseCase:
                 continue
             item: dict[str, object] = item_  # type: ignore[reportUnknownVariableType]
             number = next_number + i
-            title = _strip_feature_id_prefix(str(item.get("title", f"Característica {number}")))
+            title = _strip_feature_id_prefix(
+                str(item.get("title", f"Característica {number}"))
+            )
             inferred_from_raw = item.get("inferred_from", [])
             inferred_from: list[str] = (
                 [str(x) for x in inferred_from_raw]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
@@ -164,12 +164,6 @@ class SuggestFeaturesUseCase:
 
 
 class SaveSelectedFeaturesUseCase:
-    """Caso de uso: guarda las características seleccionadas por el usuario.
-
-    Persiste las características que el usuario seleccionó desde las sugerencias
-    de la IA o desde la creación manual, asignándoles proyecto y numeración.
-    """
-
     def __init__(self, feature_repo: FeatureRepository) -> None:
         self._feature_repo = feature_repo
 
@@ -182,9 +176,13 @@ class SaveSelectedFeaturesUseCase:
 
         features: list[Feature] = []
         for item in input_data.features:
-            title = _strip_feature_id_prefix(str(item.get("title", f"Característica {next_num}")))
+            title = _strip_feature_id_prefix(
+                str(item.get("title", f"Característica {next_num}"))
+            )
             inferred_raw = cast("list[Any]", item.get("inferred_from", []))
-            inferred: list[str] = [str(x) for x in inferred_raw] if inferred_raw else []
+            inferred: list[str] = (
+                [str(x) for x in inferred_raw] if inferred_raw else []
+            )
             features.append(
                 Feature(
                     id=FeatureId(IdGenerator.generate("feature")),
