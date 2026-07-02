@@ -10,6 +10,7 @@ export { default as ArrowRight } from './icons/ArrowRight';
 export { default as Load } from './icons/Load';
 export { default as Close } from './icons/Close';
 export { default as Plus } from './icons/Plus';
+export { default as Send } from './icons/Send';
 
 // toast
 export { toast, ToasterProvider } from './toast';
