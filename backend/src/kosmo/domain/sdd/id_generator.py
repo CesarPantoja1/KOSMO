@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import ulid
+from ulid import ULID
 
 _PREFIX_MAP: dict[str, str] = {
     "project": "prj_",
@@ -21,4 +21,4 @@ class IdGenerator:
         prefix = _PREFIX_MAP.get(entity)
         if prefix is None:
             raise ValueError(f"Entidad desconocida: {entity}. Valores validos: {sorted(_PREFIX_MAP.keys())}")
-        return f"{prefix}{ulid.new()}"
+        return f"{prefix}{ULID()}"

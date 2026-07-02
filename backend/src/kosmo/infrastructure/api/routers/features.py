@@ -5,6 +5,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from kosmo.application.features import (
+    CreateCharacteristicInput,
+    CreateCharacteristicUseCase,
     GenerateFeaturesInput,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesInput,
@@ -22,6 +24,7 @@ from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
+    CreateCharacteristicRequest,
     FeatureResponse,
     FeatureSuggestionResponse,
     SaveSelectedFeaturesRequest,
@@ -43,6 +46,10 @@ def _suggest_features(request: Request) -> SuggestFeaturesUseCase:
 
 def _save_selected_features(request: Request) -> SaveSelectedFeaturesUseCase:
     return request.app.state.save_selected_features
+
+
+def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
+    return request.app.state.create_characteristic
 
 
 def _feature_repo(request: Request) -> FeatureRepository:
@@ -138,6 +145,9 @@ async def list_features(
         status.HTTP_404_NOT_FOUND: {
             "description": "Documento de descubrimiento no encontrado.",
         },
+        status.HTTP_502_BAD_GATEWAY: {
+            "description": "Error al invocar el servicio de IA.",
+        },
     },
 )
 async def suggest_features(
@@ -152,6 +162,11 @@ async def suggest_features(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.problem.detail,
         ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error al generar sugerencias: {exc}",
+        ) from exc
     return [
         FeatureSuggestionResponse(
             number=s.number,
@@ -161,6 +176,53 @@ async def suggest_features(
         )
         for s in output.suggestions
     ]
+
+
+@router.post(
+    "/manual",
+    summary="Crear característica manualmente",
+    description=(
+        "Crea una nueva característica con los datos proporcionados por el usuario. "
+        "El título no puede exceder 50 caracteres y la descripción no puede exceder 500 caracteres. "
+        "Requiere autenticación mediante Bearer token."
+    ),
+    response_model=FeatureResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_201_CREATED: {
+            "description": "Característica creada exitosamente.",
+        },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Datos de entrada inválidos (título vacío, título muy largo, descripción muy larga).",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de acceso inválido o ausente.",
+        },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": "Error inesperado del servidor.",
+        },
+    },
+)
+async def create_characteristic_manual(
+    project_id: str,
+    payload: Annotated[CreateCharacteristicRequest, Body(...)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[CreateCharacteristicUseCase, Depends(_create_characteristic)],
+) -> FeatureResponse:
+    try:
+        output = await use_case.execute(
+            CreateCharacteristicInput(
+                project_id=ProjectId(project_id),
+                title=payload.title,
+                description=payload.description,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return _feature_to_response(output.characteristic)
 
 
 @router.post(

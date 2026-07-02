@@ -524,3 +524,22 @@ class FeatureSuggestionResponse(BaseModel):
     title: str = Field(description="Título sugerido.")
     description: str = Field(description="Descripción sugerida.")
     origin: str = Field(description="Justificación y trazabilidad de la característica.")
+
+
+class CreateCharacteristicRequest(BaseModel):
+    """Payload para crear una característica de forma manual."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Título de la característica (máximo 50 caracteres).",
+        examples=["Gestión de catálogo de productos"],
+    )
+    description: str = Field(
+        default="",
+        max_length=500,
+        description="Descripción de la característica (máximo 500 caracteres).",
+        examples=["Permite a los usuarios administrar el catálogo de productos del sistema."],
+    )

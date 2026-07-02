@@ -40,8 +40,7 @@ class CreateCharacteristicUseCase:
 
         if len(input_data.title) > 50:
             raise ValueError(
-                f"El titulo de la caracteristica no puede exceder los 50 caracteres "
-                f"(actual: {len(input_data.title)})"
+                f"El titulo de la caracteristica no puede exceder los 50 caracteres (actual: {len(input_data.title)})"
             )
 
         if len(input_data.description) > 500:
