@@ -66,4 +66,10 @@ PROHIBITED_TERMS: list[str] = [
     "AWS",
     "GCP",
     "Azure",
+    "plataforma",
+    "sistema",
+    "software",
+    "web",
+    "aplicación",
+    "aplicaciones",
 ]
