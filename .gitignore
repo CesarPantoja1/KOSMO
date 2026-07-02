@@ -68,3 +68,4 @@ build/
 .idea/
 backend/CLAUDE.md
 .opencode/skills/tdd/SKILL.md
+docs/
