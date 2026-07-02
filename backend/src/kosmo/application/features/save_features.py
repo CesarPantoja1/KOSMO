@@ -81,7 +81,9 @@ class SuggestFeaturesUseCase:
 
         if existing_titles:
             titles = ", ".join(existing_titles)
-            suggest_prompt += f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
+            suggest_prompt += (
+                f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
+            )
 
         suggest_prompt += (
             '\n\nEl campo "title" debe contener ÚNICAMENTE el nombre de la '
@@ -104,7 +106,9 @@ class SuggestFeaturesUseCase:
         return SuggestFeaturesOutput(
             suggestions=suggestions,
             excluded_titles=existing_titles,
-            domain_inferred=(discovery_doc.sections[0].text if discovery_doc.sections else ""),
+            domain_inferred=(
+                discovery_doc.sections[0].text if discovery_doc.sections else ""
+            ),
         )
 
     @staticmethod
@@ -137,7 +141,9 @@ class SuggestFeaturesUseCase:
                 continue
             item: dict[str, object] = item_  # type: ignore[reportUnknownVariableType]
             number = next_number + i
-            title = _strip_feature_id_prefix(str(item.get("title", f"Característica {number}")))
+            title = _strip_feature_id_prefix(
+                str(item.get("title", f"Característica {number}"))
+            )
             inferred_from_raw = item.get("inferred_from", [])
             inferred_from: list[str] = (
                 [str(x) for x in inferred_from_raw]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
@@ -170,9 +176,13 @@ class SaveSelectedFeaturesUseCase:
 
         features: list[Feature] = []
         for item in input_data.features:
-            title = _strip_feature_id_prefix(str(item.get("title", f"Característica {next_num}")))
+            title = _strip_feature_id_prefix(
+                str(item.get("title", f"Característica {next_num}"))
+            )
             inferred_raw = cast("list[Any]", item.get("inferred_from", []))
-            inferred: list[str] = [str(x) for x in inferred_raw] if inferred_raw else []
+            inferred: list[str] = (
+                [str(x) for x in inferred_raw] if inferred_raw else []
+            )
             features.append(
                 Feature(
                     id=FeatureId(IdGenerator.generate("feature")),
