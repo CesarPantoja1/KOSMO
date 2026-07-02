@@ -52,9 +52,7 @@ class RefineDiscoveryUseCase:
         from kosmo.contracts.sdd.errors import ProjectNotFoundError
 
         if len(input_data.instructions) > 500:
-            raise ValueError(
-                "Las instrucciones de refinamiento no pueden exceder los 500 caracteres."
-            )
+            raise ValueError("Las instrucciones de refinamiento no pueden exceder los 500 caracteres.")
 
         project = await self._project_repo.by_id(input_data.project_id)
         if project is None:
@@ -70,7 +68,7 @@ class RefineDiscoveryUseCase:
 
         try:
             # Nota: Usamos SpecPhase.DESCUBRIMIENTO porque el DiscoveryRefineMode
-            # utiliza esta fase por diseño de la arquitectura. El agente instanciado 
+            # utiliza esta fase por diseño de la arquitectura. El agente instanciado
             # para este endpoint debe tener registrado DiscoveryRefineMode en esta llave.
             phase_output = await self._agent.execute(
                 phase=SpecPhase.DESCUBRIMIENTO,
@@ -85,6 +83,16 @@ class RefineDiscoveryUseCase:
         if not isinstance(phase_output, DiscoveryPhaseOutput):  # type: ignore[reportUnknownMemberType]
             raise LLMInvocationError(
                 detail="El agente no devolvió un DiscoveryPhaseOutput válido.",
+                instance=f"/api/v1/projects/{input_data.project_id}/discovery/refine",
+            )
+
+        # En refinamiento el usuario decide la estructura: solo exigimos nivel de
+        # negocio y que el documento no quede vacío (no se persiste basura).
+        validation = phase_output.validation_result
+        if not validation.is_valid or phase_output.discovery_document.section_count == 0:
+            detail = "; ".join(validation.errors) or "El documento refinado está vacío."
+            raise LLMInvocationError(
+                detail=f"El descubrimiento refinado no se mantiene a nivel de negocio: {detail}",
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery/refine",
             )
 

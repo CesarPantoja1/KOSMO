@@ -89,6 +89,14 @@ class GenerateDiscoveryUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery",
             )
 
+        validation = phase_output.validation_result
+        if not validation.is_valid or phase_output.discovery_document.section_count == 0:
+            detail = "; ".join(validation.errors) or "El documento generado está vacío."
+            raise LLMInvocationError(
+                detail=f"El descubrimiento generado no cumple la estructura de negocio: {detail}",
+                instance=f"/api/v1/projects/{input_data.project_id}/discovery",
+            )
+
         document = await self._document_repo.save_discovery(
             project_id=input_data.project_id,
             document=phase_output.discovery_document,

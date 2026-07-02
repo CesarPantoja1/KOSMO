@@ -17,15 +17,19 @@ from kosmo.domain.pipeline.tool_registry import ToolRegistry
 _REACT_FORMAT_INSTRUCTIONS = (
     "FORMATO DE RESPUESTA: Responde UNICAMENTE en JSON con uno de estos dos formatos.\n\n"
     "1. Para usar una herramienta:\n"
-    '   {{"reasoning": "por que necesitas esta herramienta", '
-    '"action": "nombre_herramienta", "input": {{"param": "valor"}}}}\n\n'
+    '   {"reasoning": "por que necesitas esta herramienta", '
+    '"action": "nombre_herramienta", "input": {"param": "valor"}}\n\n'
     "2. Para dar la respuesta final:\n"
-    '   {{"reasoning": "por que el trabajo esta completo", "final": true, '
-    '"output": "documento completo en markdown"}}\n\n'
+    '   {"reasoning": "por que el trabajo esta completo", "final": true, '
+    '"output": "documento completo en markdown"}\n\n'
     "REGLAS:\n"
     "- NO escribas texto fuera del JSON.\n"
+    "- El campo 'output' debe contener el documento Markdown completo como una sola "
+    "cadena JSON (usa \\n para los saltos de linea).\n"
     "- Usa herramientas para verificar tu trabajo antes de responder.\n"
-    "- Si una validacion falla, usa el feedback para corregir.\n"
+    "- Si una validacion falla, usa el feedback para corregir y vuelve a responder "
+    "con final=true.\n"
+    "- Agota siempre con una respuesta final=true antes de quedarte sin intentos.\n"
 )
 
 _PHASE_TEMPERATURES: dict[SpecPhase, float] = {
@@ -43,7 +47,7 @@ class KOSMOAgent:
         llm_client: LLMClient,
         registry: ToolRegistry,
         modes: dict[SpecPhase, PhaseMode] | None = None,
-        max_iterations: int = 5,
+        max_iterations: int = 8,
         skill_registry: SkillRegistry | None = None,
     ) -> None:
         self._llm_client = llm_client
@@ -129,10 +133,7 @@ class KOSMOAgent:
                     )
                     return mode.build_output(last_output, last_validation, metadata)
 
-                feedback = (
-                    "## Feedback de validacion\n\n"
-                    "El documento tiene los siguientes errores:\n"
-                )
+                feedback = "## Feedback de validacion\n\nEl documento tiene los siguientes errores:\n"
                 for err in last_validation.errors:
                     feedback += f"- {err}\n"
                 feedback += "\nCorrige estos problemas y genera el documento completo nuevamente."
@@ -145,19 +146,14 @@ class KOSMOAgent:
             reasoning = parsed.get("reasoning", "")
 
             trace_entries.append(
-                f"Paso {iteration}: llamada a herramienta '{tool_name}'. "
-                f"Razonamiento: {reasoning[:120]}"
+                f"Paso {iteration}: llamada a herramienta '{tool_name}'. Razonamiento: {reasoning[:120]}"
             )
 
             result = self._registry.execute(tool_name, tool_input)
-            tool_results_entries.append(
-                {"tool": tool_name, "output": json.dumps(result, default=str)}
-            )
+            tool_results_entries.append({"tool": tool_name, "output": json.dumps(result, default=str)})
 
             observation = json.dumps(result, default=str)
-            conversation.append(
-                f"## Resultado de la herramienta '{tool_name}'\n\n{observation}"
-            )
+            conversation.append(f"## Resultado de la herramienta '{tool_name}'\n\n{observation}")
 
         # Max iterations reached
         total_ms = int((time.monotonic() - start_time) * 1000)
@@ -173,12 +169,7 @@ class KOSMOAgent:
 
     def _build_react_system_prompt(self, mode: PhaseMode) -> str:
         tools_desc = self._registry.describe_tools(mode.available_tools)
-        return (
-            f"{mode.system_prompt}\n\n"
-            f"## Herramientas disponibles\n\n"
-            f"{tools_desc}\n\n"
-            f"{_REACT_FORMAT_INSTRUCTIONS}"
-        )
+        return f"{mode.system_prompt}\n\n## Herramientas disponibles\n\n{tools_desc}\n\n{_REACT_FORMAT_INSTRUCTIONS}"
 
     def _parse_react_response(self, text: str) -> dict[str, Any]:
         try:

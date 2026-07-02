@@ -41,20 +41,13 @@ _DISCOVERY_MD = (
     "en un solo lugar facilitando la toma de decisiones sobre el presupuesto familiar.\n"
     "- **Para el miembro:** claridad sobre cuanto debe y en que se gasta el dinero "
     "compartido eliminando confusiones y malentendidos entre los integrantes.\n\n"
-    "## Casos de uso\n"
-    "1. **Registrar gasto:** el usuario registra un gasto compartido indicando monto "
-    "y los participantes involucrados en el consumo de manera clara.\n"
-    "2. **Calcular reparto:** el sistema divide el gasto total entre los participantes "
-    "de forma equitativa segun el criterio definido por el grupo.\n"
-    "3. **Visualizar balance:** el usuario consulta el saldo pendiente con cada miembro "
-    "del hogar en cualquier momento del mes.\n"
-    "4. **Generar informe:** el administrador genera un resumen mensual de todos los "
-    "gastos compartidos del hogar de forma automatica.\n\n"
-    "## Capacidades principales\n"
-    "- **Registro de gastos:** permite registrar cada gasto compartido con su detalle "
-    "y los participantes involucrados en el consumo de manera sencilla.\n"
-    "- **Calculo automatico:** divide los gastos de forma equitativa entre los miembros "
-    "del hogar sin necesidad de calculos manuales adicionales.\n\n"
+    "## Metas del producto\n"
+    "1. **Reparto equitativo de gastos:** todo gasto compartido se distribuye entre "
+    "los participantes con exactitud y cada quien puede consultar el estado de sus "
+    "deudas y acreencias en cualquier momento.\n"
+    "2. **Control transparente del hogar:** los saldos del grupo se mantienen "
+    "actualizados y consultables para eliminar las discusiones sobre montos "
+    "pendientes entre los integrantes.\n\n"
     "## Reglas de negocio\n"
     "1. Todo gasto debe tener al menos un participante asignado para su registro "
     "y contabilizacion en el sistema de gestion.\n"
@@ -63,11 +56,6 @@ _DISCOVERY_MD = (
     "por el administrador del sistema.\n"
     "4. Los saldos se recalculan automaticamente al registrar un nuevo gasto compartido "
     "entre los miembros del hogar registrados.\n\n"
-    "## Atributos de calidad\n"
-    "- **Transparencia:** todos los miembros pueden ver el detalle de gastos en tiempo "
-    "real de forma clara y sin restricciones de acceso al sistema.\n"
-    "- **Precision:** los calculos de reparto se realizan con exactitud de centavos "
-    "sin errores de redondeo en ningun caso de uso.\n\n"
     "## Alcance\n"
     "### Incluido\n"
     "- Registro de gastos compartidos del hogar con detalle de participantes\n"
@@ -115,6 +103,33 @@ def test_discovery_mode_build_output_returns_discovery_phase_output() -> None:
 
 
 @pytest.mark.unit
+def test_discovery_mode_build_output_none_yields_empty_document_not_none_string() -> None:
+    # Arrange
+    mode = DiscoveryMode()
+
+    # Act
+    result = mode.build_output(None, _VALID_VALIDATION, _VALID_METADATA)
+
+    # Assert
+    assert isinstance(result, DiscoveryPhaseOutput)
+    assert result.discovery_document.section_count == 0
+    assert result.discovery_document.nodes == []
+
+
+@pytest.mark.unit
+def test_discovery_refine_mode_build_output_none_yields_empty_document() -> None:
+    # Arrange
+    mode = DiscoveryRefineMode()
+
+    # Act
+    result = mode.build_output(None, _VALID_VALIDATION, _VALID_METADATA)
+
+    # Assert
+    assert isinstance(result, DiscoveryPhaseOutput)
+    assert result.discovery_document.nodes == []
+
+
+@pytest.mark.unit
 def test_discovery_refine_mode_build_output_returns_discovery_phase_output() -> None:
     # Arrange
     mode = DiscoveryRefineMode()
@@ -133,9 +148,7 @@ def test_discovery_mode_build_output_handles_dict_input() -> None:
     mode = DiscoveryMode()
 
     # Act
-    result = mode.build_output(
-        {"document": _DISCOVERY_MD}, _VALID_VALIDATION, _VALID_METADATA
-    )
+    result = mode.build_output({"document": _DISCOVERY_MD}, _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
     assert isinstance(result, DiscoveryPhaseOutput)
@@ -149,9 +162,7 @@ def test_features_mode_build_output_returns_features_phase_output() -> None:
     import json
 
     # Act
-    result = mode.build_output(
-        json.loads(_FEATURES_JSON), _VALID_VALIDATION, _VALID_METADATA
-    )
+    result = mode.build_output(json.loads(_FEATURES_JSON), _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
     assert isinstance(result, FeaturesPhaseOutput)
@@ -168,9 +179,7 @@ def test_ears_mode_build_output_returns_ears_phase_output() -> None:
     import json
 
     # Act
-    result = mode.build_output(
-        json.loads(_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA
-    )
+    result = mode.build_output(json.loads(_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
     assert isinstance(result, EARSPhaseOutput)

@@ -17,19 +17,19 @@ _DISCOVERY_REFINE_SYSTEM_PROMPT = (
     "Tu tarea es reescribir el documento aplicando EXACTAMENTE lo que pide la "
     "instrucción: puede agregar, modificar o eliminar contenido o secciones.\n\n"
     "REGLAS DE REFINAMIENTO:\n"
-    "- Partí del documento actual tal como está; respetá su estructura vigente.\n"
-    "- Aplicá únicamente los cambios solicitados; conservá intacto el resto del "
+    "- Parte del documento actual tal como está; respeta su estructura vigente.\n"
+    "- Aplica únicamente los cambios solicitados; conserva intacto el resto del "
     "contenido.\n"
     "- NO reincorpores secciones que el usuario haya eliminado.\n"
     "- NO agregues secciones nuevas salvo que la instrucción lo pida de forma "
     "explícita.\n"
-    "- Mantené todo a NIVEL DE NEGOCIO. PROHIBIDO: API, base de datos, "
+    "- Mantén todo a NIVEL DE NEGOCIO. PROHIBIDO: API, base de datos, "
     "microservicios, endpoints, servidores, lenguajes, frameworks, protocolos, "
     "arquitectura, deployment, Docker, cloud, SQL, HTTP, REST, GraphQL, backend, "
     "frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes, AWS, GCP, Azure.\n"
     "- No uses formato de historia de usuario (Como... quiero... para...).\n"
     "- Todo en español con tildes correctas.\n"
-    "- Devolvé ÚNICAMENTE el documento completo en Markdown, sin texto introductorio "
+    "- Devuelve ÚNICAMENTE el documento completo en Markdown, sin texto introductorio "
     "ni explicaciones sobre los cambios realizados.\n"
 )
 
@@ -55,9 +55,7 @@ class DiscoveryRefineMode:
                     "properties": {
                         "document": {
                             "type": "string",
-                            "description": (
-                                "El documento de descubrimiento refinado en formato markdown"
-                            ),
+                            "description": ("El documento de descubrimiento refinado en formato markdown"),
                         }
                     },
                     "required": ["document"],
@@ -117,7 +115,7 @@ class DiscoveryRefineMode:
             f"El documento refinado tiene los siguientes problemas:\n\n"
             f"{error_list}\n\n"
             f"Corrige estos problemas manteniendo el documento a nivel de negocio, sin "
-            f"jerga técnica, y devolvé el documento completo en Markdown sin texto "
+            f"jerga técnica, y devuelve el documento completo en Markdown sin texto "
             f"introductorio."
         )
 
@@ -127,15 +125,12 @@ class DiscoveryRefineMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> DiscoveryPhaseOutput:
-        from kosmo.domain.sdd.document_converters import markdown_to_document
+        from kosmo.domain.sdd.document_converters import (
+            coerce_markdown_output,
+            markdown_to_document,
+        )
 
-        if isinstance(raw_output, str):
-            doc = markdown_to_document(raw_output)
-        elif isinstance(raw_output, dict):
-            text = str(raw_output.get("document", raw_output.get("raw_text", "")))  # type: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-            doc = markdown_to_document(text)  # type: ignore[reportUnknownArgumentType]
-        else:
-            doc = markdown_to_document(str(raw_output))
+        doc = markdown_to_document(coerce_markdown_output(raw_output))
         return DiscoveryPhaseOutput(
             discovery_document=doc,
             validation_result=validation_result,

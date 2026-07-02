@@ -7,7 +7,10 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
-from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
+from kosmo.application.pipeline.kosmo_agent import (
+    _REACT_FORMAT_INSTRUCTIONS,  # type: ignore[reportPrivateUsage]
+    KOSMOAgent,
+)
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -41,20 +44,13 @@ _DISCOVERY_VALID = (
     "en un solo lugar, facilitando la toma de decisiones sobre el presupuesto familiar.\n"
     "- **Para el miembro:** claridad sobre cuanto debe y en que se gasta el dinero "
     "compartido, eliminando confusiones y malentendidos entre los integrantes.\n\n"
-    "## Casos de uso\n"
-    "1. **Registrar gasto:** el usuario registra un gasto compartido indicando monto "
-    "y los participantes involucrados en el consumo.\n"
-    "2. **Calcular reparto:** el sistema divide el gasto total entre los participantes "
-    "de forma equitativa segun el criterio definido.\n"
-    "3. **Visualizar balance:** el usuario consulta el saldo pendiente con cada miembro "
-    "del hogar en cualquier momento.\n"
-    "4. **Generar informe:** el administrador genera un resumen mensual de todos los "
-    "gastos compartidos del hogar.\n\n"
-    "## Capacidades principales\n"
-    "- **Registro de gastos:** permite registrar cada gasto compartido con su detalle "
-    "y los participantes involucrados en el consumo de manera sencilla.\n"
-    "- **Calculo automatico:** divide los gastos de forma equitativa entre los miembros "
-    "del hogar sin necesidad de calculos manuales adicionales.\n\n"
+    "## Metas del producto\n"
+    "1. **Reparto equitativo de gastos:** todo gasto compartido se distribuye entre "
+    "los participantes con exactitud y cada quien puede consultar el estado de sus "
+    "deudas y acreencias en cualquier momento.\n"
+    "2. **Control transparente del hogar:** los saldos del grupo se mantienen "
+    "actualizados y consultables para eliminar las discusiones sobre montos "
+    "pendientes entre los integrantes.\n\n"
     "## Reglas de negocio\n"
     "1. Todo gasto debe tener al menos un participante asignado para su registro "
     "y contabilizacion en el sistema.\n"
@@ -63,11 +59,6 @@ _DISCOVERY_VALID = (
     "por el administrador.\n"
     "4. Los saldos se recalculan automaticamente al registrar un nuevo gasto compartido "
     "entre los miembros del hogar.\n\n"
-    "## Atributos de calidad\n"
-    "- **Transparencia:** todos los miembros pueden ver el detalle de gastos en tiempo "
-    "real de forma clara y sin restricciones de acceso.\n"
-    "- **Precision:** los calculos de reparto se realizan con exactitud de centavos "
-    "sin errores de redondeo en ningun caso.\n\n"
     "## Alcance\n"
     "### Incluido\n"
     "- Registro de gastos compartidos del hogar con detalle de participantes\n"
@@ -322,6 +313,58 @@ async def test_kosmo_agent_raises_when_mode_missing() -> None:
             phase=SpecPhase.DESCUBRIMIENTO,
             context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
         )
+
+
+@pytest.mark.unit
+def test_react_format_instructions_use_valid_json_examples() -> None:
+    # Arrange
+    text = _REACT_FORMAT_INSTRUCTIONS
+    tool_example = (
+        '{"reasoning": "por que necesitas esta herramienta", '
+        '"action": "nombre_herramienta", "input": {"param": "valor"}}'
+    )
+    final_example = (
+        '{"reasoning": "por que el trabajo esta completo", "final": true, "output": "documento completo en markdown"}'
+    )
+
+    # Act / Assert: los ejemplos que ve el modelo deben ser JSON válido (sin llaves dobles)
+    assert "{{" not in text
+    assert tool_example in text
+    assert final_example in text
+    assert json.loads(tool_example)["action"] == "nombre_herramienta"
+    assert json.loads(final_example)["final"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_kosmo_agent_max_iterations_yields_empty_document_not_none() -> None:
+    # Arrange
+    tool_call = json.dumps(
+        {
+            "reasoning": "sigo verificando",
+            "action": "validate_structure",
+            "input": {"document": "## Test"},
+        }
+    )
+    llm = StubReactLLMClient(responses=[tool_call, tool_call])
+    registry = ToolRegistry()
+    registry.register("validate_structure", lambda _: {"is_valid": False, "errors": ["x"]})
+    agent = KOSMOAgent(
+        llm_client=llm,  # type: ignore[reportArgumentType]
+        registry=registry,
+        max_iterations=2,
+    )
+    agent._modes[SpecPhase.DESCUBRIMIENTO] = _make_discovery_mode()  # type: ignore[reportPrivateUsage]
+
+    # Act
+    result = await agent.execute(
+        phase=SpecPhase.DESCUBRIMIENTO,
+        context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
+    )
+
+    # Assert
+    assert result.validation_result.is_valid is False
+    assert result.discovery_document.nodes == []
 
 
 def _make_discovery_mode() -> Any:

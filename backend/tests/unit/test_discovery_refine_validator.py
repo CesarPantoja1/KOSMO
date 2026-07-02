@@ -50,7 +50,7 @@ def test_validate_business_level_flags_technical_term(term: str) -> None:
         nodes=[
             DocumentNode(
                 type="heading",
-                heading=SectionHeading(text="Capacidades principales", level=2, slug="capacidades"),
+                heading=SectionHeading(text="Metas del producto", level=2, slug="metas"),
                 content=f"El sistema usa {term} para operar.",
             ),
         ]

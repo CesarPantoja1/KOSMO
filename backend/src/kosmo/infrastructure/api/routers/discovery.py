@@ -53,7 +53,7 @@ def _refine_discovery(request: Request) -> RefineDiscoveryUseCase:
     description=(
         "Genera el documento de visión de producto para un proyecto "
         "utilizando inteligencia artificial. El documento se estructura "
-        "en 8 secciones obligatorias siguiendo el formato de descubrimiento KOSMO. "
+        "en 7 secciones obligatorias siguiendo el formato de descubrimiento KOSMO. "
         "Requiere autenticación mediante Bearer token."
     ),
     response_model=DiscoveryResponse,
