@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from typing import Any
@@ -34,10 +35,14 @@ _REACT_FORMAT_INSTRUCTIONS = (
 
 _PHASE_TEMPERATURES: dict[SpecPhase, float] = {
     SpecPhase.DESCUBRIMIENTO: 0.3,
+    SpecPhase.CARACTERISTICAS: 0.4,
+    SpecPhase.REQUISITOS: 0.3,
 }
 
 _PHASE_MAX_TOKENS: dict[SpecPhase, int] = {
     SpecPhase.DESCUBRIMIENTO: 8192,
+    SpecPhase.CARACTERISTICAS: 4096,
+    SpecPhase.REQUISITOS: 8192,
 }
 
 
@@ -109,9 +114,17 @@ class KOSMOAgent:
 
             parsed = self._parse_react_response(llm_response.text)
 
-            # Final answer
-            if parsed.get("final"):
-                last_output = parsed.get("output", "")
+            is_final = bool(parsed.get("final"))
+            has_action = bool(parsed.get("action"))
+
+            if is_final or not has_action:
+                raw_output: Any = parsed.get("output", "") if is_final else parsed
+
+                if isinstance(raw_output, str) and raw_output.strip().startswith(("{", "[")):
+                    with contextlib.suppress(json.JSONDecodeError, TypeError):
+                        raw_output = json.loads(raw_output)
+
+                last_output = raw_output
                 last_validation = mode.validate_output(last_output)
 
                 trace_entries.append(

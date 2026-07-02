@@ -25,11 +25,7 @@ class SqlAlchemyProjectRepository(ProjectRepository):
         async with self._session_factory() as session:
             from sqlalchemy import select
 
-            stmt = (
-                select(ProjectModel)
-                .where(ProjectModel.owner_id == owner_id)
-                .where(ProjectModel.slug == slug)
-            )
+            stmt = select(ProjectModel).where(ProjectModel.owner_id == owner_id).where(ProjectModel.slug == slug)
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if model is None:

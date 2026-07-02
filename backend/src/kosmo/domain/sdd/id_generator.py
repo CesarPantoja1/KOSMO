@@ -20,7 +20,5 @@ class IdGenerator:
     def generate(entity: str) -> str:
         prefix = _PREFIX_MAP.get(entity)
         if prefix is None:
-            raise ValueError(
-                f"Entidad desconocida: {entity}. Valores validos: {sorted(_PREFIX_MAP.keys())}"
-            )
+            raise ValueError(f"Entidad desconocida: {entity}. Valores validos: {sorted(_PREFIX_MAP.keys())}")
         return f"{prefix}{ULID()}"

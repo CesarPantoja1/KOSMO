@@ -11,7 +11,7 @@ _HU_PATTERN_RE = re.compile(r"Como\s+.+\s+quiero\s+.+\s+para\s+", re.IGNORECASE)
 _NUMBERED_ITEM_RE = re.compile(r"^\s*\d+\.\s+\S", re.MULTILINE)
 _BULLET_ITEM_RE = re.compile(r"^\s*[-*]\s+\S", re.MULTILINE)
 _EXCLUDED_BLOCK_RE = re.compile(
-    r"^#{0,6}\s*Excluido\s*$\n(.*?)(?=^\s*#{1,6}\s|\Z)",
+    r"^#{0,6}\s*Excluido\b[^\n]*$\n(.*?)(?=^\s*#{1,6}\s|\Z)",
     re.IGNORECASE | re.DOTALL | re.MULTILINE,
 )
 
@@ -25,7 +25,11 @@ MIN_EXCLUSIONS = 3
 
 
 def _group_sections(doc: RichTextDocument) -> list[tuple[str, str]]:
-    """Agrupa cada encabezado con el contenido que le sigue hasta el próximo encabezado."""
+    """Agrupa cada encabezado level <=2 con el contenido que le sigue hasta el próximo encabezado level <=2.
+
+    Los encabezados level 3+ (###) se tratan como contenido de la sección padre,
+    no como secciones independientes.
+    """
     groups: list[tuple[str, str]] = []
     current_heading: str | None = None
     current_content: list[str] = []
@@ -36,9 +40,15 @@ def _group_sections(doc: RichTextDocument) -> list[tuple[str, str]]:
 
     for node in doc.nodes:
         if node.type == "heading" and node.heading:
-            flush()
-            current_heading = node.heading.text
-            current_content = [node.content] if node.content else []
+            if node.heading.level <= 2:
+                flush()
+                current_heading = node.heading.text
+                current_content = [node.content] if node.content else []
+            else:
+                prefix = "#" * node.heading.level
+                current_content.append(f"{prefix} {node.heading.text}")
+                if node.content:
+                    current_content.append(node.content)
         elif node.content:
             current_content.append(node.content)
 

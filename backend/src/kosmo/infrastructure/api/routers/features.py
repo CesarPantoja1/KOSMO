@@ -98,8 +98,7 @@ async def generate_features(
     "",
     summary="Listar características del proyecto",
     description=(
-        "Devuelve todas las características asociadas a un proyecto. "
-        "Requiere autenticación mediante Bearer token."
+        "Devuelve todas las características asociadas a un proyecto. Requiere autenticación mediante Bearer token."
     ),
     response_model=list[FeatureResponse],
     responses={

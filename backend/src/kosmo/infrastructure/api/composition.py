@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import (
@@ -62,9 +63,18 @@ from kosmo.domain.pipeline.phase_validators.discovery_validator import (
     validate_discovery_quality,
     validate_discovery_structure,
 )
+from kosmo.domain.pipeline.phase_validators.features_validator import (
+    validate_feature_structure,
+    validate_feature_uniqueness,
+)
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
+from kosmo.domain.sdd.output_guardrails import detect_implementation_leaks
+from kosmo.domain.sdd.validators.ears_validator import (
+    validate_ears_quality,
+    validate_ears_syntax,
+)
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.postgres.repositories import (
@@ -213,9 +223,7 @@ def build_auth_components(settings: Settings) -> AuthComponents:
             revocation_store=token_store,
             audit_sink=audit_sink,
         ),
-        revoke_session=RevokeSession(
-            verifier=verifier, revocation_store=token_store, audit_sink=audit_sink
-        ),
+        revoke_session=RevokeSession(verifier=verifier, revocation_store=token_store, audit_sink=audit_sink),
     )
 
 
@@ -275,21 +283,35 @@ def build_pipeline_components(
     tool_registry = ToolRegistry()
     tool_registry.register(
         "validate_discovery_structure",
-        lambda inp: _adapt_validation_result(
-            validate_discovery_structure(_markdown_input(inp))
-        ),
+        lambda inp: _adapt_validation_result(validate_discovery_structure(_markdown_input(inp))),
     )
     tool_registry.register(
         "validate_discovery_quality",
-        lambda inp: _adapt_validation_result(
-            validate_discovery_quality(_markdown_input(inp))
-        ),
+        lambda inp: _adapt_validation_result(validate_discovery_quality(_markdown_input(inp))),
     )
     tool_registry.register(
         "validate_business_level",
-        lambda inp: _adapt_validation_result(
-            validate_business_level(_markdown_input(inp))
-        ),
+        lambda inp: _adapt_validation_result(validate_business_level(_markdown_input(inp))),
+    )
+    tool_registry.register(
+        "validate_feature_structure",
+        lambda inp: _adapt_validation_result(_validate_features_input(inp)),
+    )
+    tool_registry.register(
+        "validate_feature_uniqueness",
+        lambda inp: _adapt_validation_result(validate_feature_uniqueness(_extract_array(inp, "features"))),
+    )
+    tool_registry.register(
+        "validate_ears_syntax",
+        lambda inp: _adapt_validation_result(_validate_ears_syntax_raw(inp)),
+    )
+    tool_registry.register(
+        "validate_ears_quality",
+        lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
+    )
+    tool_registry.register(
+        "detect_implementation_leaks",
+        lambda inp: _adapt_leaks_result(_detect_leaks_raw(inp)),
     )
 
     # 6. Instanciar el agente KOSMO con el registro de herramientas
@@ -453,3 +475,56 @@ def _markdown_input(inp: dict[str, object]) -> RichTextDocument:
 
 def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
     return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}
+
+
+def _adapt_leaks_result(result: Any) -> dict[str, object]:
+    return {
+        "is_valid": result.is_valid,
+        "errors": [str(v) for v in result.violations],
+        "warnings": [],
+    }
+
+
+def _extract_array(inp: dict[str, object], key: str) -> list[Any]:
+    import json
+
+    raw = inp.get(key, [])
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    if not isinstance(raw, list):
+        return []
+
+    result: list[Any] = []
+    for item in cast(list[object], raw):
+        if isinstance(item, dict):
+            cleaned: dict[str, Any] = {}
+            for k, v in cast(dict[object, object], item).items():
+                if isinstance(k, str):
+                    cleaned[k] = v
+            result.append(cleaned)
+        else:
+            result.append(item)
+    return result
+
+
+def _validate_features_input(inp: dict[str, object]) -> ValidationResult:
+    features = _extract_array(inp, "features")
+    return validate_feature_structure(features)
+
+
+def _validate_ears_syntax_raw(inp: dict[str, object]) -> ValidationResult:
+    requirements = _extract_array(inp, "requirements")
+    return validate_ears_syntax(requirements)
+
+
+def _validate_ears_quality_raw(inp: dict[str, object]) -> ValidationResult:
+    requirements = _extract_array(inp, "requirements")
+    return validate_ears_quality(requirements)
+
+
+def _detect_leaks_raw(inp: dict[str, object]) -> Any:
+    requirements = _extract_array(inp, "requirements")
+    return detect_implementation_leaks(cast("list[dict[str, str]]", requirements))

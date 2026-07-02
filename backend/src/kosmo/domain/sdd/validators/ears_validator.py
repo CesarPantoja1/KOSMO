@@ -6,24 +6,16 @@ from typing import Any, cast
 from kosmo.contracts.pipeline.phase_outputs import ValidationResult
 from kosmo.contracts.sdd.document import EARSPattern, EARSPattern_SYNTAX
 
-_UBIQUITOUS_RE = re.compile(
-    r"^(el sistema|la aplicación|el sistema)\s+(shall|debe|deberá)\s+", re.IGNORECASE
-)
-_EVENT_DRIVEN_RE = re.compile(
-    r"^(cuando|al|al\s+producirse|al\s+ocurrir|al\s+recibir)\s+", re.IGNORECASE
-)
-_STATE_DRIVEN_RE = re.compile(
-    r"^(mientras|durante|en\s+estado\s+de|bajo\s+la\s+condición\s+de)\s+", re.IGNORECASE
-)
+_UBIQUITOUS_RE = re.compile(r"^(el sistema|la aplicación|el sistema)\s+(shall|debe|deberá)\s+", re.IGNORECASE)
+_EVENT_DRIVEN_RE = re.compile(r"^(cuando|al|al\s+producirse|al\s+ocurrir|al\s+recibir)\s+", re.IGNORECASE)
+_STATE_DRIVEN_RE = re.compile(r"^(mientras|durante|en\s+estado\s+de|bajo\s+la\s+condición\s+de)\s+", re.IGNORECASE)
 _OPTIONAL_RE = re.compile(r"^(donde|si|en\s+caso\s+de\s+que|opcionalmente)\s+", re.IGNORECASE)
 _UNWANTED_RE = re.compile(
     r"^(si\s+.+\s+(no\s+funciona|falla|fallare|error|fallo))\s*,?\s*"
     r"(el sistema|la aplicación)\s+(shall|debe|deberá)\s+",
     re.IGNORECASE,
 )
-_COMPLEX_RE = re.compile(
-    r"^(mientras|durante|en\s+estado\s+de)\s+.+\s+(y|además|cuando|al)\s+", re.IGNORECASE
-)
+_COMPLEX_RE = re.compile(r"^(mientras|durante|en\s+estado\s+de)\s+.+\s+(y|además|cuando|al)\s+", re.IGNORECASE)
 
 
 def _get(req: Any, key: str, default: Any = "") -> Any:
@@ -121,9 +113,7 @@ def validate_ears_quality(requirements: list[Any]) -> ValidationResult:
     warnings: list[str] = []
 
     if len(requirements) < 3:
-        errors.append(
-            f"Se requieren al menos 3 requisitos por feature, solo hay {len(requirements)}"
-        )
+        errors.append(f"Se requieren al menos 3 requisitos por feature, solo hay {len(requirements)}")
     elif len(requirements) > 15:
         warnings.append(f"Se recomienda máximo 15 requisitos por feature, hay {len(requirements)}")
 
@@ -142,9 +132,7 @@ def validate_ears_quality(requirements: list[Any]) -> ValidationResult:
             warnings.append(f"{display_id}: sin criterios de aceptación")
 
     if len(patterns_seen) < 4:
-        warnings.append(
-            f"Se recomiendan al menos 4 categorías EARS diferentes, solo hay {len(patterns_seen)}"
-        )
+        warnings.append(f"Se recomiendan al menos 4 categorías EARS diferentes, solo hay {len(patterns_seen)}")
 
     return ValidationResult(
         is_valid=len(errors) == 0,

@@ -82,9 +82,7 @@ class FeaturesMode:
         return [
             ToolDefinition(
                 name="validate_feature_structure",
-                description=(
-                    "Verifica que las caracteristicas tengan todos los campos y formatos correctos"
-                ),
+                description=("Verifica que las caracteristicas tengan todos los campos y formatos correctos"),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -111,9 +109,7 @@ class FeaturesMode:
             ),
             ToolDefinition(
                 name="validate_feature_uniqueness",
-                description=(
-                    "Verifica que no existan redundancias ni duplicados entre caracteristicas"
-                ),
+                description=("Verifica que no existan redundancias ni duplicados entre caracteristicas"),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -130,10 +126,7 @@ class FeaturesMode:
 
     def build_user_prompt(
         self,
-        context: DiscoveryPhaseContext
-        | FeaturesPhaseContext
-        | EARSPhaseContext
-        | SuggestFeaturesContext,
+        context: DiscoveryPhaseContext | FeaturesPhaseContext | EARSPhaseContext | SuggestFeaturesContext,
     ) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
@@ -165,8 +158,7 @@ class FeaturesMode:
             self._existing_titles = list(existing_titles_list)
             existing_list = "\n".join(f"- {title}" for title in self._existing_titles)
             parts.append(
-                "\n## Características Existentes (NO DUPLICAR NI REPETIR ESTAS "
-                f"CARACTERÍSTICAS):\n\n{existing_list}"
+                f"\n## Características Existentes (NO DUPLICAR NI REPETIR ESTAS CARACTERÍSTICAS):\n\n{existing_list}"
             )
 
         if user_prefs:
@@ -231,9 +223,7 @@ class FeaturesMode:
                 except Exception:
                     return ValidationResult(
                         is_valid=False,
-                        errors=[
-                            "El formato de salida no es un JSON válido con la clave 'features'."
-                        ],
+                        errors=["El formato de salida no es un JSON válido con la clave 'features'."],
                     )
             else:
                 return ValidationResult(
@@ -305,9 +295,7 @@ class FeaturesMode:
                     project_id=self._project_id,
                     rationale=str(item.get("rationale", "")),  # type: ignore[reportUnknownArgumentType]
                     inferred_from=(
-                        item.get("inferred_from", [])
-                        if isinstance(item.get("inferred_from"), list)
-                        else []  # type: ignore[reportUnknownArgumentType]
+                        item.get("inferred_from", []) if isinstance(item.get("inferred_from"), list) else []  # type: ignore[reportUnknownArgumentType]
                     ),
                 )
             )

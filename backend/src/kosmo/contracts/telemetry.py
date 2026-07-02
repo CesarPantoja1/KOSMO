@@ -20,9 +20,7 @@ _auth_events = _meter.create_counter(
 )
 
 
-def traced(
-    span_name: str, attributes: dict[str, Any] | None = None
-) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def traced(span_name: str, attributes: dict[str, Any] | None = None) -> Callable[[Callable[P, R]], Callable[P, R]]:
     span_attrs: dict[str, Any] = dict(attributes) if attributes else {}
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:

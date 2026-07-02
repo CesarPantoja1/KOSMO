@@ -54,9 +54,7 @@ async def _resolve_feature_id(request: Request, project_id: str, id_or_slug: str
 @router.post(
     "/generate",
     summary="Generar requisitos EARS",
-    description=(
-        "Genera requisitos utilizando el estándar EARS para la característica especificada."
-    ),
+    description=("Genera requisitos utilizando el estándar EARS para la característica especificada."),
     status_code=status.HTTP_200_OK,
 )
 async def generate_requirements(
@@ -97,9 +95,7 @@ async def generate_requirements(
 @router.get(
     "",
     summary="Obtener requisitos de una característica",
-    description=(
-        "Recupera los requisitos en formato Markdown asociados a la característica especificada."
-    ),
+    description=("Recupera los requisitos en formato Markdown asociados a la característica especificada."),
 )
 async def get_requirements(
     feature_id: str,

@@ -179,9 +179,7 @@ def client() -> TestClient:
     )
     issuer = JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=settings)
     verifier = JoseJwtVerifier(public_key_pem=_PUBLIC_PEM, settings=settings)
-    hasher = Argon2idPasswordHasher(
-        Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4)
-    )
+    hasher = Argon2idPasswordHasher(Argon2idParameters(memory_kib=65536, time_cost=3, parallelism=4))
     user_repository = InMemoryUserRepository()
     code_store = InMemoryAuthorizationCodeStore()
     token_store = InMemoryStore()
@@ -206,18 +204,14 @@ def client() -> TestClient:
         issue_token_pair=issue_token_pair,
     )
     app.state.issue_token_pair = issue_token_pair
-    app.state.verify_access_token = VerifyAccessToken(
-        verifier=verifier, revocation_store=token_store
-    )
+    app.state.verify_access_token = VerifyAccessToken(verifier=verifier, revocation_store=token_store)
     app.state.refresh_token_pair = RefreshTokenPair(
         issuer=issuer,
         verifier=verifier,
         revocation_store=token_store,
         audit_sink=audit_sink,
     )
-    app.state.revoke_session = RevokeSession(
-        verifier=verifier, revocation_store=token_store, audit_sink=audit_sink
-    )
+    app.state.revoke_session = RevokeSession(verifier=verifier, revocation_store=token_store, audit_sink=audit_sink)
     app.include_router(auth_router)
     app.include_router(schemas_router)
     return TestClient(app)

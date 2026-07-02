@@ -56,9 +56,7 @@ class InMemoryDocumentRepository:
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
         return self.documents.get(str(project_id))
 
-    async def save_discovery(
-        self, project_id: ProjectId, document: RichTextDocument
-    ) -> RichTextDocument:
+    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
         self.documents[str(project_id)] = document
         return document
 

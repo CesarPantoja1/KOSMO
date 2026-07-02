@@ -148,8 +148,7 @@ _SERVERS = [
 _GLOBAL_RESPONSES = {
     403: {
         "description": (
-            "Forbidden — El token es válido pero no tiene los scopes necesarios "
-            "para acceder al recurso solicitado."
+            "Forbidden — El token es válido pero no tiene los scopes necesarios para acceder al recurso solicitado."
         ),
         "content": {
             "application/json": {

@@ -60,9 +60,7 @@ class InMemoryDocumentRepository:
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
         return self.documents.get(str(project_id))
 
-    async def save_discovery(
-        self, project_id: ProjectId, document: RichTextDocument
-    ) -> RichTextDocument:
+    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
         self.documents[str(project_id)] = document
         return document
 
@@ -191,9 +189,7 @@ async def test_generate_ears_success() -> None:
     )
 
     # Act
-    result = await use_case.execute(
-        GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01"))
-    )
+    result = await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
 
     # Assert
     assert isinstance(result, GenerateEARSOutput)
@@ -219,9 +215,7 @@ async def test_generate_ears_raises_project_not_found() -> None:
 
     # Act & Assert
     with pytest.raises(ProjectNotFoundError) as exc_info:
-        await use_case.execute(
-            GenerateEARSInput(project_id=ProjectId("prj_missing"), feature_id=FeatureId("feat_01"))
-        )
+        await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_missing"), feature_id=FeatureId("feat_01")))
     assert exc_info.value.problem.status == 404
 
 
@@ -251,9 +245,7 @@ async def test_generate_ears_raises_feature_not_found() -> None:
 
     # Act & Assert
     with pytest.raises(FeatureNotFoundError) as exc_info:
-        await use_case.execute(
-            GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_missing"))
-        )
+        await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_missing")))
     assert exc_info.value.problem.status == 404
 
 
@@ -285,9 +277,7 @@ async def test_generate_ears_raises_document_not_found() -> None:
 
     # Act & Assert
     with pytest.raises(DocumentNotFoundError) as exc_info:
-        await use_case.execute(
-            GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01"))
-        )
+        await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
     assert exc_info.value.problem.status == 404
 
 
@@ -319,9 +309,7 @@ async def test_generate_ears_persists_requirements_markdown() -> None:
     )
 
     # Act
-    result = await use_case.execute(
-        GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01"))
-    )
+    result = await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
 
     # Assert
     saved = await req_repo.by_feature_id(FeatureId("feat_01"))
@@ -364,7 +352,5 @@ async def test_generate_ears_raises_when_llm_fails() -> None:
 
     # Act & Assert
     with pytest.raises(LLMInvocationError) as exc_info:
-        await use_case.execute(
-            GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01"))
-        )
+        await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
     assert exc_info.value.problem.status == 502

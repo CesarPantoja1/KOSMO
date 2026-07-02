@@ -18,22 +18,22 @@ from kosmo.domain.sdd.validators.ears_validator import (
 )
 
 _EARS_SYSTEM_PROMPT = """Eres un ingeniero de requisitos experto en la notación EARS
-(Easy Approach to Requirements Syntax). Tu ÚNICA responsabilidad es
+Easy Approach to Requirements Syntax). Tu ÚNICA responsabilidad es
 generar requisitos formales para UNA característica aprobada del producto.
 
 ## Tu rol
-- Generás requisitos precisos, verificables y trazables usando las 6 categorías EARS.
+- Generas requisitos precisos, verificables y trazables usando las 6 categorías EARS.
 - Cada requisito sigue la sintaxis EARS correspondiente a su categoría.
 - Los requisitos se numeran como REQ-X.Y donde X es el número de
   la característica e Y es el correlativo.
 
 ## Lo que NO haces
-- No diseñás soluciones técnicas ni proponés implementación.
-- No generás nuevas características (ya están aprobadas).
-- No modificás el Discovery (es inmutable en esta fase).
-- No generás requisitos para todas las características a la vez — solo para UNA.
+- No diseñas soluciones técnicas ni propones implementación.
+- No generas nuevas características (ya están aprobadas).
+- No modificas el Discovery (es inmutable en esta fase).
+- No generas requisitos para todas las características a la vez — solo para UNA.
 
-## Input que recibís
+## Input que recibes
 - Un Documento de Descubrimiento (contexto de negocio).
 - UNA característica aprobada (con su C0X, título, descripción 4W, rationale).
 - El número de la característica (para formato REQ-X.X).
@@ -41,7 +41,7 @@ generar requisitos formales para UNA característica aprobada del producto.
 
 ## Categorías EARS y su sintaxis
 
-Generá requisitos distribuidos en al menos 4 categorías:
+Genera requisitos distribuidos en al menos 4 categorías:
 
 1. **Ubiquitous** — SIEMPRE se cumple.
    Sintaxis: "[El sistema] shall [comportamiento]".
@@ -99,13 +99,13 @@ Los requisitos se agrupan por categoría EARS en el output JSON:
 - Todo en español con tildes correctas.
 
 ## Detección de fugas técnicas
-Antes de generar, revisá:
+Antes de generar, revisa:
 - Ningún requisito menciona cómo implementar algo.
 - Ningún requisito dice "el sistema guardará en base de datos" → usar
   "el sistema registrará y mantendrá".
 - Ningún requisito describe arquitectura interna.
 
-Si detectás una fuga, reemplazala con lenguaje de negocio:
+Si detectas una fuga, reemplázala con lenguaje de negocio:
 - "almacenará en la base de datos" → "registrará y mantendrá"
 - "enviará una petición HTTP" → "comunicará a"
 - "validará con el servidor" → "verificará"
@@ -182,21 +182,6 @@ class EARSMode:
                     "required": ["requirements"],
                 },
             ),
-            ToolDefinition(
-                name="auto_repair_leaks",
-                description="Reemplaza fugas técnicas con lenguaje de negocio",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "requirements": {
-                            "type": "array",
-                            "description": "Lista de requisitos a reparar",
-                            "items": {"type": "object"},
-                        }
-                    },
-                    "required": ["requirements"],
-                },
-            ),
         ]
 
     def build_user_prompt(self, context: EARSPhaseContext) -> str:
@@ -232,9 +217,7 @@ class EARSMode:
             leaks_result = detect_implementation_leaks(cast("list[dict[str, str]]", requirements))
 
             all_errors = syntax_result.errors + quality_result.errors
-            all_warnings = (
-                syntax_result.warnings + quality_result.warnings + leaks_result.error_messages
-            )
+            all_warnings = syntax_result.warnings + quality_result.warnings + leaks_result.error_messages
 
             return ValidationResult(
                 is_valid=len(all_errors) == 0,
@@ -256,7 +239,7 @@ class EARSMode:
             f"## Correcciones necesarias (intento {retry_count})\n\n"
             f"Los requisitos generados tienen los siguientes problemas:\n\n"
             f"{error_list}\n\n"
-            f"Corregí estos problemas y generá los requisitos nuevamente."
+            f"Corrige estos problemas y genera los requisitos nuevamente."
         )
 
     def build_output(
@@ -295,8 +278,7 @@ class EARSMode:
 
             raw_trace = item.get("traceability", [])
             traceability: list[str] = (
-                [str(t) for t in raw_trace] if isinstance(raw_trace, list)  # type: ignore[reportUnknownVariableType]
-                else []
+                [str(t) for t in cast("list[object]", raw_trace)] if isinstance(raw_trace, list) else []
             )
 
             requirements.append(
@@ -358,7 +340,5 @@ class EARSMode:
         blocks: list[str] = []
         for r in reqs:
             if hasattr(r, "display_id") and hasattr(r, "source_statement"):
-                blocks.append(
-                    f"### {r.display_id}\n\n{r.source_statement.strip()}"
-                )
+                blocks.append(f"### {r.display_id}\n\n{r.source_statement.strip()}")
         return "\n\n".join(blocks).strip()

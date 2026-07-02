@@ -89,6 +89,14 @@ class GenerateFeaturesUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features",
             )
 
+        validation = phase_output.validation_result
+        if not validation.is_valid or not phase_output.features:
+            detail = "; ".join(validation.errors) or "No se generaron características."
+            raise LLMInvocationError(
+                detail=f"Las características generadas no cumplen la estructura válida: {detail}",
+                instance=f"/api/v1/projects/{input_data.project_id}/features",
+            )
+
         next_num = max((f.number for f in existing_features), default=0) + 1
         for feat in phase_output.features:
             feat.number = next_num
