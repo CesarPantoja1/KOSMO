@@ -18,9 +18,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
 
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
         async with self._session_factory() as session:
-            stmt = select(DiscoveryDocumentModel).where(
-                DiscoveryDocumentModel.project_id == str(project_id)
-            )
+            stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if model is None:
@@ -34,9 +32,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
     ) -> RichTextDocument:
         markdown = document_to_markdown(document)
         async with self._session_factory() as session:
-            stmt = select(DiscoveryDocumentModel).where(
-                DiscoveryDocumentModel.project_id == str(project_id)
-            )
+            stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
 

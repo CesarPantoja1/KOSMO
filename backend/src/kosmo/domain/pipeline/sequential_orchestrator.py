@@ -51,10 +51,7 @@ class SequentialOrchestrator:
         if current_phase is None:
             if target_idx != 0:
                 raise PhaseTransitionError(
-                    detail=(
-                        f"La primera fase debe ser '{_PHASE_ORDER[0].value}', "
-                        f"no '{target_phase.value}'."
-                    )
+                    detail=(f"La primera fase debe ser '{_PHASE_ORDER[0].value}', no '{target_phase.value}'.")
                 )
             return
 
@@ -66,10 +63,7 @@ class SequentialOrchestrator:
         # No se puede retroceder
         if target_idx <= current_idx:
             raise PhaseTransitionError(
-                detail=(
-                    f"No se puede retroceder de la fase '{current_phase.value}' "
-                    f"a la fase '{target_phase.value}'."
-                )
+                detail=(f"No se puede retroceder de la fase '{current_phase.value}' a la fase '{target_phase.value}'.")
             )
 
         # Solo se puede avanzar una fase a la vez

@@ -27,9 +27,7 @@ if TYPE_CHECKING:
     from kosmo.config import Settings
 
 
-def _inject_otel_context(
-    _logger: WrappedLogger, _method_name: str, event_dict: EventDict
-) -> EventDict:
+def _inject_otel_context(_logger: WrappedLogger, _method_name: str, event_dict: EventDict) -> EventDict:
     span = trace.get_current_span()
     context = span.get_span_context()
     if context.is_valid:
@@ -67,9 +65,7 @@ def _configure_structlog(settings: Settings) -> None:
 
 
 def _configure_logfire(settings: Settings) -> None:
-    token = (
-        settings.logfire_token.get_secret_value() if settings.logfire_token is not None else None
-    )
+    token = settings.logfire_token.get_secret_value() if settings.logfire_token is not None else None
     logfire.configure(
         token=token,
         service_name=settings.otel_service_name,

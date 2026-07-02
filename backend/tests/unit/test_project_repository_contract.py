@@ -24,11 +24,7 @@ class InMemoryProjectRepository:
 
     async def by_slug(self, owner_id: str, slug: str) -> FakeProject | None:
         return next(
-            (
-                project
-                for project in self.projects.values()
-                if project.owner_id == owner_id and project.slug == slug
-            ),
+            (project for project in self.projects.values() if project.owner_id == owner_id and project.slug == slug),
             None,
         )
 

@@ -200,9 +200,7 @@ async def test_register_creates_user_with_argon2_hash() -> None:
 @pytest.mark.asyncio
 async def test_register_rejects_duplicate_email() -> None:
     repo = InMemoryUserRepository()
-    register = RegisterUser(
-        user_repository=repo, password_hasher=_hasher(), audit_sink=InMemoryAuditEventSink()
-    )
+    register = RegisterUser(user_repository=repo, password_hasher=_hasher(), audit_sink=InMemoryAuditEventSink())
     await register.execute(email="alice@example.com", password="password-12345")
 
     with pytest.raises(UserAlreadyExistsError):

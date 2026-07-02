@@ -161,9 +161,7 @@ async def register(
             "content": {
                 "application/json": {
                     "example": {
-                        "authorization_code": (
-                            "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-                        ),
+                        "authorization_code": ("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
                         "expires_in": 300,
                     }
                 }
@@ -215,9 +213,7 @@ async def authorize(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content=OAuthErrorResponse(
                 error="account_locked",
-                error_description=(
-                    f"Cuenta bloqueada. Intente de nuevo en {exc.seconds_remaining} segundos."
-                ),
+                error_description=(f"Cuenta bloqueada. Intente de nuevo en {exc.seconds_remaining} segundos."),
             ).model_dump(),
             headers={"Retry-After": str(exc.seconds_remaining)},
         )
@@ -455,9 +451,7 @@ async def refresh(
                             "summary": "Header Authorization ausente",
                             "value": {
                                 "error": "missing_token",
-                                "error_description": (
-                                    "Se requiere el header Authorization: Bearer <token>"
-                                ),
+                                "error_description": ("Se requiere el header Authorization: Bearer <token>"),
                             },
                         },
                         "token_expirado": {

@@ -90,9 +90,7 @@ class JoseJwtVerifier:
 
         token_type_raw = payload.get("type")
         if token_type_raw != expected_type.value:
-            raise InvalidTokenError(
-                f"Unexpected token type: got {token_type_raw!r}, expected {expected_type.value!r}"
-            )
+            raise InvalidTokenError(f"Unexpected token type: got {token_type_raw!r}, expected {expected_type.value!r}")
 
         try:
             family_raw = payload.get("fam")

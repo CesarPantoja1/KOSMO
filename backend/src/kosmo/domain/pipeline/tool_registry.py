@@ -101,10 +101,7 @@ class ToolRegistry:
 
         for param in required:
             if param not in input_data:
-                return (
-                    f"Parametro requerido '{param}' no proporcionado. "
-                    f"Se requieren: {', '.join(required)}"
-                )
+                return f"Parametro requerido '{param}' no proporcionado. Se requieren: {', '.join(required)}"
 
         for param, value in input_data.items():
             if param not in properties:
@@ -112,8 +109,7 @@ class ToolRegistry:
             expected_type = properties[param].get("type", "string")
             if not _matches_type(value, expected_type):
                 return (
-                    f"Parametro '{param}' debe ser de tipo '{expected_type}' "
-                    f"pero se recibio '{type(value).__name__}'"
+                    f"Parametro '{param}' debe ser de tipo '{expected_type}' pero se recibio '{type(value).__name__}'"
                 )
 
         return None
