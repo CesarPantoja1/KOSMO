@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import ulid
+from ulid import ULID
 
 
 @dataclass
@@ -20,7 +20,7 @@ class ProblemDetail:
     status: int
     detail: str
     instance: str
-    trace_id: str = field(default_factory=lambda: str(ulid.new()))
+    trace_id: str = field(default_factory=lambda: ULID().hex)
     violations: list[Violation] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
 
