@@ -41,6 +41,8 @@ const RequirementsPage = () => {
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
 	const hasRequirements = useAppStore((s) => s.hasRequirements);
 	const setHasRequirements = useAppStore((s) => s.setHasRequirements);
+	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
+	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
@@ -84,10 +86,7 @@ const RequirementsPage = () => {
 			setMarkdown('');
 			setSavedContent('');
 			try {
-				const content = await getCharacteristicRequirements(
-					projectId,
-					characteristicId,
-				);
+				const content = await getCharacteristicRequirements(projectId, characteristicId);
 				if (cancelled) return;
 				if (content) {
 					setHasRequirements(characteristicId, true);
@@ -238,30 +237,33 @@ const RequirementsPage = () => {
 					<div>
 						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
 						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-							de cada función de la lista.
+							Usa el asistente de IA para desglosar y estructurar los requisitos
+							específicos de cada función de la lista.
 						</p>
 					</div>
-					<div className='inline-flex justify-end items-start gap-3 mt-2'>
-						<button
-							disabled
-							className='px-5 py-2 cursor-pointer rounded-sm disabled:opacity-50 bg-base-600 text-base-50 font-medium inline-flex items-center gap-2'
-						>
-							Guardar
-						</button>
-						<Link
-							href='modelo'
-							onClick={(e) => e.preventDefault()}
-							className='px-5 py-2 inline-flex gap-2 items-center cursor-pointer text-base-50 bg-ai rounded-sm font-medium'
-						>
-							Modelado
-							<ArrowRight color='text-base-50' size={24} />
-						</Link>
-					</div>
+				</div>
+				<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+					<button
+						disabled
+						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 disabled:opacity-50 bg-ai rounded-sm font-medium'
+					>
+						<Ai color='text-base-50' size={20} />
+						Refinar
+					</button>
+
+					<Link
+						href='modelo'
+						aria-disabled
+						onClick={(e) => e.preventDefault()}
+						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
+					>
+						Ir a modelo
+						<ArrowRight color='text-base-50' size={20} />
+					</Link>
 				</div>
 
 				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<div className='w-[22rem] pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
+					<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
 						<div className='h-7 bg-base-200 rounded w-48' />
 						{[1, 2, 3, 4].map((i) => (
 							<div key={i} className='h-14 bg-base-200 rounded' />
@@ -286,43 +288,45 @@ const RequirementsPage = () => {
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			{isGenerating && <Loading title='Generando requisitos...' description='Desglosando la característica seleccionada en especificaciones técnicas.' />}
+			{isGenerating && (
+				<Loading
+					title='Generando requisitos...'
+					description='Desglosando la característica seleccionada en especificaciones técnicas.'
+				/>
+			)}
 
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
+			<div
+				className={`flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
+			>
 				<div className='flex justify-between items-start'>
 					<div>
 						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
 						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-							de cada función de la lista.
+							Usa el asistente de IA para desglosar y estructurar los requisitos
+							específicos de cada función de la lista.
 						</p>
 					</div>
-					<div className='inline-flex justify-end items-start gap-3 mt-2'>
-						<button
-							onClick={handleSave}
-							disabled={!selectedCharacteristic || !hasUnsavedChanges}
-							className={`px-5 py-2 cursor-pointer rounded-sm disabled:opacity-50 font-medium inline-flex items-center gap-2 ${
-								hasUnsavedChanges
-									? 'bg-primary-100 text-base-50 hover:bg-primary-100/90'
-									: 'bg-base-600 text-base-50'
-							}`}
-						>
-							Guardar
+				</div>
+				{!isEditorMaximized && (
+					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+						<button className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-ai rounded-sm font-medium'>
+							<Ai color='text-base-50' size={20} />
+							Refinar
 						</button>
 
 						<Link
 							href='modelo'
 							onClick={handleNextLink('modelo')}
-							className='px-5 py-2 inline-flex gap-2 items-center cursor-pointer text-base-50 bg-ai rounded-sm hover:bg-ai/90 transition-colors duration-200 font-medium'
+							className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
 						>
-							Modelado
-							<ArrowRight color='text-base-50' size={24} />
+							Ir a modelo
+							<ArrowRight color='text-base-50' size={20} />
 						</Link>
 					</div>
-				</div>
+				)}
 
 				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<aside className='w-[22rem] pt-3 bg-base-100/50 rounded-sm flex flex-col'>
+					<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
 						<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
 							Lista de Características
 						</h3>
@@ -361,7 +365,10 @@ const RequirementsPage = () => {
 										</p>
 										{(c.requirements || hasRequirements[c.id]) && (
 											<div className='shrink-0 mt-0.5'>
-												<Requirements size={20} color={isSelected ? 'text-primary-100' : 'text-base-600'} />
+												<Requirements
+													size={20}
+													color={isSelected ? 'text-primary-100' : 'text-base-600'}
+												/>
 											</div>
 										)}
 									</button>
@@ -397,49 +404,60 @@ const RequirementsPage = () => {
 							</div>
 						)}
 
-						{selectedCharacteristic && !isLoadingRequirements && selectedCharacteristic.requirements && (
-							<div className='flex flex-col flex-1 min-h-0 gap-4'>
-								<div className='flex flex-col gap-2 px-2'>
-									<div className='inline-flex justify-start gap-3 items-center'>
-										<span className='text-2xl font-bold text-base-800'>
-											{selectedCharacteristic.display_id}
-										</span>
-										<span className='text-2xl font-bold text-primary-100'>
-											{selectedCharacteristic.title}
-										</span>
+						{selectedCharacteristic &&
+							!isLoadingRequirements &&
+							selectedCharacteristic.requirements && (
+								<div className='flex flex-col flex-1 min-h-0 gap-4'>
+									<div className='flex flex-col gap-2 px-2'>
+										<div className='inline-flex justify-start gap-3 items-center'>
+											<span className='text-2xl font-bold text-base-800'>
+												{selectedCharacteristic.display_id}
+											</span>
+											<span className='text-2xl font-bold text-primary-100'>
+												{selectedCharacteristic.title}
+											</span>
+										</div>
+										<p className='text-base-600 text-base'>
+											{selectedCharacteristic.description}
+										</p>
 									</div>
-									<p className='text-base-600 text-base'>
-										{selectedCharacteristic.description}
+									<div className='flex-1 min-h-0 mt-2'>
+										<MarkdownEditor
+											markdown={markdown}
+											onChange={setMarkdown}
+											isMaximized={isEditorMaximized}
+											onMaximize={() => setEditorMaximized(true)}
+											onMinimize={() => setEditorMaximized(false)}
+										/>
+									</div>
+								</div>
+							)}
+
+						{selectedCharacteristic &&
+							!isLoadingRequirements &&
+							!selectedCharacteristic.requirements && (
+								<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
+									<Ai color='text-ai' size={70} />
+
+									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+										Sin requisitos generados
+									</span>
+
+									<p className='text-base-800 text-lg text-center'>
+										Esta característica aún no tiene requisitos asociados. Haz clic en el
+										botón <span className='text-xl font-bold'>Generar </span>
+										para generarlos automáticamente basados en la descripción.
 									</p>
-								</div>
-								<div className='flex-1 min-h-0 mt-2'>
-									<MarkdownEditor markdown={markdown} onChange={setMarkdown} />
-								</div>
-							</div>
-						)}
 
-						{selectedCharacteristic && !isLoadingRequirements && !selectedCharacteristic.requirements && (
-							<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-								<Ai color='text-ai' size={70} />
-
-								<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-									Sin requisitos generados
-								</span>
-
-								<p className='text-base-800 text-lg text-center'>
-									Esta característica aún no tiene requisitos asociados. Haz clic en el
-									botón <span className='text-xl font-bold'>Generar </span>
-									para generarlos automáticamente basados en la descripción.
-								</p>
-
-								<button
-									onClick={handleGenerate}
-									className='px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
-								>
-									Generar
-								</button>
-							</section>
-						)}
+									<button
+										onClick={handleGenerate}
+										className='inline-flex items-center gap-1 px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
+									>
+										<Ai color='text-base-50' size={20} />
+										Generar
+									</button>
+								</section>
+							)}
 					</div>
 				</div>
 			</div>
