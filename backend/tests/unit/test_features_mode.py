@@ -399,7 +399,10 @@ def test_features_mode_validate_output_accepts_five_features_on_first_generation
             {
                 "number": 1,
                 "title": "Registrar gastos compartidos",
-                "description": "Cualquier participante indica el monto de un gasto y selecciona a las personas involucradas.",
+                "description": (
+                    "Cualquier participante indica el monto de un gasto "
+                    "y selecciona a las personas involucradas."
+                ),
                 "origin": "Se traza a Metas del producto.",
             },
             {
@@ -411,7 +414,10 @@ def test_features_mode_validate_output_accepts_five_features_on_first_generation
             {
                 "number": 3,
                 "title": "Liquidar deudas del grupo",
-                "description": "El administrador visualiza un plan de transferencias para saldar todas las cuentas pendientes.",
+                "description": (
+                    "El administrador visualiza un plan de transferencias "
+                    "para saldar todas las cuentas pendientes."
+                ),
                 "origin": "Se traza a Reglas de negocio.",
             },
             {
@@ -423,7 +429,10 @@ def test_features_mode_validate_output_accepts_five_features_on_first_generation
             {
                 "number": 5,
                 "title": "Notificar recordatorios de pago",
-                "description": "Los miembros reciben avisos automaticos cuando se acerca la fecha de vencimiento de una deuda.",
+                "description": (
+                    "Los miembros reciben avisos automaticos "
+                    "cuando se acerca la fecha de vencimiento de una deuda."
+                ),
                 "origin": "Se traza a Alcance.",
             },
         ]
@@ -446,7 +455,10 @@ def test_features_mode_validate_output_rejects_wrong_count_on_first_generation()
             {
                 "number": 1,
                 "title": "Registrar gastos compartidos",
-                "description": "Cualquier participante indica el monto de un gasto y selecciona a las personas involucradas.",
+                "description": (
+                    "Cualquier participante indica el monto de un gasto "
+                    "y selecciona a las personas involucradas."
+                ),
                 "origin": "Se traza a Metas del producto.",
             },
             {
@@ -458,7 +470,10 @@ def test_features_mode_validate_output_rejects_wrong_count_on_first_generation()
             {
                 "number": 3,
                 "title": "Liquidar deudas del grupo",
-                "description": "El administrador visualiza un plan de transferencias para saldar todas las cuentas pendientes.",
+                "description": (
+                    "El administrador visualiza un plan de transferencias "
+                    "para saldar todas las cuentas pendientes."
+                ),
                 "origin": "Se traza a Reglas de negocio.",
             },
         ]
