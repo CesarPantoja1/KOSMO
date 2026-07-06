@@ -25,6 +25,7 @@ from kosmo.application.discovery import (
     SaveDiscoveryUseCase,
 )
 from kosmo.application.features import (
+    CreateCharacteristicUseCase,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
@@ -401,6 +402,7 @@ class FeaturesComponents:
     generate_features: GenerateFeaturesUseCase
     suggest_features: SuggestFeaturesUseCase
     save_selected_features: SaveSelectedFeaturesUseCase
+    create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
 
 
@@ -424,6 +426,9 @@ def build_features_components(
             llm_client=pipeline.llm_client,
         ),
         save_selected_features=SaveSelectedFeaturesUseCase(
+            feature_repo=feature_repo,
+        ),
+        create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
         ),
         feature_repo=feature_repo,

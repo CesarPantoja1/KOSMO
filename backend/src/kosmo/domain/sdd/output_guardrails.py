@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from kosmo.contracts.sdd.guardrails import (
+    FEATURE_LEVEL_PROHIBITED_TERMS,
     PROHIBITED_TERMS,
     GuardrailResult,
     GuardrailViolation,
@@ -41,6 +42,21 @@ def auto_repair_technical_terms(text: str) -> str:
     for original, replacement in _TECH_REPLACEMENTS.items():
         result = result.replace(original, replacement)
     return result
+
+
+def detect_feature_level_violations(text: str, section: str = "") -> GuardrailResult:
+    violations: list[GuardrailViolation] = []
+    all_terms = PROHIBITED_TERMS + FEATURE_LEVEL_PROHIBITED_TERMS
+    for term in all_terms:
+        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        match = pattern.search(text)
+        if match:
+            idx = match.start()
+            start = max(0, idx - 30)
+            end = min(len(text), idx + len(term) + 30)
+            context = text[start:end]
+            violations.append(GuardrailViolation(term=term, context=context, section=section))
+    return GuardrailResult(is_valid=len(violations) == 0, violations=violations)
 
 
 def detect_implementation_leaks(requirements: list[dict[str, str]]) -> GuardrailResult:
