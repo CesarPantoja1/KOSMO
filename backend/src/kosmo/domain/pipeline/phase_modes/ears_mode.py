@@ -35,7 +35,7 @@ generar requisitos formales para UNA característica aprobada del producto.
 
 ## Input que recibes
 - Un Documento de Descubrimiento (contexto de negocio).
-- UNA característica aprobada (con su C0X, título, descripción 4W, rationale).
+- UNA característica aprobada (con su C0X, título, descripción 4W, origen).
 - El número de la característica (para formato REQ-X.X).
 - Preferencias del usuario (si existen).
 
@@ -196,7 +196,7 @@ class EARSMode:
         parts.append(f"- **ID**: {context.feature.display_id}\n")
         parts.append(f"- **Título**: {context.feature.title}\n")
         parts.append(f"- **Descripción**: {context.feature.description}\n")
-        parts.append(f"- **Rationale**: {context.feature.rationale}\n")
+        parts.append(f"- **Origen**: {context.feature.origin}\n")
         parts.append(f"\nNúmero de característica para formato REQ: {context.feature_number}\n")
 
         if context.user_preferences:

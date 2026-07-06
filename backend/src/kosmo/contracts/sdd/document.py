@@ -63,8 +63,7 @@ class SuggestedFeature:
     number: int
     title: str
     description: str
-    rationale: str
-    inferred_from: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    origin: str = ""
 
 
 @dataclass(frozen=True)

@@ -71,8 +71,7 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             title=model.title,
             slug=model.slug,
             description=model.description,
-            rationale=model.rationale,
-            inferred_from=model.inferred_from if isinstance(model.inferred_from, list) else [],
+            origin=model.origin,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -85,8 +84,7 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             title=feature.title,
             slug=feature.slug,
             description=feature.description,
-            rationale=feature.rationale,
-            inferred_from=feature.inferred_from,
+            origin=feature.origin,
         )
 
     def _update_model(self, model: FeatureModel, feature: Feature) -> None:
@@ -94,6 +92,5 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
         model.title = feature.title
         model.slug = feature.slug
         model.description = feature.description
-        model.rationale = feature.rationale
-        model.inferred_from = feature.inferred_from  # type: ignore[reportAttributeAccessIssue]
+        model.origin = feature.origin
         model.updated_at = datetime.now(UTC)

@@ -1,3 +1,8 @@
+from kosmo.application.features.create_characteristic import (
+    CreateCharacteristicInput,
+    CreateCharacteristicOutput,
+    CreateCharacteristicUseCase,
+)
 from kosmo.application.features.generate_features import (
     GenerateFeaturesInput,
     GenerateFeaturesOutput,
@@ -13,6 +18,9 @@ from kosmo.application.features.save_features import (
 )
 
 __all__ = [
+    "CreateCharacteristicInput",
+    "CreateCharacteristicOutput",
+    "CreateCharacteristicUseCase",
     "GenerateFeaturesInput",
     "GenerateFeaturesOutput",
     "GenerateFeaturesUseCase",

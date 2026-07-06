@@ -14,8 +14,7 @@ class Feature:
     slug: str
     description: str
     project_id: ProjectId = field(default_factory=lambda: ProjectId(""))
-    rationale: str = ""
-    inferred_from: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    origin: str = ""
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 

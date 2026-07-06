@@ -8,8 +8,6 @@ import { toast } from '@/shared/ui';
 import type { Characteristic } from '@/entities/characteristic';
 
 interface UseCharacteristicsPageReturn {
-	view: 'list' | 'create';
-	setView: (v: 'list' | 'create') => void;
 	characteristics: Characteristic[];
 	isLoading: boolean;
 	searchQuery: string;
@@ -21,7 +19,6 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [view, setView] = useState<'list' | 'create'>('list');
 	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
@@ -54,5 +51,5 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 			)
 		: characteristics;
 
-	return { view, setView, characteristics, isLoading, searchQuery, setSearchQuery, filtered };
+	return { characteristics, isLoading, searchQuery, setSearchQuery, filtered };
 }

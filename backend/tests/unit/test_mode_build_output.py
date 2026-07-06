@@ -70,8 +70,8 @@ _DISCOVERY_MD = (
 
 _FEATURES_JSON = (
     '{"features": ['
-    '{"title": "Feature 1", "description": "Descripcion valida", '
-    '"number": 1, "rationale": "Justificacion", "inferred_from": ["C01"]}'
+    '{"title": "Feature 1", "description": "Descripcion valida del feature", '
+    '"number": 1, "origin": "Se deriva de las metas. Se traza a Metas del producto y Reglas de negocio."}'
     "]}"
 )
 
