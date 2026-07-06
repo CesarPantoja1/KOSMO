@@ -69,6 +69,7 @@ class SuggestedFeature:
 
 @dataclass(frozen=True)
 class AcceptanceCriterion:
+    scenario: str
     given: str
     when: str
     then: str
@@ -109,7 +110,7 @@ class EARSPatternLabel(StrEnum):
     event_driven = "Requisitos Basados en Eventos"
     state_driven = "Requisitos Determinados por el Estado"
     optional = "Requisitos Opcionales"
-    unwanted = "Requisitos de Respuestas Deseadas ante Fallos"
+    unwanted = "Respuesta ante Comportamiento no Deseado"
     complex = "Requisitos Complejos"
 
 

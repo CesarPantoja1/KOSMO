@@ -17,12 +17,8 @@ class EARSRequirement:
     feature_number: int
     requirement_number: int
     pattern: EARSPattern
-    trigger: str
-    system: str
-    response: str
-    source_statement: str
-    rationale: str
-    traceability: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    statement: str
+    origin: str
     acceptance_criteria: list[AcceptanceCriterion] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 

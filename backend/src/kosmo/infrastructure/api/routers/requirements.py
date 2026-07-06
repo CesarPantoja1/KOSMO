@@ -102,12 +102,12 @@ async def get_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
     project_id: str = Query(...),
-) -> dict[str, str]:
+) -> dict[str, Any]:
     fid = await _resolve_feature_id(request, project_id, feature_id)
     uc = cast("GetRequirementsUseCase", request.app.state.get_requirements)
 
     try:
-        markdown = await uc.execute(
+        output = await uc.execute(
             project_id=ProjectId(project_id),
             feature_id=fid,
         )
@@ -117,7 +117,7 @@ async def get_requirements(
             detail=exc.problem.detail,
         ) from exc
 
-    return {"document_markdown": markdown or ""}
+    return {"document_markdown": output.markdown or "", "total": output.total}
 
 
 @router.put(

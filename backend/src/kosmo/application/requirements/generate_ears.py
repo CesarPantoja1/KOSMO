@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
@@ -31,6 +32,12 @@ class GenerateEARSOutput:
     feature_id: FeatureId
     requirements: list[EARSRequirement]
     phase_output: EARSPhaseOutput
+
+
+@dataclass(frozen=True)
+class GetRequirementsOutput:
+    markdown: str | None
+    total: int
 
 
 class GenerateEARSUseCase:
@@ -128,7 +135,7 @@ class GetRequirementsUseCase:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
 
-    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> str | None:
+    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> GetRequirementsOutput:
         from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 
         project = await self._project_repo.by_id(project_id)
@@ -145,4 +152,10 @@ class GetRequirementsUseCase:
                 instance=f"/api/v1/projects/{project_id}/features/{feature_id}/requirements",
             )
 
-        return await self._requirement_repo.by_feature_id(feature_id)
+        markdown = await self._requirement_repo.by_feature_id(feature_id)
+        total = self._count_requirements(markdown) if markdown else 0
+        return GetRequirementsOutput(markdown=markdown, total=total)
+
+    @staticmethod
+    def _count_requirements(markdown: str) -> int:
+        return len(re.findall(r"^###\s+REQ-\d+\.\d+", markdown, re.MULTILINE))

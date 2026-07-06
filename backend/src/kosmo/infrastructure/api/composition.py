@@ -70,9 +70,9 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
-from kosmo.domain.sdd.output_guardrails import detect_implementation_leaks
 from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_quality,
+    validate_ears_software_level,
     validate_ears_syntax,
 )
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
@@ -310,8 +310,8 @@ def build_pipeline_components(
         lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
     )
     tool_registry.register(
-        "detect_implementation_leaks",
-        lambda inp: _adapt_leaks_result(_detect_leaks_raw(inp)),
+        "validate_ears_software_level",
+        lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
     )
 
     # 6. Instanciar el agente KOSMO con el registro de herramientas
@@ -477,14 +477,6 @@ def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
     return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}
 
 
-def _adapt_leaks_result(result: Any) -> dict[str, object]:
-    return {
-        "is_valid": result.is_valid,
-        "errors": [str(v) for v in result.violations],
-        "warnings": [],
-    }
-
-
 def _extract_array(inp: dict[str, object], key: str) -> list[Any]:
     import json
 
@@ -525,6 +517,6 @@ def _validate_ears_quality_raw(inp: dict[str, object]) -> ValidationResult:
     return validate_ears_quality(requirements)
 
 
-def _detect_leaks_raw(inp: dict[str, object]) -> Any:
+def _validate_ears_software_level_raw(inp: dict[str, object]) -> ValidationResult:
     requirements = _extract_array(inp, "requirements")
-    return detect_implementation_leaks(cast("list[dict[str, str]]", requirements))
+    return validate_ears_software_level(requirements)

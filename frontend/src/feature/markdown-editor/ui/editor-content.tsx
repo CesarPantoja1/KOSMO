@@ -6,11 +6,13 @@ import {
 	BlockTypeSelect,
 	BoldItalicUnderlineToggles,
 	headingsPlugin,
+	InsertTable,
 	listsPlugin,
 	ListsToggle,
 	markdownShortcutPlugin,
 	MDXEditor,
 	quotePlugin,
+	tablePlugin,
 	thematicBreakPlugin,
 	toolbarPlugin,
 	UndoRedo,
@@ -42,6 +44,7 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 					listsPlugin(),
 					quotePlugin(),
 					thematicBreakPlugin(),
+					tablePlugin(),
 					markdownShortcutPlugin(),
 					toolbarPlugin({
 						toolbarClassName: 'bg-base-300',
@@ -52,6 +55,7 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 									<BoldItalicUnderlineToggles />
 									<BlockTypeSelect />
 									<ListsToggle />
+									<InsertTable />
 								</div>
 								<button
 									type='button'

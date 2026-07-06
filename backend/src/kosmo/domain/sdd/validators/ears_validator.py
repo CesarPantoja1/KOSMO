@@ -129,7 +129,56 @@ def validate_ears_quality(requirements: list[Any]) -> ValidationResult:
             errors.append(f"{display_id}: source_statement vacío")
 
         if not ac:
-            warnings.append(f"{display_id}: sin criterios de aceptación")
+            errors.append(f"{display_id}: sin criterios de aceptación")
+
+        if len(ac) == 1:
+            errors.append(f"{display_id}: se requieren al menos 2 criterios de aceptación, tiene {len(ac)}")
+
+    if len(patterns_seen) < 4:
+        warnings.append(f"Se recomiendan al menos 4 categorías EARS diferentes, solo hay {len(patterns_seen)}")
+
+    return ValidationResult(
+        is_valid=len(errors) == 0,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def validate_ears_software_level(requirements: list[Any]) -> ValidationResult:
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if len(requirements) < 3:
+        errors.append(f"Se requieren al menos 3 requisitos por feature, solo hay {len(requirements)}")
+    elif len(requirements) > 15:
+        warnings.append(f"Se recomienda máximo 15 requisitos por feature, hay {len(requirements)}")
+
+    patterns_seen: set[str] = set()
+    for req in requirements:
+        pattern = _get_pattern(req)
+        patterns_seen.add(str(pattern))
+        display_id = _get_display_id(req)
+        stmt = str(_get(req, "statement", ""))
+        origin = str(_get(req, "origin", ""))
+        ac = _get_acceptance_criteria(req)
+
+        if not stmt.strip():
+            errors.append(f"{display_id}: statement vacío")
+
+        if not origin.strip():
+            warnings.append(f"{display_id}: origen vacío")
+
+        if len(ac) < 2:
+            errors.append(f"{display_id}: se requieren al menos 2 criterios de aceptación, tiene {len(ac)}")
+
+        for i, criterion in enumerate(ac, start=1):
+            if isinstance(criterion, dict):
+                c = cast("dict[str, Any]", criterion)
+                if not str(c.get("scenario", "")).strip():
+                    errors.append(f"{display_id}: criterio {i} sin scenario")
+                for key in ("given", "when", "then"):
+                    if not str(c.get(key, "")).strip():
+                        errors.append(f"{display_id}: criterio {i} sin {key}")
 
     if len(patterns_seen) < 4:
         warnings.append(f"Se recomiendan al menos 4 categorías EARS diferentes, solo hay {len(patterns_seen)}")

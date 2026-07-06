@@ -85,10 +85,7 @@ class PhaseMode(Protocol):
 
     def build_user_prompt(
         self,
-        context: DiscoveryPhaseContext
-        | FeaturesPhaseContext
-        | EARSPhaseContext
-        | SuggestFeaturesContext,
+        context: DiscoveryPhaseContext | FeaturesPhaseContext | EARSPhaseContext | SuggestFeaturesContext,
     ) -> str: ...
 
     def validate_output(self, output: Any) -> ValidationResult: ...
