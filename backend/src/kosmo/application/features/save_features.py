@@ -146,12 +146,6 @@ class SuggestFeaturesUseCase:
             item: dict[str, object] = item_  # type: ignore[reportUnknownVariableType]
             number = next_number + i
             title = _strip_feature_id_prefix(str(item.get("title", f"Característica {number}")))
-            inferred_from_raw = item.get("inferred_from", [])
-            inferred_from: list[str] = (
-                [str(x) for x in inferred_from_raw]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-                if isinstance(inferred_from_raw, list)
-                else []
-            )
             suggestions.append(
                 SuggestedFeature(
                     number=number,
@@ -178,8 +172,6 @@ class SaveSelectedFeaturesUseCase:
         features: list[Feature] = []
         for item in input_data.features:
             title = _strip_feature_id_prefix(str(item.get("title", f"Característica {next_num}")))
-            inferred_raw = cast("list[Any]", item.get("inferred_from", []))
-            inferred: list[str] = [str(x) for x in inferred_raw] if inferred_raw else []
             features.append(
                 Feature(
                     id=FeatureId(IdGenerator.generate("feature")),

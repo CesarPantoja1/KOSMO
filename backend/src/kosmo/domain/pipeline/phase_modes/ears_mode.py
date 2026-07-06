@@ -199,7 +199,7 @@ class EARSMode:
         parts.append(f"- **Código**: {context.feature.display_id}\n")
         parts.append(f"- **Título**: {context.feature.title}\n")
         parts.append(f"- **Descripción**: {context.feature.description}\n")
-        parts.append(f"- **Origen**: {context.feature.rationale}\n")
+        parts.append(f"- **Origen**: {context.feature.origin}\n")
         parts.append(f"\nNúmero de característica para formato REQ: {context.feature_number}\n")
 
         if context.user_preferences:
