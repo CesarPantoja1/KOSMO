@@ -67,6 +67,7 @@ build/
 .vscode/
 .idea/
 backend/CLAUDE.md
+backend/.opencode/skills/tdd/SKILL.md
 .opencode/skills/tdd/SKILL.md
 docs/
 opencode.json
