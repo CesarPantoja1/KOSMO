@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kosmo.application.features.save_features import (
+    SuggestFeaturesInput,
+    SuggestFeaturesUseCase,
+)
+from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
@@ -18,6 +23,7 @@ class CreateCharacteristicInput:
 @dataclass(frozen=True)
 class CreateCharacteristicOutput:
     characteristic: Feature
+    suggestions: list[SuggestedFeature]
 
 
 class CreateCharacteristicUseCase:
@@ -29,10 +35,16 @@ class CreateCharacteristicUseCase:
     3. Obtiene el siguiente numero secuencial para el proyecto.
     4. Crea la entidad Feature con slug y display_id generados.
     5. Persiste la caracteristica en el repositorio.
+    6. Orquesta la generacion de sugerencias con IA.
     """
 
-    def __init__(self, feature_repo: FeatureRepository) -> None:
+    def __init__(
+        self,
+        feature_repo: FeatureRepository,
+        suggest_use_case: SuggestFeaturesUseCase,
+    ) -> None:
         self._feature_repo = feature_repo
+        self._suggest_use_case = suggest_use_case
 
     async def execute(self, input_data: CreateCharacteristicInput) -> CreateCharacteristicOutput:
         if not input_data.title.strip():
@@ -62,4 +74,10 @@ class CreateCharacteristicUseCase:
 
         saved = await self._feature_repo.save(feature)
 
-        return CreateCharacteristicOutput(characteristic=saved)
+        suggest_input = SuggestFeaturesInput(project_id=input_data.project_id)
+        suggest_output = await self._suggest_use_case.execute(suggest_input)
+
+        return CreateCharacteristicOutput(
+            characteristic=saved,
+            suggestions=suggest_output.suggestions,
+        )

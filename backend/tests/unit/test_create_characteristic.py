@@ -10,6 +10,7 @@ from kosmo.application.features.create_characteristic import (
     CreateCharacteristicInput,
     CreateCharacteristicUseCase,
 )
+from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature, SuggestFeaturesOutput
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 
@@ -38,10 +39,35 @@ class InMemoryFeatureRepository:
         return max((f.number for f in project_features), default=0) + 1
 
 
+class MockSuggestFeaturesUseCase:
+    def __init__(self, output: SuggestFeaturesOutput) -> None:
+        self.output = output
+        self.called_with: Any = None
+
+    async def execute(self, input_data: Any) -> SuggestFeaturesOutput:
+        self.called_with = input_data
+        return self.output
+
+
+def _default_mock_suggest() -> Any:
+    return MockSuggestFeaturesUseCase(
+        output=SuggestFeaturesOutput(suggestions=[], excluded_titles=[], domain_inferred="")
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_characteristic_success() -> None:
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    mock_suggest: Any = MockSuggestFeaturesUseCase(
+        output=SuggestFeaturesOutput(
+            suggestions=[
+                SuggestedFeature(number=2, title="Sugerencia 1", description="Desc 1", origin="AI")
+            ],
+            excluded_titles=[],
+            domain_inferred="",
+        )
+    )
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=mock_suggest)
     project_id = ProjectId("prj_create_test")
 
     input_data = CreateCharacteristicInput(
@@ -58,11 +84,15 @@ async def test_create_characteristic_success() -> None:
     assert str(output.characteristic.id).startswith("feat_")
     assert output.characteristic.slug == "catalogo-de-productos"
 
+    assert len(output.suggestions) == 1
+    assert output.suggestions[0].title == "Sugerencia 1"
+    assert mock_suggest.called_with.project_id == project_id
+
 
 @pytest.mark.asyncio
 async def test_create_characteristic_increments_number() -> None:
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
     project_id = ProjectId("prj_increment")
 
     await repository.save(
@@ -101,7 +131,7 @@ async def test_create_characteristic_increments_number() -> None:
 @pytest.mark.asyncio
 async def test_create_characteristic_title_too_long_raises() -> None:
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
 
     with pytest.raises(ValueError, match="50 caracteres"):
         await use_case.execute(
@@ -116,7 +146,7 @@ async def test_create_characteristic_title_too_long_raises() -> None:
 @pytest.mark.asyncio
 async def test_create_characteristic_description_too_long_raises() -> None:
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
 
     with pytest.raises(ValueError, match="500 caracteres"):
         await use_case.execute(
@@ -131,7 +161,7 @@ async def test_create_characteristic_description_too_long_raises() -> None:
 @pytest.mark.asyncio
 async def test_create_characteristic_empty_title_raises() -> None:
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
 
     with pytest.raises(ValueError, match="vacio"):
         await use_case.execute(
@@ -146,7 +176,7 @@ async def test_create_characteristic_empty_title_raises() -> None:
 @pytest.mark.asyncio
 async def test_create_characteristic_generates_unique_id_per_call() -> None:
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
     project_id = ProjectId("prj_unique")
 
     output1 = await use_case.execute(
