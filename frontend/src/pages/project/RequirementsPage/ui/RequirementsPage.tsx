@@ -33,6 +33,7 @@ const RequirementsPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
+	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
 
@@ -98,6 +99,7 @@ const RequirementsPage = () => {
 				);
 				setMarkdown(content);
 				setSavedContent(content);
+				setSaveStatus('idle');
 			} catch {
 				if (!cancelled) toast.error('Error al cargar los requisitos');
 			} finally {
@@ -157,6 +159,7 @@ const RequirementsPage = () => {
 			);
 			setMarkdown(content);
 			setSavedContent(content);
+			setSaveStatus('idle');
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
 			console.log(_err);
@@ -167,6 +170,7 @@ const RequirementsPage = () => {
 
 	const handleSave = async () => {
 		if (!selectedCharacteristic || !currentProject) return;
+		setSaveStatus('saving');
 		try {
 			await saveCharacteristicRequirements(
 				currentProject.id,
@@ -182,8 +186,10 @@ const RequirementsPage = () => {
 					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
 				),
 			);
+			setSaveStatus('saved');
 			toast.success('Requisitos guardados con éxito.');
 		} catch (_err) {
+			setSaveStatus('error');
 			toast.error('Error al guardar los requisitos');
 			console.log(_err);
 		}
@@ -409,13 +415,44 @@ const RequirementsPage = () => {
 							selectedCharacteristic.requirements && (
 								<div className='flex flex-col flex-1 min-h-0 gap-4'>
 									<div className='flex flex-col gap-2 px-2'>
-										<div className='inline-flex justify-start gap-3 items-center'>
-											<span className='text-2xl font-bold text-base-800'>
-												{selectedCharacteristic.display_id}
-											</span>
-											<span className='text-2xl font-bold text-primary-100'>
-												{selectedCharacteristic.title}
-											</span>
+										<div className='inline-flex justify-between items-center w-full'>
+											<div className='inline-flex justify-start gap-3 items-center'>
+												<span className='text-2xl font-bold text-base-800'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-2xl font-bold text-primary-100'>
+													{selectedCharacteristic.title}
+												</span>
+											</div>
+											<div className='inline-flex items-center gap-3'>
+												{saveStatus === 'saving' && (
+													<span className='text-sm font-medium text-base-600 animate-pulse'>
+														Guardando...
+													</span>
+												)}
+												{saveStatus === 'saved' && (
+													<span className='text-sm font-medium text-status-success'>
+														Guardado
+													</span>
+												)}
+												{saveStatus === 'error' && (
+													<span className='text-sm font-medium text-status-error'>
+														Error al guardar
+													</span>
+												)}
+												{(saveStatus === 'idle' || hasUnsavedChanges) && saveStatus !== 'saving' && saveStatus !== 'error' && (
+													<span className='text-sm font-medium text-base-500'>
+														{hasUnsavedChanges ? 'Cambios sin guardar' : ''}
+													</span>
+												)}
+												<button
+													onClick={handleSave}
+													disabled={!hasUnsavedChanges || saveStatus === 'saving'}
+													className='px-4 py-1.5 bg-primary-100 hover:bg-primary-100/90 text-base-50 rounded-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+												>
+													Guardar
+												</button>
+											</div>
 										</div>
 										<p className='text-base-600 text-base'>
 											{selectedCharacteristic.description}
