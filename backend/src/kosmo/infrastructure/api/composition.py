@@ -42,6 +42,7 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.config import Settings
+from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
@@ -78,6 +79,9 @@ from kosmo.domain.sdd.validators.ears_validator import (
 )
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
+from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
+    SqlAlchemyAgentSessionStore,
+)
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyProjectRepository,
@@ -237,6 +241,7 @@ class PipelineComponents:
     orchestrator: SequentialOrchestrator
     tool_registry: ToolRegistry
     skill_registry: SkillRegistry
+    agent_memory: AgentMemoryPort
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -315,14 +320,18 @@ def build_pipeline_components(
         lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
     )
 
-    # 6. Instanciar el agente KOSMO con el registro de herramientas
+    # 6. Instanciar el repositorio de memoria del agente
+    agent_memory = SqlAlchemyAgentSessionStore(session_factory)
+
+    # 7. Instanciar el agente KOSMO con el registro de herramientas y memoria
     agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
         modes=modes,  # type: ignore[reportArgumentType]
+        memory=agent_memory,  # type: ignore[reportArgumentType]
     )
 
-    # 7. Instanciar el SkillRegistry y registrar los skills
+    # 8. Instanciar el SkillRegistry y registrar los skills
     skill_registry = SkillRegistry()
     skill_registry.register(
         Skill(
@@ -341,18 +350,17 @@ def build_pipeline_components(
         )
     )
 
-    # 8. Instanciar el agente de refinamiento con DiscoveryRefineMode
+    # 9. Instanciar el agente de refinamiento con DiscoveryRefineMode y memoria
     refine_agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
         modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},  # type: ignore[reportArgumentType]
         skill_registry=skill_registry,
+        memory=agent_memory,  # type: ignore[reportArgumentType]
     )
 
-    # 9. Instanciar el orquestador secuencial
+    # 10. Instanciar el orquestador secuencial
     orchestrator = SequentialOrchestrator()
-
-    # (Aquí se instanciarán y retornarán los casos de uso a medida que se implementen)
 
     return PipelineComponents(
         llm_client=llm_client,
@@ -362,6 +370,7 @@ def build_pipeline_components(
         orchestrator=orchestrator,
         tool_registry=tool_registry,
         skill_registry=skill_registry,
+        agent_memory=agent_memory,
     )
 
 
