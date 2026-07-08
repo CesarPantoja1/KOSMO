@@ -3,9 +3,20 @@
 interface Props {
 	onCancel: () => void;
 	onConfirm: () => void;
+	title?: string;
+	description?: string;
+	cancelText?: string;
+	confirmText?: string;
 }
 
-const ModalConfirmLeave = ({ onCancel, onConfirm }: Props) => {
+const ModalConfirmLeave = ({
+	onCancel,
+	onConfirm,
+	title = 'Cambios sin guardar',
+	description = 'Si sale ahora, perderá las modificaciones recientes.',
+	cancelText = 'Cancelar',
+	confirmText = 'Aceptar',
+}: Props) => {
 	return (
 		<div
 			className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'
@@ -16,23 +27,23 @@ const ModalConfirmLeave = ({ onCancel, onConfirm }: Props) => {
 				onClick={(e) => e.stopPropagation()}
 			>
 				<h3 className='text-xl font-semibold text-base-950 mb-4 text-center'>
-					Cambios sin guardar
+					{title}
 				</h3>
 				<p className='text-base-950 text-center mb-6'>
-					Si sale ahora, perderá las modificaciones recientes.
+					{description}
 				</p>
 				<div className='flex justify-center gap-5 mt-9'>
 					<button
 						className='px-5 py-1 rounded-sm border cursor-pointer bg-base-950 border-base-950 text-base-50 hover:bg-base-50 hover:text-base-950'
 						onClick={onCancel}
 					>
-						Cancelar
+						{cancelText}
 					</button>
 					<button
 						className='px-5 py-1 rounded-sm border cursor-pointer bg-primary-100 text-base-50 border-primary-100 hover:bg-base-50 hover:text-primary-100'
 						onClick={onConfirm}
 					>
-						Aceptar
+						{confirmText}
 					</button>
 				</div>
 			</div>

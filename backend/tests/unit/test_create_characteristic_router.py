@@ -10,6 +10,7 @@ from kosmo.application.features.create_characteristic import (
     CreateCharacteristicUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.pipeline.phase_outputs import SuggestFeaturesOutput
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.routers.features import (
@@ -45,6 +46,15 @@ class InMemoryFeatureRepository:
         return max((f.number for f in project_features), default=0) + 1
 
 
+class MockSuggestFeaturesUseCase:
+    async def execute(self, _input_data: Any) -> SuggestFeaturesOutput:
+        return SuggestFeaturesOutput(
+            suggestions=[],
+            excluded_titles=[],
+            domain_inferred=""
+        )
+
+
 def _principal() -> Principal:
     return Principal(subject="usr_test123", scopes=frozenset({"*"}))
 
@@ -53,7 +63,8 @@ def _principal() -> Principal:
 async def test_create_manual_returns_201_and_feature_response() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    suggest_use_case: Any = MockSuggestFeaturesUseCase()
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=suggest_use_case)
     payload = CreateCharacteristicRequest(
         title="Catalogo de productos",
         description="Permite a los usuarios administrar el catalogo de productos del sistema",
@@ -81,7 +92,8 @@ async def test_create_manual_returns_201_and_feature_response() -> None:
 async def test_create_manual_whitespace_title_returns_400() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    suggest_use_case: Any = MockSuggestFeaturesUseCase()
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=suggest_use_case)
     payload = CreateCharacteristicRequest(
         title="   ",
         description="Descripcion valida",
@@ -101,7 +113,8 @@ async def test_create_manual_whitespace_title_returns_400() -> None:
 async def test_create_manual_title_at_max_50_chars_succeeds() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    suggest_use_case: Any = MockSuggestFeaturesUseCase()
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=suggest_use_case)
     payload = CreateCharacteristicRequest(
         title="A" * 50,
         description="Descripcion valida",
@@ -126,7 +139,8 @@ async def test_create_manual_title_at_max_50_chars_succeeds() -> None:
 async def test_create_manual_description_at_max_500_chars_succeeds() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    suggest_use_case: Any = MockSuggestFeaturesUseCase()
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=suggest_use_case)
     payload = CreateCharacteristicRequest(
         title="Titulo valido",
         description="D" * 500,
@@ -151,7 +165,8 @@ async def test_create_manual_description_at_max_500_chars_succeeds() -> None:
 async def test_create_manual_increments_number_for_subsequent_creations() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
-    use_case = CreateCharacteristicUseCase(feature_repo=repository)
+    suggest_use_case: Any = MockSuggestFeaturesUseCase()
+    use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=suggest_use_case)
     project_id = "prj_multi"
 
     first_payload = CreateCharacteristicRequest(

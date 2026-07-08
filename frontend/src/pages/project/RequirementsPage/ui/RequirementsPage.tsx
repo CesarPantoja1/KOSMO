@@ -33,6 +33,7 @@ const RequirementsPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
+	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
 
@@ -98,6 +99,7 @@ const RequirementsPage = () => {
 				);
 				setMarkdown(content);
 				setSavedContent(content);
+				setSaveStatus('idle');
 			} catch {
 				if (!cancelled) toast.error('Error al cargar los requisitos');
 			} finally {
@@ -157,6 +159,7 @@ const RequirementsPage = () => {
 			);
 			setMarkdown(content);
 			setSavedContent(content);
+			setSaveStatus('idle');
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
 			console.log(_err);
@@ -167,6 +170,7 @@ const RequirementsPage = () => {
 
 	const handleSave = async () => {
 		if (!selectedCharacteristic || !currentProject) return;
+		setSaveStatus('saving');
 		try {
 			await saveCharacteristicRequirements(
 				currentProject.id,
@@ -182,8 +186,10 @@ const RequirementsPage = () => {
 					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
 				),
 			);
+			setSaveStatus('saved');
 			toast.success('Requisitos guardados con éxito.');
 		} catch (_err) {
+			setSaveStatus('error');
 			toast.error('Error al guardar los requisitos');
 			console.log(_err);
 		}
@@ -235,10 +241,9 @@ const RequirementsPage = () => {
 			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
 				<div className='flex justify-between items-start'>
 					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+						<h2 className='text-3xl font-bold text-base-800'>Refinar y Completar Requisitos EARS</h2>
 						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos
-							específicos de cada función de la lista.
+							Usa el asistente de IA para refinar, estructurar y completar los requisitos EARS de cada característica.
 						</p>
 					</div>
 				</div>
@@ -290,8 +295,8 @@ const RequirementsPage = () => {
 
 			{isGenerating && (
 				<Loading
-					title='Generando requisitos...'
-					description='Desglosando la característica seleccionada en especificaciones técnicas.'
+					title='Refinando requisitos EARS...'
+					description='Estructurando la característica seleccionada bajo el estándar EARS.'
 				/>
 			)}
 
@@ -300,10 +305,9 @@ const RequirementsPage = () => {
 			>
 				<div className='flex justify-between items-start'>
 					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+						<h2 className='text-3xl font-bold text-base-800'>Refinar y Completar Requisitos EARS</h2>
 						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos
-							específicos de cada función de la lista.
+							Usa el asistente de IA para refinar, estructurar y completar los requisitos EARS de cada característica.
 						</p>
 					</div>
 				</div>
@@ -384,14 +388,14 @@ const RequirementsPage = () => {
 								<div className='self-stretch px-24 flex flex-col justify-start items-start'>
 									<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
 										<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
-											Comienza a trabajar
+											Selecciona una Característica
 										</div>
 									</div>
 									<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
 										<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
 											Selecciona una característica del listado lateral para ver su
 											detalle
-											<br />o generar nuevos requisitos.
+											<br />o comenzar a refinar sus requisitos EARS.
 										</div>
 									</div>
 								</div>
@@ -409,13 +413,44 @@ const RequirementsPage = () => {
 							selectedCharacteristic.requirements && (
 								<div className='flex flex-col flex-1 min-h-0 gap-4'>
 									<div className='flex flex-col gap-2 px-2'>
-										<div className='inline-flex justify-start gap-3 items-center'>
-											<span className='text-2xl font-bold text-base-800'>
-												{selectedCharacteristic.display_id}
-											</span>
-											<span className='text-2xl font-bold text-primary-100'>
-												{selectedCharacteristic.title}
-											</span>
+										<div className='inline-flex justify-between items-center w-full'>
+											<div className='inline-flex justify-start gap-3 items-center'>
+												<span className='text-2xl font-bold text-base-800'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-2xl font-bold text-primary-100'>
+													{selectedCharacteristic.title}
+												</span>
+											</div>
+											<div className='inline-flex items-center gap-3'>
+												{saveStatus === 'saving' && (
+													<span className='text-sm font-medium text-base-600 animate-pulse'>
+														Guardando...
+													</span>
+												)}
+												{saveStatus === 'saved' && (
+													<span className='text-sm font-medium text-status-success'>
+														Guardado
+													</span>
+												)}
+												{saveStatus === 'error' && (
+													<span className='text-sm font-medium text-status-error'>
+														Error al guardar
+													</span>
+												)}
+												{(saveStatus === 'idle' || hasUnsavedChanges) && saveStatus !== 'saving' && saveStatus !== 'error' && (
+													<span className='text-sm font-medium text-base-500'>
+														{hasUnsavedChanges ? 'Cambios sin guardar' : ''}
+													</span>
+												)}
+												<button
+													onClick={handleSave}
+													disabled={!hasUnsavedChanges || saveStatus === 'saving'}
+													className='px-4 py-1.5 bg-primary-100 hover:bg-primary-100/90 text-base-50 rounded-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+												>
+													Guardar
+												</button>
+											</div>
 										</div>
 										<p className='text-base-600 text-base'>
 											{selectedCharacteristic.description}
@@ -440,13 +475,13 @@ const RequirementsPage = () => {
 									<Ai color='text-ai' size={70} />
 
 									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Sin requisitos generados
+										Requisitos EARS no refinados
 									</span>
 
 									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos asociados. Haz clic en el
-										botón <span className='text-xl font-bold'>Generar </span>
-										para generarlos automáticamente basados en la descripción.
+										Esta característica aún no tiene requisitos estructurados. Haz clic en el
+										botón <span className='text-xl font-bold'>Refinar con IA </span>
+										para estructurarlos y completarlos automáticamente bajo el formato EARS.
 									</p>
 
 									<button
@@ -454,7 +489,7 @@ const RequirementsPage = () => {
 										className='inline-flex items-center gap-1 px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
 									>
 										<Ai color='text-base-50' size={20} />
-										Generar
+										Refinar con IA
 									</button>
 								</section>
 							)}
