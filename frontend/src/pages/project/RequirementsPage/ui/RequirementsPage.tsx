@@ -241,10 +241,9 @@ const RequirementsPage = () => {
 			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
 				<div className='flex justify-between items-start'>
 					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+						<h2 className='text-3xl font-bold text-base-800'>Refinar y Completar Requisitos EARS</h2>
 						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos
-							específicos de cada función de la lista.
+							Usa el asistente de IA para refinar, estructurar y completar los requisitos EARS de cada característica.
 						</p>
 					</div>
 				</div>
@@ -296,8 +295,8 @@ const RequirementsPage = () => {
 
 			{isGenerating && (
 				<Loading
-					title='Generando requisitos...'
-					description='Desglosando la característica seleccionada en especificaciones técnicas.'
+					title='Refinando requisitos EARS...'
+					description='Estructurando la característica seleccionada bajo el estándar EARS.'
 				/>
 			)}
 
@@ -306,10 +305,9 @@ const RequirementsPage = () => {
 			>
 				<div className='flex justify-between items-start'>
 					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+						<h2 className='text-3xl font-bold text-base-800'>Refinar y Completar Requisitos EARS</h2>
 						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos
-							específicos de cada función de la lista.
+							Usa el asistente de IA para refinar, estructurar y completar los requisitos EARS de cada característica.
 						</p>
 					</div>
 				</div>
@@ -390,14 +388,14 @@ const RequirementsPage = () => {
 								<div className='self-stretch px-24 flex flex-col justify-start items-start'>
 									<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
 										<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
-											Comienza a trabajar
+											Selecciona una Característica
 										</div>
 									</div>
 									<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
 										<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
 											Selecciona una característica del listado lateral para ver su
 											detalle
-											<br />o generar nuevos requisitos.
+											<br />o comenzar a refinar sus requisitos EARS.
 										</div>
 									</div>
 								</div>
@@ -477,13 +475,13 @@ const RequirementsPage = () => {
 									<Ai color='text-ai' size={70} />
 
 									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Sin requisitos generados
+										Requisitos EARS no refinados
 									</span>
 
 									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos asociados. Haz clic en el
-										botón <span className='text-xl font-bold'>Generar </span>
-										para generarlos automáticamente basados en la descripción.
+										Esta característica aún no tiene requisitos estructurados. Haz clic en el
+										botón <span className='text-xl font-bold'>Refinar con IA </span>
+										para estructurarlos y completarlos automáticamente bajo el formato EARS.
 									</p>
 
 									<button
@@ -491,7 +489,7 @@ const RequirementsPage = () => {
 										className='inline-flex items-center gap-1 px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
 									>
 										<Ai color='text-base-50' size={20} />
-										Generar
+										Refinar con IA
 									</button>
 								</section>
 							)}
