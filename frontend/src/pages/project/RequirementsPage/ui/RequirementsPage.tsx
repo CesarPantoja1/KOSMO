@@ -187,7 +187,6 @@ const RequirementsPage = () => {
 				),
 			);
 			setSaveStatus('saved');
-			toast.success('Requisitos guardados con éxito.');
 		} catch (_err) {
 			setSaveStatus('error');
 			toast.error('Error al guardar los requisitos');
@@ -235,6 +234,17 @@ const RequirementsPage = () => {
 		window.addEventListener('popstate', handler);
 		return () => window.removeEventListener('popstate', handler);
 	}, [hasUnsavedChanges, setPendingNavigationPath]);
+
+	useEffect(() => {
+		if (markdown === savedContent) return;
+
+		const timer = setTimeout(() => {
+			handleSave();
+		}, 3000);
+
+		return () => clearTimeout(timer);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [markdown]);
 
 	if (isLoading) {
 		return (
@@ -439,13 +449,6 @@ const RequirementsPage = () => {
 															{hasUnsavedChanges ? 'Cambios sin guardar' : ''}
 														</span>
 													)}
-												<button
-													onClick={handleSave}
-													disabled={!hasUnsavedChanges || saveStatus === 'saving'}
-													className='px-4 py-1.5 bg-primary-100 hover:bg-primary-100/90 text-base-50 rounded-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
-												>
-													Guardar
-												</button>
 											</div>
 										</div>
 										<p className='text-base-600 text-base'>
