@@ -48,15 +48,17 @@ Formato de salida (JSON):
 {
   "requirements": [
     {
+      "code": "REQ-X.Y",
       "pattern": "ubiquitous",
-      "trigger": "...",
-      "system": "...",
-      "response": "...",
-      "source_statement": "...",
-      "rationale": "...",
-      "traceability": ["C0X: ..."],
+      "statement": "El sistema shall ...",
+      "origin": "...",
       "acceptance_criteria": [
-        {"given": "...", "when": "...", "then": "..."}
+        {
+          "scenario": "...",
+          "given": "...",
+          "when": "...",
+          "then": "..."
+        }
       ]
     }
   ]
@@ -192,16 +194,12 @@ class RequirementsRefineMode:
                         ac_dict = cast(dict[str, object], ac)
                         criteria.append(
                             AcceptanceCriterion(
+                                scenario=str(ac_dict.get("scenario", "")),
                                 given=str(ac_dict.get("given", "")),
                                 when=str(ac_dict.get("when", "")),
                                 then=str(ac_dict.get("then", "")),
                             )
                         )
-
-            raw_trace = item.get("traceability", [])
-            traceability: list[str] = (
-                [str(t) for t in cast("list[object]", raw_trace)] if isinstance(raw_trace, list) else []
-            )
 
             requirements.append(
                 EARSRequirement(
@@ -210,12 +208,8 @@ class RequirementsRefineMode:
                     feature_number=self._feature_number,
                     requirement_number=i,
                     pattern=pattern,
-                    trigger=str(item.get("trigger", "")),  # type: ignore[reportUnknownArgumentType]
-                    system=str(item.get("system", "")),  # type: ignore[reportUnknownArgumentType]
-                    response=str(item.get("response", "")),  # type: ignore[reportUnknownArgumentType]
-                    source_statement=str(item.get("source_statement", "")),  # type: ignore[reportUnknownArgumentType]
-                    rationale=str(item.get("rationale", "")),  # type: ignore[reportUnknownArgumentType]
-                    traceability=traceability,
+                    statement=str(item.get("statement", "")),  # type: ignore[reportUnknownArgumentType]
+                    origin=str(item.get("origin", "")),  # type: ignore[reportUnknownArgumentType]
                     acceptance_criteria=criteria,
                 )
             )
@@ -261,6 +255,6 @@ class RequirementsRefineMode:
     def _requirements_to_markdown(reqs: list[Any]) -> str:
         blocks: list[str] = []
         for r in reqs:
-            if hasattr(r, "display_id") and hasattr(r, "source_statement"):
-                blocks.append(f"### {r.display_id}\n\n{r.source_statement.strip()}")
+            if hasattr(r, "display_id") and hasattr(r, "statement"):
+                blocks.append(f"### {r.display_id}\n\n{r.statement.strip()}")
         return "\n\n".join(blocks).strip()
