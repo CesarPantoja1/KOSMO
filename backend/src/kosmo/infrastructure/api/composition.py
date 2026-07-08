@@ -423,6 +423,11 @@ def build_features_components(
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
     project_repo = SqlAlchemyProjectRepository(session_factory)
+    suggest_features = SuggestFeaturesUseCase(
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        llm_client=pipeline.llm_client,
+    )
     return FeaturesComponents(
         generate_features=GenerateFeaturesUseCase(
             project_repo=project_repo,
@@ -430,16 +435,13 @@ def build_features_components(
             feature_repo=feature_repo,
             agent=pipeline.agent,
         ),
-        suggest_features=SuggestFeaturesUseCase(
-            document_repo=document_repo,
-            feature_repo=feature_repo,
-            llm_client=pipeline.llm_client,
-        ),
+        suggest_features=suggest_features,
         save_selected_features=SaveSelectedFeaturesUseCase(
             feature_repo=feature_repo,
         ),
         create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
+            suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
     )
