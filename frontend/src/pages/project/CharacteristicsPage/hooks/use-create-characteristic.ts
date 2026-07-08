@@ -9,8 +9,17 @@ import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
 const characteristicSchema = z.object({
-	title: z.string().max(50, 'Máximo 50 caracteres'),
-	description: z.string().max(500, 'Máximo 500 caracteres'),
+	title: z
+		.string()
+		.max(50, 'Máximo 50 caracteres')
+		.regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]*$/, 'Solo se permiten letras y espacios'),
+	description: z
+		.string()
+		.max(500, 'Máximo 500 caracteres')
+		.regex(
+			/^[a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s.,:;\-()¿?¡!]*$/,
+			'Solo se permiten letras, números y signos de puntuación básicos',
+		),
 });
 
 type CharacteristicFormData = z.infer<typeof characteristicSchema>;
@@ -71,12 +80,25 @@ export function useCreateCharacteristic(
 	const descOver = descCount > 500;
 
 	const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		titleOnChange(e);
+		const sanitizedValue = e.target.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g, '');
+		const syntheticEvent = {
+			...e,
+			target: { ...e.target, value: sanitizedValue, name: e.target.name },
+		};
+		titleOnChange(syntheticEvent);
 		if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: false }));
 	};
 
 	const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-		descOnChange(e);
+		const sanitizedValue = e.target.value.replace(
+			/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s.,:;\-()¿?¡!]/g,
+			'',
+		);
+		const syntheticEvent = {
+			...e,
+			target: { ...e.target, value: sanitizedValue, name: e.target.name },
+		};
+		descOnChange(syntheticEvent);
 		if (fieldErrors.description) setFieldErrors((p) => ({ ...p, description: false }));
 	};
 

@@ -116,22 +116,19 @@ async def test_suggest_features_returns_suggestions_from_llm() -> None:
     llm_json = """{
         "suggestions": [
             {
-                "title": "Autenticación de usuarios",
-                "description": "Sistema de login con OAuth2",
-                "rationale": "Seguridad básica",
-                "inferred_from": ["doc1.md"]
+                "title": "Registrar gastos entre participantes",
+                "description": "Cualquier participante indica el monto de un gasto compartido.",
+                "origin": "Se deriva de la meta Gestion financiera. Se traza a Metas del producto."
             },
             {
-                "title": "Gestión de permisos",
-                "description": "RBAC para control de acceso",
-                "rationale": "Autorización granular",
-                "inferred_from": ["doc1.md"]
+                "title": "Consultar balances y deudas",
+                "description": "Cualquier participante accede a un resumen de sus deudas.",
+                "origin": "Se deriva de la meta Gestion financiera. Se traza a Metas del producto."
             },
             {
-                "title": "Notificaciones por email",
-                "description": "Envío de emails automáticos",
-                "rationale": "Comunicación con usuarios",
-                "inferred_from": ["doc1.md"]
+                "title": "Liquidar deudas del grupo",
+                "description": "El administrador visualiza un plan de transferencias optimizado.",
+                "origin": "Se deriva de la meta Gestion financiera. Se traza a Metas del producto."
             }
         ]
     }"""
@@ -148,10 +145,10 @@ async def test_suggest_features_returns_suggestions_from_llm() -> None:
     # Assert
     assert isinstance(result, SuggestFeaturesOutput)
     assert len(result.suggestions) == 3
-    assert result.suggestions[0].title == "Autenticación de usuarios"
+    assert result.suggestions[0].title == "Registrar gastos entre participantes"
     assert result.suggestions[0].number == 1
-    assert result.suggestions[1].title == "Gestión de permisos"
-    assert result.suggestions[2].title == "Notificaciones por email"
+    assert result.suggestions[1].title == "Consultar balances y deudas"
+    assert result.suggestions[2].title == "Liquidar deudas del grupo"
 
 
 @pytest.mark.asyncio
@@ -166,9 +163,9 @@ async def test_suggest_features_excludes_existing_titles() -> None:
     existing = Feature(
         id=FeatureId("feat_exist123"),
         number=1,
-        title="Autenticación de usuarios",
-        slug="autenticacion-de-usuarios",
-        description="Login existente",
+        title="Registrar gastos entre participantes",
+        slug="registrar-gastos-entre-participantes",
+        description="Registro existente de gastos",
         project_id=project_id,
     )
     await feat_repo.save(existing)
@@ -177,9 +174,8 @@ async def test_suggest_features_excludes_existing_titles() -> None:
         "suggestions": [
             {
                 "title": "Nueva Feature",
-                "description": "Descripción",
-                "rationale": "Razón",
-                "inferred_from": []
+                "description": "Descripción de la nueva característica",
+                "origin": "Se traza a Metas del producto."
             }
         ]
     }"""
@@ -194,7 +190,7 @@ async def test_suggest_features_excludes_existing_titles() -> None:
     result = await use_case.execute(SuggestFeaturesInput(project_id=project_id))
 
     # Assert
-    assert "Autenticación de usuarios" in result.excluded_titles
+    assert "Registrar gastos entre participantes" in result.excluded_titles
     assert result.suggestions[0].number == 2
 
 
@@ -210,22 +206,19 @@ async def test_suggest_features_strips_identifier_prefix_from_title() -> None:
     llm_json = """{
         "suggestions": [
             {
-                "title": "C01 Autenticación de usuarios",
-                "description": "Login con OAuth2",
-                "rationale": "Seguridad",
-                "inferred_from": []
+                "title": "C01 Registrar gastos entre participantes",
+                "description": "Descripcion del registro de gastos",
+                "origin": "Se traza a Metas del producto."
             },
             {
-                "title": "C02: Gestión de permisos",
-                "description": "RBAC",
-                "rationale": "Autorización",
-                "inferred_from": []
+                "title": "C02: Consultar balances y deudas",
+                "description": "Consulta de balances del grupo",
+                "origin": "Se traza a Metas del producto."
             },
             {
-                "title": "C03 - Notificaciones por email",
-                "description": "Emails automáticos",
-                "rationale": "Comunicación",
-                "inferred_from": []
+                "title": "C03 - Liquidar deudas del grupo",
+                "description": "Liquidacion de deudas pendientes",
+                "origin": "Se traza a Metas del producto."
             }
         ]
     }"""
@@ -240,6 +233,6 @@ async def test_suggest_features_strips_identifier_prefix_from_title() -> None:
     result = await use_case.execute(SuggestFeaturesInput(project_id=project_id))
 
     # Assert
-    assert result.suggestions[0].title == "Autenticación de usuarios"
-    assert result.suggestions[1].title == "Gestión de permisos"
-    assert result.suggestions[2].title == "Notificaciones por email"
+    assert result.suggestions[0].title == "Registrar gastos entre participantes"
+    assert result.suggestions[1].title == "Consultar balances y deudas"
+    assert result.suggestions[2].title == "Liquidar deudas del grupo"

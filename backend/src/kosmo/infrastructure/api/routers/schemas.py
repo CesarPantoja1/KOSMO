@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
     AuthorizeRequest,
+    CreateCharacteristicRequest,
     CreateProjectRequest,
     DiscoveryResponse,
     FeatureResponse,
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/api/v1/schemas", tags=["schemas"])
 
 
 _REGISTRY: dict[str, type[BaseModel]] = {
+    "CreateCharacteristicRequest": CreateCharacteristicRequest,
     "CreateProjectRequest": CreateProjectRequest,
     "DiscoveryResponse": DiscoveryResponse,
     "FeatureResponse": FeatureResponse,

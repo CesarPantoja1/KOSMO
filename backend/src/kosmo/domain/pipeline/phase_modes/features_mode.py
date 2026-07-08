@@ -17,46 +17,73 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 
+FIRST_GENERATION_COUNT = 5
+
 _FEATURES_SYSTEM_PROMPT = (
-    "Eres un analista de sistemas y gerente de producto sénior. Tu tarea consiste en descomponer "
-    "un documento de descubrimiento de producto (visión de negocio) en exactamente cinco (5) "
-    "características funcionales iniciales clave del sistema.\n\n"
-    "Cada característica debe ser una unidad funcional coherente y debe incluir los siguientes "
-    "campos:\n"
-    "- 'number': Un número secuencial entero comenzando desde 1 (por ejemplo: 1, 2, 3, 4, 5).\n"
-    "- 'title': Un título conciso, orientado a la acción y en español (por ejemplo: "
-    "'Gestión de catálogo de productos').\n"
-    "- 'description': Una descripción detallada y clara (de al menos 20 caracteres) que "
-    "explique qué hace la característica.\n"
-    "- 'rationale': Una justificación de negocio (de al menos 15 caracteres) explicando "
-    "por qué esta característica es valiosa y necesaria.\n"
-    "- 'inferred_from': Una lista de nombres de secciones del documento de descubrimiento de "
-    "las cuales se infiere esta característica (por ejemplo: ['Casos de uso', "
-    "'Capacidades principales']).\n\n"
+    "Eres un diseñador de producto experto. Aplicas ReAct internamente.\n"
+    "Las Características operan a nivel de usuario: cada característica expresa "
+    "lo que el usuario desea lograr, no lo que el software hace. En este nivel "
+    "no existe todavía un sistema ni una aplicación.\n\n"
+    "Genera características con EXACTAMENTE cuatro campos:\n\n"
+    "### 1. Código\n"
+    "Identificador correlativo con formato C seguido de dos dígitos (C01, C02, C03). "
+    "Se representa como 'number' (entero secuencial desde 1).\n\n"
+    "### 2. Título\n"
+    "Máximo seis palabras que expresan la intención de interacción del usuario "
+    "con el futuro producto. Se redacta como una acción que el usuario desea "
+    "realizar. Evita nomenclatura de software y terminología de negocio abstracta.\n\n"
+    "### 3. Descripción\n"
+    "Párrafo de una a dos oraciones que describe cómo el usuario interactuaría "
+    "con el producto para lograr el propósito del título. Se construye desde "
+    "la perspectiva del usuario, sin mencionar componentes de software, "
+    "mecanismos técnicos ni conceptos de negocio abstractos.\n\n"
+    "### 4. Origen\n"
+    "Unifica la justificación de existencia de la característica y las secciones "
+    "del Descubrimiento de las cuales se deriva. Explica en una a dos oraciones "
+    "por qué resulta esencial y enumera las secciones del Descubrimiento que la "
+    "fundamentan.\n\n"
+    "Secciones válidas del Descubrimiento para trazabilidad:\n"
+    + "\n".join(f"- {s}" for s in DISCOVERY_SECTIONS)
+    + "\n\n"
     "REGLAS CRÍTICAS DE CALIDAD:\n"
-    "1. NO DUPLICADOS: Las características generadas deben ser distintas entre sí y no presentar "
-    "solapamiento o redundancia semántica.\n"
-    "2. EVITAR DETALLES TÉCNICOS: Está terminantemente prohibido incluir términos de "
-    "implementación o técnicos como: API, base de datos, backend, frontend, microservicios, "
-    "servidor, docker, SQL, etc. Describe las características en lenguaje funcional de negocio.\n"
-    "3. EVITAR REPETICIONES: Si se te proporciona una lista de características existentes, NO "
-    "generes características redundantes con ellas.\n"
-    "4. IDIOMA: Todo el contenido debe estar en español con acentuación y ortografía "
-    "correctas.\n\n"
+    "1. NIVEL DE USUARIO: Las características expresan lo que el usuario desea "
+    "lograr, no lo que el software hace. PROHIBIDO: API, base de datos, "
+    "microservicios, endpoints, servidores, lenguajes, frameworks, protocolos, "
+    "arquitectura, deployment, Docker, cloud, SQL, HTTP, REST, GraphQL, backend, "
+    "frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes, AWS, GCP, Azure, "
+    "plataforma, sistema, software, web, aplicación, aplicaciones.\n"
+    "2. SIN TERMINOLOGÍA DE NEGOCIO ABSTRACTA: PROHIBIDO usar términos como: "
+    "propuesta de valor, modelo de negocio, ventaja competitiva, diferenciador, "
+    "monetización, ROI, KPI, stakeholder, oportunidad de mercado, segmento de "
+    "mercado, caso de negocio, estrategia comercial. El origin puede mencionar "
+    "nombres de secciones del Descubrimiento, pero el título y la descripción "
+    "no deben contenerlos.\n"
+    "3. NO DUPLICADOS: Las características generadas deben ser distintas entre sí "
+    "y no presentar solapamiento o redundancia semántica.\n"
+    "4. TÍTULO MÁXIMO SEIS PALABRAS: El título no puede exceder seis palabras.\n"
+    "5. TRAZABILIDAD: El campo origin debe mencionar al menos una sección del "
+    "Descubrimiento de la lista anterior.\n"
+    "6. IDIOMA: Todo el contenido debe estar en español con acentuación y "
+    "ortografía correctas.\n"
+    "7. CANTIDAD: En la primera generación (sin características previas), genera "
+    "EXACTAMENTE 5 características. En generaciones posteriores, el número puede "
+    "variar.\n\n"
     "FORMATO DE SALIDA:\n"
-    "Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructura, sin "
-    "texto de introducción ni de conclusión:\n"
+    "Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente "
+    "estructura, sin texto de introducción ni de conclusión:\n"
     "```json\n"
     "{\n"
     '  "features": [\n'
     "    {\n"
     '      "number": 1,\n'
-    '      "title": "Nombre de la característica",\n'
-    '      "description": "Descripción detallada...",\n'
-    '      "rationale": "Justificación detallada...",\n'
-    '      "inferred_from": ["Sección A", "Sección B"]\n'
+    '      "title": "Registrar gastos entre participantes",\n'
+    '      "description": "Cualquier participante del grupo indica el monto de "\n'
+    '        "un gasto, selecciona a las personas involucradas.",\n'
+    '      "origin": "Se deriva de la meta Gestión financiera de gastos. "\n'
+    '        "Se traza a Metas del producto, Actores y Reglas de negocio."\n'
     "    }\n"
     "  ]\n"
     "}\n"
@@ -82,7 +109,11 @@ class FeaturesMode:
         return [
             ToolDefinition(
                 name="validate_feature_structure",
-                description=("Verifica que las caracteristicas tengan todos los campos y formatos correctos"),
+                description=(
+                    "Verifica que las características tengan los cuatro campos requeridos "
+                    "(number, title, description, origin), el título no exceda seis palabras "
+                    "y el origin incluya trazabilidad al descubrimiento"
+                ),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -95,11 +126,7 @@ class FeaturesMode:
                                     "number": {"type": "integer"},
                                     "title": {"type": "string"},
                                     "description": {"type": "string"},
-                                    "rationale": {"type": "string"},
-                                    "inferred_from": {
-                                        "type": "array",
-                                        "items": {"type": "string"},
-                                    },
+                                    "origin": {"type": "string"},
                                 },
                             },
                         }
@@ -109,7 +136,7 @@ class FeaturesMode:
             ),
             ToolDefinition(
                 name="validate_feature_uniqueness",
-                description=("Verifica que no existan redundancias ni duplicados entre caracteristicas"),
+                description="Verifica que no existan redundancias ni duplicados entre características",
                 parameters={
                     "type": "object",
                     "properties": {
@@ -130,7 +157,6 @@ class FeaturesMode:
     ) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
-        # Limpiar títulos cacheados
         self._existing_titles = []
 
         discovery_md = ""
@@ -160,6 +186,8 @@ class FeaturesMode:
             parts.append(
                 f"\n## Características Existentes (NO DUPLICAR NI REPETIR ESTAS CARACTERÍSTICAS):\n\n{existing_list}"
             )
+        elif isinstance(context, FeaturesPhaseContext):
+            parts.append(f"\n## Cantidad requerida\n\nGenera EXACTAMENTE {FIRST_GENERATION_COUNT} características.")
 
         if user_prefs:
             pref_strings: list[str] = []
@@ -250,6 +278,14 @@ class FeaturesMode:
         all_errors = struct_result.errors + uniq_result.errors
         all_warnings = struct_result.warnings + uniq_result.warnings
 
+        if not self._existing_titles:
+            count = len(features_list)
+            if count != FIRST_GENERATION_COUNT:
+                all_errors.append(
+                    f"La primera generación debe contener EXACTAMENTE {FIRST_GENERATION_COUNT} "
+                    f"características; se generaron {count}."
+                )
+
         return ValidationResult(
             is_valid=len(all_errors) == 0,
             errors=all_errors,
@@ -269,7 +305,7 @@ class FeaturesMode:
             f"La generación de características tiene los siguientes problemas:\n\n"
             f"{error_list}\n\n"
             f"Corrige estos problemas y vuelve a generar la lista completa de características "
-            f"en formato JSON válido matching el esquema indicado."
+            f"en formato JSON válido con los cuatro campos: number, title, description, origin."
         )
 
     def build_output(
@@ -284,19 +320,16 @@ class FeaturesMode:
         features: list[Feature] = []
         features_list = self._extract_features_list(raw_output)
         for item in features_list:
-            title = str(item.get("title", ""))  # type: ignore[reportUnknownMemberType]
+            title = str(item.get("title", ""))
             features.append(
                 Feature(
                     id=FeatureId(IdGenerator.generate("feature")),
-                    number=int(item.get("number", 0)),  # type: ignore[reportUnknownArgumentType]
+                    number=int(item.get("number", 0)),
                     title=title,
                     slug=title.lower().replace(" ", "-"),
-                    description=str(item.get("description", "")),  # type: ignore[reportUnknownArgumentType]
+                    description=str(item.get("description", "")),
                     project_id=self._project_id,
-                    rationale=str(item.get("rationale", "")),  # type: ignore[reportUnknownArgumentType]
-                    inferred_from=(
-                        item.get("inferred_from", []) if isinstance(item.get("inferred_from"), list) else []  # type: ignore[reportUnknownArgumentType]
-                    ),
+                    origin=str(item.get("origin", "")),
                 )
             )
         return FeaturesPhaseOutput(
@@ -318,7 +351,7 @@ class FeaturesMode:
                     result.append(feat_dict)
             return result
         if isinstance(content, dict):
-            raw: object = content.get("features", [])  # type: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            raw = cast(dict[str, object], content).get("features", [])
             if isinstance(raw, list):
                 result: list[dict[str, Any]] = []
                 for item in cast(list[object], raw):

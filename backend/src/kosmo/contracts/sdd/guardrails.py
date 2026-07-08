@@ -73,3 +73,19 @@ PROHIBITED_TERMS: list[str] = [
     "aplicación",
     "aplicaciones",
 ]
+
+FEATURE_LEVEL_PROHIBITED_TERMS: list[str] = [
+    "propuesta de valor",
+    "modelo de negocio",
+    "ventaja competitiva",
+    "diferenciador",
+    "monetizacion",
+    "monetización",
+    "ROI",
+    "KPI",
+    "stakeholder",
+    "oportunidad de mercado",
+    "segmento de mercado",
+    "caso de negocio",
+    "estrategia comercial",
+]

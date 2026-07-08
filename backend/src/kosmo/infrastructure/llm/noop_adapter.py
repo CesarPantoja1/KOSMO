@@ -23,8 +23,10 @@ _FEATURES = [
         "title": f"Característica {i}",
         "description": f"Descripción 4W de la característica {i}",
         "slug": f"característica-{i}",
-        "rationale": f"Rationale de la característica {i}",
-        "inferred_from": ["Visión del producto"],
+        "origin": (
+            f"Se deriva de las metas del producto. Se traza a Metas del "
+            f"producto y Reglas de negocio. Caracteristica {i}."
+        ),
     }
     for i in range(1, 6)
 ]

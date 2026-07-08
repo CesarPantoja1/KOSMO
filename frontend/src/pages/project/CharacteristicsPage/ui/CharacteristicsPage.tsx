@@ -6,19 +6,10 @@ import Link from 'next/link';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
-import CreateCharacteristic from './CreateCharacteristic';
 
 const CharacteristicsPage = () => {
-	const { view, setView, characteristics, isLoading, searchQuery, setSearchQuery, filtered } =
+	const { isLoading, searchQuery, setSearchQuery, filtered } =
 		useCharacteristicsPage();
-
-	if (view === 'create') {
-		return (
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
-				<CreateCharacteristic onCreated={() => setView('list')} />
-			</div>
-		);
-	}
 
 	return (
 		<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
@@ -36,15 +27,15 @@ const CharacteristicsPage = () => {
 			<div className='h-10 inline-flex justify-between items-center gap-4'>
 				<Search value={searchQuery} onChange={setSearchQuery} />
 				<div className='flex justify-end items-center gap-4'>
-					<button
-						onClick={() => setView('create')}
+					<Link
+						href='caracteristicas/nueva'
 						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
 					>
 						<Plus color='text-base-50' size={20} />
 						<span className='text-center justify-center text-base-50'>
 							Nueva Característica
 						</span>
-					</button>
+					</Link>
 
 					<Link
 						href='requisitos'
