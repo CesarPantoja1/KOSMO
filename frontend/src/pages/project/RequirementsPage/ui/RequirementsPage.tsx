@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { MarkdownEditor } from '@/feature';
-import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
 import type { Characteristic } from '@/entities/characteristic';
@@ -18,8 +18,6 @@ import {
 
 import { CursorClickFill } from './icons';
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
-
-import ModalConfirmLeave from './ModalConfirmLeave';
 
 const RequirementsPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
@@ -233,33 +231,28 @@ const RequirementsPage = () => {
 	if (isLoading) {
 		return (
 			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex justify-between items-start'>
-					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos
-							específicos de cada función de la lista.
-						</p>
-					</div>
-				</div>
-				<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-					<button
-						disabled
-						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 disabled:opacity-50 bg-ai rounded-sm font-medium'
-					>
-						<Ai color='text-base-50' size={20} />
-						Refinar
-					</button>
+				<div className='flex flex-col gap-3'>
+					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+					<p className='text-base-600 text-lg'>
+						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
+						de cada función de la lista.
+					</p>
+					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
+							<Ai color='' size={20} />
+							Refinar
+						</button>
 
-					<Link
-						href='modelo'
-						aria-disabled
-						onClick={(e) => e.preventDefault()}
-						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-					>
-						Ir a modelo
-						<ArrowRight color='text-base-50' size={20} />
-					</Link>
+						<Link
+							href='modelo'
+							aria-disabled
+							onClick={(e) => e.preventDefault()}
+							className='btn text-base-50 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90'
+						>
+							Ir a modelo
+							<ArrowRight color='' size={20} />
+						</Link>
+					</div>
 				</div>
 
 				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
@@ -295,35 +288,32 @@ const RequirementsPage = () => {
 				/>
 			)}
 
-			<div
-				className={`flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
-			>
-				<div className='flex justify-between items-start'>
-					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para desglosar y estructurar los requisitos
-							específicos de cada función de la lista.
-						</p>
-					</div>
-				</div>
-				{!isEditorMaximized && (
-					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						<button className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-ai rounded-sm font-medium'>
-							<Ai color='text-base-50' size={20} />
-							Refinar
-						</button>
+			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+				<div className='page-header'>
+					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+					<p className='text-base-600 text-lg'>
+						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
+						de cada función de la lista.
+					</p>
 
-						<Link
-							href='modelo'
-							onClick={handleNextLink('modelo')}
-							className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-						>
-							Ir a modelo
-							<ArrowRight color='text-base-50' size={20} />
-						</Link>
-					</div>
-				)}
+					{!isEditorMaximized && (
+						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+							<button className='btn text-base-50 bg-ai rounded-sm font-medium'>
+								<Ai color='' size={20} />
+								Refinar
+							</button>
+
+							<Link
+								href='modelo'
+								onClick={handleNextLink('modelo')}
+								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
+							>
+								Ir a modelo
+								<ArrowRight color='' size={20} />
+							</Link>
+						</div>
+					)}
+				</div>
 
 				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
 					<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
@@ -451,9 +441,9 @@ const RequirementsPage = () => {
 
 									<button
 										onClick={handleGenerate}
-										className='inline-flex items-center gap-1 px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
+										className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
 									>
-										<Ai color='text-base-50' size={20} />
+										<Ai color='' size={20} />
 										Generar
 									</button>
 								</section>

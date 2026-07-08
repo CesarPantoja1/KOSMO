@@ -2,13 +2,11 @@
 
 import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, ArrowRight, toast } from '@/shared/ui';
+import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
-
-import ModalConfimLeave from './ModalConfimLeave';
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -183,36 +181,38 @@ const DiscoveryPage = () => {
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
 			toast.error(errorMessage);
-			throw err; 
+			throw err;
 		}
 	};
 
 	return (
 		<>
-			{isChatbotOpen && <ChatbotPopup onClose={() => setIsChatbotOpen(false)} onSubmitInstructions={handleRefine} />}
-
-			{pendingNavigationPath && (
-				<ModalConfimLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+			{isChatbotOpen && (
+				<ChatbotPopup
+					onClose={() => setIsChatbotOpen(false)}
+					onSubmitInstructions={handleRefine}
+				/>
 			)}
 
-			<div
-				className={`flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
-			>
-				<div className='flex flex-col gap-3'>
-					<div className='flex flex-col'>
-						<h3 className='text-base-800 text-3xl font-bold'>
-							Descubrimiento del proyecto
-						</h3>
-						<p className='text-base-600 mt-2'>
-							Identificar y documentar la información estratégica del proyecto para
-							comprender el problema, el contexto y el alcance del negocio.
-						</p>
-					</div>
+			{pendingNavigationPath && (
+				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+			)}
+
+			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+				<div className='page-header'>
+					<h2 className='text-base-800 text-3xl font-bold'>
+						Descubrimiento del proyecto
+					</h2>
+					<p className='text-base-600 text-lg'>
+						Identificar y documentar la información estratégica del proyecto para
+						comprender el problema, el contexto y el alcance del negocio.
+					</p>
+
 					{!isEditorMaximized && (
 						<div className='flex justify-end gap-3'>
 							<button
 								onClick={() => setIsChatbotOpen(true)}
-								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
 							>
 								<Ai size={20} color='text-base-50' />
 								<span className='text-center font-semibold'>Refinar</span>
@@ -220,7 +220,7 @@ const DiscoveryPage = () => {
 							<button
 								onClick={handleNextLink}
 								disabled={isGenerating}
-								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
+								className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
 							>
 								<span className='text-center font-semibold'>
 									{isGenerating ? 'Generando...' : 'Ir a características'}
