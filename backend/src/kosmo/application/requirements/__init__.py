@@ -7,6 +7,11 @@ from kosmo.application.requirements.generate_ears import (
     GetRequirementsOutput,
     GetRequirementsUseCase,
 )
+from kosmo.application.requirements.refine_requirements import (
+    RefineRequirementsInput,
+    RefineRequirementsOutput,
+    RefineRequirementsUseCase,
+)
 from kosmo.application.requirements.save_requirements import SaveRequirementsUseCase
 
 __all__ = [
@@ -15,5 +20,8 @@ __all__ = [
     "GenerateEARSUseCase",
     "GetRequirementsOutput",
     "GetRequirementsUseCase",
+    "RefineRequirementsInput",
+    "RefineRequirementsOutput",
+    "RefineRequirementsUseCase",
     "SaveRequirementsUseCase",
 ]

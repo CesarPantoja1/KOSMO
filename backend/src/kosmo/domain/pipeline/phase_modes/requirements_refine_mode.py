@@ -104,12 +104,9 @@ class RequirementsRefineMode:
         self._feature_id = context.feature.id
         self._feature_number = context.feature_number
 
-        val = validate_refine_input_exists(context.current_requirements)
+        val = validate_refine_input_exists(context.current_requirements_markdown)
         if not val.is_valid:
             raise ValueError(val.errors[0])
-
-        import json
-        from dataclasses import asdict
 
         parts = ["## Característica actual\n"]
         parts.append(f"- **ID**: {context.feature.display_id}")
@@ -117,8 +114,7 @@ class RequirementsRefineMode:
         parts.append(f"- **Descripción**: {context.feature.description}\n")
 
         parts.append("## Requisitos EARS Actuales\n")
-        reqs_list = [asdict(r) for r in context.current_requirements]
-        parts.append(json.dumps({"requirements": reqs_list}, ensure_ascii=False, indent=2))
+        parts.append(context.current_requirements_markdown)
 
         parts.append("\n## Instrucción de refinamiento del usuario\n")
         parts.append(context.user_instructions)
