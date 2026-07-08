@@ -46,6 +46,17 @@ class InMemoryFeatureRepository:
         return max((f.number for f in project_features), default=0) + 1
 
 
+from kosmo.contracts.pipeline.phase_outputs import SuggestFeaturesOutput
+
+class MockSuggestFeaturesUseCase:
+    async def execute(self, input_data: Any) -> SuggestFeaturesOutput:
+        return SuggestFeaturesOutput(
+            suggestions=[],
+            excluded_titles=[],
+            domain_inferred=""
+        )
+
+
 def _principal() -> Principal:
     return Principal(subject="usr_test123", scopes=frozenset({"*"}))
 
