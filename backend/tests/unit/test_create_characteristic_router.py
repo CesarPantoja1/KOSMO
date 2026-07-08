@@ -10,9 +10,9 @@ from kosmo.application.features.create_characteristic import (
     CreateCharacteristicUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.pipeline.phase_outputs import SuggestFeaturesOutput
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-from kosmo.contracts.pipeline.phase_outputs import SuggestFeaturesOutput
 from kosmo.infrastructure.api.routers.features import (
     create_characteristic_manual,
 )
@@ -46,10 +46,8 @@ class InMemoryFeatureRepository:
         return max((f.number for f in project_features), default=0) + 1
 
 
-from kosmo.contracts.pipeline.phase_outputs import SuggestFeaturesOutput
-
 class MockSuggestFeaturesUseCase:
-    async def execute(self, input_data: Any) -> SuggestFeaturesOutput:
+    async def execute(self, _input_data: Any) -> SuggestFeaturesOutput:
         return SuggestFeaturesOutput(
             suggestions=[],
             excluded_titles=[],
@@ -59,11 +57,6 @@ class MockSuggestFeaturesUseCase:
 
 def _principal() -> Principal:
     return Principal(subject="usr_test123", scopes=frozenset({"*"}))
-
-
-class MockSuggestFeaturesUseCase:
-    async def execute(self, input_data: Any) -> SuggestFeaturesOutput:
-        return SuggestFeaturesOutput(suggestions=[])
 
 
 @pytest.mark.asyncio
