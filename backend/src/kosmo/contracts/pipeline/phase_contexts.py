@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.sdd.document import RichTextDocument
+from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ProjectId
 
@@ -43,4 +44,13 @@ class SuggestFeaturesContext:
     discovery_document: RichTextDocument
     existing_feature_titles: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     next_feature_number: int = 1
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+
+@dataclass(frozen=True)
+class RequirementsRefinePhaseContext:
+    feature: Feature
+    feature_number: int
+    current_requirements: list[EARSRequirement]
+    user_instructions: str
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
