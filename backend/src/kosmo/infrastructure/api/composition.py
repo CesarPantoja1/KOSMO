@@ -39,6 +39,7 @@ from kosmo.application.projects import (
 from kosmo.application.requirements import (
     GenerateEARSUseCase,
     GetRequirementsUseCase,
+    RefineRequirementsUseCase,
     SaveRequirementsUseCase,
 )
 from kosmo.config import Settings
@@ -449,6 +450,7 @@ class RequirementsComponents:
     generate_ears: GenerateEARSUseCase
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
+    refine_requirements: RefineRequirementsUseCase
 
 
 def build_requirements_components(
@@ -476,6 +478,12 @@ def build_requirements_components(
             project_repo=project_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
+        ),
+        refine_requirements=RefineRequirementsUseCase(
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            agent=pipeline.refine_agent,
         ),
     )
 
