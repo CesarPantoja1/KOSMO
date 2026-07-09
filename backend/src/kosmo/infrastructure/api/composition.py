@@ -39,9 +39,11 @@ from kosmo.application.projects import (
 from kosmo.application.requirements import (
     GenerateEARSUseCase,
     GetRequirementsUseCase,
+    RefineRequirementsUseCase,
     SaveRequirementsUseCase,
 )
 from kosmo.config import Settings
+from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import LLMClient
@@ -57,6 +59,9 @@ from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
 )
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
+from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
+    RequirementsRefineMode,
+)
 from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
     validate_business_level,
 )
@@ -71,13 +76,16 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
-from kosmo.domain.sdd.output_guardrails import detect_implementation_leaks
 from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_quality,
+    validate_ears_software_level,
     validate_ears_syntax,
 )
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
+from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
+    SqlAlchemyAgentSessionStore,
+)
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyProjectRepository,
@@ -237,6 +245,7 @@ class PipelineComponents:
     orchestrator: SequentialOrchestrator
     tool_registry: ToolRegistry
     skill_registry: SkillRegistry
+    agent_memory: AgentMemoryPort
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -247,6 +256,14 @@ def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> 
         return OpenAIChatModel(
             model,
             provider=OpenAIProvider(base_url="https://api.deepseek.com", api_key=api_key),
+        )
+    elif provider == "openai":
+        from pydantic_ai.models.openai import OpenAIChatModel
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        return OpenAIChatModel(
+            model,
+            provider=OpenAIProvider(api_key=api_key),
         )
 
     return f"{provider}:{model}"
@@ -311,18 +328,22 @@ def build_pipeline_components(
         lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
     )
     tool_registry.register(
-        "detect_implementation_leaks",
-        lambda inp: _adapt_leaks_result(_detect_leaks_raw(inp)),
+        "validate_ears_software_level",
+        lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
     )
 
-    # 6. Instanciar el agente KOSMO con el registro de herramientas
+    # 6. Instanciar el repositorio de memoria del agente
+    agent_memory = SqlAlchemyAgentSessionStore(session_factory)
+
+    # 7. Instanciar el agente KOSMO con el registro de herramientas y memoria
     agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
         modes=modes,  # type: ignore[reportArgumentType]
+        memory=agent_memory,  # type: ignore[reportArgumentType]
     )
 
-    # 7. Instanciar el SkillRegistry y registrar los skills
+    # 8. Instanciar el SkillRegistry y registrar los skills
     skill_registry = SkillRegistry()
     skill_registry.register(
         Skill(
@@ -341,18 +362,20 @@ def build_pipeline_components(
         )
     )
 
-    # 8. Instanciar el agente de refinamiento con DiscoveryRefineMode
+    # 9. Instanciar el agente de refinamiento con DiscoveryRefineMode y memoria
     refine_agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
-        modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},  # type: ignore[reportArgumentType]
+        modes={
+            SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode(),
+            SpecPhase.REQUISITOS: RequirementsRefineMode(),
+        },  # type: ignore[reportArgumentType]
         skill_registry=skill_registry,
+        memory=agent_memory,  # type: ignore[reportArgumentType]
     )
 
-    # 9. Instanciar el orquestador secuencial
+    # 10. Instanciar el orquestador secuencial
     orchestrator = SequentialOrchestrator()
-
-    # (Aquí se instanciarán y retornarán los casos de uso a medida que se implementen)
 
     return PipelineComponents(
         llm_client=llm_client,
@@ -362,6 +385,7 @@ def build_pipeline_components(
         orchestrator=orchestrator,
         tool_registry=tool_registry,
         skill_registry=skill_registry,
+        agent_memory=agent_memory,
     )
 
 
@@ -413,6 +437,11 @@ def build_features_components(
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
     project_repo = SqlAlchemyProjectRepository(session_factory)
+    suggest_features = SuggestFeaturesUseCase(
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        llm_client=pipeline.llm_client,
+    )
     return FeaturesComponents(
         generate_features=GenerateFeaturesUseCase(
             project_repo=project_repo,
@@ -420,16 +449,13 @@ def build_features_components(
             feature_repo=feature_repo,
             agent=pipeline.agent,
         ),
-        suggest_features=SuggestFeaturesUseCase(
-            document_repo=document_repo,
-            feature_repo=feature_repo,
-            llm_client=pipeline.llm_client,
-        ),
+        suggest_features=suggest_features,
         save_selected_features=SaveSelectedFeaturesUseCase(
             feature_repo=feature_repo,
         ),
         create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
+            suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
     )
@@ -440,6 +466,7 @@ class RequirementsComponents:
     generate_ears: GenerateEARSUseCase
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
+    refine_requirements: RefineRequirementsUseCase
 
 
 def build_requirements_components(
@@ -468,6 +495,12 @@ def build_requirements_components(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
         ),
+        refine_requirements=RefineRequirementsUseCase(
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            agent=pipeline.refine_agent,
+        ),
     )
 
 
@@ -480,14 +513,6 @@ def _markdown_input(inp: dict[str, object]) -> RichTextDocument:
 
 def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
     return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}
-
-
-def _adapt_leaks_result(result: Any) -> dict[str, object]:
-    return {
-        "is_valid": result.is_valid,
-        "errors": [str(v) for v in result.violations],
-        "warnings": [],
-    }
 
 
 def _extract_array(inp: dict[str, object], key: str) -> list[Any]:
@@ -530,6 +555,6 @@ def _validate_ears_quality_raw(inp: dict[str, object]) -> ValidationResult:
     return validate_ears_quality(requirements)
 
 
-def _detect_leaks_raw(inp: dict[str, object]) -> Any:
+def _validate_ears_software_level_raw(inp: dict[str, object]) -> ValidationResult:
     requirements = _extract_array(inp, "requirements")
-    return detect_implementation_leaks(cast("list[dict[str, str]]", requirements))
+    return validate_ears_software_level(requirements)

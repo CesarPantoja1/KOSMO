@@ -3,6 +3,7 @@ export { ButtonSM, ButtonMD, ButtonLG } from './button';
 
 // components
 export { default as Loading } from './Loading';
+export { default as ModalConfirmLeave } from './ModalConfirmLeave';
 
 // icons
 export { default as Ai } from './icons/Ai';

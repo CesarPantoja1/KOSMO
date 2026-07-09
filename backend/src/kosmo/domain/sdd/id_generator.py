@@ -12,6 +12,7 @@ _PREFIX_MAP: dict[str, str] = {
     "audit": "aud_",
     "pipeline": "pipe_",
     "requirement": "req_",
+    "agent_memory": "agm_",
 }
 
 

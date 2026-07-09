@@ -2,13 +2,11 @@
 
 import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, ArrowRight, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
+import { getDiscovery, saveDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
-
-import ModalConfimLeave from './ModalConfimLeave';
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -26,6 +24,7 @@ const DiscoveryPage = () => {
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	const [isRefining, setIsRefining] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
 	const [editorKey, setEditorKey] = useState(0);
 
@@ -170,49 +169,66 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handleRefine = async (instructions: string) => {
+	const handleRefine = async (_instructions: string) => {
 		if (!currentProject) return;
+		setIsChatbotOpen(false);
+		setIsRefining(true);
 		try {
-			const data = await refineDiscovery(currentProject.id, instructions);
-			setMarkdown(data.content);
-			savedContentRef.current = data.content;
+			// Simulate API delay
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			// Mock refined content
+			const mockRefinedContent =
+				markdown +
+				'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
+			setMarkdown(mockRefinedContent);
+			savedContentRef.current = mockRefinedContent;
 			setHasUnsavedChangesLocal(false);
 			setEditorKey((prev) => prev + 1);
 			toast.success('Documento refinado correctamente');
-			setIsChatbotOpen(false);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
 			toast.error(errorMessage);
-			throw err; 
+		} finally {
+			setIsRefining(false);
 		}
 	};
 
 	return (
 		<>
-			{isChatbotOpen && <ChatbotPopup onClose={() => setIsChatbotOpen(false)} onSubmitInstructions={handleRefine} />}
-
-			{pendingNavigationPath && (
-				<ModalConfimLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+			{isRefining && (
+				<Loading
+					title='Refinando descubriemiento del proyecto'
+					description='Optimizando la estructura del descubrimiento del proyecto. Porfavor, espere un momento.'
+				/>
 			)}
 
-			<div
-				className={`flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
-			>
-				<div className='flex flex-col gap-3'>
-					<div className='flex flex-col'>
-						<h3 className='text-base-800 text-3xl font-bold'>
-							Descubrimiento del proyecto
-						</h3>
-						<p className='text-base-600 mt-2'>
-							Identificar y documentar la información estratégica del proyecto para
-							comprender el problema, el contexto y el alcance del negocio.
-						</p>
-					</div>
+			{isChatbotOpen && (
+				<ChatbotPopup
+					placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
+					onClose={() => setIsChatbotOpen(false)}
+					onSubmitInstructions={handleRefine}
+				/>
+			)}
+
+			{pendingNavigationPath && (
+				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+			)}
+
+			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+				<div className='page-header'>
+					<h2 className='text-base-800 text-3xl font-bold'>
+						Descubrimiento del proyecto
+					</h2>
+					<p className='text-base-600 text-lg'>
+						Identificar y documentar la información estratégica del proyecto para
+						comprender el problema, el contexto y el alcance del negocio.
+					</p>
+
 					{!isEditorMaximized && (
 						<div className='flex justify-end gap-3'>
 							<button
 								onClick={() => setIsChatbotOpen(true)}
-								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
 							>
 								<Ai size={20} color='text-base-50' />
 								<span className='text-center font-semibold'>Refinar</span>
@@ -220,7 +236,7 @@ const DiscoveryPage = () => {
 							<button
 								onClick={handleNextLink}
 								disabled={isGenerating}
-								className='flex justify-center cursor-pointer items-center px-3.5 py-1.5 gap-1 rounded-sm bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
+								className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
 							>
 								<span className='text-center font-semibold'>
 									{isGenerating ? 'Generando...' : 'Ir a características'}

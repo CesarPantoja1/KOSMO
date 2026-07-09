@@ -1,0 +1,159 @@
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from kosmo.contracts.agent_memory import (
+    AgentMemoryPort,
+    AgentSession,
+    AgentSessionSummary,
+    ProjectMemoryContext,
+)
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
+from kosmo.infrastructure.persistence.postgres.models import AgentSessionModel
+
+
+class SqlAlchemyAgentSessionStore(AgentMemoryPort):
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def save_session(self, session: AgentSession) -> None:
+        async with self._session_factory() as db:
+            stmt = select(AgentSessionModel).where(AgentSessionModel.id == session.session_id)
+            result = await db.execute(stmt)
+            model = result.scalar_one_or_none()
+
+            if model is None:
+                model = AgentSessionModel(id=session.session_id)
+                db.add(model)
+
+            model.project_id = session.project_id
+            model.session_type = session.session_type
+            model.phase = session.phase.value
+            model.skill_name = session.skill_name
+            model.conversation = list(session.conversation)
+            model.reasoning_log = list(session.reasoning_log)
+            model.tool_results = list(session.tool_results)
+            model.current_iteration = session.current_iteration
+            model.max_iterations = session.max_iterations
+            model.is_completed = session.is_completed
+            model.output_json = _safe_json_dump(session.output_json)
+            model.validation_is_valid = session.validation_is_valid
+            model.validation_errors = session.validation_errors
+            model.total_llm_calls = session.total_llm_calls
+            model.user_instructions = session.user_instructions
+            model.updated_at = datetime.now(UTC)
+
+            await db.commit()
+
+    async def load_session(self, session_id: AgentMemoryId) -> AgentSession | None:
+        async with self._session_factory() as db:
+            stmt = select(AgentSessionModel).where(AgentSessionModel.id == session_id)
+            result = await db.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return None
+            return _model_to_session(model)
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,
+        *,
+        phase: SpecPhase | None = None,
+    ) -> list[AgentSessionSummary]:
+        async with self._session_factory() as db:
+            stmt = select(AgentSessionModel).where(AgentSessionModel.project_id == str(project_id))
+            if phase is not None:
+                stmt = stmt.where(AgentSessionModel.phase == phase.value)
+            stmt = stmt.order_by(AgentSessionModel.created_at.desc())
+            result = await db.execute(stmt)
+            models = result.scalars().all()
+            return [_model_to_summary(m) for m in models]
+
+    async def get_latest_session(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+    ) -> AgentSession | None:
+        async with self._session_factory() as db:
+            stmt = (
+                select(AgentSessionModel)
+                .where(AgentSessionModel.project_id == str(project_id))
+                .where(AgentSessionModel.phase == phase.value)
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(1)
+            )
+            result = await db.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return None
+            return _model_to_session(model)
+
+    async def get_project_context(self, project_id: ProjectId) -> ProjectMemoryContext:
+        summaries = await self.list_sessions(project_id)
+        latest: dict[str, AgentSessionSummary] = {}
+        for s in summaries:
+            key = f"{s.session_type}:{s.phase.value}"
+            if key not in latest or s.created_at > latest[key].created_at:
+                latest[key] = s
+        return ProjectMemoryContext(
+            project_id=project_id,
+            latest_sessions=latest,
+            total_sessions=len(summaries),
+        )
+
+
+def _model_to_session(model: AgentSessionModel) -> AgentSession:
+    return AgentSession(
+        session_id=AgentMemoryId(model.id),
+        project_id=ProjectId(model.project_id),
+        session_type=model.session_type,
+        phase=SpecPhase(model.phase),
+        skill_name=model.skill_name,
+        conversation=[str(c) for c in (model.conversation or [])],
+        reasoning_log=[str(r) for r in (model.reasoning_log or [])],
+        tool_results=[
+            dict(t) if isinstance(t, dict) else {}  # type: ignore[reportUnknownArgumentType]
+            for t in (model.tool_results or [])
+        ],
+        current_iteration=model.current_iteration,
+        max_iterations=model.max_iterations,
+        is_completed=model.is_completed,
+        output_json=_safe_json_dump(model.output_json),
+        validation_is_valid=model.validation_is_valid,
+        validation_errors=model.validation_errors,
+        total_llm_calls=model.total_llm_calls,
+        user_instructions=model.user_instructions,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def _model_to_summary(model: AgentSessionModel) -> AgentSessionSummary:
+    return AgentSessionSummary(
+        session_id=AgentMemoryId(model.id),
+        project_id=ProjectId(model.project_id),
+        session_type=model.session_type,
+        phase=SpecPhase(model.phase),
+        skill_name=model.skill_name,
+        is_completed=model.is_completed,
+        total_llm_calls=model.total_llm_calls,
+        validation_errors=model.validation_errors,
+        user_instructions=model.user_instructions,
+        created_at=model.created_at,
+    )
+
+
+def _safe_json_dump(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, default=str)
+    except (TypeError, ValueError):
+        return str(value)

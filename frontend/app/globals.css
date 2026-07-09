@@ -96,3 +96,15 @@ body {
 	background-color: #ffffff;
 	color: var(--color-base-950);
 }
+
+.btn {
+	@apply inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 rounded-sm transition-colors duration-200;
+}
+
+.page-container {
+	@apply flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4;
+}
+
+.page-header {
+	@apply flex flex-col gap-3;
+}

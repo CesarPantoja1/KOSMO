@@ -83,7 +83,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 							Proyectos
 						</h2>
 					) : (
-						<div className='border-b border-base-800 h-[49px]'></div>
+						<div className='border-b border-base-800 h-12.25'></div>
 					)}
 
 					<div className='flex flex-col flex-1 p-2'>
@@ -98,7 +98,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 									onClick={() => handleProjectClick(currentProject!)}
 								>
 									<ComputerDesktop color='text-base-600' />
-									<span className='flex-1 text-left truncate text-base font-medium'>
+									<span className='flex-1 text-left truncate text-base font-medium capitalize'>
 										{currentProject?.name}
 									</span>
 								</button>
@@ -121,10 +121,10 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						<UserCircle size={40} color='text-base-600' className='shrink-0' />
 						{isSidebarExpanded && (
 							<div className='w-40 inline-flex flex-col justify-center items-start'>
-								<h4 className="justify-start text-base-800 text-2xl font-semibold font-['Geist'] truncate w-full text-left">
+								<h4 className='justify-start text-base-800 text-2xl font-semibold truncate w-full text-left'>
 									Carlos Yupa
 								</h4>
-								<button className="justify-start text-base-600 text-base font-normal font-['Geist']">
+								<button className='justify-start text-base-600 text-base font-normal'>
 									Salir
 								</button>
 							</div>

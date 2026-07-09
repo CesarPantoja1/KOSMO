@@ -44,3 +44,12 @@ class SuggestFeaturesContext:
     existing_feature_titles: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     next_feature_number: int = 1
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+
+@dataclass(frozen=True)
+class RequirementsRefinePhaseContext:
+    feature: Feature
+    feature_number: int
+    current_requirements_markdown: str
+    user_instructions: str
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]

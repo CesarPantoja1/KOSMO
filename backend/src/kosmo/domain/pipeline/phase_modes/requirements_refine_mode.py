@@ -1,0 +1,251 @@
+from __future__ import annotations
+
+from typing import Any, cast
+
+from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
+from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
+from kosmo.contracts.pipeline.phase_outputs import (
+    EARSPhaseOutput,
+    GenerationMetadata,
+    ValidationResult,
+)
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.domain.pipeline.phase_validators.requirements_refine_validator import (
+    validate_refine_input_exists,
+)
+
+_REQUIREMENTS_REFINE_SYSTEM_PROMPT = """Eres un editor de documentos experto. Recibes un documento de requisitos
+en formato Markdown y una instrucción de refinamiento del usuario.
+
+## Tu tarea
+
+Eres un editor quirúrgico de texto. El documento de entrada es la fuente de verdad.
+Debes devolver el documento COMPLETO con ÚNICAMENTE los cambios solicitados aplicados.
+Cada carácter que no fue mencionado en la instrucción debe permanecer IDÉNTICO al
+original — incluyendo espacios, saltos de línea, puntuación y formato markdown.
+
+## Reglas estrictas
+
+1. Si la instrucción menciona un requisito específico (por código REQ-X.Y o por su
+   contenido), modifica EXACTAMENTE ese requisito y nada más.
+2. Si la instrucción pide eliminar algo, solo elimínalo. No toques el resto.
+3. Si la instrucción pide agregar algo, agrégalo sin alterar los existentes.
+4. PROHIBIDO reformatear, reescribir o "mejorar" requisitos no mencionados.
+5. PROHIBIDO cambiar numeración, puntuación, formato o estilo de partes no afectadas.
+6. PROHIBIDO agregar criterios de aceptación, escenarios o cualquier contenido
+   que el usuario no haya solicitado explícitamente.
+7. PROHIBIDO eliminar o modificar los separadores `---` entre requisitos a menos
+   que la instrucción lo pida.
+8. Si no entiendes la instrucción, devuelve el documento SIN CAMBIOS.
+9. No añadas texto introductorio, explicaciones ni comentarios fuera del documento.
+
+## Formato de salida
+
+El documento que debes devolver es ÚNICAMENTE el contenido que aparece después
+del marcador `---` en el prompt del usuario (la sección "DOCUMENTO A EDITAR").
+No incluyas el contexto, las instrucciones ni los marcadores `---` en tu salida.
+Devuelve el documento editado empezando directamente con `### REQ-X.Y`, sin
+texto antes ni después.
+"""
+
+
+class RequirementsRefineMode:
+    def __init__(self) -> None:
+        self._feature_id: FeatureId = FeatureId("")
+        self._feature_number: int = 0
+
+    @property
+    def phase_name(self) -> SpecPhase:
+        return SpecPhase.REQUISITOS
+
+    @property
+    def system_prompt(self) -> str:
+        return _REQUIREMENTS_REFINE_SYSTEM_PROMPT
+
+    @property
+    def available_tools(self) -> list[ToolDefinition]:
+        return []
+
+    def build_user_prompt(self, context: RequirementsRefinePhaseContext) -> str:
+        self._feature_id = context.feature.id
+        self._feature_number = context.feature_number
+
+        val = validate_refine_input_exists(context.current_requirements_markdown)
+        if not val.is_valid:
+            raise ValueError(val.errors[0])
+
+        parts = ["## Contexto (NO incluir en tu respuesta)\n"]
+        parts.append(f"- **Código**: {context.feature.display_id}")
+        parts.append(f"- **Título**: {context.feature.title}\n")
+
+        parts.append("---\n")
+        parts.append("## DOCUMENTO A EDITAR (comienza aquí)\n")
+        parts.append(context.current_requirements_markdown)
+
+        parts.append("\n---\n")
+        parts.append("## Instrucción del usuario\n")
+        parts.append(context.user_instructions)
+
+        if context.user_preferences:
+            prefs = "\n".join(f"- {p.rule_text}" for p in context.user_preferences)
+            parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
+
+        return "\n".join(parts)
+
+    def validate_output(self, _output: Any) -> ValidationResult:
+        return ValidationResult(is_valid=True)
+
+    def build_retry_prompt(
+        self,
+        original_prompt: str,
+        errors: list[str],
+        retry_count: int,
+    ) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            f"{original_prompt}\n\n"
+            f"## Correcciones necesarias (intento {retry_count})\n\n"
+            f"Los requisitos generados tienen los siguientes problemas:\n\n"
+            f"{error_list}\n\n"
+            f"Corrige estos problemas y genera los requisitos nuevamente."
+        )
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,
+        metadata: GenerationMetadata,
+    ) -> EARSPhaseOutput:
+        markdown_text = ""
+
+        if isinstance(raw_output, str):
+            markdown_text = raw_output.strip()
+        elif isinstance(raw_output, dict):
+            output_value: object = raw_output.get("output", "")  # type: ignore[reportUnknownVariableType]
+            if isinstance(output_value, str) and output_value.strip():
+                markdown_text = output_value.strip()
+
+        if markdown_text:
+            return EARSPhaseOutput(
+                feature_id=self._feature_id,
+                feature_number=self._feature_number,
+                requirements=[],
+                requirements_markdown=markdown_text,
+                validation_result=validation_result,
+                generation_metadata=metadata,
+            )
+
+        from kosmo.contracts.sdd.document import AcceptanceCriterion
+        from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
+        from kosmo.contracts.sdd.ids import RequirementId
+        from kosmo.domain.sdd.id_generator import IdGenerator
+
+        reqs_data = self._extract_requirements_list(raw_output)
+        requirements: list[EARSRequirement] = []
+
+        for i, item in enumerate(reqs_data, start=1):
+            pattern_str = item.get("pattern", "Ubicuo")  # type: ignore[reportUnknownMemberType]
+            try:
+                pattern = EARSPattern(str(pattern_str))  # type: ignore[reportUnknownArgumentType]
+            except ValueError:
+                pattern = EARSPattern.ubiquitous
+
+            raw_ac = item.get("acceptance_criteria", [])
+            criteria: list[AcceptanceCriterion] = []
+            if isinstance(raw_ac, list):
+                for ac in cast(list[object], raw_ac):
+                    if isinstance(ac, dict):
+                        ac_dict = cast(dict[str, object], ac)
+                        criteria.append(
+                            AcceptanceCriterion(
+                                scenario=str(ac_dict.get("scenario", "")),
+                                given=str(ac_dict.get("given", "")),
+                                when=str(ac_dict.get("when", "")),
+                                then=str(ac_dict.get("then", "")),
+                            )
+                        )
+
+            requirements.append(
+                EARSRequirement(
+                    id=RequirementId(IdGenerator.generate("requirement")),
+                    feature_id=self._feature_id,
+                    feature_number=self._feature_number,
+                    requirement_number=i,
+                    title=str(item.get("title", "")),  # type: ignore[reportUnknownArgumentType]
+                    pattern=pattern,
+                    statement=str(item.get("statement", "")),  # type: ignore[reportUnknownArgumentType]
+                    origin=str(item.get("origin", "")),  # type: ignore[reportUnknownArgumentType]
+                    acceptance_criteria=criteria,
+                )
+            )
+
+        markdown_str = self._requirements_to_markdown(requirements)
+
+        return EARSPhaseOutput(
+            feature_id=self._feature_id,
+            feature_number=self._feature_number,
+            requirements=requirements,
+            requirements_markdown=markdown_str,
+            validation_result=validation_result,
+            generation_metadata=metadata,
+        )
+
+    @staticmethod
+    def _extract_requirements_list(content: Any) -> list[dict[str, Any]]:
+        if isinstance(content, dict):
+            raw: object = content.get("requirements", [])  # type: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            if isinstance(raw, list):
+                result: list[dict[str, Any]] = []
+                for item in cast(list[object], raw):
+                    if isinstance(item, dict):
+                        req_dict: dict[str, Any] = {}
+                        for k, v in cast(dict[object, object], item).items():
+                            if isinstance(k, str):
+                                req_dict[k] = v
+                        result.append(req_dict)
+                return result
+        if isinstance(content, list):
+            result: list[dict[str, Any]] = []
+            for item in cast(list[object], content):
+                if isinstance(item, dict):
+                    req_dict: dict[str, Any] = {}
+                    for k, v in cast(dict[object, object], item).items():
+                        if isinstance(k, str):
+                            req_dict[k] = v
+                    result.append(req_dict)
+            return result
+        return []
+
+    @staticmethod
+    def _requirements_to_markdown(reqs: list[Any]) -> str:
+        blocks: list[str] = []
+        for r in reqs:
+            if not (hasattr(r, "display_id") and hasattr(r, "statement")):
+                continue
+
+            title = getattr(r, "title", "")
+            pattern_display = str(r.pattern) if hasattr(r, "pattern") else ""
+            statement = r.statement.strip()
+            display_id = r.display_id
+
+            block = f"### {display_id} {title}\n\n"
+            block += f"**{pattern_display}**\n\n"
+            block += f"{statement}\n"
+
+            if hasattr(r, "acceptance_criteria") and r.acceptance_criteria:
+                block += "\n**Criterios de Aceptación**\n\n"
+                for ac in r.acceptance_criteria:
+                    scenario = getattr(ac, "scenario", "")
+                    given = getattr(ac, "given", "")
+                    when = getattr(ac, "when", "")
+                    then = getattr(ac, "then", "")
+
+                    block += f"**Escenario: {scenario}**\n\n"
+                    block += f"- **Dado** que {given}\n"
+                    block += f"- **Cuando** {when}\n"
+                    block += f"- **Entonces** {then}\n\n"
+
+            blocks.append(block.strip())
+
+        return "\n\n---\n\n".join(blocks).strip()

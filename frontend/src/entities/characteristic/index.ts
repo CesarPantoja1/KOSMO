@@ -7,4 +7,5 @@ export {
   saveCharacteristicRequirements,
   generateCharacteristicRequirements,
   getCharacteristicRequirements,
+  refineCharacteristicRequirements,
 } from './api'

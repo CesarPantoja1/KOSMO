@@ -77,11 +77,14 @@ _FEATURES_JSON = (
 
 _EARS_JSON = (
     '{"requirements": ['
-    '{"pattern": "ubiquitous", "trigger": "", "system": "El sistema", '
-    '"response": "debe gestionar", "source_statement": "shall gestionar", '
-    '"rationale": "Fundamental", "traceability": ["C01"], '
+    '{"code": "REQ-1.1", "title": "Gestión segura de datos", "pattern": "Ubicuo", '
+    '"statement": "El sistema debe gestionar los datos de forma segura", '
+    '"origin": "Requisito fundamental de seguridad. Se deriva de C01.", '
     '"acceptance_criteria": ['
-    '{"given": "usuario autenticado", "when": "accede", "then": "datos correctos"}'
+    '{"scenario": "Acceso autenticado", "given": "usuario autenticado", '
+    '"when": "accede a sus datos", "then": "los datos se muestran correctamente"},'
+    '{"scenario": "Acceso no autenticado", "given": "usuario no autenticado", '
+    '"when": "intenta acceder", "then": "recibe un error de autenticacion"}'
     "]}]}"
 )
 
