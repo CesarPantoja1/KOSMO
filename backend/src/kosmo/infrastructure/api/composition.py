@@ -57,11 +57,11 @@ from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
 )
+from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
+from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
 )
-from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
-from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
     validate_business_level,
 )

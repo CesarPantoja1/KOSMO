@@ -48,11 +48,7 @@ class InMemoryFeatureRepository:
 
 class MockSuggestFeaturesUseCase:
     async def execute(self, _input_data: Any) -> SuggestFeaturesOutput:
-        return SuggestFeaturesOutput(
-            suggestions=[],
-            excluded_titles=[],
-            domain_inferred=""
-        )
+        return SuggestFeaturesOutput(suggestions=[], excluded_titles=[], domain_inferred="")
 
 
 def _principal() -> Principal:
