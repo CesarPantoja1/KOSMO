@@ -187,6 +187,16 @@ const mockGetCharacteristicRequirements = async (
 	return found?.requirements ?? '';
 };
 
+const mockRefineCharacteristicRequirements = async (
+	_projectId: string,
+	characteristicId: string,
+	_instructions: string,
+): Promise<string> => {
+	await delay(1500);
+	const found = mockStore.find((c) => c.id === characteristicId);
+	return (found?.requirements ?? '') + '\n\n**Refinado**\n- Nueva regla agregada por IA según instrucciones.';
+};
+
 //
 // REAL API implementations
 //
@@ -337,6 +347,22 @@ const realGetCharacteristicRequirements = async (
 	return data.document_markdown;
 };
 
+const realRefineCharacteristicRequirements = async (
+	projectId: string,
+	characteristicId: string,
+	instructions: string,
+): Promise<string> => {
+	const data = await apiClient<GenerateRequirementsResponse>(
+		`/api/v1/features/${characteristicId}/requirements/refine`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ project_id: projectId, instructions }),
+		},
+	);
+	return data.requirements_markdown;
+};
+
 //
 // Exported functions (switch based on config)
 //
@@ -402,4 +428,14 @@ export const getCharacteristicRequirements = async (
 	return isUsingMocks()
 		? mockGetCharacteristicRequirements(projectId, characteristicId)
 		: realGetCharacteristicRequirements(projectId, characteristicId);
+};
+
+export const refineCharacteristicRequirements = async (
+	projectId: string,
+	characteristicId: string,
+	instructions: string,
+): Promise<string> => {
+	return isUsingMocks()
+		? mockRefineCharacteristicRequirements(projectId, characteristicId, instructions)
+		: realRefineCharacteristicRequirements(projectId, characteristicId, instructions);
 };

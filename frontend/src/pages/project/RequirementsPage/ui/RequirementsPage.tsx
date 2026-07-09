@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { MarkdownEditor } from '@/feature';
+import { ChatbotPopup, MarkdownEditor } from '@/feature';
 import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
@@ -14,6 +14,7 @@ import {
 	getCharacteristicRequirements,
 	getCharacteristics,
 	saveCharacteristicRequirements,
+	refineCharacteristicRequirements,
 } from '@/entities/characteristic';
 
 import { CursorClickFill } from './icons';
@@ -27,6 +28,8 @@ const RequirementsPage = () => {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [isRefining, setIsRefining] = useState(false);
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
@@ -194,6 +197,34 @@ const RequirementsPage = () => {
 		}
 	};
 
+	const handleRefine = async (instructions: string) => {
+		if (!selectedCharacteristic || !currentProject) return;
+		setIsRefining(true);
+		setIsChatbotOpen(false);
+		try {
+			const content = await refineCharacteristicRequirements(
+				currentProject.id,
+				selectedCharacteristic.id,
+				instructions
+			);
+			setCharacteristics((prev) =>
+				prev.map((c) =>
+					c.id === selectedCharacteristic.id ? { ...c, requirements: content } : c,
+				),
+			);
+			setMarkdown(content);
+			setSavedContent(content);
+			setSaveStatus('idle');
+			toast.success('Requisitos refinados correctamente');
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			toast.error(errorMessage);
+			throw err;
+		} finally {
+			setIsRefining(false);
+		}
+	};
+
 	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges: unsaved, setPendingNavigationPath: setPath } =
 			useAppStore.getState();
@@ -288,6 +319,13 @@ const RequirementsPage = () => {
 
 	return (
 		<>
+			{isChatbotOpen && (
+				<ChatbotPopup
+					onClose={() => setIsChatbotOpen(false)}
+					onSubmitInstructions={handleRefine}
+				/>
+			)}
+
 			{pendingCharSwitch && (
 				<ModalConfirmLeave
 					onCancel={handleCancelSwitch}
@@ -299,7 +337,7 @@ const RequirementsPage = () => {
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			{isGenerating && (
+			{(isGenerating || isRefining) && (
 				<Loading
 					title='Refinando requisitos EARS...'
 					description='Estructurando la característica seleccionada bajo el estándar EARS.'
@@ -316,7 +354,11 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button className='btn text-base-50 bg-ai rounded-sm font-medium'>
+							<button 
+								onClick={() => setIsChatbotOpen(true)}
+								disabled={!selectedCharacteristic?.requirements}
+								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm font-medium'
+							>
 								<Ai color='' size={20} />
 								Refinar
 							</button>

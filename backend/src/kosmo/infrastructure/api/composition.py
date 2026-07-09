@@ -57,6 +57,9 @@ from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
 )
+from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
+    RequirementsRefineMode,
+)
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
@@ -363,7 +366,10 @@ def build_pipeline_components(
     refine_agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
-        modes={SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode()},  # type: ignore[reportArgumentType]
+        modes={
+            SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode(),
+            SpecPhase.REQUISITOS: RequirementsRefineMode(),
+        },  # type: ignore[reportArgumentType]
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
     )
