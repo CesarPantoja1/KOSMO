@@ -254,6 +254,14 @@ def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> 
             model,
             provider=OpenAIProvider(base_url="https://api.deepseek.com", api_key=api_key),
         )
+    elif provider == "openai":
+        from pydantic_ai.models.openai import OpenAIChatModel
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        return OpenAIChatModel(
+            model,
+            provider=OpenAIProvider(api_key=api_key),
+        )
 
     return f"{provider}:{model}"
 
