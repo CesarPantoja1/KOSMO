@@ -457,9 +457,6 @@ def build_features_components(
             feature_repo=feature_repo,
             suggest_use_case=suggest_features,
         ),
-        create_characteristic=CreateCharacteristicUseCase(
-            feature_repo=feature_repo,
-        ),
         feature_repo=feature_repo,
     )
 
