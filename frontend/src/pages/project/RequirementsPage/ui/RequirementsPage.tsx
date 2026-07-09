@@ -34,6 +34,7 @@ const RequirementsPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
+	const [editorKey, setEditorKey] = useState(0);
 	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
 		'idle',
 	);
@@ -163,6 +164,7 @@ const RequirementsPage = () => {
 			setMarkdown(content);
 			setSavedContent(content);
 			setSaveStatus('idle');
+			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
 			console.log(_err);
@@ -215,6 +217,7 @@ const RequirementsPage = () => {
 			setMarkdown(content);
 			setSavedContent(content);
 			setSaveStatus('idle');
+			setEditorKey((prev) => prev + 1);
 			toast.success('Requisitos refinados correctamente');
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
@@ -499,6 +502,7 @@ const RequirementsPage = () => {
 									</div>
 									<div className='flex-1 min-h-0 mt-2'>
 										<MarkdownEditor
+											key={editorKey}
 											markdown={markdown}
 											onChange={setMarkdown}
 											isMaximized={isEditorMaximized}

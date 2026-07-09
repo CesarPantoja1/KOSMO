@@ -96,7 +96,7 @@ class RefineRequirementsUseCase:
             )
 
         validation = phase_output.validation_result
-        if not validation.is_valid or not phase_output.requirements:
+        if not validation.is_valid or not phase_output.requirements_markdown.strip():
             detail = "; ".join(validation.errors) or "No se generaron requisitos refinados."
             raise LLMInvocationError(
                 detail=f"Los requisitos refinados no cumplen la estructura válida: {detail}",

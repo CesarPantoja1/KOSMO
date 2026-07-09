@@ -10,60 +10,43 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import FeatureId, RequirementId
+from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.domain.pipeline.phase_validators.requirements_refine_validator import (
     validate_refine_input_exists,
 )
-from kosmo.domain.sdd.output_guardrails import detect_implementation_leaks
-from kosmo.domain.sdd.validators.ears_validator import (
-    validate_ears_quality,
-    validate_ears_syntax,
-)
 
-_REQUIREMENTS_REFINE_SYSTEM_PROMPT = """Eres un ingeniero de requisitos experto en la notación EARS.
-Recibes una lista de requisitos EARS EXISTENTES para una característica y una instrucción de refinamiento del usuario.
-Tu tarea es reescribir la lista de requisitos aplicando EXACTAMENTE lo que pide
-la instrucción: agregar, modificar o eliminar requisitos.
+_REQUIREMENTS_REFINE_SYSTEM_PROMPT = """Eres un editor de documentos experto. Recibes un documento de requisitos
+en formato Markdown y una instrucción de refinamiento del usuario.
 
-REGLAS DE REFINAMIENTO:
-- Parte de la lista de requisitos actual tal como está.
-- Mantén el formato EARS para todos los requisitos, incluyendo los nuevos o modificados.
-- Mantén la coherencia de la numeración (REQ-X.Y) usando el número de característica proporcionado.
-- Si el usuario pide eliminar ciertos requisitos, no los devuelvas en el JSON.
-- Todo debe mantenerse a nivel de negocio, sin detallar la implementación técnica
-  (sin hablar de API, base de datos, backend, etc.).
-- Todo en español con tildes correctas.
-- No uses formato de historia de usuario.
+## Tu tarea
 
-Categorías EARS y su sintaxis:
-1. Ubiquitous: "[El sistema] shall [comportamiento]".
-2. Event-Driven: "CUANDO [evento], [el sistema] shall [comportamiento]".
-3. State-Driven: "MIENTRAS [estado], [el sistema] shall [comportamiento]".
-4. Optional: "DONDE [opción], [el sistema] shall [comportamiento]".
-5. Unwanted: "SI [condición no deseada], [el sistema] shall [comportamiento de mitigación]".
-6. Complex: "MIENTRAS [estado] Y [evento], [el sistema] shall [comportamiento]".
+Eres un editor quirúrgico de texto. El documento de entrada es la fuente de verdad.
+Debes devolver el documento COMPLETO con ÚNICAMENTE los cambios solicitados aplicados.
+Cada carácter que no fue mencionado en la instrucción debe permanecer IDÉNTICO al
+original — incluyendo espacios, saltos de línea, puntuación y formato markdown.
 
-Formato de salida (JSON):
-```json
-{
-  "requirements": [
-    {
-      "code": "REQ-X.Y",
-      "pattern": "ubiquitous",
-      "statement": "El sistema shall ...",
-      "origin": "...",
-      "acceptance_criteria": [
-        {
-          "scenario": "...",
-          "given": "...",
-          "when": "...",
-          "then": "..."
-        }
-      ]
-    }
-  ]
-}
-```
+## Reglas estrictas
+
+1. Si la instrucción menciona un requisito específico (por código REQ-X.Y o por su
+   contenido), modifica EXACTAMENTE ese requisito y nada más.
+2. Si la instrucción pide eliminar algo, solo elimínalo. No toques el resto.
+3. Si la instrucción pide agregar algo, agrégalo sin alterar los existentes.
+4. PROHIBIDO reformatear, reescribir o "mejorar" requisitos no mencionados.
+5. PROHIBIDO cambiar numeración, puntuación, formato o estilo de partes no afectadas.
+6. PROHIBIDO agregar criterios de aceptación, escenarios o cualquier contenido
+   que el usuario no haya solicitado explícitamente.
+7. PROHIBIDO eliminar o modificar los separadores `---` entre requisitos a menos
+   que la instrucción lo pida.
+8. Si no entiendes la instrucción, devuelve el documento SIN CAMBIOS.
+9. No añadas texto introductorio, explicaciones ni comentarios fuera del documento.
+
+## Formato de salida
+
+El documento que debes devolver es ÚNICAMENTE el contenido que aparece después
+del marcador `---` en el prompt del usuario (la sección "DOCUMENTO A EDITAR").
+No incluyas el contexto, las instrucciones ni los marcadores `---` en tu salida.
+Devuelve el documento editado empezando directamente con `### REQ-X.Y`, sin
+texto antes ni después.
 """
 
 
@@ -82,23 +65,7 @@ class RequirementsRefineMode:
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
-        return [
-            ToolDefinition(
-                name="validate_ears_syntax",
-                description="Verifica que cada requisito sigue su patrón EARS",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "requirements": {
-                            "type": "array",
-                            "description": "Lista de requisitos EARS refinados a validar",
-                            "items": {"type": "object"},
-                        }
-                    },
-                    "required": ["requirements"],
-                },
-            ),
-        ]
+        return []
 
     def build_user_prompt(self, context: RequirementsRefinePhaseContext) -> str:
         self._feature_id = context.feature.id
@@ -108,15 +75,16 @@ class RequirementsRefineMode:
         if not val.is_valid:
             raise ValueError(val.errors[0])
 
-        parts = ["## Característica actual\n"]
-        parts.append(f"- **ID**: {context.feature.display_id}")
-        parts.append(f"- **Título**: {context.feature.title}")
-        parts.append(f"- **Descripción**: {context.feature.description}\n")
+        parts = ["## Contexto (NO incluir en tu respuesta)\n"]
+        parts.append(f"- **Código**: {context.feature.display_id}")
+        parts.append(f"- **Título**: {context.feature.title}\n")
 
-        parts.append("## Requisitos EARS Actuales\n")
+        parts.append("---\n")
+        parts.append("## DOCUMENTO A EDITAR (comienza aquí)\n")
         parts.append(context.current_requirements_markdown)
 
-        parts.append("\n## Instrucción de refinamiento del usuario\n")
+        parts.append("\n---\n")
+        parts.append("## Instrucción del usuario\n")
         parts.append(context.user_instructions)
 
         if context.user_preferences:
@@ -125,27 +93,8 @@ class RequirementsRefineMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
-        if isinstance(output, dict) and "requirements" in output:
-            raw_reqs = cast(object, output["requirements"])
-            if not isinstance(raw_reqs, list):
-                return ValidationResult(is_valid=False, errors=["requirements debe ser una lista"])
-            requirements = cast("list[Any]", raw_reqs)
-
-            syntax_result = validate_ears_syntax(requirements)
-            quality_result = validate_ears_quality(requirements)
-            leaks_result = detect_implementation_leaks(cast("list[dict[str, str]]", requirements))
-
-            all_errors = syntax_result.errors + quality_result.errors
-            all_warnings = syntax_result.warnings + quality_result.warnings + leaks_result.error_messages
-
-            return ValidationResult(
-                is_valid=len(all_errors) == 0,
-                errors=all_errors,
-                warnings=all_warnings,
-            )
-
-        return ValidationResult(is_valid=False, errors=["Formato de salida no reconocido"])
+    def validate_output(self, _output: Any) -> ValidationResult:
+        return ValidationResult(is_valid=True)
 
     def build_retry_prompt(
         self,
@@ -168,17 +117,37 @@ class RequirementsRefineMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> EARSPhaseOutput:
+        markdown_text = ""
+
+        if isinstance(raw_output, str):
+            markdown_text = raw_output.strip()
+        elif isinstance(raw_output, dict):
+            output_value: object = raw_output.get("output", "")  # type: ignore[reportUnknownVariableType]
+            if isinstance(output_value, str) and output_value.strip():
+                markdown_text = output_value.strip()
+
+        if markdown_text:
+            return EARSPhaseOutput(
+                feature_id=self._feature_id,
+                feature_number=self._feature_number,
+                requirements=[],
+                requirements_markdown=markdown_text,
+                validation_result=validation_result,
+                generation_metadata=metadata,
+            )
+
         from kosmo.contracts.sdd.document import AcceptanceCriterion
         from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
+        from kosmo.contracts.sdd.ids import RequirementId
         from kosmo.domain.sdd.id_generator import IdGenerator
 
         reqs_data = self._extract_requirements_list(raw_output)
         requirements: list[EARSRequirement] = []
 
         for i, item in enumerate(reqs_data, start=1):
-            pattern_str = item.get("pattern", "ubiquitous")  # type: ignore[reportUnknownMemberType]
+            pattern_str = item.get("pattern", "Ubicuo")  # type: ignore[reportUnknownMemberType]
             try:
-                pattern = EARSPattern(str(pattern_str).lower())  # type: ignore[reportUnknownArgumentType]
+                pattern = EARSPattern(str(pattern_str))  # type: ignore[reportUnknownArgumentType]
             except ValueError:
                 pattern = EARSPattern.ubiquitous
 
@@ -252,6 +221,31 @@ class RequirementsRefineMode:
     def _requirements_to_markdown(reqs: list[Any]) -> str:
         blocks: list[str] = []
         for r in reqs:
-            if hasattr(r, "display_id") and hasattr(r, "statement"):
-                blocks.append(f"### {r.display_id}\n\n{r.statement.strip()}")
-        return "\n\n".join(blocks).strip()
+            if not (hasattr(r, "display_id") and hasattr(r, "statement")):
+                continue
+
+            title = getattr(r, "title", "")
+            pattern_display = str(r.pattern) if hasattr(r, "pattern") else ""
+            statement = r.statement.strip()
+            display_id = r.display_id
+
+            block = f"### {display_id} {title}\n\n"
+            block += f"**{pattern_display}**\n\n"
+            block += f"{statement}\n"
+
+            if hasattr(r, "acceptance_criteria") and r.acceptance_criteria:
+                block += "\n**Criterios de Aceptación**\n\n"
+                for ac in r.acceptance_criteria:
+                    scenario = getattr(ac, "scenario", "")
+                    given = getattr(ac, "given", "")
+                    when = getattr(ac, "when", "")
+                    then = getattr(ac, "then", "")
+
+                    block += f"**Escenario: {scenario}**\n\n"
+                    block += f"- **Dado** que {given}\n"
+                    block += f"- **Cuando** {when}\n"
+                    block += f"- **Entonces** {then}\n\n"
+
+            blocks.append(block.strip())
+
+        return "\n\n---\n\n".join(blocks).strip()
