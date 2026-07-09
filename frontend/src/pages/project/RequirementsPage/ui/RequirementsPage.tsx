@@ -14,6 +14,7 @@ import {
 	getCharacteristicRequirements,
 	getCharacteristics,
 	saveCharacteristicRequirements,
+	refineCharacteristicRequirements,
 } from '@/entities/characteristic';
 
 import { CursorClickFill } from './icons';
@@ -167,22 +168,25 @@ const RequirementsPage = () => {
 		}
 	};
 
-	const handleRefine = async (_instructions: string) => {
+	const handleRefine = async (instructions: string) => {
 		if (!selectedCharacteristic || !currentProject) return;
 		setIsChatbotOpen(false);
 		setIsRefining(true);
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-			const mockRefinedContent =
-				markdown +
-				'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
-			setMarkdown(mockRefinedContent);
-			setSavedContent(mockRefinedContent);
+			const res = await refineCharacteristicRequirements(
+				currentProject.id,
+				selectedCharacteristic.id,
+				instructions,
+			);
+			const refinedContent = res.requirements_markdown;
+			
+			setMarkdown(refinedContent);
+			setSavedContent(refinedContent);
 			setEditorKey((prev) => prev + 1);
 			setCharacteristics((prev) =>
 				prev.map((c) =>
 					c.id === selectedCharacteristic.id
-						? { ...c, requirements: mockRefinedContent }
+						? { ...c, requirements: refinedContent }
 						: c,
 				),
 			);
