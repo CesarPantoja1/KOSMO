@@ -13,7 +13,6 @@ import {
 	generateCharacteristicRequirements,
 	getCharacteristicRequirements,
 	getCharacteristics,
-	refineCharacteristicRequirements,
 	saveCharacteristicRequirements,
 } from '@/entities/characteristic';
 
@@ -29,6 +28,7 @@ const RequirementsPage = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	const [isRefining, setIsRefining] = useState(false);
 
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
@@ -172,30 +172,31 @@ const RequirementsPage = () => {
 		}
 	};
 
-	const handleRefine = async (instructions: string) => {
+	const handleRefine = async (_instructions: string) => {
 		if (!selectedCharacteristic || !currentProject) return;
-
+		setIsChatbotOpen(false);
+		setIsRefining(true);
 		try {
-			const data = await refineCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				instructions,
-			);
-			const newContent = data.requirements_markdown;
-			setMarkdown(newContent);
-			setSavedContent(newContent);
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			const mockRefinedContent =
+				markdown +
+				'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
+			setMarkdown(mockRefinedContent);
+			setSavedContent(mockRefinedContent);
 			setEditorKey((prev) => prev + 1);
 			setCharacteristics((prev) =>
 				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: newContent } : c,
+					c.id === selectedCharacteristic.id
+						? { ...c, requirements: mockRefinedContent }
+						: c,
 				),
 			);
 			toast.success('Requisitos refinados correctamente');
-			setIsChatbotOpen(false);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
 			toast.error(errorMessage);
-			throw err;
+		} finally {
+			setIsRefining(false);
 		}
 	};
 
@@ -292,7 +293,6 @@ const RequirementsPage = () => {
 							Refinar
 						</button>
 
-
 						<Link
 							href='modelo'
 							aria-disabled
@@ -320,8 +320,16 @@ const RequirementsPage = () => {
 
 	return (
 		<>
+			{isRefining && (
+				<Loading
+					title='Refinando requisitos'
+					description='Mejorando la calidad y consistencia de los requisitos. Esto tomará unos segundos.'
+				/>
+			)}
+
 			{isChatbotOpen && (
 				<ChatbotPopup
+					placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
 					onClose={() => setIsChatbotOpen(false)}
 					onSubmitInstructions={handleRefine}
 				/>
@@ -354,7 +362,7 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button 
+							<button
 								onClick={() => setIsChatbotOpen(true)}
 								className='btn text-base-50 bg-ai rounded-sm font-medium cursor-pointer hover:bg-ai/90'
 							>

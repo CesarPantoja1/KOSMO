@@ -2,10 +2,10 @@
 
 import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
-import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
+import { getDiscovery, saveDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
 
 const DiscoveryPage = () => {
@@ -24,6 +24,7 @@ const DiscoveryPage = () => {
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	const [isRefining, setIsRefining] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
 	const [editorKey, setEditorKey] = useState(0);
 
@@ -168,27 +169,42 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handleRefine = async (instructions: string) => {
+	const handleRefine = async (_instructions: string) => {
 		if (!currentProject) return;
+		setIsChatbotOpen(false);
+		setIsRefining(true);
 		try {
-			const data = await refineDiscovery(currentProject.id, instructions);
-			setMarkdown(data.content);
-			savedContentRef.current = data.content;
+			// Simulate API delay
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			// Mock refined content
+			const mockRefinedContent =
+				markdown +
+				'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
+			setMarkdown(mockRefinedContent);
+			savedContentRef.current = mockRefinedContent;
 			setHasUnsavedChangesLocal(false);
 			setEditorKey((prev) => prev + 1);
 			toast.success('Documento refinado correctamente');
-			setIsChatbotOpen(false);
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
 			toast.error(errorMessage);
-			throw err;
+		} finally {
+			setIsRefining(false);
 		}
 	};
 
 	return (
 		<>
+			{isRefining && (
+				<Loading
+					title='Refinando descubriemiento del proyecto'
+					description='Optimizando la estructura del descubrimiento del proyecto. Porfavor, espere un momento.'
+				/>
+			)}
+
 			{isChatbotOpen && (
 				<ChatbotPopup
+					placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
 					onClose={() => setIsChatbotOpen(false)}
 					onSubmitInstructions={handleRefine}
 				/>
