@@ -75,12 +75,12 @@ class AcceptanceCriterion:
 
 
 class EARSPattern(StrEnum):
-    ubiquitous = "ubiquitous"
-    event_driven = "event_driven"
-    state_driven = "state_driven"
-    optional = "optional"
-    unwanted = "unwanted"
-    complex = "complex"
+    ubiquitous = "Ubicuo"
+    event_driven = "Basado en eventos"
+    state_driven = "Determinado por estado"
+    optional = "Opcional"
+    unwanted = "Comportamiento no deseado"
+    complex = "Complejo"
 
 
 class ProjectPhase(StrEnum):
@@ -114,10 +114,10 @@ class EARSPatternLabel(StrEnum):
 
 
 EARSPattern_SYNTAX: dict[EARSPattern, str] = {
-    EARSPattern.ubiquitous: "[El sistema] shall [comportamiento]",
-    EARSPattern.event_driven: "CUANDO [evento], [el sistema] shall [comportamiento]",
-    EARSPattern.state_driven: "MIENTRAS [estado], [el sistema] shall [comportamiento]",
-    EARSPattern.optional: "DONDE [opción], [el sistema] shall [comportamiento]",
-    EARSPattern.unwanted: ("SI [condición no deseada], [el sistema] shall [comportamiento de mitigación]"),
-    EARSPattern.complex: "MIENTRAS [estado] Y [evento], [el sistema] shall [comportamiento]",
+    EARSPattern.ubiquitous: "[El sistema] debe [comportamiento]",
+    EARSPattern.event_driven: "CUANDO [evento], [el sistema] debe [comportamiento]",
+    EARSPattern.state_driven: "MIENTRAS [estado], [el sistema] debe [comportamiento]",
+    EARSPattern.optional: "DONDE [opción], [el sistema] debe [comportamiento]",
+    EARSPattern.unwanted: ("SI [condición no deseada], [el sistema] debe [comportamiento de mitigación]"),
+    EARSPattern.complex: "MIENTRAS [estado] Y [evento], [el sistema] debe [comportamiento]",
 }

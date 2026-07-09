@@ -66,38 +66,38 @@ def validate_ears_syntax(requirements: list[Any]) -> ValidationResult:
 
         if pattern == EARSPattern.ubiquitous and not _UBIQUITOUS_RE.match(stmt):
             warnings.append(
-                f"{display_id}: Posible sintaxis ubiquitous incorrecta. "
+                f"{display_id}: Posible sintaxis de Ubicuo incorrecta. "
                 f"Esperado: '{EARSPattern_SYNTAX[EARSPattern.ubiquitous]}'. "
                 f"Obtenido: '{stmt[:80]}'"
             )
 
         elif pattern == EARSPattern.event_driven and not _EVENT_DRIVEN_RE.match(stmt):
             warnings.append(
-                f"{display_id}: Posible sintaxis event-driven incorrecta. "
+                f"{display_id}: Posible sintaxis de Basado en eventos incorrecta. "
                 f"Esperado inicio con 'CUANDO/al'. Obtenido: '{stmt[:80]}'"
             )
 
         elif pattern == EARSPattern.state_driven and not _STATE_DRIVEN_RE.match(stmt):
             warnings.append(
-                f"{display_id}: Posible sintaxis state-driven incorrecta. "
+                f"{display_id}: Posible sintaxis de Determinado por estado incorrecta. "
                 f"Esperado inicio con 'MIENTRAS/durante'. Obtenido: '{stmt[:80]}'"
             )
 
         elif pattern == EARSPattern.optional and not _OPTIONAL_RE.match(stmt):
             warnings.append(
-                f"{display_id}: Posible sintaxis optional incorrecta. "
+                f"{display_id}: Posible sintaxis de Opcional incorrecta. "
                 f"Esperado inicio con 'DONDE/si'. Obtenido: '{stmt[:80]}'"
             )
 
         elif pattern == EARSPattern.unwanted and not _UNWANTED_RE.match(stmt):
             warnings.append(
-                f"{display_id}: Posible sintaxis unwanted incorrecta. "
+                f"{display_id}: Posible sintaxis de Comportamiento no deseado incorrecta. "
                 f"Esperado inicio con 'SI ... falla'. Obtenido: '{stmt[:80]}'"
             )
 
         elif pattern == EARSPattern.complex and not _COMPLEX_RE.match(stmt):
             warnings.append(
-                f"{display_id}: Posible sintaxis complex incorrecta. "
+                f"{display_id}: Posible sintaxis de Complejo incorrecta. "
                 f"Esperado inicio con 'MIENTRAS ... Y ...'. Obtenido: '{stmt[:80]}'"
             )
 

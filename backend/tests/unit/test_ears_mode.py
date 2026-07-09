@@ -23,8 +23,8 @@ _VALID_EARS_JSON = json.dumps(
         "requirements": [
             {
                 "code": "REQ-1.1",
-                "pattern": "ubiquitous",
-                "statement": "El sistema shall presentar todos los montos con exactamente dos decimales",
+                "pattern": "Ubicuo",
+                "statement": "El sistema debe presentar todos los montos con exactamente dos decimales",
                 "origin": "Garantiza consistencia. Se deriva de C01 y Reglas de negocio.",
                 "acceptance_criteria": [
                     {
@@ -43,10 +43,10 @@ _VALID_EARS_JSON = json.dumps(
             },
             {
                 "code": "REQ-1.2",
-                "pattern": "event_driven",
+                "pattern": "Basado en eventos",
                 "statement": (
                     "CUANDO un participante confirma el registro de un gasto, "
-                    "el sistema shall calcular la cuota correspondiente"
+                    "el sistema debe calcular la cuota correspondiente"
                 ),
                 "origin": "Traduce la interacción central de C01. Se deriva de C01 y Metas del producto.",
                 "acceptance_criteria": [
@@ -66,10 +66,10 @@ _VALID_EARS_JSON = json.dumps(
             },
             {
                 "code": "REQ-1.3",
-                "pattern": "state_driven",
+                "pattern": "Determinado por estado",
                 "statement": (
                     "MIENTRAS el grupo tiene un único participante activo, "
-                    "el sistema shall impedir el registro de nuevos gastos"
+                    "el sistema debe impedir el registro de nuevos gastos"
                 ),
                 "origin": "Aplica regla de negocio de mínimo dos participantes. Se deriva de C01.",
                 "acceptance_criteria": [
@@ -96,8 +96,8 @@ _EARS_JSON_SINGLE_CRITERION = json.dumps(
         "requirements": [
             {
                 "code": "REQ-1.1",
-                "pattern": "ubiquitous",
-                "statement": "El sistema shall presentar montos con dos decimales",
+                "pattern": "Ubicuo",
+                "statement": "El sistema debe presentar montos con dos decimales",
                 "origin": "Garantiza consistencia. Se deriva de C01.",
                 "acceptance_criteria": [
                     {
@@ -130,14 +130,14 @@ def test_ears_mode_build_output_returns_ears_phase_output() -> None:
     assert len(result.requirements) == 3
     assert result.requirements[0].pattern == EARSPattern.ubiquitous
     assert result.requirements[0].statement == (
-        "El sistema shall presentar todos los montos con exactamente dos decimales"
+        "El sistema debe presentar todos los montos con exactamente dos decimales"
     )
     assert result.requirements[0].origin == "Garantiza consistencia. Se deriva de C01 y Reglas de negocio."
     assert result.requirements_markdown != ""
 
 
 @pytest.mark.unit
-def test_ears_mode_markdown_includes_table_and_spanish_criteria() -> None:
+def test_ears_mode_markdown_structure_includes_heading_separators_and_criteria() -> None:
     # Arrange
     mode = EARSMode()
     mode._feature_id = FeatureId("feat_01")  # type: ignore[reportPrivateUsage]
@@ -147,16 +147,19 @@ def test_ears_mode_markdown_includes_table_and_spanish_criteria() -> None:
     result = mode.build_output(json.loads(_VALID_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
-    assert "| Campo | Contenido |" in result.requirements_markdown
-    assert "| **Patrón** |" in result.requirements_markdown
-    assert "| **Enunciado** |" in result.requirements_markdown
-    assert "**Origen**" not in result.requirements_markdown
-    assert "### REQ-1.1" in result.requirements_markdown
+    assert "### REQ-1.1 Ubicuo" in result.requirements_markdown
+    assert "### REQ-1.2 Basado en eventos" in result.requirements_markdown
+    assert "### REQ-1.3 Determinado por estado" in result.requirements_markdown
+    assert "---" in result.requirements_markdown
     assert "#### Criterios de Aceptación" in result.requirements_markdown
     assert "**Escenario:" in result.requirements_markdown
     assert "- **Dado** que" in result.requirements_markdown
     assert "- **Cuando**" in result.requirements_markdown
     assert "- **Entonces**" in result.requirements_markdown
+    assert "| Campo | Contenido |" not in result.requirements_markdown
+    assert "| **Patrón** |" not in result.requirements_markdown
+    assert "| **Enunciado** |" not in result.requirements_markdown
+    assert "**Origen**" not in result.requirements_markdown
 
 
 @pytest.mark.unit
@@ -170,7 +173,7 @@ def test_ears_mode_markdown_excludes_origin_field() -> None:
     result = mode.build_output(json.loads(_VALID_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
-    assert "| **Origen** |" not in result.requirements_markdown
+    assert "**Origen**" not in result.requirements_markdown
 
 
 @pytest.mark.unit

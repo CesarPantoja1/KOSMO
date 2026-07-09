@@ -9,7 +9,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     GenerationMetadata,
     ValidationResult,
 )
-from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern, EARSPatternLabel, SpecPhase
+from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern, SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId, RequirementId
 from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_quality,
@@ -45,22 +45,23 @@ generar requisitos a nivel de SOFTWARE para UNA característica aprobada.
 Genera requisitos distribuidos en al menos 4 categorías:
 
 1. **Ubicuo** — Siempre se cumple, sin condiciones.
-   Sintaxis: "El sistema shall [comportamiento]".
+   Sintaxis: "El sistema debe [comportamiento]".
 2. **Basado en Eventos** — Se activa por un evento externo.
-   Sintaxis: "CUANDO [evento], el sistema shall [comportamiento]".
+   Sintaxis: "CUANDO [evento], el sistema debe [comportamiento]".
 3. **Determinado por el Estado** — Se activa mientras persiste un estado.
-   Sintaxis: "MIENTRAS [estado], el sistema shall [comportamiento]".
+   Sintaxis: "MIENTRAS [estado], el sistema debe [comportamiento]".
 4. **Opcional** — Se activa si una opción está seleccionada.
-   Sintaxis: "DONDE [opción], el sistema shall [comportamiento]".
+   Sintaxis: "DONDE [opción], el sistema debe [comportamiento]".
 5. **Respuesta ante Comportamiento no Deseado** — Previene o mitiga fallos.
-   Sintaxis: "SI [condición no deseada], el sistema shall [comportamiento de mitigación]".
+   Sintaxis: "SI [condición no deseada], el sistema debe [comportamiento de mitigación]".
 6. **Complejo** — Combina estado y evento.
-   Sintaxis: "MIENTRAS [estado] Y CUANDO [evento], el sistema shall [comportamiento]".
+   Sintaxis: "MIENTRAS [estado] Y CUANDO [evento], el sistema debe [comportamiento]".
 
 ## Cinco campos de cada requisito
 
 1. **code** — Identificador REQ-X.Y donde X es el número de característica e Y el correlativo.
-2. **pattern** — Una de las 6 categorías: ubiquitous, event_driven, state_driven, optional, unwanted, complex.
+2. **pattern** — Una de las 6 categorías: Ubicuo, Basado en eventos, Determinado por estado,
+   Opcional, Comportamiento no deseado, Complejo.
 3. **statement** — Oración completa en sintaxis EARS. Es el enunciado del requisito.
 4. **origin** — Justificación del requisito y su cadena de derivación hacia la
    característica (C0X) y las secciones del Discovery que lo fundamentan.
@@ -78,8 +79,8 @@ Genera requisitos distribuidos en al menos 4 categorías:
   "requirements": [
     {
       "code": "REQ-1.1",
-      "pattern": "ubiquitous",
-      "statement": "El sistema shall presentar todos los montos con exactamente dos decimales",
+      "pattern": "Ubicuo",
+      "statement": "El sistema debe presentar todos los montos con exactamente dos decimales",
       "origin": "Garantiza consistencia visual. Se deriva de C01 y Reglas de negocio.",
       "acceptance_criteria": [
         {
@@ -258,9 +259,9 @@ class EARSMode:
         requirements: list[EARSRequirement] = []
 
         for i, item in enumerate(reqs_data, start=1):
-            pattern_str = item.get("pattern", "ubiquitous")  # type: ignore[reportUnknownMemberType]
+            pattern_str = item.get("pattern", "Ubicuo")  # type: ignore[reportUnknownMemberType]
             try:
-                pattern = EARSPattern(str(pattern_str).lower())  # type: ignore[reportUnknownArgumentType]
+                pattern = EARSPattern(str(pattern_str))  # type: ignore[reportUnknownArgumentType]
             except ValueError:
                 pattern = EARSPattern.ubiquitous
 
@@ -336,21 +337,12 @@ class EARSMode:
             if not (hasattr(r, "display_id") and hasattr(r, "statement")):
                 continue
 
-            pattern_label = ""
-            if hasattr(r, "pattern"):
-                try:
-                    pattern_label = EARSPatternLabel(EARSPattern(str(r.pattern)))
-                except ValueError:
-                    pattern_label = str(r.pattern)
-
+            pattern_display = str(r.pattern) if hasattr(r, "pattern") else ""
             statement = r.statement.strip()
             display_id = r.display_id
 
-            block = f"### {display_id}\n\n"
-            block += "| Campo | Contenido |\n"
-            block += "|-------|-----------|\n"
-            block += f"| **Patrón** | {pattern_label} |\n"
-            block += f"| **Enunciado** | {statement} |\n"
+            block = f"### {display_id} {pattern_display}\n\n"
+            block += f"{statement}\n"
 
             if hasattr(r, "acceptance_criteria") and r.acceptance_criteria:
                 block += "\n#### Criterios de Aceptación\n\n"
@@ -367,4 +359,4 @@ class EARSMode:
 
             blocks.append(block.strip())
 
-        return "\n\n".join(blocks).strip()
+        return "\n\n---\n\n".join(blocks).strip()
