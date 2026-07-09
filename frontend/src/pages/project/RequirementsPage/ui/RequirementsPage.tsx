@@ -364,7 +364,8 @@ const RequirementsPage = () => {
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
 							<button
 								onClick={() => setIsChatbotOpen(true)}
-								className='btn text-base-50 bg-ai rounded-sm font-medium cursor-pointer hover:bg-ai/90'
+								disabled={!selectedCharacteristic?.requirements}
+								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm font-medium cursor-pointer'
 							>
 								<Ai color='' size={20} />
 								Refinar
