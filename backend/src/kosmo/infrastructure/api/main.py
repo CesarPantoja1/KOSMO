@@ -226,6 +226,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.generate_ears = requirements_components.generate_ears
     app.state.get_requirements = requirements_components.get_requirements
     app.state.save_requirements = requirements_components.save_requirements
+    app.state.refine_requirements = requirements_components.refine_requirements
 
     instrument_app(settings, app=app, db_engine=db_engine)
     try:

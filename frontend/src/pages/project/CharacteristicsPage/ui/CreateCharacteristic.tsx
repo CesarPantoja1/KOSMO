@@ -33,9 +33,9 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 
 	return (
 		<div className='flex-1 px-0.5 flex flex-col gap-6'>
-			<div className='w-full px-2 flex flex-col gap-2'>
+			<div className='w-full flex flex-col gap-3'>
 				<h2 className='text-3xl font-bold text-base-800'>Crear una Característica</h2>
-				<p className='text-lg font-medium text-base-800'>
+				<p className='text-lg text-base-600'>
 					Define la interacción y el propósito de la nueva funcionalidad
 				</p>
 			</div>
@@ -52,7 +52,7 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 					<button
 						type='button'
 						onClick={openSuggestionsModal}
-						className='flex items-center gap-2 rounded-sm bg-ai hover:bg-ai/90 px-2.5 py-1 cursor-pointer'
+						className='btn bg-ai hover:bg-ai/90'
 					>
 						<Ai color='text-base-50' size={20} />
 						<span className='text-base text-base-50'>Generar sugerencias</span>
@@ -113,12 +113,10 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 
 					<button
 						type='submit'
-						className='self-center flex items-center gap-1 rounded-sm bg-primary-100 px-2.5 py-1 cursor-pointer'
+						className='btn self-center bg-primary-100 hover:bg-primary-100/90 disabled:opacity-50'
 					>
-						<Send color='text-base-50 rotate-310' size={24} />
-						<span className='text-base font-semibold text-base-50'>
-							Crear característica
-						</span>
+						<Send color='text-base-50 rotate-310' size={20} />
+						<span className='text-base-50'>Crear característica</span>
 					</button>
 				</div>
 			</form>

@@ -34,13 +34,13 @@ const ModalConfirmLeave = ({
 				</p>
 				<div className='flex justify-center gap-5 mt-9'>
 					<button
-						className='px-5 py-1 rounded-sm border cursor-pointer bg-base-950 border-base-950 text-base-50 hover:bg-base-50 hover:text-base-950'
+						className='btn border bg-base-950 border-base-950 text-base-50 hover:bg-base-950/90'
 						onClick={onCancel}
 					>
 						{cancelText}
 					</button>
 					<button
-						className='px-5 py-1 rounded-sm border cursor-pointer bg-primary-100 text-base-50 border-primary-100 hover:bg-base-50 hover:text-primary-100'
+						className='btn border bg-primary-100 text-base-50 border-primary-100 hover:bg-primary-100/90'
 						onClick={onConfirm}
 					>
 						{confirmText}

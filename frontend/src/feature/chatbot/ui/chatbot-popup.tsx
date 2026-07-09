@@ -13,11 +13,16 @@ const refinementSchema = z.object({
 type RefinementFormData = z.infer<typeof refinementSchema>;
 
 interface ChatbotPopupProps {
+	placeholder: string;
 	onClose?: () => void;
 	onSubmitInstructions?: (instructions: string) => Promise<void>;
 }
 
-export const ChatbotPopup = ({ onClose, onSubmitInstructions }: ChatbotPopupProps) => {
+export const ChatbotPopup = ({
+	onClose,
+	onSubmitInstructions,
+	placeholder,
+}: ChatbotPopupProps) => {
 	const { control, handleSubmit } = useForm<RefinementFormData>({
 		mode: 'onChange',
 		resolver: zodResolver(refinementSchema),
@@ -44,7 +49,7 @@ export const ChatbotPopup = ({ onClose, onSubmitInstructions }: ChatbotPopupProp
 			setHasSubmitError(true);
 			return;
 		}
-		
+
 		if (!onSubmitInstructions) return;
 
 		setIsSubmitting(true);
@@ -66,7 +71,12 @@ export const ChatbotPopup = ({ onClose, onSubmitInstructions }: ChatbotPopupProp
 						Agente de refinamiento
 					</h4>
 
-					<button type='button' className='cursor-pointer disabled:opacity-50' onClick={onClose} disabled={isSubmitting}>
+					<button
+						type='button'
+						className='cursor-pointer disabled:opacity-50'
+						onClick={onClose}
+						disabled={isSubmitting}
+					>
 						<Close color='text-base-50' />
 					</button>
 				</div>
@@ -96,7 +106,7 @@ export const ChatbotPopup = ({ onClose, onSubmitInstructions }: ChatbotPopupProp
 							onChange={handleChange}
 							onBlur={onBlur}
 							disabled={isSubmitting}
-							placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
+							placeholder={placeholder}
 							className='
             flex-1
             w-full

@@ -5,6 +5,7 @@ import json
 import time
 from typing import Any
 
+from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -12,6 +13,8 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.domain.agent_memory.session_factory import create_session
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 
@@ -54,43 +57,76 @@ class KOSMOAgent:
         modes: dict[SpecPhase, PhaseMode] | None = None,
         max_iterations: int = 8,
         skill_registry: SkillRegistry | None = None,
+        memory: AgentMemoryPort | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._registry = registry
         self._modes: dict[SpecPhase, PhaseMode] = modes or {}
         self._max_iterations = max_iterations
         self._skill_registry: SkillRegistry | None = skill_registry
+        self._memory = memory
 
     async def execute_with_skill(
         self,
         skill_name: str,
         context: Any,
+        *,
+        project_id: ProjectId | None = None,
+        user_instructions: str | None = None,
     ) -> Any:
         if self._skill_registry is None:
             raise ValueError("SkillRegistry no configurado")
         mode = self._skill_registry.resolve(skill_name)
-        # Reuse el mismo bucle ReAct con el modo resuelto
-        return await self._execute_loop(mode, context)
+        return await self._execute_loop(
+            mode,
+            context,
+            skill_name=skill_name,
+            project_id=project_id,
+            user_instructions=user_instructions,
+        )
 
     async def execute(
         self,
         phase: SpecPhase,
         context: Any,
+        *,
+        project_id: ProjectId | None = None,
+        user_instructions: str | None = None,
     ) -> Any:
         mode = self._modes.get(phase)
         if mode is None:
             raise ValueError(f"No hay modo para la fase {phase.value}")
-        return await self._execute_loop(mode, context)
+        return await self._execute_loop(
+            mode,
+            context,
+            project_id=project_id,
+            user_instructions=user_instructions,
+        )
 
-    async def _execute_loop(self, mode: PhaseMode, context: Any) -> Any:
+    async def _execute_loop(
+        self,
+        mode: PhaseMode,
+        context: Any,
+        *,
+        skill_name: str | None = None,
+        project_id: ProjectId | None = None,
+        user_instructions: str | None = None,
+    ) -> Any:
         phase = mode.phase_name
         system_prompt = self._build_react_system_prompt(mode)
+
+        if self._memory is not None and project_id is not None:
+            project_context = await self._memory.get_project_context(project_id)
+            if project_context.total_sessions > 0:
+                system_prompt = self._inject_context(system_prompt, project_context)
+
         base_user_prompt = mode.build_user_prompt(context)
 
         trace_entries: list[str] = []
         tool_results_entries: list[dict[str, str]] = []
         last_output: Any = None
         last_validation = ValidationResult(is_valid=False, errors=["No se genero contenido"])
+        last_structured_requirements: Any = None
 
         start_time = time.monotonic()
 
@@ -127,6 +163,12 @@ class KOSMOAgent:
                 last_output = raw_output
                 last_validation = mode.validate_output(last_output)
 
+                if not last_validation.is_valid and last_structured_requirements is not None:
+                    fallback_validation = mode.validate_output(last_structured_requirements)
+                    if fallback_validation.is_valid:
+                        last_output = last_structured_requirements
+                        last_validation = fallback_validation
+
                 trace_entries.append(
                     f"Paso {iteration}: respuesta final. "
                     f"Valido={last_validation.is_valid}, "
@@ -144,6 +186,24 @@ class KOSMOAgent:
                         generation_time_ms=total_ms,
                         model_used=llm_response.model,
                     )
+
+                    if self._memory is not None and project_id is not None:
+                        await self._save_completed_session(
+                            project_id=project_id,
+                            phase=phase,
+                            session_type="refinement" if user_instructions else "generation",
+                            skill_name=skill_name,
+                            conversation=conversation,
+                            reasoning_log=trace_entries,
+                            tool_results=tool_results_entries,
+                            current_iteration=iteration,
+                            max_iterations=self._max_iterations,
+                            output=last_output,
+                            validation=last_validation,
+                            total_llm_calls=iteration,
+                            user_instructions=user_instructions,
+                        )
+
                     return mode.build_output(last_output, last_validation, metadata)
 
                 feedback = "## Feedback de validacion\n\nEl documento tiene los siguientes errores:\n"
@@ -165,6 +225,9 @@ class KOSMOAgent:
             result = self._registry.execute(tool_name, tool_input)
             tool_results_entries.append({"tool": tool_name, "output": json.dumps(result, default=str)})
 
+            if isinstance(tool_input, dict) and "requirements" in tool_input:
+                last_structured_requirements = tool_input  # type: ignore[reportUnknownVariableType]
+
             observation = json.dumps(result, default=str)
             conversation.append(f"## Resultado de la herramienta '{tool_name}'\n\n{observation}")
 
@@ -183,6 +246,93 @@ class KOSMOAgent:
     def _build_react_system_prompt(self, mode: PhaseMode) -> str:
         tools_desc = self._registry.describe_tools(mode.available_tools)
         return f"{mode.system_prompt}\n\n## Herramientas disponibles\n\n{tools_desc}\n\n{_REACT_FORMAT_INSTRUCTIONS}"
+
+    def _inject_context(
+        self,
+        system_prompt: str,
+        project_context: Any,
+    ) -> str:
+        from kosmo.contracts.agent_memory import ProjectMemoryContext
+
+        if not isinstance(project_context, ProjectMemoryContext):
+            return system_prompt
+
+        parts: list[str] = [system_prompt]
+
+        if project_context.total_sessions > 0:
+            parts.append(
+                "## Contexto acumulado del proyecto\n\n"
+                f"Este proyecto tiene {project_context.total_sessions} sesiones previas "
+                "del agente.\n"
+            )
+
+            for _key, session in project_context.latest_sessions.items():
+                parts.append(
+                    f"- Fase {session.phase.value} ({session.session_type}): "
+                    f"{'completada' if session.is_completed else 'incompleta'}, "
+                    f"{session.total_llm_calls} llamadas LLM"
+                )
+                if session.user_instructions:
+                    parts.append(f"  Instruccion del usuario: {session.user_instructions}")
+
+            parts.append(
+                "Utiliza este contexto para mantener consistencia con el trabajo previo: "
+                "mismo nivel de detalle, mismo estilo de redaccion, mismas convenciones."
+            )
+
+        if project_context.common_validation_errors:
+            parts.append(
+                "Errores de validacion frecuentes en sesiones previas:\n"
+                + "\n".join(f"- {e}" for e in project_context.common_validation_errors)
+            )
+
+        return "\n\n".join(parts)
+
+    async def _save_completed_session(
+        self,
+        *,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        session_type: str,
+        skill_name: str | None,
+        conversation: list[str],
+        reasoning_log: list[str],
+        tool_results: list[dict[str, str]],
+        current_iteration: int,
+        max_iterations: int,
+        output: Any,
+        validation: ValidationResult,
+        total_llm_calls: int,
+        user_instructions: str | None,
+    ) -> None:
+        if self._memory is None:
+            return
+
+        output_json = json.dumps(output, default=str) if output else None
+
+        session = create_session(
+            project_id=project_id,
+            session_type=session_type,
+            phase=phase,
+            skill_name=skill_name,
+            max_iterations=max_iterations,
+            conversation=list(conversation),
+            reasoning_log=list(reasoning_log),
+            tool_results=[dict(t) for t in tool_results],
+            current_iteration=current_iteration,
+            is_completed=True,
+            output_json=output_json,
+            validation_is_valid=validation.is_valid,
+            validation_errors=len(validation.errors),
+            total_llm_calls=total_llm_calls,
+            user_instructions=user_instructions,
+        )
+
+        await self._memory.save_session(session)
+
+    @property
+    def memory(self) -> AgentMemoryPort | None:
+        return self._memory
 
     def _parse_react_response(self, text: str) -> dict[str, Any]:
         try:

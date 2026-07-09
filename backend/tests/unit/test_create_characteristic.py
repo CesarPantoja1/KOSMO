@@ -60,9 +60,7 @@ async def test_create_characteristic_success() -> None:
     repository: Any = InMemoryFeatureRepository()
     mock_suggest: Any = MockSuggestFeaturesUseCase(
         output=SuggestFeaturesOutput(
-            suggestions=[
-                SuggestedFeature(number=2, title="Sugerencia 1", description="Desc 1", origin="AI")
-            ],
+            suggestions=[SuggestedFeature(number=2, title="Sugerencia 1", description="Desc 1", origin="AI")],
             excluded_titles=[],
             domain_inferred="",
         )

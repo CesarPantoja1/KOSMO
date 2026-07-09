@@ -58,7 +58,24 @@ class FeatureNotFoundError(SpecError):
             type="urn:kosmo:features:not-found",
             title="Feature no encontrada",
             status=404,
-            detail=f"La feature {feature_id} no existe en este proyecto",
+            detail=f"La feature {feature_id} no existe o no pertenece al proyecto",
+            instance=instance,
+        )
+        super().__init__(problem)
+
+
+class RequirementsNotFoundError(SpecError):
+    def __init__(
+        self,
+        *,
+        feature_id: str,
+        instance: str = "/api/v1/requirements",
+    ) -> None:
+        problem = ProblemDetail(
+            type="urn:kosmo:requirements:not-found",
+            title="Requisitos no encontrados",
+            status=404,
+            detail=f"La feature {feature_id} no tiene requisitos generados",
             instance=instance,
         )
         super().__init__(problem)

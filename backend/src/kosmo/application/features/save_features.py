@@ -7,10 +7,75 @@ from dataclasses import dataclass
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature, SuggestFeaturesOutput
 from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository
 
 _FEATURE_ID_PREFIX = re.compile(r"^\s*C\d+[\s:.–—-]+")
+
+_SUGGEST_FEATURES_SYSTEM_PROMPT = (
+    "Eres un diseñador de producto experto.\n"
+    "Las Características operan a nivel de usuario: cada característica expresa "
+    "lo que el usuario desea lograr, no lo que el software hace. En este nivel "
+    "no existe todavía un sistema ni una aplicación.\n\n"
+    "Genera sugerencias de características con EXACTAMENTE tres campos:\n\n"
+    "### 1. Título\n"
+    "Máximo seis palabras que expresan la intención de interacción del usuario "
+    "con el futuro producto. Se redacta como una acción que el usuario desea "
+    "realizar. Evita nomenclatura de software y terminología de negocio abstracta.\n\n"
+    "### 2. Descripción\n"
+    "Párrafo de una a dos oraciones que describe cómo el usuario interactuaría "
+    "con el producto para lograr el propósito del título. Se construye desde "
+    "la perspectiva del usuario, sin mencionar componentes de software, "
+    "mecanismos técnicos ni conceptos de negocio abstractos.\n\n"
+    "### 3. Origen\n"
+    "Unifica la justificación de existencia de la característica y las secciones "
+    "del Descubrimiento de las cuales se deriva. Explica en una a dos oraciones "
+    "por qué resulta esencial y enumera las secciones del Descubrimiento que la "
+    "fundamentan.\n\n"
+    "Secciones válidas del Descubrimiento para trazabilidad:\n"
+    + "\n".join(f"- {s}" for s in DISCOVERY_SECTIONS)
+    + "\n\n"
+    "REGLAS CRÍTICAS DE CALIDAD:\n"
+    "1. NIVEL DE USUARIO: Las características expresan lo que el usuario desea "
+    "lograr, no lo que el software hace. PROHIBIDO: API, base de datos, "
+    "microservicios, endpoints, servidores, lenguajes, frameworks, protocolos, "
+    "arquitectura, deployment, Docker, cloud, SQL, HTTP, REST, GraphQL, backend, "
+    "frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes, AWS, GCP, Azure, "
+    "plataforma, sistema, software, web, aplicación, aplicaciones.\n"
+    "2. SIN TERMINOLOGÍA DE NEGOCIO ABSTRACTA: PROHIBIDO usar términos como: "
+    "propuesta de valor, modelo de negocio, ventaja competitiva, diferenciador, "
+    "monetización, ROI, KPI, stakeholder, oportunidad de mercado, segmento de "
+    "mercado, caso de negocio, estrategia comercial. El origin puede mencionar "
+    "nombres de secciones del Descubrimiento, pero el título y la descripción "
+    "no deben contenerlos.\n"
+    "3. NO DUPLICADOS: Las sugerencias generadas deben ser distintas entre sí "
+    "y no presentar solapamiento o redundancia semántica. Tampoco deben duplicar "
+    "las características ya existentes listadas en el prompt del usuario.\n"
+    "4. TÍTULO MÁXIMO SEIS PALABRAS: El título no puede exceder seis palabras.\n"
+    "5. TRAZABILIDAD: El campo origin debe mencionar al menos una sección del "
+    "Descubrimiento de la lista anterior.\n"
+    "6. IDIOMA: Todo el contenido debe estar en español con acentuación y "
+    "ortografía correctas.\n"
+    "7. CANTIDAD: Genera EXACTAMENTE 3 sugerencias. "
+    "Nada de texto antes o después del JSON.\n\n"
+    "FORMATO DE SALIDA:\n"
+    "Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente "
+    "estructura, sin texto de introducción ni de conclusión:\n"
+    "```json\n"
+    "{\n"
+    '  "suggestions": [\n'
+    "    {\n"
+    '      "title": "Registrar gastos entre participantes",\n'
+    '      "description": "Cualquier participante del grupo indica el monto de "\n'
+    '        "un gasto, selecciona a las personas involucradas.",\n'
+    '      "origin": "Se deriva de la meta Gestión financiera de gastos. "\n'
+    '        "Se traza a Metas del producto, Actores y Reglas de negocio."\n'
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "```"
+)
 
 
 def _strip_feature_id_prefix(title: str) -> str:
@@ -47,6 +112,7 @@ class SuggestFeaturesUseCase:
 
     async def execute(self, input_data: SuggestFeaturesInput) -> SuggestFeaturesOutput:
         from kosmo.contracts.sdd.errors import DocumentNotFoundError
+        from kosmo.domain.sdd.document_converters import document_to_markdown
 
         discovery_doc = await self._document_repo.get_discovery(input_data.project_id)
         if discovery_doc is None:
@@ -59,49 +125,23 @@ class SuggestFeaturesUseCase:
         existing_titles = [f.title for f in existing_features]
         next_number = len(existing_features) + 1
 
-        suggest_prompt = (
-            "Eres un diseñador de producto experto.\n"
-            "Las Características operan a nivel de usuario: cada característica "
-            "expresa lo que el usuario desea lograr, no lo que el software hace.\n\n"
-            "A continuación se presenta un Documento de Descubrimiento y una lista de\n"
-            "características ya existentes. Tu tarea es sugerir EXACTAMENTE 3 nuevas\n"
-            "características que NO dupliquen las ya existentes.\n\n"
-            "Cada característica tiene cuatro campos:\n"
-            "- 'number': número secuencial entero.\n"
-            "- 'title': máximo seis palabras, acción del usuario, sin software ni "
-            "terminología de negocio abstracta.\n"
-            "- 'description': una a dos oraciones desde la perspectiva del usuario.\n"
-            "- 'origin': justificación de existencia y trazabilidad a secciones del "
-            "Descubrimiento (Visión del producto, Espacio del problema, Actores, "
-            "Propuesta de valor, Metas del producto, Reglas de negocio, Alcance).\n\n"
-            "Responde ÚNICAMENTE con JSON:\n"
-            "```json\n"
-            '{"suggestions": [\n'
-            '  {"title": "...", "description": "...", "origin": "..."}\n'
-            "]}\n"
-            "```\n\n"
-        )
-
-        from kosmo.domain.sdd.document_converters import document_to_markdown
-
-        suggest_prompt += "## Documento de Descubrimiento\n\n"
-        suggest_prompt += document_to_markdown(discovery_doc)
+        user_prompt_parts = [
+            "## Documento de Descubrimiento\n\n",
+            document_to_markdown(discovery_doc),
+        ]
 
         if existing_titles:
-            titles = ", ".join(existing_titles)
-            suggest_prompt += f"\n\n## Características ya existentes (NO duplicar)\n\n{titles}"
+            existing_list = "\n".join(f"- {title}" for title in existing_titles)
+            user_prompt_parts.append(
+                f"\n## Características Existentes (NO DUPLICAR NI REPETIR ESTAS CARACTERÍSTICAS):\n\n{existing_list}"
+            )
 
-        suggest_prompt += (
-            '\n\nEl campo "title" debe contener ÚNICAMENTE el nombre de la '
-            "característica, sin prefijos ni identificadores tipo C01, C02, etc."
-            "\nGenera exactamente 3 sugerencias. "
-            "Nada de texto antes o después del JSON."
-        )
+        user_prompt = "\n".join(user_prompt_parts)
 
         llm_response = await self._llm_client.complete(
             prompt=PromptTemplate(
-                system_prompt=suggest_prompt,
-                user_prompt="Genera 3 sugerencias de características.",
+                system_prompt=_SUGGEST_FEATURES_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
             ),
             temperature=0.4,
         )

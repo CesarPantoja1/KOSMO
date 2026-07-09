@@ -113,8 +113,8 @@ async def test_get_requirements_returns_markdown_when_exists() -> None:
     result = await use_case.execute(project_id, feature_id)
 
     # Assert
-    assert result is not None
-    assert "Requisitos EARS" in result
+    assert result.markdown is not None
+    assert "Requisitos EARS" in result.markdown
 
 
 @pytest.mark.asyncio
@@ -155,7 +155,8 @@ async def test_get_requirements_returns_none_when_not_exists() -> None:
     result = await use_case.execute(project_id, feature_id)
 
     # Assert
-    assert result is None
+    assert result.markdown is None
+    assert result.total == 0
 
 
 @pytest.mark.asyncio

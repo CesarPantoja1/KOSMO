@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { MarkdownEditor } from '@/feature';
-import { Ai, ArrowRight, Loading, toast } from '@/shared/ui';
+import { ChatbotPopup, MarkdownEditor } from '@/feature';
+import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
 import type { Characteristic } from '@/entities/characteristic';
@@ -19,8 +19,6 @@ import {
 import { CursorClickFill } from './icons';
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
-import ModalConfirmLeave from './ModalConfirmLeave';
-
 const RequirementsPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
@@ -29,13 +27,15 @@ const RequirementsPage = () => {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	const [isRefining, setIsRefining] = useState(false);
 
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
-	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
+	const [editorKey, setEditorKey] = useState(0);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -99,7 +99,6 @@ const RequirementsPage = () => {
 				);
 				setMarkdown(content);
 				setSavedContent(content);
-				setSaveStatus('idle');
 			} catch {
 				if (!cancelled) toast.error('Error al cargar los requisitos');
 			} finally {
@@ -159,7 +158,7 @@ const RequirementsPage = () => {
 			);
 			setMarkdown(content);
 			setSavedContent(content);
-			setSaveStatus('idle');
+			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
 			console.log(_err);
@@ -168,9 +167,39 @@ const RequirementsPage = () => {
 		}
 	};
 
-	const handleSave = async () => {
+	const handleRefine = async (_instructions: string) => {
 		if (!selectedCharacteristic || !currentProject) return;
-		setSaveStatus('saving');
+		setIsChatbotOpen(false);
+		setIsRefining(true);
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			const mockRefinedContent =
+				markdown +
+				'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
+			setMarkdown(mockRefinedContent);
+			setSavedContent(mockRefinedContent);
+			setEditorKey((prev) => prev + 1);
+			setCharacteristics((prev) =>
+				prev.map((c) =>
+					c.id === selectedCharacteristic.id
+						? { ...c, requirements: mockRefinedContent }
+						: c,
+				),
+			);
+			toast.success('Requisitos refinados correctamente');
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			toast.error(errorMessage);
+		} finally {
+			setIsRefining(false);
+		}
+	};
+
+	const handleSave = async (): Promise<boolean> => {
+		if (!selectedCharacteristic || !currentProject) return false;
+		
+		const savingToast = toast.info('Guardando...');
+		
 		try {
 			await saveCharacteristicRequirements(
 				currentProject.id,
@@ -186,12 +215,14 @@ const RequirementsPage = () => {
 					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
 				),
 			);
-			setSaveStatus('saved');
-			toast.success('Requisitos guardados con éxito.');
+			toast.close(savingToast);
+			toast.success('Guardado');
+			return true;
 		} catch (_err) {
-			setSaveStatus('error');
-			toast.error('Error al guardar los requisitos');
+			toast.close(savingToast);
+			toast.error('No se pudo guardar');
 			console.log(_err);
+			return false;
 		}
 	};
 
@@ -236,35 +267,42 @@ const RequirementsPage = () => {
 		return () => window.removeEventListener('popstate', handler);
 	}, [hasUnsavedChanges, setPendingNavigationPath]);
 
+	useEffect(() => {
+		if (markdown === savedContent) return;
+
+		const timer = setTimeout(() => {
+			handleSave();
+		}, 3000);
+
+		return () => clearTimeout(timer);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [markdown]);
+
 	if (isLoading) {
 		return (
 			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex justify-between items-start'>
-					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Refinar y Completar Requisitos EARS</h2>
-						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para refinar, estructurar y completar los requisitos EARS de cada característica.
-						</p>
-					</div>
-				</div>
-				<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-					<button
-						disabled
-						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 disabled:opacity-50 bg-ai rounded-sm font-medium'
-					>
-						<Ai color='text-base-50' size={20} />
-						Refinar
-					</button>
+				<div className='flex flex-col gap-3'>
+					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+					<p className='text-base-600 text-lg'>
+						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
+						de cada función de la lista.
+					</p>
+					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
+							<Ai color='' size={20} />
+							Refinar
+						</button>
 
-					<Link
-						href='modelo'
-						aria-disabled
-						onClick={(e) => e.preventDefault()}
-						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-					>
-						Ir a modelo
-						<ArrowRight color='text-base-50' size={20} />
-					</Link>
+						<Link
+							href='modelo'
+							aria-disabled
+							onClick={(e) => e.preventDefault()}
+							className='btn text-base-50 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90'
+						>
+							Ir a modelo
+							<ArrowRight color='' size={20} />
+						</Link>
+					</div>
 				</div>
 
 				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
@@ -282,6 +320,20 @@ const RequirementsPage = () => {
 
 	return (
 		<>
+			{isRefining && (
+				<Loading
+					title='Refinando requisitos'
+					description='Mejorando la calidad y consistencia de los requisitos. Esto tomará unos segundos.'
+				/>
+			)}
+
+			{isChatbotOpen && (
+				<ChatbotPopup
+					placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
+					onClose={() => setIsChatbotOpen(false)}
+					onSubmitInstructions={handleRefine}
+				/>
+			)}
 			{pendingCharSwitch && (
 				<ModalConfirmLeave
 					onCancel={handleCancelSwitch}
@@ -300,34 +352,36 @@ const RequirementsPage = () => {
 				/>
 			)}
 
-			<div
-				className={`flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1 ${isEditorMaximized ? 'px-8' : 'px-0'}`}
-			>
-				<div className='flex justify-between items-start'>
-					<div>
-						<h2 className='text-3xl font-bold text-base-800'>Refinar y Completar Requisitos EARS</h2>
-						<p className='text-base-800 text-lg mt-2'>
-							Usa el asistente de IA para refinar, estructurar y completar los requisitos EARS de cada característica.
-						</p>
-					</div>
-				</div>
-				{!isEditorMaximized && (
-					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						<button className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-ai rounded-sm font-medium'>
-							<Ai color='text-base-50' size={20} />
-							Refinar
-						</button>
+			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+				<div className='page-header'>
+					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
+					<p className='text-base-600 text-lg'>
+						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
+						de cada función de la lista.
+					</p>
 
-						<Link
-							href='modelo'
-							onClick={handleNextLink('modelo')}
-							className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-						>
-							Ir a modelo
-							<ArrowRight color='text-base-50' size={20} />
-						</Link>
-					</div>
-				)}
+					{!isEditorMaximized && (
+						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+							<button
+								onClick={() => setIsChatbotOpen(true)}
+								disabled={!selectedCharacteristic?.requirements}
+								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm font-medium cursor-pointer'
+							>
+								<Ai color='' size={20} />
+								Refinar
+							</button>
+
+							<Link
+								href='modelo'
+								onClick={handleNextLink('modelo')}
+								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
+							>
+								Ir a modelo
+								<ArrowRight color='' size={20} />
+							</Link>
+						</div>
+					)}
+				</div>
 
 				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
 					<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
@@ -422,35 +476,6 @@ const RequirementsPage = () => {
 													{selectedCharacteristic.title}
 												</span>
 											</div>
-											<div className='inline-flex items-center gap-3'>
-												{saveStatus === 'saving' && (
-													<span className='text-sm font-medium text-base-600 animate-pulse'>
-														Guardando...
-													</span>
-												)}
-												{saveStatus === 'saved' && (
-													<span className='text-sm font-medium text-status-success'>
-														Guardado
-													</span>
-												)}
-												{saveStatus === 'error' && (
-													<span className='text-sm font-medium text-status-error'>
-														Error al guardar
-													</span>
-												)}
-												{(saveStatus === 'idle' || hasUnsavedChanges) && saveStatus !== 'saving' && saveStatus !== 'error' && (
-													<span className='text-sm font-medium text-base-500'>
-														{hasUnsavedChanges ? 'Cambios sin guardar' : ''}
-													</span>
-												)}
-												<button
-													onClick={handleSave}
-													disabled={!hasUnsavedChanges || saveStatus === 'saving'}
-													className='px-4 py-1.5 bg-primary-100 hover:bg-primary-100/90 text-base-50 rounded-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
-												>
-													Guardar
-												</button>
-											</div>
 										</div>
 										<p className='text-base-600 text-base'>
 											{selectedCharacteristic.description}
@@ -458,6 +483,7 @@ const RequirementsPage = () => {
 									</div>
 									<div className='flex-1 min-h-0 mt-2'>
 										<MarkdownEditor
+											key={editorKey}
 											markdown={markdown}
 											onChange={setMarkdown}
 											isMaximized={isEditorMaximized}
@@ -479,17 +505,18 @@ const RequirementsPage = () => {
 									</span>
 
 									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos estructurados. Haz clic en el
-										botón <span className='text-xl font-bold'>Refinar con IA </span>
-										para estructurarlos y completarlos automáticamente bajo el formato EARS.
+										Esta característica aún no tiene requisitos estructurados. Haz clic en
+										el botón <span className='text-xl font-bold'>Refinar con IA </span>
+										para estructurarlos y completarlos automáticamente bajo el formato
+										EARS.
 									</p>
 
 									<button
 										onClick={handleGenerate}
-										className='inline-flex items-center gap-1 px-5 py-2 text-base-50 cursor-pointer bg-ai rounded-sm font-medium mt-2 hover:bg-ai/90 transition-colors'
+										className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
 									>
-										<Ai color='text-base-50' size={20} />
-										Refinar con IA
+										<Ai color='' size={20} />
+										Generar
 									</button>
 								</section>
 							)}

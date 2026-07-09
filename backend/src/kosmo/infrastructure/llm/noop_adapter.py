@@ -33,21 +33,23 @@ _FEATURES = [
 
 _REQUIREMENTS = [
     {
+        "code": "REQ-1.1",
         "pattern": "ubiquitous",
-        "feature_number": 1,
-        "requirement_number": 1,
-        "trigger": "El sistema siempre",
-        "system": "El sistema",
-        "response": "debe gestionar los datos de forma segura",
-        "source_statement": "El sistema shall gestionar los datos de forma segura",
-        "rationale": "Requisito fundamental de seguridad",
-        "traceability": ["C01"],
+        "statement": "El sistema shall gestionar los datos de forma segura",
+        "origin": "Requisito fundamental de seguridad. Se deriva de C01 y Reglas de negocio.",
         "acceptance_criteria": [
             {
+                "scenario": "Acceso autenticado a los datos",
                 "given": "un usuario autenticado",
                 "when": "accede a sus datos",
                 "then": "los datos se muestran correctamente",
-            }
+            },
+            {
+                "scenario": "Acceso no autenticado",
+                "given": "un usuario no autenticado",
+                "when": "intenta acceder a los datos",
+                "then": "recibe un error de autenticación",
+            },
         ],
     }
 ]

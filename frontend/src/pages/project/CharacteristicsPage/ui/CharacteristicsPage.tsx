@@ -8,42 +8,36 @@ import CardCharacterist from './CardCharacterist';
 import Search from './Search';
 
 const CharacteristicsPage = () => {
-	const { isLoading, searchQuery, setSearchQuery, filtered } =
-		useCharacteristicsPage();
+	const { isLoading, searchQuery, setSearchQuery, filtered } = useCharacteristicsPage();
 
 	return (
-		<div className='flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8'>
-			<div className='flex flex-col justify-start items-start gap-5'>
-				<h2 className='h-8 justify-center text-base-800 text-3xl font-bold'>
-					Características
-				</h2>
-				<div className='justify-center text-base-800 text-lg font-medium'>
+		<div className='page-container'>
+			<div className='page-header'>
+				<h2 className='text-base-800 text-3xl font-bold'>Características</h2>
+				<p className='text-base-600 text-lg'>
 					Gestiona y organiza las funciones principales de tu proyecto. Tienes el control
 					total para editar, eliminar o añadir nuevas características según tus
 					necesidades.
-				</div>
-			</div>
+				</p>
+				<div className='w-full inline-flex justify-between items-center gap-4'>
+					<Search value={searchQuery} onChange={setSearchQuery} />
+					<div className='flex justify-end items-center gap-4'>
+						<Link
+							href='caracteristicas/nueva'
+							className='btn bg-primary-100 hover:bg-primary-100/90'
+						>
+							<Plus color='text-base-50' size={20} />
+							<span className='text-center text-base-50'>Nueva Característica</span>
+						</Link>
 
-			<div className='h-10 inline-flex justify-between items-center gap-4'>
-				<Search value={searchQuery} onChange={setSearchQuery} />
-				<div className='flex justify-end items-center gap-4'>
-					<Link
-						href='caracteristicas/nueva'
-						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-					>
-						<Plus color='text-base-50' size={20} />
-						<span className='text-center justify-center text-base-50'>
-							Nueva Característica
-						</span>
-					</Link>
-
-					<Link
-						href='requisitos'
-						className='inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-					>
-						<div className='text-center justify-center text-base-50'>Ir a Requisitos</div>
-						<ArrowRight color='text-base-50' size={20} />
-					</Link>
+						<Link
+							href='requisitos'
+							className='btn bg-primary-100 hover:bg-primary-100/90'
+						>
+							<div className='text-center text-base-50'>Ir a Requisitos</div>
+							<ArrowRight color='text-base-50' size={20} />
+						</Link>
+					</div>
 				</div>
 			</div>
 

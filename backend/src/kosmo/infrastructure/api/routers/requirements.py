@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from kosmo.application.requirements import (
     GenerateEARSInput,
     GenerateEARSUseCase,
     GetRequirementsUseCase,
+    RefineRequirementsInput,
+    RefineRequirementsUseCase,
     SaveRequirementsUseCase,
 )
 from kosmo.contracts.auth import Principal
@@ -17,6 +19,7 @@ from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
     ProjectNotFoundError,
+    RequirementsNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
@@ -34,6 +37,11 @@ class GenerateRequirementsRequest(BaseModel):
 class SaveRequirementsRequest(BaseModel):
     project_id: str
     markdown: str
+
+
+class RefineRequirementsRequest(BaseModel):
+    project_id: str
+    instructions: str = Field(min_length=1, max_length=500)
 
 
 async def _resolve_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
@@ -102,12 +110,12 @@ async def get_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
     project_id: str = Query(...),
-) -> dict[str, str]:
+) -> dict[str, Any]:
     fid = await _resolve_feature_id(request, project_id, feature_id)
     uc = cast("GetRequirementsUseCase", request.app.state.get_requirements)
 
     try:
-        markdown = await uc.execute(
+        output = await uc.execute(
             project_id=ProjectId(project_id),
             feature_id=fid,
         )
@@ -117,7 +125,7 @@ async def get_requirements(
             detail=exc.problem.detail,
         ) from exc
 
-    return {"document_markdown": markdown or ""}
+    return {"document_markdown": output.markdown or "", "total": output.total}
 
 
 @router.put(
@@ -147,3 +155,51 @@ async def save_requirements(
         ) from exc
 
     return {"feature_id": feature_id, "message": "ok"}
+
+
+@router.post(
+    "/refine",
+    summary="Refinar requisitos EARS con IA",
+    description=(
+        "Refina los requisitos de una característica aplicando las instrucciones "
+        "proporcionadas por el usuario mediante inteligencia artificial. "
+        "Requiere que la característica ya tenga requisitos generados; de lo contrario "
+        "devuelve 404. Los requisitos actuales se conservan intactos si la IA falla. "
+        "Las instrucciones no pueden exceder los 500 caracteres."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+async def refine_requirements(
+    feature_id: str,
+    body: RefineRequirementsRequest,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> dict[str, Any]:
+    fid = await _resolve_feature_id(request, body.project_id, feature_id)
+    uc = cast("RefineRequirementsUseCase", request.app.state.refine_requirements)
+
+    try:
+        output = await uc.execute(
+            RefineRequirementsInput(
+                project_id=ProjectId(body.project_id),
+                feature_id=fid,
+                user_instructions=body.instructions,
+            )
+        )
+    except (ProjectNotFoundError, FeatureNotFoundError, RequirementsNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+    except LLMInvocationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=exc.problem.detail,
+        ) from exc
+
+    return {
+        "feature_id": str(output.feature_id),
+        "feature_number": output.phase_output.feature_number,
+        "requirements_markdown": output.phase_output.requirements_markdown,
+        "total": len(output.requirements),
+    }

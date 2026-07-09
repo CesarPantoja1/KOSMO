@@ -7,7 +7,7 @@ type Props = {
 
 const Loading = ({ title, description }: Props) => {
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
 			<div className='w-full max-w-2xl rounded-xl bg-base-50 p-10 shadow-2xl outline outline-base-800'>
 				<div className='flex flex-col items-center gap-8 text-center'>
 					<div className='space-y-3'>

@@ -131,20 +131,19 @@ def _make_valid_ears_output() -> EARSPhaseOutput:
         feature_id=FeatureId("feat_01"),
         feature_number=1,
         requirement_number=1,
+        title="Gestión segura de datos",
         pattern=EARSPattern.ubiquitous,
-        trigger="",
-        system="El sistema",
-        response="debe gestionar los datos de forma segura",
-        source_statement="El sistema shall gestionar los datos de forma segura",
-        rationale="Requisito fundamental",
-        traceability=["C01"],
+        statement="El sistema shall gestionar los datos de forma segura",
+        origin="Requisito fundamental. Se deriva de C01 y Reglas de negocio.",
         acceptance_criteria=[
             AcceptanceCriterion(
+                scenario="Acceso autenticado",
                 given="un usuario autenticado",
                 when="accede a sus datos",
                 then="los datos se muestran correctamente",
             ),
             AcceptanceCriterion(
+                scenario="Acceso no autenticado",
                 given="un usuario no autenticado",
                 when="intenta acceder",
                 then="recibe un error de autenticacion",
@@ -155,7 +154,16 @@ def _make_valid_ears_output() -> EARSPhaseOutput:
         feature_id=FeatureId("feat_01"),
         feature_number=1,
         requirements=[req],
-        requirements_markdown="### REQ-1.1\n\nEl sistema shall gestionar los datos de forma segura",
+        requirements_markdown=(
+            "### REQ-1.1\n\n| Campo | Contenido |\n|-------|-----------|\n"
+            "| **Patrón** | Requisitos Ubicuos |\n"
+            "| **Enunciado** | El sistema shall gestionar los datos de forma segura |\n\n"
+            "#### Criterios de Aceptación\n\n"
+            "**Escenario: Acceso autenticado**\n\n"
+            "- **Dado** que un usuario autenticado\n"
+            "- **Cuando** accede a sus datos\n"
+            "- **Entonces** los datos se muestran correctamente"
+        ),
         validation_result=ValidationResult(is_valid=True),
         generation_metadata=GenerationMetadata(llm_calls=1),
     )

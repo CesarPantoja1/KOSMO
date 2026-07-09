@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any, Protocol
+
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
+
+
+@dataclass(frozen=True)
+class AgentSession:
+    session_id: AgentMemoryId
+    project_id: ProjectId
+    session_type: str  # generation | refinement
+    phase: SpecPhase
+    skill_name: str | None
+
+    conversation: list[str] = field(default_factory=list[str])
+    reasoning_log: list[str] = field(default_factory=list[str])
+    tool_results: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+
+    current_iteration: int = 0
+    max_iterations: int = 8
+    is_completed: bool = False
+
+    output_json: str | None = None
+    validation_is_valid: bool = False
+    validation_errors: int = 0
+    total_llm_calls: int = 0
+
+    user_instructions: str | None = None
+
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class AgentSessionSummary:
+    session_id: AgentMemoryId
+    project_id: ProjectId
+    session_type: str
+    phase: SpecPhase
+    skill_name: str | None
+    is_completed: bool
+    total_llm_calls: int
+    validation_errors: int
+    user_instructions: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ProjectMemoryContext:
+    project_id: ProjectId
+    latest_sessions: dict[str, AgentSessionSummary]
+    total_sessions: int
+    common_validation_errors: list[str] = field(default_factory=list[str])
+
+
+class AgentMemoryPort(Protocol):
+    async def save_session(self, session: AgentSession) -> None: ...
+
+    async def load_session(self, session_id: AgentMemoryId) -> AgentSession | None: ...
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,
+        *,
+        phase: SpecPhase | None = None,
+    ) -> list[AgentSessionSummary]: ...
+
+    async def get_latest_session(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+    ) -> AgentSession | None: ...
+
+    async def get_project_context(self, project_id: ProjectId) -> ProjectMemoryContext: ...
+
+
+class AgentMemoryError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

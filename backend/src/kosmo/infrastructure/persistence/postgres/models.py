@@ -102,3 +102,31 @@ class DiscoveryDocumentModel(Base):
     markdown: Mapped[str] = mapped_column(Text(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AgentSessionModel(Base):
+    __tablename__ = "agent_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    session_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    skill_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    conversation: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+    reasoning_log: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+    tool_results: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+
+    current_iteration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    is_completed: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+    output_json: Mapped[str | None] = mapped_column(pg.JSONB(), nullable=True)
+    validation_is_valid: Mapped[bool] = mapped_column(default=False, nullable=False)
+    validation_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    user_instructions: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
