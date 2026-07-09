@@ -190,11 +190,20 @@ const mockGetCharacteristicRequirements = async (
 const mockRefineCharacteristicRequirements = async (
 	_projectId: string,
 	characteristicId: string,
-	_instructions: string,
-): Promise<string> => {
+	instructions: string,
+): Promise<GenerateRequirementsResponse> => {
 	await delay(1500);
-	const found = mockStore.find((c) => c.id === characteristicId);
-	return (found?.requirements ?? '') + '\n\n**Refinado**\n- Nueva regla agregada por IA según instrucciones.';
+	const idx = mockStore.findIndex((c) => c.id === characteristicId);
+	const newRequirements = (mockStore[idx]?.requirements || '') + `\n\n*Refinado con IA: ${instructions}*`;
+	if (idx !== -1) {
+		mockStore[idx] = { ...mockStore[idx], requirements: newRequirements };
+	}
+	return {
+		feature_id: characteristicId,
+		feature_number: mockStore[idx]?.number ?? 0,
+		requirements_markdown: newRequirements,
+		total: 10,
+	};
 };
 
 //
@@ -351,7 +360,7 @@ const realRefineCharacteristicRequirements = async (
 	projectId: string,
 	characteristicId: string,
 	instructions: string,
-): Promise<string> => {
+): Promise<GenerateRequirementsResponse> => {
 	const data = await apiClient<GenerateRequirementsResponse>(
 		`/api/v1/features/${characteristicId}/requirements/refine`,
 		{
@@ -360,7 +369,7 @@ const realRefineCharacteristicRequirements = async (
 			body: JSON.stringify({ project_id: projectId, instructions }),
 		},
 	);
-	return data.requirements_markdown;
+	return data;
 };
 
 //
@@ -434,8 +443,9 @@ export const refineCharacteristicRequirements = async (
 	projectId: string,
 	characteristicId: string,
 	instructions: string,
-): Promise<string> => {
+): Promise<GenerateRequirementsResponse> => {
 	return isUsingMocks()
 		? mockRefineCharacteristicRequirements(projectId, characteristicId, instructions)
 		: realRefineCharacteristicRequirements(projectId, characteristicId, instructions);
 };
+

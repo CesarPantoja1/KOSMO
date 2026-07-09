@@ -13,8 +13,8 @@ import {
 	generateCharacteristicRequirements,
 	getCharacteristicRequirements,
 	getCharacteristics,
-	saveCharacteristicRequirements,
 	refineCharacteristicRequirements,
+	saveCharacteristicRequirements,
 } from '@/entities/characteristic';
 
 import { CursorClickFill } from './icons';
@@ -28,13 +28,11 @@ const RequirementsPage = () => {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
-	const [isRefining, setIsRefining] = useState(false);
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
-	const [editorKey, setEditorKey] = useState(0);
 	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
 		'idle',
 	);
@@ -164,12 +162,37 @@ const RequirementsPage = () => {
 			setMarkdown(content);
 			setSavedContent(content);
 			setSaveStatus('idle');
-			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
 			console.log(_err);
 		} finally {
 			setIsGenerating(false);
+		}
+	};
+
+	const handleRefine = async (instructions: string) => {
+		if (!selectedCharacteristic || !currentProject) return;
+
+		try {
+			const data = await refineCharacteristicRequirements(
+				currentProject.id,
+				selectedCharacteristic.id,
+				instructions,
+			);
+			const newContent = data.requirements_markdown;
+			setMarkdown(newContent);
+			setSavedContent(newContent);
+			setCharacteristics((prev) =>
+				prev.map((c) =>
+					c.id === selectedCharacteristic.id ? { ...c, requirements: newContent } : c,
+				),
+			);
+			toast.success('Requisitos refinados correctamente');
+			setIsChatbotOpen(false);
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			toast.error(errorMessage);
+			throw err;
 		}
 	};
 
@@ -196,35 +219,6 @@ const RequirementsPage = () => {
 			setSaveStatus('error');
 			toast.error('Error al guardar los requisitos');
 			console.log(_err);
-		}
-	};
-
-	const handleRefine = async (instructions: string) => {
-		if (!selectedCharacteristic || !currentProject) return;
-		setIsRefining(true);
-		setIsChatbotOpen(false);
-		try {
-			const content = await refineCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				instructions
-			);
-			setCharacteristics((prev) =>
-				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: content } : c,
-				),
-			);
-			setMarkdown(content);
-			setSavedContent(content);
-			setSaveStatus('idle');
-			setEditorKey((prev) => prev + 1);
-			toast.success('Requisitos refinados correctamente');
-		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
-			toast.error(errorMessage);
-			throw err;
-		} finally {
-			setIsRefining(false);
 		}
 	};
 
@@ -295,6 +289,7 @@ const RequirementsPage = () => {
 							Refinar
 						</button>
 
+
 						<Link
 							href='modelo'
 							aria-disabled
@@ -328,7 +323,6 @@ const RequirementsPage = () => {
 					onSubmitInstructions={handleRefine}
 				/>
 			)}
-
 			{pendingCharSwitch && (
 				<ModalConfirmLeave
 					onCancel={handleCancelSwitch}
@@ -340,7 +334,7 @@ const RequirementsPage = () => {
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			{(isGenerating || isRefining) && (
+			{isGenerating && (
 				<Loading
 					title='Refinando requisitos EARS...'
 					description='Estructurando la característica seleccionada bajo el estándar EARS.'
@@ -359,8 +353,7 @@ const RequirementsPage = () => {
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
 							<button 
 								onClick={() => setIsChatbotOpen(true)}
-								disabled={!selectedCharacteristic?.requirements}
-								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm font-medium'
+								className='btn text-base-50 bg-ai rounded-sm font-medium cursor-pointer hover:bg-ai/90'
 							>
 								<Ai color='' size={20} />
 								Refinar
@@ -502,7 +495,6 @@ const RequirementsPage = () => {
 									</div>
 									<div className='flex-1 min-h-0 mt-2'>
 										<MarkdownEditor
-											key={editorKey}
 											markdown={markdown}
 											onChange={setMarkdown}
 											isMaximized={isEditorMaximized}
