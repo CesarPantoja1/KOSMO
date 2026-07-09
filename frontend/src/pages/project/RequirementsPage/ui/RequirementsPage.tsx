@@ -33,9 +33,6 @@ const RequirementsPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
-	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
-		'idle',
-	);
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
 	const [editorKey, setEditorKey] = useState(0);
@@ -102,7 +99,6 @@ const RequirementsPage = () => {
 				);
 				setMarkdown(content);
 				setSavedContent(content);
-				setSaveStatus('idle');
 			} catch {
 				if (!cancelled) toast.error('Error al cargar los requisitos');
 			} finally {
@@ -162,7 +158,6 @@ const RequirementsPage = () => {
 			);
 			setMarkdown(content);
 			setSavedContent(content);
-			setSaveStatus('idle');
 			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
@@ -200,9 +195,11 @@ const RequirementsPage = () => {
 		}
 	};
 
-	const handleSave = async () => {
-		if (!selectedCharacteristic || !currentProject) return;
-		setSaveStatus('saving');
+	const handleSave = async (): Promise<boolean> => {
+		if (!selectedCharacteristic || !currentProject) return false;
+		
+		const savingToast = toast.info('Guardando...');
+		
 		try {
 			await saveCharacteristicRequirements(
 				currentProject.id,
@@ -218,11 +215,14 @@ const RequirementsPage = () => {
 					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
 				),
 			);
-			setSaveStatus('saved');
+			toast.close(savingToast);
+			toast.success('Guardado');
+			return true;
 		} catch (_err) {
-			setSaveStatus('error');
-			toast.error('Error al guardar los requisitos');
+			toast.close(savingToast);
+			toast.error('No se pudo guardar');
 			console.log(_err);
+			return false;
 		}
 	};
 
@@ -474,30 +474,6 @@ const RequirementsPage = () => {
 												<span className='text-2xl font-bold text-primary-100'>
 													{selectedCharacteristic.title}
 												</span>
-											</div>
-											<div className='inline-flex items-center gap-3'>
-												{saveStatus === 'saving' && (
-													<span className='text-sm font-medium text-base-600 animate-pulse'>
-														Guardando...
-													</span>
-												)}
-												{saveStatus === 'saved' && (
-													<span className='text-sm font-medium text-status-success'>
-														Guardado
-													</span>
-												)}
-												{saveStatus === 'error' && (
-													<span className='text-sm font-medium text-status-error'>
-														Error al guardar
-													</span>
-												)}
-												{(saveStatus === 'idle' || hasUnsavedChanges) &&
-													saveStatus !== 'saving' &&
-													saveStatus !== 'error' && (
-														<span className='text-sm font-medium text-base-500'>
-															{hasUnsavedChanges ? 'Cambios sin guardar' : ''}
-														</span>
-													)}
 											</div>
 										</div>
 										<p className='text-base-600 text-base'>
