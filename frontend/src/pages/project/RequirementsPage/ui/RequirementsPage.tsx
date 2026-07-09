@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { MarkdownEditor } from '@/feature';
+import { ChatbotPopup, MarkdownEditor } from '@/feature';
 import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
@@ -13,6 +13,7 @@ import {
 	generateCharacteristicRequirements,
 	getCharacteristicRequirements,
 	getCharacteristics,
+	refineCharacteristicRequirements,
 	saveCharacteristicRequirements,
 } from '@/entities/characteristic';
 
@@ -27,6 +28,7 @@ const RequirementsPage = () => {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
@@ -168,6 +170,32 @@ const RequirementsPage = () => {
 		}
 	};
 
+	const handleRefine = async (instructions: string) => {
+		if (!selectedCharacteristic || !currentProject) return;
+
+		try {
+			const data = await refineCharacteristicRequirements(
+				currentProject.id,
+				selectedCharacteristic.id,
+				instructions,
+			);
+			const newContent = data.requirements_markdown;
+			setMarkdown(newContent);
+			setSavedContent(newContent);
+			setCharacteristics((prev) =>
+				prev.map((c) =>
+					c.id === selectedCharacteristic.id ? { ...c, requirements: newContent } : c,
+				),
+			);
+			toast.success('Requisitos refinados correctamente');
+			setIsChatbotOpen(false);
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			toast.error(errorMessage);
+			throw err;
+		}
+	};
+
 	const handleSave = async () => {
 		if (!selectedCharacteristic || !currentProject) return;
 		setSaveStatus('saving');
@@ -261,6 +289,7 @@ const RequirementsPage = () => {
 							Refinar
 						</button>
 
+
 						<Link
 							href='modelo'
 							aria-disabled
@@ -288,6 +317,12 @@ const RequirementsPage = () => {
 
 	return (
 		<>
+			{isChatbotOpen && (
+				<ChatbotPopup
+					onClose={() => setIsChatbotOpen(false)}
+					onSubmitInstructions={handleRefine}
+				/>
+			)}
 			{pendingCharSwitch && (
 				<ModalConfirmLeave
 					onCancel={handleCancelSwitch}
@@ -316,7 +351,10 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button className='btn text-base-50 bg-ai rounded-sm font-medium'>
+							<button 
+								onClick={() => setIsChatbotOpen(true)}
+								className='btn text-base-50 bg-ai rounded-sm font-medium cursor-pointer hover:bg-ai/90'
+							>
 								<Ai color='' size={20} />
 								Refinar
 							</button>
