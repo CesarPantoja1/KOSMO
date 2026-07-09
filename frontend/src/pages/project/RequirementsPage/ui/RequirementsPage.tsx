@@ -38,6 +38,7 @@ const RequirementsPage = () => {
 	);
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
+	const [editorKey, setEditorKey] = useState(0);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -162,6 +163,7 @@ const RequirementsPage = () => {
 			setMarkdown(content);
 			setSavedContent(content);
 			setSaveStatus('idle');
+			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
 			console.log(_err);
@@ -182,6 +184,7 @@ const RequirementsPage = () => {
 			const newContent = data.requirements_markdown;
 			setMarkdown(newContent);
 			setSavedContent(newContent);
+			setEditorKey((prev) => prev + 1);
 			setCharacteristics((prev) =>
 				prev.map((c) =>
 					c.id === selectedCharacteristic.id ? { ...c, requirements: newContent } : c,
@@ -495,6 +498,7 @@ const RequirementsPage = () => {
 									</div>
 									<div className='flex-1 min-h-0 mt-2'>
 										<MarkdownEditor
+											key={editorKey}
 											markdown={markdown}
 											onChange={setMarkdown}
 											isMaximized={isEditorMaximized}
