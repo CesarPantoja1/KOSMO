@@ -16,6 +16,7 @@ class EARSRequirement:
     feature_id: FeatureId
     feature_number: int
     requirement_number: int
+    title: str
     pattern: EARSPattern
     statement: str
     origin: str

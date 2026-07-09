@@ -77,7 +77,7 @@ _FEATURES_JSON = (
 
 _EARS_JSON = (
     '{"requirements": ['
-    '{"code": "REQ-1.1", "pattern": "Ubicuo", '
+    '{"code": "REQ-1.1", "title": "Gestión segura de datos", "pattern": "Ubicuo", '
     '"statement": "El sistema debe gestionar los datos de forma segura", '
     '"origin": "Requisito fundamental de seguridad. Se deriva de C01.", '
     '"acceptance_criteria": ['

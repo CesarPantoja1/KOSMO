@@ -203,6 +203,7 @@ class RequirementsRefineMode:
                     feature_id=self._feature_id,
                     feature_number=self._feature_number,
                     requirement_number=i,
+                    title=str(item.get("title", "")),  # type: ignore[reportUnknownArgumentType]
                     pattern=pattern,
                     statement=str(item.get("statement", "")),  # type: ignore[reportUnknownArgumentType]
                     origin=str(item.get("origin", "")),  # type: ignore[reportUnknownArgumentType]

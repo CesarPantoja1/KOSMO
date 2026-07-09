@@ -131,6 +131,7 @@ def _make_valid_ears_output() -> EARSPhaseOutput:
         feature_id=FeatureId("feat_01"),
         feature_number=1,
         requirement_number=1,
+        title="Gestión segura de datos",
         pattern=EARSPattern.ubiquitous,
         statement="El sistema shall gestionar los datos de forma segura",
         origin="Requisito fundamental. Se deriva de C01 y Reglas de negocio.",

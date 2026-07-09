@@ -57,16 +57,18 @@ Genera requisitos distribuidos en al menos 4 categorías:
 6. **Complejo** — Combina estado y evento.
    Sintaxis: "MIENTRAS [estado] Y CUANDO [evento], el sistema debe [comportamiento]".
 
-## Cinco campos de cada requisito
+## Seis campos de cada requisito
 
 1. **code** — Identificador REQ-X.Y donde X es el número de característica e Y el correlativo.
-2. **pattern** — Una de las 6 categorías: Ubicuo, Basado en eventos, Determinado por estado,
+2. **title** — Título breve de 3 a 6 palabras que resume el propósito del requisito.
+   Ejemplo: "Asignación de turnos estándar", "Rechazo de turnos excedidos".
+3. **pattern** — Una de las 6 categorías: Ubicuo, Basado en eventos, Determinado por estado,
    Opcional, Comportamiento no deseado, Complejo.
-3. **statement** — Oración completa en sintaxis EARS. Es el enunciado del requisito.
-4. **origin** — Justificación del requisito y su cadena de derivación hacia la
+4. **statement** — Oración completa en sintaxis EARS. Es el enunciado del requisito.
+5. **origin** — Justificación del requisito y su cadena de derivación hacia la
    característica (C0X) y las secciones del Discovery que lo fundamentan.
    Ejemplo: "Garantiza consistencia en la presentación de valores. Se deriva de C01 y Reglas de negocio."
-5. **acceptance_criteria** — Mínimo 2 criterios verificables. Cada criterio tiene:
+6. **acceptance_criteria** — Mínimo 2 criterios verificables. Cada criterio tiene:
    - **scenario**: título breve del escenario.
    - **given** (Dado): contexto inicial.
    - **when** (Cuando): acción concreta del usuario.
@@ -79,6 +81,7 @@ Genera requisitos distribuidos en al menos 4 categorías:
   "requirements": [
     {
       "code": "REQ-1.1",
+      "title": "Presentación de montos con dos decimales",
       "pattern": "Ubicuo",
       "statement": "El sistema debe presentar todos los montos con exactamente dos decimales",
       "origin": "Garantiza consistencia visual. Se deriva de C01 y Reglas de negocio.",
@@ -286,6 +289,7 @@ class EARSMode:
                     feature_id=self._feature_id,
                     feature_number=self._feature_number,
                     requirement_number=i,
+                    title=str(item.get("title", "")),  # type: ignore[reportUnknownArgumentType]
                     pattern=pattern,
                     statement=str(item.get("statement", "")),  # type: ignore[reportUnknownArgumentType]
                     origin=str(item.get("origin", "")),  # type: ignore[reportUnknownArgumentType]
@@ -337,15 +341,17 @@ class EARSMode:
             if not (hasattr(r, "display_id") and hasattr(r, "statement")):
                 continue
 
+            title = getattr(r, "title", "")
             pattern_display = str(r.pattern) if hasattr(r, "pattern") else ""
             statement = r.statement.strip()
             display_id = r.display_id
 
-            block = f"### {display_id} {pattern_display}\n\n"
+            block = f"### {display_id} {title}\n\n"
+            block += f"**{pattern_display}**\n\n"
             block += f"{statement}\n"
 
             if hasattr(r, "acceptance_criteria") and r.acceptance_criteria:
-                block += "\n#### Criterios de Aceptación\n\n"
+                block += "\n**Criterios de Aceptación**\n\n"
                 for ac in r.acceptance_criteria:
                     scenario = getattr(ac, "scenario", "")
                     given = getattr(ac, "given", "")

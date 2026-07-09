@@ -97,6 +97,7 @@ def _an_ears_requirement(feature_id: FeatureId) -> EARSRequirement:
         feature_id=feature_id,
         feature_number=1,
         requirement_number=1,
+        title="Presentación de montos",
         pattern=EARSPattern.ubiquitous,
         statement="El sistema debe presentar los montos con dos decimales.",
         origin="Se deriva de la caracteristica C01.",

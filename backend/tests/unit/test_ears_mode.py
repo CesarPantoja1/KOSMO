@@ -23,6 +23,7 @@ _VALID_EARS_JSON = json.dumps(
         "requirements": [
             {
                 "code": "REQ-1.1",
+                "title": "Presentación de montos con dos decimales",
                 "pattern": "Ubicuo",
                 "statement": "El sistema debe presentar todos los montos con exactamente dos decimales",
                 "origin": "Garantiza consistencia. Se deriva de C01 y Reglas de negocio.",
@@ -43,6 +44,7 @@ _VALID_EARS_JSON = json.dumps(
             },
             {
                 "code": "REQ-1.2",
+                "title": "Cálculo de cuota al registrar gasto",
                 "pattern": "Basado en eventos",
                 "statement": (
                     "CUANDO un participante confirma el registro de un gasto, "
@@ -66,6 +68,7 @@ _VALID_EARS_JSON = json.dumps(
             },
             {
                 "code": "REQ-1.3",
+                "title": "Impedir registro con un solo participante",
                 "pattern": "Determinado por estado",
                 "statement": (
                     "MIENTRAS el grupo tiene un único participante activo, "
@@ -96,6 +99,7 @@ _EARS_JSON_SINGLE_CRITERION = json.dumps(
         "requirements": [
             {
                 "code": "REQ-1.1",
+                "title": "Presentación de montos",
                 "pattern": "Ubicuo",
                 "statement": "El sistema debe presentar montos con dos decimales",
                 "origin": "Garantiza consistencia. Se deriva de C01.",
@@ -128,6 +132,7 @@ def test_ears_mode_build_output_returns_ears_phase_output() -> None:
     # Assert
     assert isinstance(result, EARSPhaseOutput)
     assert len(result.requirements) == 3
+    assert result.requirements[0].title == "Presentación de montos con dos decimales"
     assert result.requirements[0].pattern == EARSPattern.ubiquitous
     assert result.requirements[0].statement == (
         "El sistema debe presentar todos los montos con exactamente dos decimales"
@@ -147,18 +152,19 @@ def test_ears_mode_markdown_structure_includes_heading_separators_and_criteria()
     result = mode.build_output(json.loads(_VALID_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
-    assert "### REQ-1.1 Ubicuo" in result.requirements_markdown
-    assert "### REQ-1.2 Basado en eventos" in result.requirements_markdown
-    assert "### REQ-1.3 Determinado por estado" in result.requirements_markdown
+    assert "### REQ-1.1 Presentación de montos con dos decimales" in result.requirements_markdown
+    assert "### REQ-1.2 Cálculo de cuota al registrar gasto" in result.requirements_markdown
+    assert "### REQ-1.3 Impedir registro con un solo participante" in result.requirements_markdown
+    assert "**Ubicuo**" in result.requirements_markdown
+    assert "**Basado en eventos**" in result.requirements_markdown
+    assert "**Determinado por estado**" in result.requirements_markdown
     assert "---" in result.requirements_markdown
-    assert "#### Criterios de Aceptación" in result.requirements_markdown
+    assert "**Criterios de Aceptación**" in result.requirements_markdown
+    assert "#### Criterios" not in result.requirements_markdown
     assert "**Escenario:" in result.requirements_markdown
     assert "- **Dado** que" in result.requirements_markdown
     assert "- **Cuando**" in result.requirements_markdown
     assert "- **Entonces**" in result.requirements_markdown
-    assert "| Campo | Contenido |" not in result.requirements_markdown
-    assert "| **Patrón** |" not in result.requirements_markdown
-    assert "| **Enunciado** |" not in result.requirements_markdown
     assert "**Origen**" not in result.requirements_markdown
 
 
