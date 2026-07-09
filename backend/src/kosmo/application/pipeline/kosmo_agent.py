@@ -126,6 +126,7 @@ class KOSMOAgent:
         tool_results_entries: list[dict[str, str]] = []
         last_output: Any = None
         last_validation = ValidationResult(is_valid=False, errors=["No se genero contenido"])
+        last_structured_requirements: Any = None
 
         start_time = time.monotonic()
 
@@ -161,6 +162,12 @@ class KOSMOAgent:
 
                 last_output = raw_output
                 last_validation = mode.validate_output(last_output)
+
+                if not last_validation.is_valid and last_structured_requirements is not None:
+                    fallback_validation = mode.validate_output(last_structured_requirements)
+                    if fallback_validation.is_valid:
+                        last_output = last_structured_requirements
+                        last_validation = fallback_validation
 
                 trace_entries.append(
                     f"Paso {iteration}: respuesta final. "
@@ -217,6 +224,9 @@ class KOSMOAgent:
 
             result = self._registry.execute(tool_name, tool_input)
             tool_results_entries.append({"tool": tool_name, "output": json.dumps(result, default=str)})
+
+            if isinstance(tool_input, dict) and "requirements" in tool_input:
+                last_structured_requirements = tool_input  # type: ignore[reportUnknownVariableType]
 
             observation = json.dumps(result, default=str)
             conversation.append(f"## Resultado de la herramienta '{tool_name}'\n\n{observation}")

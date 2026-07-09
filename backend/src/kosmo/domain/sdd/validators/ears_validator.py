@@ -26,7 +26,10 @@ def _get(req: Any, key: str, default: Any = "") -> Any:
 
 
 def _get_source_statement(req: Any) -> str:
-    return str(_get(req, "source_statement", ""))
+    stmt = _get(req, "source_statement", "")
+    if stmt:
+        return str(stmt)
+    return str(_get(req, "statement", ""))
 
 
 def _get_pattern(req: Any) -> EARSPattern | str:
@@ -39,12 +42,22 @@ def _get_pattern(req: Any) -> EARSPattern | str:
         return str(val)
 
 
+_CODE_RE = re.compile(r"REQ-(\d+)\.(\d+)", re.IGNORECASE)
+
+
 def _get_display_id(req: Any) -> str:
     if isinstance(req, dict):
         d = cast("dict[str, Any]", req)
         fn = d.get("feature_number", 0)
         rn = d.get("requirement_number", 0)
-        return f"REQ-{fn}.{rn}"
+        if fn and rn:
+            return f"REQ-{fn}.{rn}"
+        code = str(d.get("code", ""))
+        if code:
+            m = _CODE_RE.search(code)
+            if m:
+                return f"REQ-{m.group(1)}.{m.group(2)}"
+        return code if code else "REQ-?.?"
     return str(_get(req, "display_id", "REQ-?.?"))
 
 
