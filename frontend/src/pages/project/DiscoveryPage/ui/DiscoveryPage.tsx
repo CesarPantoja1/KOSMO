@@ -5,7 +5,7 @@ import { useAppStore } from 'app/store/app.store';
 import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery } from '../api/api';
+import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
 import { generateCharacteristics } from '@/entities/characteristic';
 
 const DiscoveryPage = () => {
@@ -169,19 +169,14 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handleRefine = async (_instructions: string) => {
+	const handleRefine = async (instructions: string) => {
 		if (!currentProject) return;
 		setIsChatbotOpen(false);
 		setIsRefining(true);
 		try {
-			// Simulate API delay
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-			// Mock refined content
-			const mockRefinedContent =
-				markdown +
-				'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
-			setMarkdown(mockRefinedContent);
-			savedContentRef.current = mockRefinedContent;
+			const data = await refineDiscovery(currentProject.id, instructions);
+			setMarkdown(data.content);
+			savedContentRef.current = data.content;
 			setHasUnsavedChangesLocal(false);
 			setEditorKey((prev) => prev + 1);
 			toast.success('Documento refinado correctamente');
