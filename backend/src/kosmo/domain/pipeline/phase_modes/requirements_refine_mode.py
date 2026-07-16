@@ -42,11 +42,17 @@ original — incluyendo espacios, saltos de línea, puntuación y formato markdo
 
 ## Formato de salida
 
-El documento que debes devolver es ÚNICAMENTE el contenido que aparece después
-del marcador `---` en el prompt del usuario (la sección "DOCUMENTO A EDITAR").
-No incluyas el contexto, las instrucciones ni los marcadores `---` en tu salida.
-Devuelve el documento editado empezando directamente con `### REQ-X.Y`, sin
-texto antes ni después.
+Responde en el campo `output` del JSON de respuesta final con el documento
+editado. El valor de `output` debe ser el contenido que aparece después del
+marcador `---` en el prompt del usuario (la sección "DOCUMENTO A EDITAR").
+No incluyas el contexto, las instrucciones ni los marcadores `---` en el
+documento. El documento editado debe empezar directamente con `### REQ-X.Y`,
+sin texto antes ni después.
+
+**IMPORTANTE SOBRE EL FORMATO JSON:** El campo `output` es una cadena JSON.
+Escapa TODOS los saltos de línea como \\n y TODAS las comillas dobles como
+\\". No uses saltos de línea reales dentro de la cadena JSON. Ejemplo:
+{"reasoning": "...", "final": true, "output": "### REQ-1.1 Titulo\\n\\nUbicuo\\n\\nEl sistema debe..."}
 """
 
 
@@ -93,8 +99,41 @@ class RequirementsRefineMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, _output: Any) -> ValidationResult:
+    def validate_output(self, output: Any) -> ValidationResult:
+        text = ""
+        if isinstance(output, str):
+            text = output.strip()
+        elif isinstance(output, dict):
+            as_dict = cast(dict[str, object], output)
+            text = str(as_dict.get("output", "")).strip()
+
+        if not text:
+            return ValidationResult(is_valid=False, errors=["El output está vacío"])
+
+        if text.startswith("{") or text.startswith("["):
+            return ValidationResult(
+                is_valid=False,
+                errors=["El output parece JSON crudo en lugar de markdown de requisitos"],
+            )
+
+        if "### REQ-" not in text:
+            return ValidationResult(
+                is_valid=False,
+                errors=["El output no contiene requisitos en formato esperado (### REQ-...)"],
+            )
+
         return ValidationResult(is_valid=True)
+
+    def build_validation_feedback(self, errors: list[str]) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            "## Feedback de validacion\n\n"
+            f"El documento tiene los siguientes errores:\n\n{error_list}\n\n"
+            "Corrige UNICAMENTE estos problemas puntuales en el documento. "
+            "NO modifiques, reescribas ni reformatees el resto del contenido "
+            "que ya esta correcto. Aplica cambios quirurgicos, especificos y "
+            "localizados."
+        )
 
     def build_retry_prompt(
         self,

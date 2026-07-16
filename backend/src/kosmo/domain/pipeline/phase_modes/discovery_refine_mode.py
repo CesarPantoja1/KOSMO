@@ -30,8 +30,8 @@ _DISCOVERY_REFINE_SYSTEM_PROMPT = (
     "plataforma, sistema, software, web, aplicación, aplicaciones.\n"
     "- No uses formato de historia de usuario (Como... quiero... para...).\n"
     "- Todo en español con tildes correctas.\n"
-    "- Devuelve ÚNICAMENTE el documento completo en Markdown, sin texto introductorio "
-    "ni explicaciones sobre los cambios realizados.\n"
+    "- El documento refinado debe entregarse en el campo `output` del JSON de "
+    'respuesta final. Escapa saltos de línea como \\n y comillas dobles como \\".\n'
 )
 
 
@@ -102,6 +102,18 @@ class DiscoveryRefineMode:
         raw_text = auto_repair_technical_terms(raw_text)
         doc = markdown_to_document(raw_text)
         return validate_business_level(doc)
+
+    def build_validation_feedback(self, errors: list[str]) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            "## Feedback de validacion\n\n"
+            f"El documento tiene los siguientes errores:\n\n{error_list}\n\n"
+            "Corrige UNICAMENTE estos problemas puntuales en el documento. "
+            "NO modifiques, reescribas ni reformatees el resto del contenido "
+            "que ya esta correcto. Aplica cambios quirurgicos, especificos y "
+            "localizados. Devuelve el documento completo en Markdown sin texto "
+            "introductorio."
+        )
 
     def build_retry_prompt(
         self,

@@ -160,8 +160,15 @@ class KOSMOAgent:
                     with contextlib.suppress(json.JSONDecodeError, TypeError):
                         raw_output = json.loads(raw_output)
 
-                last_output = raw_output
-                last_validation = mode.validate_output(last_output)
+                if isinstance(raw_output, str) and raw_output.strip().startswith(("{", "[")):
+                    last_output = raw_output
+                    last_validation = ValidationResult(
+                        is_valid=False,
+                        errors=["El output parece JSON malformado que no se pudo parsear"],
+                    )
+                else:
+                    last_output = raw_output
+                    last_validation = mode.validate_output(last_output)
 
                 if not last_validation.is_valid and last_structured_requirements is not None:
                     fallback_validation = mode.validate_output(last_structured_requirements)
@@ -206,10 +213,7 @@ class KOSMOAgent:
 
                     return mode.build_output(last_output, last_validation, metadata)
 
-                feedback = "## Feedback de validacion\n\nEl documento tiene los siguientes errores:\n"
-                for err in last_validation.errors:
-                    feedback += f"- {err}\n"
-                feedback += "\nCorrige estos problemas y genera el documento completo nuevamente."
+                feedback = mode.build_validation_feedback(last_validation.errors)
                 conversation.append(feedback)
                 continue
 
@@ -344,8 +348,22 @@ class KOSMOAgent:
                 return json.loads(json_str)  # type: ignore[reportUnknownVariableType]
             return json.loads(text.strip())  # type: ignore[reportUnknownVariableType]
         except (json.JSONDecodeError, IndexError, TypeError):
+            extracted = self._extract_output_from_malformed_json(text)
+            if extracted is not None:
+                return {"final": True, "output": extracted, "reasoning": "JSON reparado automaticamente"}
             return {
                 "final": True,
                 "output": text,
                 "reasoning": "Respuesta no-JSON, tratada como final",
             }
+
+    @staticmethod
+    def _extract_output_from_malformed_json(text: str) -> str | None:
+        import re
+
+        match = re.search(r'"output"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
+        if match:
+            raw = match.group(1)
+            raw = raw.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+            return raw
+        return None
