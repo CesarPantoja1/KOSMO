@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { addCharacteristics } from '@/entities/characteristic';
 import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
+import { useRouter } from 'next/navigation';
 
 const characteristicSchema = z.object({
 	title: z
@@ -24,6 +25,11 @@ const characteristicSchema = z.object({
 
 type CharacteristicFormData = z.infer<typeof characteristicSchema>;
 
+interface FieldError {
+	title: string;
+	description: string;
+}
+
 interface UseCreateCharacteristicReturn {
 	titleValue: string;
 	titleOnBlur: () => void;
@@ -35,20 +41,29 @@ interface UseCreateCharacteristicReturn {
 	descCount: number;
 	titleOver: boolean;
 	descOver: boolean;
-	fieldErrors: { title: boolean; description: boolean };
+	fieldErrors: FieldError;
 	showSuggestionsModal: boolean;
 	openSuggestionsModal: () => void;
 	closeSuggestionsModal: () => void;
 	handleTitleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 	handleDescChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
 	handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+	handleCancel: () => void;
 	applySuggestion: (title: string, description: string) => void;
+}
+
+function validateField(value: string, maxLength: number): string {
+	const trimmed = value.trim();
+	if (trimmed.length === 0) return 'Este campo es obligatorio';
+	if (value.length > maxLength) return `Máximo ${maxLength} caracteres`;
+	return '';
 }
 
 export function useCreateCharacteristic(
 	onCreated?: () => void,
 ): UseCreateCharacteristicReturn {
 	const projectId = useAppStore((s) => s.currentProject?.id);
+	const router = useRouter();
 	const { control, handleSubmit: formSubmit, setValue } = useForm<CharacteristicFormData>({
 		mode: 'onChange',
 		resolver: zodResolver(characteristicSchema),
@@ -69,9 +84,9 @@ export function useCreateCharacteristic(
 	} = useController({ name: 'description', control });
 
 	const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
-	const [fieldErrors, setFieldErrors] = useState<{ title: boolean; description: boolean }>({
-		title: false,
-		description: false,
+	const [fieldErrors, setFieldErrors] = useState<FieldError>({
+		title: '',
+		description: '',
 	});
 
 	const titleCount = titleValue.length;
@@ -86,7 +101,7 @@ export function useCreateCharacteristic(
 			target: { ...e.target, value: sanitizedValue, name: e.target.name },
 		};
 		titleOnChange(syntheticEvent);
-		if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: false }));
+		if (fieldErrors.title) setFieldErrors((p) => ({ ...p, title: '' }));
 	};
 
 	const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -99,14 +114,14 @@ export function useCreateCharacteristic(
 			target: { ...e.target, value: sanitizedValue, name: e.target.name },
 		};
 		descOnChange(syntheticEvent);
-		if (fieldErrors.description) setFieldErrors((p) => ({ ...p, description: false }));
+		if (fieldErrors.description) setFieldErrors((p) => ({ ...p, description: '' }));
 	};
 
 	const onSubmit = async (data: CharacteristicFormData) => {
-		const hasTitleError = !data.title || data.title.length > 50;
-		const hasDescError = !data.description || data.description.length > 500;
-		if (hasTitleError || hasDescError) {
-			setFieldErrors({ title: hasTitleError, description: hasDescError });
+		const titleError = validateField(data.title, 50);
+		const descError = validateField(data.description, 500);
+		if (titleError || descError) {
+			setFieldErrors({ title: titleError, description: descError });
 			return;
 		}
 		if (!projectId) return;
@@ -121,9 +136,15 @@ export function useCreateCharacteristic(
 			onCreated?.();
 		} catch (err) {
 			const message =
-				err instanceof Error ? err.message : 'Error al crear la característica';
+				err instanceof Error
+					? err.message
+					: 'No se pudo guardar la característica. Intenta nuevamente.';
 			toast.error(message);
 		}
+	};
+
+	const handleCancel = () => {
+		router.push('/proyecto/caracteristicas');
 	};
 
 	const applySuggestion = (title: string, description: string) => {
@@ -150,6 +171,7 @@ export function useCreateCharacteristic(
 		handleTitleChange,
 		handleDescChange,
 		handleSubmit: formSubmit(onSubmit),
+		handleCancel,
 		applySuggestion,
 	};
 }
