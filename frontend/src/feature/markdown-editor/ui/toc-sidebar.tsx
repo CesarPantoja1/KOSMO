@@ -40,7 +40,10 @@ export function TocSidebar({ headings, activeId }: Props) {
 					</div>
 
 					<nav className='space-y-1 px-4 flex-1 overflow-y-auto'>
-						{headings.map((heading, index) => (
+						{headings.length === 0 ? (
+							<p className='text-sm text-neutral-500'>Sin secciones</p>
+						) : (
+							headings.map((heading, index) => (
 							<button
 								key={index}
 								onClick={() => handleScroll(heading.id)}
@@ -57,7 +60,8 @@ export function TocSidebar({ headings, activeId }: Props) {
 							>
 								{heading.text}
 							</button>
-						))}
+						))
+						)}
 					</nav>
 				</>
 			) : (
