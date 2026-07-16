@@ -34,6 +34,7 @@ export const ChatbotPopup = ({
 	} = useController({ name: 'instructions', control });
 
 	const [hasSubmitError, setHasSubmitError] = useState(false);
+	const [errorMessage, setErrorMessage] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const charCount = value.length;
@@ -41,12 +42,17 @@ export const ChatbotPopup = ({
 
 	const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		onChange(e);
-		if (hasSubmitError) setHasSubmitError(false);
+		if (hasSubmitError) {
+			setHasSubmitError(false);
+			setErrorMessage('');
+		}
 	};
 
 	const onSubmit = async () => {
-		if (charCount === 0 || charCount > 500) {
+		const trimmed = value.trim();
+		if (trimmed.length === 0 || charCount > 500) {
 			setHasSubmitError(true);
+			setErrorMessage(trimmed.length === 0 ? 'La instrucción no puede estar vacía' : 'Máximo 500 caracteres');
 			return;
 		}
 
@@ -106,6 +112,7 @@ export const ChatbotPopup = ({
 							onChange={handleChange}
 							onBlur={onBlur}
 							disabled={isSubmitting}
+							maxLength={500}
 							placeholder={placeholder}
 							className='
             flex-1
@@ -121,6 +128,9 @@ export const ChatbotPopup = ({
           '
 						/>
 
+						{hasSubmitError && (
+							<p className='mt-1 text-sm text-status-error'>{errorMessage}</p>
+						)}
 						<div className='mt-2 flex justify-end'>
 							<span
 								className={`text-sm font-mono ${isOverLimit ? 'text-status-error' : 'text-base-600'}`}
@@ -132,7 +142,7 @@ export const ChatbotPopup = ({
 
 					<button
 						type='submit'
-						disabled={isSubmitting || charCount === 0 || isOverLimit}
+						disabled={isSubmitting || value.trim().length === 0 || isOverLimit}
 						className='flex items-center justify-center gap-2 rounded-sm bg-ai px-4 py-2 text-base-50 cursor-pointer disabled:opacity-50'
 					>
 						<Ai size={20} color='text-base-50' />

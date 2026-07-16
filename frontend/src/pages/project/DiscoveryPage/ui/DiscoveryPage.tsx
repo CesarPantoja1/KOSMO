@@ -181,7 +181,7 @@ const DiscoveryPage = () => {
 			setEditorKey((prev) => prev + 1);
 			toast.success('Documento refinado correctamente');
 		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			const errorMessage = err instanceof Error ? err.message : 'No se pudo refinar el documento. Intenta nuevamente.';
 			toast.error(errorMessage);
 		} finally {
 			setIsRefining(false);
