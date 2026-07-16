@@ -1,2 +1,1 @@
-export const USE_CHARACTERISTIC_MOCKS =
-  process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
+export { USE_MOCKS as USE_CHARACTERISTIC_MOCKS } from '@/shared/api/config';

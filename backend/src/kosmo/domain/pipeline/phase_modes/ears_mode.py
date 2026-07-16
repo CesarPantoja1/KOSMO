@@ -234,6 +234,14 @@ class EARSMode:
 
         return ValidationResult(is_valid=False, errors=["Formato de salida no reconocido"])
 
+    def build_validation_feedback(self, errors: list[str]) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            "## Feedback de validacion\n\n"
+            f"Los requisitos generados tienen los siguientes problemas:\n\n{error_list}\n\n"
+            "Corrige estos problemas y genera los requisitos nuevamente."
+        )
+
     def build_retry_prompt(
         self,
         original_prompt: str,

@@ -292,6 +292,14 @@ class FeaturesMode:
             warnings=all_warnings,
         )
 
+    def build_validation_feedback(self, errors: list[str]) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            "## Feedback de validacion\n\n"
+            f"La generacion de caracteristicas tiene los siguientes problemas:\n\n{error_list}\n\n"
+            "Corrige estos problemas y vuelve a generar la lista completa de caracteristicas."
+        )
+
     def build_retry_prompt(
         self,
         original_prompt: str,

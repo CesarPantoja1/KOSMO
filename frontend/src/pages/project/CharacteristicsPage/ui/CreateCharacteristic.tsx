@@ -28,6 +28,7 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 		handleTitleChange,
 		handleDescChange,
 		handleSubmit,
+		handleCancel,
 		applySuggestion,
 	} = useCreateCharacteristic(onCreated);
 
@@ -62,6 +63,9 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 				<div className='flex-1 flex flex-col gap-6'>
 					<div className='flex flex-col gap-2'>
 						<label className='text-lg font-medium'>Título*</label>
+						{fieldErrors.title && (
+							<p className='text-sm text-status-error'>{fieldErrors.title}</p>
+						)}
 						<p className='text-base text-base-800'>
 							Expresa la intención de interacción del usuario (sin términos técnicos)
 						</p>
@@ -75,6 +79,7 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 								value={titleValue}
 								onChange={handleTitleChange}
 								onBlur={titleOnBlur}
+								maxLength={50}
 								placeholder='Ej. Categorización inteligente de consumos'
 								className='bg-transparent outline-none border-none focus:outline-none focus:ring-0'
 							/>
@@ -88,6 +93,9 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 
 					<div className='flex-1 flex flex-col gap-2'>
 						<label className='text-lg font-medium'>Descripción*</label>
+						{fieldErrors.description && (
+							<p className='text-sm text-status-error'>{fieldErrors.description}</p>
+						)}
 						<p className='text-base text-base-800'>
 							Describe cómo el usuario interactúa con el producto
 						</p>
@@ -100,6 +108,7 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 								value={descValue}
 								onChange={handleDescChange}
 								onBlur={descOnBlur}
+								maxLength={500}
 								placeholder='Ej. Asigna automáticamente una categoría (como alimentación, transporte, alojamiento o servicios) a cada gasto registrado basándose en el historial del grupo y el concepto ingresado. Esto facilita a los usuarios visualizar y analizar en qué rubros se está invirtiendo el dinero durante un viaje o periodo compartido.'
 								className='flex-1 resize-none overflow-y-auto bg-transparent outline-none border-none focus:outline-none focus:ring-0'
 							/>
@@ -111,13 +120,22 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 						</div>
 					</div>
 
-					<button
-						type='submit'
-						className='btn self-center bg-primary-100 hover:bg-primary-100/90 disabled:opacity-50'
-					>
-						<Send color='text-base-50 rotate-310' size={20} />
-						<span className='text-base-50'>Crear característica</span>
-					</button>
+					<div className='flex items-center justify-center gap-4'>
+						<button
+							type='button'
+							onClick={handleCancel}
+							className='btn bg-base-200 hover:bg-base-300'
+						>
+							<span className='text-base-800'>Cancelar</span>
+						</button>
+						<button
+							type='submit'
+							className='btn bg-primary-100 hover:bg-primary-100/90 disabled:opacity-50'
+						>
+							<Send color='text-base-50 rotate-310' size={20} />
+							<span className='text-base-50'>Crear característica</span>
+						</button>
+					</div>
 				</div>
 			</form>
 

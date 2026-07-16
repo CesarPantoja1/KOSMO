@@ -192,7 +192,7 @@ const RequirementsPage = () => {
 			);
 			toast.success('Requisitos refinados correctamente');
 		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'Error al refinar';
+			const errorMessage = err instanceof Error ? err.message : 'No se pudo refinar el documento. Intenta nuevamente.';
 			toast.error(errorMessage);
 		} finally {
 			setIsRefining(false);
@@ -351,8 +351,8 @@ const RequirementsPage = () => {
 
 			{isGenerating && (
 				<Loading
-					title='Refinando requisitos EARS...'
-					description='Estructurando la característica seleccionada bajo el estándar EARS.'
+					title='Generando requisitos EARS'
+					description='Estructurando la característica seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
 				/>
 			)}
 
@@ -453,7 +453,7 @@ const RequirementsPage = () => {
 										<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
 											Selecciona una característica del listado lateral para ver su
 											detalle
-											<br />o comenzar a refinar sus requisitos EARS.
+											<br />o comenzar a generar sus requisitos EARS.
 										</div>
 									</div>
 								</div>
@@ -505,12 +505,12 @@ const RequirementsPage = () => {
 									<Ai color='text-ai' size={70} />
 
 									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Requisitos EARS no refinados
+										Sin requisitos EARS
 									</span>
 
 									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos estructurados. Haz clic en
-										el botón <span className='text-xl font-bold'>Refinar con IA </span>
+										Esta característica aún no tiene requisitos generados. Haz clic en
+										el botón <span className='text-xl font-bold'>Generar </span>
 										para estructurarlos y completarlos automáticamente bajo el formato
 										EARS.
 									</p>

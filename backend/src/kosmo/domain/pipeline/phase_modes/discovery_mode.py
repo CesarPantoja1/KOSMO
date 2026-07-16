@@ -174,6 +174,14 @@ class DiscoveryMode:
             warnings=all_warnings,
         )
 
+    def build_validation_feedback(self, errors: list[str]) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            "## Feedback de validacion\n\n"
+            f"El documento tiene los siguientes errores:\n\n{error_list}\n\n"
+            "Corrige estos problemas y genera el documento completo nuevamente."
+        )
+
     def build_retry_prompt(
         self,
         original_prompt: str,
