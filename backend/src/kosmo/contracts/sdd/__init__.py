@@ -1,5 +1,7 @@
+from kosmo.contracts.sdd.activity_diagram import DiagramaActividad, DiagramNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import (
+    ActivityDiagramId,
     ApiKey,
     AuditId,
     FeatureId,
@@ -13,8 +15,11 @@ from kosmo.contracts.sdd.ids import (
 from kosmo.contracts.sdd.project import Project
 
 __all__ = [
+    "ActivityDiagramId",
     "ApiKey",
     "AuditId",
+    "DiagramNotFoundError",
+    "DiagramaActividad",
     "Feature",
     "FeatureId",
     "PipelineId",
