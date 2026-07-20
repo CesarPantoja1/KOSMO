@@ -13,9 +13,11 @@ from kosmo.contracts.sdd.ids import (
     UserId,
 )
 from kosmo.contracts.sdd.project import Project
+from kosmo.contracts.sdd.repositories import ActivityDiagramRepository
 
 __all__ = [
     "ActivityDiagramId",
+    "ActivityDiagramRepository",
     "ApiKey",
     "AuditId",
     "DiagramNotFoundError",
