@@ -97,6 +97,8 @@ class PhaseMode(Protocol):
         retry_count: int,
     ) -> str: ...
 
+    def build_validation_feedback(self, errors: list[str]) -> str: ...
+
     def build_output(
         self,
         raw_output: Any,

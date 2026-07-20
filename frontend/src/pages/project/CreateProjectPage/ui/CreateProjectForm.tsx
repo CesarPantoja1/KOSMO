@@ -124,7 +124,7 @@ const CreateProjectForm = () => {
 							onBlur={nameOnBlur}
 							onChange={handleNameChange}
 							placeholder='Ej. Ferretería'
-							className='w-full flex items-center px-3.5 py-1 justify-start outline-base-100 rounded-sm outline outline-2'
+							className='w-full flex items-center px-3.5 py-1 justify-start outline-base-100 rounded-sm outline-2'
 							autoComplete='off'
 						/>
 
@@ -152,7 +152,7 @@ const CreateProjectForm = () => {
 							onBlur={descOnBlur}
 							onChange={handleDescChange}
 							placeholder='Ej. App para la gestión integral de las sucursales'
-							className='w-full flex-1 px-3.5 py-1  rounded-sm outline outline-2  outline-base-100 resize-none'
+							className='w-full flex-1 px-3.5 py-1  rounded-sm outline-2  outline-base-100 resize-none'
 						/>
 						<div className='w-full flex justify-end gap-1 items-center'>
 							{descError && (
