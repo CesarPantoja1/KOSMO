@@ -11,7 +11,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId
-from kosmo.domain.sdd.validators.modelo_validator import validate_plantuml_syntax
+from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
 
 _MODELO_SYSTEM_PROMPT = """Eres un arquitecto de software experto en modelado UML,
 específicamente en diagramas de actividad.
@@ -84,7 +84,7 @@ class ModeloMode:
     def available_tools(self) -> list[ToolDefinition]:
         return [
             ToolDefinition(
-                name="validate_plantuml_syntax",
+                name="validate_activity_diagram_syntax",
                 description="Verifica que la sintaxis PlantUML del diagrama de actividad sea válida.",
                 parameters={
                     "type": "object",
@@ -115,7 +115,7 @@ class ModeloMode:
     def validate_output(self, output: Any) -> ValidationResult:
         if isinstance(output, dict) and "diagram_syntax" in output:
             diagram = str(cast(object, output["diagram_syntax"]))
-            return validate_plantuml_syntax(diagram)
+            return validate_activity_diagram_syntax(diagram)
         
         return ValidationResult(
             is_valid=False,
