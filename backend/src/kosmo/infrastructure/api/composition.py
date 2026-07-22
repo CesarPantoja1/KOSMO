@@ -30,6 +30,10 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.modelo import (
+    GenerateActivityDiagramUseCase,
+    GetActivityDiagramUseCase,
+)
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.application.projects import (
     CreateProjectUseCase,
@@ -90,6 +94,9 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyProjectRepository,
     SqlAlchemyUserRepository,
+)
+from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
+    SqlAlchemyActivityDiagramRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
@@ -500,6 +507,33 @@ def build_requirements_components(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             agent=pipeline.refine_agent,
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ModeloComponents:
+    generate_diagram: GenerateActivityDiagramUseCase
+    get_diagram: GetActivityDiagramUseCase
+
+
+def build_modelo_components(
+    session_factory: async_sessionmaker[AsyncSession],
+    pipeline: PipelineComponents,
+) -> ModeloComponents:
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
+    return ModeloComponents(
+        generate_diagram=GenerateActivityDiagramUseCase(
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            diagram_repo=diagram_repo,
+            agent=pipeline.agent,
+        ),
+        get_diagram=GetActivityDiagramUseCase(
+            feature_repo=feature_repo,
+            diagram_repo=diagram_repo,
         ),
     )
 

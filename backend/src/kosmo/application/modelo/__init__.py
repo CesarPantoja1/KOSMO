@@ -5,9 +5,17 @@ from kosmo.application.modelo.generate_diagram import (
     GenerateDiagramInput,
     GenerateDiagramOutput,
 )
+from kosmo.application.modelo.get_diagram import (
+    GetActivityDiagramUseCase,
+    GetDiagramInput,
+    GetDiagramOutput,
+)
 
 __all__ = [
     "GenerateActivityDiagramUseCase",
     "GenerateDiagramInput",
     "GenerateDiagramOutput",
+    "GetActivityDiagramUseCase",
+    "GetDiagramInput",
+    "GetDiagramOutput",
 ]
