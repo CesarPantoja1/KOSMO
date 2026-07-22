@@ -30,18 +30,30 @@ def validate_activity_diagram_syntax(diagram: str) -> ValidationResult:
     endif_count = sum(1 for line in lines if line == "endif" or line == "end if")
     
     if if_count > endif_count:
-        errors.append(f"Se detectaron condicionales 'if' sin su correspondiente 'endif' ({if_count} if vs {endif_count} endif)")
+        errors.append(
+            f"Se detectaron condicionales 'if' sin su correspondiente 'endif' "
+            f"({if_count} if vs {endif_count} endif)"
+        )
     elif if_count < endif_count:
-        errors.append(f"Se detectaron 'endif' sobrantes sin un 'if' correspondiente ({if_count} if vs {endif_count} endif)")
+        errors.append(
+            f"Se detectaron 'endif' sobrantes sin un 'if' correspondiente "
+            f"({if_count} if vs {endif_count} endif)"
+        )
 
     # Validar balance de fork / end merge (concurrencia)
     fork_count = sum(1 for line in lines if line == "fork")
     endmerge_count = sum(1 for line in lines if line == "end merge" or line == "endmerge")
 
     if fork_count > endmerge_count:
-        errors.append(f"Se detectaron ramas concurrentes 'fork' sin su correspondiente 'end merge' ({fork_count} fork vs {endmerge_count} end merge)")
+        errors.append(
+            f"Se detectaron ramas concurrentes 'fork' sin su correspondiente 'end merge' "
+            f"({fork_count} fork vs {endmerge_count} end merge)"
+        )
     elif fork_count < endmerge_count:
-        errors.append(f"Se detectaron 'end merge' sobrantes sin un 'fork' correspondiente ({fork_count} fork vs {endmerge_count} end merge)")
+        errors.append(
+            f"Se detectaron 'end merge' sobrantes sin un 'fork' correspondiente "
+            f"({fork_count} fork vs {endmerge_count} end merge)"
+        )
 
     return ValidationResult(
         is_valid=len(errors) == 0,

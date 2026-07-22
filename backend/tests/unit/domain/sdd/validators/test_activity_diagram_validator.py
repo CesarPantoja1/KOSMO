@@ -1,5 +1,5 @@
-import pytest
 from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
+
 
 def test_validate_valid_diagram():
     diagram = """
