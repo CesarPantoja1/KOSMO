@@ -1,1 +1,1 @@
-export { getDiagram } from './modeling-api';
+export { generatePlantUmlDiagram, getDiagram } from './modeling-api';

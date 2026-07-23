@@ -17,7 +17,7 @@ class SqlAlchemyActivityDiagramRepository(ActivityDiagramRepository):
 
     async def save(self, diagram: DiagramaActividad) -> DiagramaActividad:
         async with self._session_factory() as session:
-            stmt = select(ActivityDiagramModel).where(ActivityDiagramModel.id == str(diagram.id))
+            stmt = select(ActivityDiagramModel).where(ActivityDiagramModel.feature_id == str(diagram.feature_id))
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
 

@@ -71,7 +71,7 @@ const realGeneratePlantUmlDiagram = async (
 			body: JSON.stringify({ project_id: projectId }),
 		},
 	);
-	return data.plantuml_source;
+	return data.diagram_syntax;
 };
 
 const mockGetDiagram = async (
@@ -87,13 +87,13 @@ const realGetDiagram = async (
 	characteristicId: string,
 ): Promise<string> => {
 	const data = await apiClient<ModelingUmlResponse>(
-		`/api/v1/features/${characteristicId}/diagram`,
+		`/api/v1/features/${characteristicId}/diagram?project_id=${projectId}`,
 		{
 			method: 'GET',
 			headers: { 'Content-Type': 'application/json' },
 		},
 	);
-	return data.plantuml_source;
+	return data.diagram_syntax;
 };
 
 const isUsingMocks = () => USE_MOCKS;

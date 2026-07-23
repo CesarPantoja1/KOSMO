@@ -26,7 +26,7 @@ import {
 
 import { Modeling } from '@/widgets/main-navbar/ui/icons';
 
-import { getDiagram } from '@/entities/modeling';
+import { generatePlantUmlDiagram, getDiagram } from '@/entities/modeling';
 
 const ModelingPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
@@ -186,9 +186,15 @@ const ModelingPage = () => {
 			setMarkdown(content);
 			setSavedContent(content);
 			setEditorKey((prev) => prev + 1);
+
+			const source = await generatePlantUmlDiagram(
+				currentProject.id,
+				selectedCharacteristic.id,
+			);
+			setPlantumlSource(source);
 		} catch (_err) {
-			toast.error('Error al generar los requisitos');
 			console.log(_err);
+			toast.error('No se pudo generar el diagrama de actividad. Intenta de nuevo.');
 		} finally {
 			setIsGenerating(false);
 		}
@@ -378,8 +384,8 @@ const ModelingPage = () => {
 
 			{isGenerating && (
 				<Loading
-					title='Generando modelo'
-					description='Estructurando el diagrama UML. Esto tomará unos segundos.'
+					title='Generando diagrama de actividad'
+					description='Analizando los requisitos para construir el flujo del proceso. Esto tomará unos segundos.'
 				/>
 			)}
 
