@@ -25,6 +25,11 @@ def validate_activity_diagram_syntax(diagram: str) -> ValidationResult:
     if not has_stop:
         warnings.append("Es recomendable incluir un nodo final 'stop' o 'end'")
 
+    # Validar presencia de carriles / swimlanes (|NombreCarril|)
+    has_swimlanes = any(line.startswith("|") and line.endswith("|") for line in lines)
+    if not has_swimlanes:
+        warnings.append("Es recomendable organizar las actividades utilizando carriles/swimlanes (|NombreCarril|)")
+
     # Validar balance de if / endif
     if_count = sum(1 for line in lines if line.startswith("if ") or line.startswith("if("))
     endif_count = sum(1 for line in lines if line == "endif" or line == "end if")

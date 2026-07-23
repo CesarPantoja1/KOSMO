@@ -63,6 +63,7 @@ from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
 )
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
+from kosmo.domain.pipeline.phase_modes.modelo_mode import ModeloMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
 )
@@ -80,6 +81,9 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
+from kosmo.domain.sdd.validators.activity_diagram_validator import (
+    validate_activity_diagram_syntax,
+)
 from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_quality,
     validate_ears_software_level,
@@ -302,6 +306,7 @@ def build_pipeline_components(
         SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
         SpecPhase.CARACTERISTICAS: FeaturesMode(),
         SpecPhase.REQUISITOS: EARSMode(),
+        SpecPhase.MODELO: ModeloMode(),
     }
 
     # 5. Configurar el registro de herramientas con los validadores existentes
@@ -337,6 +342,10 @@ def build_pipeline_components(
     tool_registry.register(
         "validate_ears_software_level",
         lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
+    )
+    tool_registry.register(
+        "validate_activity_diagram_syntax",
+        lambda inp: _adapt_validation_result(validate_activity_diagram_syntax(str(inp.get("diagram", "")))),
     )
 
     # 6. Instanciar el repositorio de memoria del agente

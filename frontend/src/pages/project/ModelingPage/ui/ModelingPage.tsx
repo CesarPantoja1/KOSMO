@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { ChatbotPopup, MarkdownEditor, PlantUmlViewer } from '@/feature';
+import { ChatbotPopup, PlantUmlViewer } from '@/feature';
 import {
 	Ai,
 	ArrowRight,
@@ -17,11 +17,8 @@ import { useAppStore } from 'app/store/app.store';
 
 import type { Characteristic } from '@/entities/characteristic';
 import {
-	generateCharacteristicRequirements,
 	getCharacteristicRequirements,
 	getCharacteristics,
-	saveCharacteristicRequirements,
-	refineCharacteristicRequirements,
 } from '@/entities/characteristic';
 
 import { Modeling } from '@/widgets/main-navbar/ui/icons';
@@ -44,10 +41,8 @@ const ModelingPage = () => {
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
 
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
-	const [editorKey, setEditorKey] = useState(0);
 
 	const [plantumlSource, setPlantumlSource] = useState('');
-	const [isPlantumlLoading, setIsPlantumlLoading] = useState(false);
 	const [isPlantumlMaximized, setPlantumlMaximized] = useState(false);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
@@ -55,6 +50,8 @@ const ModelingPage = () => {
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
 	const hasRequirements = useAppStore((s) => s.hasRequirements);
 	const setHasRequirements = useAppStore((s) => s.setHasRequirements);
+	const hasDiagram = useAppStore((s) => s.hasDiagram);
+	const setHasDiagram = useAppStore((s) => s.setHasDiagram);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
@@ -100,18 +97,10 @@ const ModelingPage = () => {
 			setMarkdown('');
 			setSavedContent('');
 			setPlantumlSource('');
-			setIsPlantumlLoading(true);
 			setPlantumlMaximized(false);
+
 			try {
-				const [content] = await Promise.all([
-					getCharacteristicRequirements(projectId, characteristicId),
-					getDiagram(projectId, characteristicId).then(
-						(source) => {
-							if (!cancelled) setPlantumlSource(source);
-						},
-						() => {},
-					),
-				]);
+				const content = await getCharacteristicRequirements(projectId, characteristicId).catch(() => '');
 				if (cancelled) return;
 				if (content) {
 					setHasRequirements(characteristicId, true);
@@ -123,12 +112,25 @@ const ModelingPage = () => {
 				);
 				setMarkdown(content);
 				setSavedContent(content);
+
+				// Intentar cargar el diagrama existente
+				try {
+					const source = await getDiagram(projectId, characteristicId);
+					if (!cancelled && source) {
+						setPlantumlSource(source);
+						setHasDiagram(characteristicId, true);
+					}
+				} catch {
+					if (!cancelled) {
+						setPlantumlSource('');
+						setHasDiagram(characteristicId, false);
+					}
+				}
 			} catch {
-				if (!cancelled) toast.error('Error al cargar los requisitos');
+				if (!cancelled) toast.error('Error al cargar la información de la característica');
 			} finally {
 				if (!cancelled) {
 					setIsLoadingRequirements(false);
-					setIsPlantumlLoading(false);
 				}
 			}
 		};
@@ -138,7 +140,7 @@ const ModelingPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedId, currentProject]);
+	}, [selectedId, currentProject, setHasRequirements, setHasDiagram]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
@@ -166,32 +168,13 @@ const ModelingPage = () => {
 		if (!selectedCharacteristic || !currentProject) return;
 		setIsGenerating(true);
 		try {
-			const content = await generateCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-			);
-			await saveCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				content,
-			);
-			if (content) {
-				setHasRequirements(selectedCharacteristic.id, true);
-			}
-			setCharacteristics((prev) =>
-				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: content } : c,
-				),
-			);
-			setMarkdown(content);
-			setSavedContent(content);
-			setEditorKey((prev) => prev + 1);
-
 			const source = await generatePlantUmlDiagram(
 				currentProject.id,
 				selectedCharacteristic.id,
 			);
 			setPlantumlSource(source);
+			setHasDiagram(selectedCharacteristic.id, true);
+			toast.success('Diagrama de actividad generado con éxito');
 		} catch (_err) {
 			console.log(_err);
 			toast.error('No se pudo generar el diagrama de actividad. Intenta de nuevo.');
@@ -200,66 +183,26 @@ const ModelingPage = () => {
 		}
 	};
 
-	const handleRefine = async (instructions: string) => {
+	const handleRefine = async (_instructions: string) => {
 		if (!selectedCharacteristic || !currentProject) return;
 		setIsChatbotOpen(false);
 		setIsRefining(true);
 		try {
-			const res = await refineCharacteristicRequirements(
+			const source = await generatePlantUmlDiagram(
 				currentProject.id,
 				selectedCharacteristic.id,
-				instructions,
 			);
-			const refinedContent = res.requirements_markdown;
-
-			setMarkdown(refinedContent);
-			setSavedContent(refinedContent);
-			setEditorKey((prev) => prev + 1);
-			setCharacteristics((prev) =>
-				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: refinedContent } : c,
-				),
-			);
-			toast.success('Requisitos refinados correctamente');
+			setPlantumlSource(source);
+			setHasDiagram(selectedCharacteristic.id, true);
+			toast.success('Diagrama refinado correctamente');
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error
 					? err.message
-					: 'No se pudo refinar el documento. Intenta nuevamente.';
+					: 'No se pudo refinar el diagrama. Intenta nuevamente.';
 			toast.error(errorMessage);
 		} finally {
 			setIsRefining(false);
-		}
-	};
-
-	const handleSave = async (): Promise<boolean> => {
-		if (!selectedCharacteristic || !currentProject) return false;
-
-		const savingToast = toast.info('Guardando...');
-
-		try {
-			await saveCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				markdown,
-			);
-			if (markdown) {
-				setHasRequirements(selectedCharacteristic.id, true);
-			}
-			setSavedContent(markdown);
-			setCharacteristics((prev) =>
-				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
-				),
-			);
-			toast.close(savingToast);
-			toast.success('Guardado');
-			return true;
-		} catch (_err) {
-			toast.close(savingToast);
-			toast.error('No se pudo guardar');
-			console.log(_err);
-			return false;
 		}
 	};
 
@@ -284,44 +227,13 @@ const ModelingPage = () => {
 		setPendingNavigationPath(null);
 	}, [setPendingNavigationPath]);
 
-	useEffect(() => {
-		if (hasUnsavedChanges) {
-			const handler = (e: BeforeUnloadEvent) => {
-				e.preventDefault();
-			};
-			window.addEventListener('beforeunload', handler);
-			return () => window.removeEventListener('beforeunload', handler);
-		}
-	}, [hasUnsavedChanges]);
-
-	useEffect(() => {
-		const handler = () => {
-			if (hasUnsavedChanges) {
-				setPendingNavigationPath(window.location.href);
-			}
-		};
-		window.addEventListener('popstate', handler);
-		return () => window.removeEventListener('popstate', handler);
-	}, [hasUnsavedChanges, setPendingNavigationPath]);
-
-	useEffect(() => {
-		if (markdown === savedContent) return;
-
-		const timer = setTimeout(() => {
-			handleSave();
-		}, 3000);
-
-		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [markdown]);
-
 	if (isLoading) {
 		return (
 			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
 				<div className='flex flex-col gap-3'>
 					<h2 className='text-3xl font-bold text-base-800'>Diagramas</h2>
 					<p className='text-base-600 text-lg'>
-						Usar el asistente AI para mejorar los diagramas UML de acuerdo a los
+						Usar el asistente AI para generar diagramas UML de acuerdo a los
 						requisitos EARS generados.
 					</p>
 					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
@@ -355,6 +267,15 @@ const ModelingPage = () => {
 		);
 	}
 
+	const hasReqs = Boolean(
+		selectedCharacteristic &&
+			(selectedCharacteristic.requirements || hasRequirements[selectedCharacteristic.id]),
+	);
+	const hasDiag = Boolean(
+		selectedCharacteristic &&
+			(plantumlSource.trim() !== '' || hasDiagram[selectedCharacteristic.id]),
+	);
+
 	return (
 		<>
 			{isRefining && (
@@ -366,7 +287,7 @@ const ModelingPage = () => {
 
 			{isChatbotOpen && (
 				<ChatbotPopup
-					placeholder='ej., "Haz que el diagrama acción sea más conciso y claro"'
+					placeholder='ej., "Haz que el diagrama de actividad sea más conciso y claro"'
 					onClose={() => setIsChatbotOpen(false)}
 					onSubmitInstructions={handleRefine}
 				/>
@@ -385,7 +306,7 @@ const ModelingPage = () => {
 			{isGenerating && (
 				<Loading
 					title='Generando diagrama de actividad'
-					description='Analizando los requisitos para construir el flujo del proceso. Esto tomará unos segundos.'
+					description='Analizando los requisitos EARS para construir el diagrama PlantUML. Esto tomará unos segundos.'
 				/>
 			)}
 
@@ -393,7 +314,7 @@ const ModelingPage = () => {
 				<div className='page-header'>
 					<h2 className='text-3xl font-bold text-base-800'>Diagramas</h2>
 					<p className='text-base-600 text-lg'>
-						Usar el asistente AI para mejorar los diagramas UML de acuerdo a los
+						Usar el asistente AI para generar diagramas UML de acuerdo a los
 						requisitos EARS generados.
 					</p>
 
@@ -401,7 +322,7 @@ const ModelingPage = () => {
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
 							<button
 								onClick={() => setIsChatbotOpen(true)}
-								disabled={!selectedCharacteristic?.requirements}
+								disabled={!hasDiag}
 								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm'
 							>
 								<Ai color='' size={20} />
@@ -434,37 +355,50 @@ const ModelingPage = () => {
 							)}
 							{characteristics.map((c) => {
 								const isSelected = c.id === selectedId;
+								const cHasReq = Boolean(c.requirements || hasRequirements[c.id]);
+								const cHasDiag = Boolean(
+									hasDiagram[c.id] || (c.id === selectedId && plantumlSource.trim() !== ''),
+								);
+
 								return (
 									<button
 										key={c.id}
 										onClick={() => handleSelectCharacteristic(c.id)}
-										className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors ${
+										className={`w-full p-3 flex justify-start items-center gap-3 text-left cursor-pointer transition-colors ${
 											isSelected
 												? 'bg-primary-100/10 border-l-4 border-primary-100'
 												: 'border-l-4 border-transparent hover:bg-base-200/30'
 										}`}
 									>
 										<span
-											className={`text-base font-bold mt-0.5 shrink-0 ${
+											className={`text-base font-bold shrink-0 ${
 												isSelected ? 'text-base-800' : 'text-base-800'
 											}`}
 										>
 											{c.display_id}
 										</span>
 										<p
-											className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
+											className={`flex-1 text-sm font-medium leading-snug ${
 												isSelected ? 'text-primary-100' : 'text-base-600'
 											}`}
 										>
 											{c.title}
 										</p>
-										{(c.requirements || hasRequirements[c.id]) && (
-											<div className='shrink-0 mt-0.5'>
+										{cHasDiag && (
+											<div className='shrink-0' title='Modelo generado'>
 												<Modeling
 													size={20}
 													color={isSelected ? 'text-primary-100' : 'text-base-600'}
 												/>
 											</div>
+										)}
+										{!cHasDiag && cHasReq && (
+											<span
+												className='shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-primary-100/10 text-primary-100'
+												title='Requisitos EARS listos para modelar'
+											>
+												Reqs OK
+											</span>
 										)}
 									</button>
 								);
@@ -498,66 +432,85 @@ const ModelingPage = () => {
 							</div>
 						)}
 
-						{selectedCharacteristic &&
-							!isLoadingRequirements &&
-							selectedCharacteristic.requirements && (
-								<div className='flex flex-col flex-1 min-h-0 gap-4'>
-									{!isPlantumlMaximized && (
-										<div className='flex flex-col flex-1 min-h-0 gap-4'>
-											<div className='flex flex-col gap-2 px-2'>
-												<div className='inline-flex justify-between items-center w-full'>
-													<div className='inline-flex justify-start gap-3 items-center'>
-														<span className='text-2xl font-bold text-base-800'>
-															{selectedCharacteristic.display_id}
-														</span>
-														<span className='text-2xl font-bold text-primary-100'>
-															{selectedCharacteristic.title}
-														</span>
-													</div>
+						{/* Caso 1: La característica NO tiene requisitos EARS generados todavía */}
+						{selectedCharacteristic && !isLoadingRequirements && !hasReqs && (
+							<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
+								<Ai color='text-ai' size={70} />
+								<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+									Sin requisitos EARS generados
+								</span>
+								<p className='text-base-800 text-lg text-center'>
+									Esta característica aún no tiene requisitos EARS generados. Primero debes generar los requisitos en la sección correspondiente para poder construir el diagrama UML.
+								</p>
+								<Link
+									href='/proyecto/requisitos'
+									onClick={handleNextLink('/proyecto/requisitos')}
+									className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
+								>
+									Ir a Requisitos
+									<ArrowRight color='' size={20} />
+								</Link>
+							</section>
+						)}
+
+						{/* Caso 2: Tiene requisitos EARS Y el diagrama ya fue generado -> Mostrar PlantUmlViewer */}
+						{selectedCharacteristic && !isLoadingRequirements && hasReqs && hasDiag && (
+							<div className='flex flex-col flex-1 min-h-0 gap-4'>
+								{!isPlantumlMaximized && (
+									<div className='flex flex-col flex-1 min-h-0 gap-4'>
+										<div className='flex flex-col gap-2 px-2'>
+											<div className='inline-flex justify-between items-center w-full'>
+												<div className='inline-flex justify-start gap-3 items-center'>
+													<span className='text-2xl font-bold text-base-800'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-2xl font-bold text-primary-100'>
+														{selectedCharacteristic.title}
+													</span>
 												</div>
-												<p className='text-base-600 text-base'>
-													{selectedCharacteristic.description}
-												</p>
 											</div>
-											<div className='flex-1 min-h-0 mt-2'>
-												<PlantUmlViewer
-													key={selectedCharacteristic.id}
-													source={plantumlSource}
-													isMaximized={isEditorMaximized}
-													onMaximize={() => setEditorMaximized(true)}
-													onMinimize={() => setEditorMaximized(false)}
-												/>
-											</div>
+											<p className='text-base-600 text-base'>
+												{selectedCharacteristic.description}
+											</p>
 										</div>
-									)}
-								</div>
-							)}
+										<div className='flex-1 min-h-0 mt-2'>
+											<PlantUmlViewer
+												key={selectedCharacteristic.id}
+												source={plantumlSource}
+												isMaximized={isEditorMaximized}
+												onMaximize={() => setEditorMaximized(true)}
+												onMinimize={() => setEditorMaximized(false)}
+											/>
+										</div>
+									</div>
+								)}
+							</div>
+						)}
 
-						{selectedCharacteristic &&
-							!isLoadingRequirements &&
-							!selectedCharacteristic.requirements && (
-								<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-									<Ai color='text-ai' size={70} />
+						{/* Caso 3: Tiene requisitos EARS pero NO tiene diagrama generado todavía -> Mostrar pantalla "Sin modelo generado" + Botón "Generar" */}
+						{selectedCharacteristic && !isLoadingRequirements && hasReqs && !hasDiag && (
+							<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
+								<Ai color='text-ai' size={70} />
 
-									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Sin modelo generado
-									</span>
+								<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+									Sin modelo generado
+								</span>
 
-									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene modelo generado. Haz clic en el botón{' '}
-										<span className='text-xl font-bold'>Generar </span>
-										para estructurarlo y completarlo automáticamente.
-									</p>
+								<p className='text-base-800 text-lg text-center'>
+									Los requisitos EARS están listos. Haz clic en el botón{' '}
+									<span className='text-xl font-bold'>Generar </span>
+									para construir el diagrama de actividad UML automáticamente.
+								</p>
 
-									<button
-										onClick={handleGenerate}
-										className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-									>
-										<Ai color='' size={20} />
-										Generar
-									</button>
-								</section>
-							)}
+								<button
+									onClick={handleGenerate}
+									className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
+								>
+									<Ai color='' size={20} />
+									Generar
+								</button>
+							</section>
+						)}
 					</div>
 				</div>
 			</div>

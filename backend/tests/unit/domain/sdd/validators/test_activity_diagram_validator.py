@@ -4,8 +4,10 @@ from kosmo.domain.sdd.validators.activity_diagram_validator import validate_acti
 def test_validate_valid_diagram():
     diagram = """
     @startuml
+    |#pink|Usuario|
     start
     :Recibir solicitud;
+    |#lightgray|Sistema|
     if (¿Válido?) then (sí)
       :Procesar;
     else (no)
