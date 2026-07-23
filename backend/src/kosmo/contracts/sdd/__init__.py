@@ -1,4 +1,5 @@
-from kosmo.contracts.sdd.activity_diagram import DiagramaActividad, DiagramNotFoundError
+from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+from kosmo.contracts.sdd.errors import DiagramNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import (
     ActivityDiagramId,

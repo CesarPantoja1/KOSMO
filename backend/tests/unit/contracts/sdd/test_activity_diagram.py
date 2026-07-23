@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kosmo.contracts.sdd.activity_diagram import DiagramaActividad, DiagramNotFoundError
+from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+from kosmo.contracts.sdd.errors import DiagramNotFoundError
 from kosmo.contracts.sdd.ids import ActivityDiagramId, FeatureId
 
 
@@ -61,7 +62,7 @@ class TestDiagramNotFoundError:
         # Assert
         assert feature_id in str(error)
         assert error.problem.status == 404
-        assert error.problem.type == "urn:kosmo:diagram:not-found"
+        assert error.problem.type == "urn:kosmo:diagrams:not-found"
 
     def test_error_construction_with_custom_instance(self) -> None:
         # Arrange
