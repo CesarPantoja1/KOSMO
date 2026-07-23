@@ -30,6 +30,10 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.modelo import (
+    GenerateActivityDiagramUseCase,
+    GetActivityDiagramUseCase,
+)
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.application.projects import (
     CreateProjectUseCase,
@@ -59,6 +63,7 @@ from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
 )
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
+from kosmo.domain.pipeline.phase_modes.modelo_mode import ModeloMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
 )
@@ -76,6 +81,9 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
 from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
+from kosmo.domain.sdd.validators.activity_diagram_validator import (
+    validate_activity_diagram_syntax,
+)
 from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_quality,
     validate_ears_software_level,
@@ -90,6 +98,9 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
     SqlAlchemyProjectRepository,
     SqlAlchemyUserRepository,
+)
+from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
+    SqlAlchemyActivityDiagramRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
@@ -295,6 +306,7 @@ def build_pipeline_components(
         SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
         SpecPhase.CARACTERISTICAS: FeaturesMode(),
         SpecPhase.REQUISITOS: EARSMode(),
+        SpecPhase.MODELO: ModeloMode(),
     }
 
     # 5. Configurar el registro de herramientas con los validadores existentes
@@ -330,6 +342,10 @@ def build_pipeline_components(
     tool_registry.register(
         "validate_ears_software_level",
         lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
+    )
+    tool_registry.register(
+        "validate_activity_diagram_syntax",
+        lambda inp: _adapt_validation_result(validate_activity_diagram_syntax(str(inp.get("diagram", "")))),
     )
 
     # 6. Instanciar el repositorio de memoria del agente
@@ -500,6 +516,33 @@ def build_requirements_components(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             agent=pipeline.refine_agent,
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ModeloComponents:
+    generate_diagram: GenerateActivityDiagramUseCase
+    get_diagram: GetActivityDiagramUseCase
+
+
+def build_modelo_components(
+    session_factory: async_sessionmaker[AsyncSession],
+    pipeline: PipelineComponents,
+) -> ModeloComponents:
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
+    return ModeloComponents(
+        generate_diagram=GenerateActivityDiagramUseCase(
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            diagram_repo=diagram_repo,
+            agent=pipeline.agent,
+        ),
+        get_diagram=GetActivityDiagramUseCase(
+            feature_repo=feature_repo,
+            diagram_repo=diagram_repo,
         ),
     )
 

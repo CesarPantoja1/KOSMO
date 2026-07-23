@@ -67,3 +67,11 @@ class EARSPhaseOutput:
     requirements_markdown: str
     validation_result: ValidationResult
     generation_metadata: GenerationMetadata
+
+
+@dataclass(frozen=True)
+class ModeloPhaseOutput:
+    feature_id: FeatureId
+    diagram_syntax: str
+    validation_result: ValidationResult
+    generation_metadata: GenerationMetadata

@@ -18,6 +18,8 @@ interface AppState {
 	setPendingNavigationPath: (v: string | null) => void;
 	hasRequirements: Record<string, boolean>;
 	setHasRequirements: (id: string, has: boolean) => void;
+	hasDiagram: Record<string, boolean>;
+	setHasDiagram: (id: string, has: boolean) => void;
 	isEditorMaximized: boolean;
 	setEditorMaximized: (v: boolean) => void;
 }
@@ -47,6 +49,8 @@ export const useAppStore = create<AppState>()(
 			setPendingNavigationPath: (v) => set({ pendingNavigationPath: v }),
 			hasRequirements: {},
 			setHasRequirements: (id, has) => set((state) => ({ hasRequirements: { ...state.hasRequirements, [id]: has } })),
+			hasDiagram: {},
+			setHasDiagram: (id, has) => set((state) => ({ hasDiagram: { ...state.hasDiagram, [id]: has } })),
 			isEditorMaximized: false,
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
 		}),
@@ -56,6 +60,7 @@ export const useAppStore = create<AppState>()(
 				currentProject: state.currentProject,
 				isProyectosOpen: state.isProyectosOpen,
 				hasRequirements: state.hasRequirements,
+				hasDiagram: state.hasDiagram,
 			}),
 		},
 	),

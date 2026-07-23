@@ -1,1 +1,1 @@
-export { ModelingPage, metadata } from './ui/ModelingPage';
+export { ModelingPage } from './ui/ModelingPage';

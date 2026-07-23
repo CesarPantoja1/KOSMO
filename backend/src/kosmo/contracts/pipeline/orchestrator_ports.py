@@ -8,6 +8,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryPhaseContext,
     EARSPhaseContext,
     FeaturesPhaseContext,
+    ModeloPhaseContext,
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -85,7 +86,11 @@ class PhaseMode(Protocol):
 
     def build_user_prompt(
         self,
-        context: DiscoveryPhaseContext | FeaturesPhaseContext | EARSPhaseContext | SuggestFeaturesContext,
+        context: DiscoveryPhaseContext
+        | FeaturesPhaseContext
+        | EARSPhaseContext
+        | SuggestFeaturesContext
+        | ModeloPhaseContext,
     ) -> str: ...
 
     def validate_output(self, output: Any) -> ValidationResult: ...

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
     from kosmo.contracts.sdd.document import RichTextDocument
     from kosmo.contracts.sdd.feature import Feature
     from kosmo.contracts.sdd.ids import FeatureId, ProjectId
@@ -47,3 +48,11 @@ class RequirementRepository(Protocol):
     async def by_feature_id(self, feature_id: FeatureId) -> str | None: ...
 
     async def save(self, feature_id: FeatureId, markdown: str) -> None: ...
+
+
+class ActivityDiagramRepository(Protocol):
+    async def save(self, diagram: DiagramaActividad) -> DiagramaActividad: ...
+
+    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None: ...
+
+    async def exists(self, feature_id: FeatureId) -> bool: ...

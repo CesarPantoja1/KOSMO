@@ -7,3 +7,5 @@ export * from './chatbot';
 
 export { ChatbotPopup, ChatbotMessage, useChatbot } from './chatbot';
 export type { Message } from './chatbot';
+
+export { PlantUmlViewer } from './plantuml-viewer';
