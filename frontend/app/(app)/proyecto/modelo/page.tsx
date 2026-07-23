@@ -1,1 +1,1 @@
-export { ModelingPage as default, metadata } from '@/pages/project/ModelingPage';
+export { ModelingPage as default } from '@/pages/project/ModelingPage';

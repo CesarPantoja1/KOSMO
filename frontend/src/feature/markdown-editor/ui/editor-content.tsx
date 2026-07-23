@@ -57,6 +57,7 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 									type='button'
 									className='cursor-pointer'
 									onClick={isMaximized ? onMinimize : onMaximize}
+									title={isMaximized ? 'Restablecer' : 'Expandir'}
 								>
 									{isMaximized ? (
 										<MinEditor size={24} color='currentColor' />

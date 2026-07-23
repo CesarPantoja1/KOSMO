@@ -12,6 +12,7 @@ export { default as Load } from './icons/Load';
 export { default as Close } from './icons/Close';
 export { default as Plus } from './icons/Plus';
 export { default as Send } from './icons/Send';
+export { default as CursorClickFill } from './icons/CursorClickFill';
 
 // toast
 export { toast, ToasterProvider } from './toast';

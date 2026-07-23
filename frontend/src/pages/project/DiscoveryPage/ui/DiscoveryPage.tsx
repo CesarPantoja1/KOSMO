@@ -181,7 +181,10 @@ const DiscoveryPage = () => {
 			setEditorKey((prev) => prev + 1);
 			toast.success('Documento refinado correctamente');
 		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'No se pudo refinar el documento. Intenta nuevamente.';
+			const errorMessage =
+				err instanceof Error
+					? err.message
+					: 'No se pudo refinar el documento. Intenta nuevamente.';
 			toast.error(errorMessage);
 		} finally {
 			setIsRefining(false);
@@ -226,14 +229,14 @@ const DiscoveryPage = () => {
 								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
 							>
 								<Ai size={20} color='text-base-50' />
-								<span className='text-center font-semibold'>Refinar</span>
+								<span className='text-center'>Refinar</span>
 							</button>
 							<button
 								onClick={handleNextLink}
 								disabled={isGenerating}
 								className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
 							>
-								<span className='text-center font-semibold'>
+								<span className='text-center'>
 									{isGenerating ? 'Generando...' : 'Ir a características'}
 								</span>
 								<ArrowRight size={20} color='text-base-50' />
