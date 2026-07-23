@@ -11,6 +11,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryRefinePhaseContext,
     EARSPhaseContext,
     FeaturesPhaseContext,
+    ModeloPhaseContext,
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_errors import (
@@ -22,6 +23,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,
     FeaturesPhaseOutput,
     GenerationMetadata,
+    ModeloPhaseOutput,
     SuggestedFeature,
     SuggestFeaturesOutput,
     ValidationResult,
@@ -39,6 +41,8 @@ __all__ = [
     "FeaturesPhaseContext",
     "FeaturesPhaseOutput",
     "GenerationMetadata",
+    "ModeloPhaseContext",
+    "ModeloPhaseOutput",
     "PhaseMode",
     "PhaseNotSupportedError",
     "PhaseTransitionError",

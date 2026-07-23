@@ -5,7 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { ChatbotPopup, MarkdownEditor } from '@/feature';
-import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
+import {
+	Ai,
+	ArrowRight,
+	CursorClickFill,
+	Loading,
+	ModalConfirmLeave,
+	toast,
+} from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
 import type { Characteristic } from '@/entities/characteristic';
@@ -13,11 +20,10 @@ import {
 	generateCharacteristicRequirements,
 	getCharacteristicRequirements,
 	getCharacteristics,
-	saveCharacteristicRequirements,
 	refineCharacteristicRequirements,
+	saveCharacteristicRequirements,
 } from '@/entities/characteristic';
 
-import { CursorClickFill } from './icons';
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
 const RequirementsPage = () => {
@@ -179,20 +185,21 @@ const RequirementsPage = () => {
 				instructions,
 			);
 			const refinedContent = res.requirements_markdown;
-			
+
 			setMarkdown(refinedContent);
 			setSavedContent(refinedContent);
 			setEditorKey((prev) => prev + 1);
 			setCharacteristics((prev) =>
 				prev.map((c) =>
-					c.id === selectedCharacteristic.id
-						? { ...c, requirements: refinedContent }
-						: c,
+					c.id === selectedCharacteristic.id ? { ...c, requirements: refinedContent } : c,
 				),
 			);
 			toast.success('Requisitos refinados correctamente');
 		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'No se pudo refinar el documento. Intenta nuevamente.';
+			const errorMessage =
+				err instanceof Error
+					? err.message
+					: 'No se pudo refinar el documento. Intenta nuevamente.';
 			toast.error(errorMessage);
 		} finally {
 			setIsRefining(false);
@@ -201,9 +208,9 @@ const RequirementsPage = () => {
 
 	const handleSave = async (): Promise<boolean> => {
 		if (!selectedCharacteristic || !currentProject) return false;
-		
+
 		const savingToast = toast.info('Guardando...');
-		
+
 		try {
 			await saveCharacteristicRequirements(
 				currentProject.id,
@@ -369,7 +376,7 @@ const RequirementsPage = () => {
 							<button
 								onClick={() => setIsChatbotOpen(true)}
 								disabled={!selectedCharacteristic?.requirements}
-								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm font-medium cursor-pointer'
+								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm'
 							>
 								<Ai color='' size={20} />
 								Refinar
@@ -509,8 +516,8 @@ const RequirementsPage = () => {
 									</span>
 
 									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos generados. Haz clic en
-										el botón <span className='text-xl font-bold'>Generar </span>
+										Esta característica aún no tiene requisitos generados. Haz clic en el
+										botón <span className='text-xl font-bold'>Generar </span>
 										para estructurarlos y completarlos automáticamente bajo el formato
 										EARS.
 									</p>

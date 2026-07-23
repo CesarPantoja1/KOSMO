@@ -130,3 +130,14 @@ class AgentSessionModel(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ActivityDiagramModel(Base):
+    __tablename__ = "activity_diagrams"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    feature_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True, unique=True)
+    diagram_syntax: Mapped[str] = mapped_column(Text(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
