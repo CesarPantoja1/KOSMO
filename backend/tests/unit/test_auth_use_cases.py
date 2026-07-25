@@ -1,13 +1,9 @@
 import importlib
-import sys
-from pathlib import Path
 from typing import cast
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.auth import (  # noqa: E402
     IssueTokenPair,

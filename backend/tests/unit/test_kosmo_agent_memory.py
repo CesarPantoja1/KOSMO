@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.contracts.pipeline.orchestrator_ports import Skill

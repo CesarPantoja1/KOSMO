@@ -1,11 +1,7 @@
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi import HTTPException
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.requirements.refine_requirements import RefineRequirementsUseCase
 from kosmo.contracts.auth import Principal

@@ -1,10 +1,6 @@
 import json
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,

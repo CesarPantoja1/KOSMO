@@ -1,10 +1,6 @@
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.requirements.save_requirements import SaveRequirementsUseCase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError

@@ -72,6 +72,7 @@ venvPath = "."
 venv = ".venv"
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 asyncio_mode = "auto"
 markers = [
     "unit: puras, sin IO",

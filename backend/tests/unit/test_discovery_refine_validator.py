@@ -1,9 +1,4 @@
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.contracts.sdd.document import DocumentNode, RichTextDocument, SectionHeading
 from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (

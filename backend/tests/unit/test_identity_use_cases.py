@@ -1,12 +1,8 @@
-import sys
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.auth import (  # noqa: E402
     AuthorizeWithPkce,

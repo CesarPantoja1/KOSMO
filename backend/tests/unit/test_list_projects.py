@@ -1,10 +1,6 @@
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.projects.list_projects import ListProjectsUseCase
 from kosmo.contracts.sdd.ids import ProjectId, UserId

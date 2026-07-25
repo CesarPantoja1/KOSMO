@@ -1,11 +1,7 @@
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.features.save_features import (
     SuggestFeaturesInput,

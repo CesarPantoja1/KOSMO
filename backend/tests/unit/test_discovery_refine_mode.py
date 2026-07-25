@@ -1,9 +1,4 @@
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryRefinePhaseContext

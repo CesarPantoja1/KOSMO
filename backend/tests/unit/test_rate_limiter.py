@@ -1,10 +1,5 @@
-import sys
-from pathlib import Path
-
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.infrastructure.api.dependencies.rate_limit import IpRateLimiter  # noqa: E402
 

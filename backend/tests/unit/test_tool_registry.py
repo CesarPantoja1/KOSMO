@@ -1,9 +1,4 @@
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
