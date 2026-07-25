@@ -69,12 +69,14 @@ class KOSMOAgent:
             if project_context.total_sessions > 0:
                 system_prompt = self._inject_context(system_prompt, project_context)
 
-        user_prompt = mode.build_user_prompt(context)
+        base_user_prompt = mode.build_user_prompt(context)
+        user_prompt = base_user_prompt
         last_output: Any = None
         last_validation = ValidationResult(is_valid=False, errors=["No se genero contenido"])
         llm_calls = 0
+        conversation: list[str] = []
 
-        for _iteration in range(1, self._max_iterations + 1):
+        for iteration in range(1, self._max_iterations + 1):
             try:
                 last_output = await self._llm_client.complete_typed(
                     prompt=PromptTemplate(
@@ -90,6 +92,18 @@ class KOSMOAgent:
 
             llm_calls += 1
             last_validation = mode.validate_output(last_output)
+
+            conversation.append(
+                json.dumps(
+                    {
+                        "iteration": iteration,
+                        "user_prompt": user_prompt[:500],
+                        "output_snippet": str(last_output)[:500],
+                        "is_valid": last_validation.is_valid,
+                    },
+                    ensure_ascii=False,
+                )
+            )
 
             if last_validation.is_valid:
                 total_ms = int((time.monotonic() - start_time) * 1000)
@@ -109,12 +123,13 @@ class KOSMOAgent:
                         output=last_output,
                         validation=last_validation,
                         user_instructions=user_instructions,
+                        conversation=conversation,
                     )
 
                 return mode.build_output(last_output, last_validation, metadata)
 
             user_prompt = (
-                mode.build_user_prompt(context) + "\n\n" + mode.build_validation_feedback(last_validation.errors)
+                base_user_prompt + "\n\n" + mode.build_validation_feedback(last_validation.errors)
             )
 
         total_ms = int((time.monotonic() - start_time) * 1000)
@@ -136,6 +151,7 @@ class KOSMOAgent:
         output: Any,
         validation: ValidationResult,
         user_instructions: str | None,
+        conversation: list[str] | None = None,
     ) -> None:
         if self._memory is None:
             return
@@ -148,7 +164,7 @@ class KOSMOAgent:
             phase=phase,
             skill_name=skill_name,
             max_iterations=self._max_iterations,
-            conversation=[],
+            conversation=conversation or [],
             reasoning_log=[],
             tool_results=[],
             current_iteration=current_iteration,
