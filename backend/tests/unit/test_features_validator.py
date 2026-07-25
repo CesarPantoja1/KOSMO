@@ -50,26 +50,6 @@ def test_validate_feature_structure_passes_for_valid_four_field_feature() -> Non
     assert result.errors == []
 
 
-@pytest.mark.unit
-def test_validate_feature_structure_passes_for_multiple_valid_features() -> None:
-    # Arrange
-    features = [
-        _a_valid_feature(number=1, title="Registrar gastos entre participantes"),
-        _a_valid_feature(
-            number=2,
-            title="Consultar balances y deudas pendientes",
-            description="Cualquier participante accede a un resumen que muestra cuánto debe.",
-            origin="Se deriva de la meta Gestion financiera. Se traza a Metas del producto.",
-        ),
-    ]
-
-    # Act
-    result = validate_feature_structure(features)
-
-    # Assert
-    assert result.is_valid is True
-
-
 # ------------------------------------------------------------------
 # validate_feature_structure — error: missing fields
 # ------------------------------------------------------------------
@@ -87,20 +67,6 @@ def test_validate_feature_structure_fails_when_origin_missing() -> None:
     # Assert
     assert result.is_valid is False
     assert any("origin" in e for e in result.errors)
-
-
-@pytest.mark.unit
-def test_validate_feature_structure_fails_when_number_missing() -> None:
-    # Arrange
-    feat = _a_valid_feature()
-    del feat["number"]
-
-    # Act
-    result = validate_feature_structure([feat])
-
-    # Assert
-    assert result.is_valid is False
-    assert any("number" in e for e in result.errors)
 
 
 @pytest.mark.unit

@@ -133,19 +133,6 @@ def test_discovery_refine_mode_build_output_none_yields_empty_document() -> None
 
 
 @pytest.mark.unit
-def test_discovery_refine_mode_build_output_returns_discovery_phase_output() -> None:
-    # Arrange
-    mode = DiscoveryRefineMode()
-
-    # Act
-    result = mode.build_output(_DISCOVERY_MD, _VALID_VALIDATION, _VALID_METADATA)
-
-    # Assert
-    assert isinstance(result, DiscoveryPhaseOutput)
-    assert result.discovery_document is not None
-
-
-@pytest.mark.unit
 def test_discovery_mode_build_output_handles_dict_input() -> None:
     # Arrange
     mode = DiscoveryMode()

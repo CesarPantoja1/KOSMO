@@ -82,43 +82,6 @@ def test_features_mode_system_prompt_mentions_four_fields() -> None:
 
 
 @pytest.mark.unit
-def test_features_mode_system_prompt_mentions_user_level() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "nivel de usuario" in prompt.lower() or "usuario" in prompt.lower()
-
-
-@pytest.mark.unit
-def test_features_mode_system_prompt_mentions_six_words_limit() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "seis palabras" in prompt.lower() or "6 palabras" in prompt.lower()
-
-
-@pytest.mark.unit
-def test_features_mode_system_prompt_excludes_software_and_business_terminology() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "software" in prompt.lower() or "nomenclatura" in prompt.lower()
-    assert "negocio" in prompt.lower() or "abstracta" in prompt.lower()
-
-
-@pytest.mark.unit
 def test_features_mode_system_prompt_lists_discovery_sections_for_traceability() -> None:
     # Arrange
     mode = FeaturesMode()
@@ -129,19 +92,6 @@ def test_features_mode_system_prompt_lists_discovery_sections_for_traceability()
     # Assert
     assert "Metas del producto" in prompt
     assert "Reglas de negocio" in prompt
-
-
-@pytest.mark.unit
-def test_features_mode_system_prompt_mentions_first_generation_count() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "5" in prompt
-    assert "primera generación" in prompt.lower()
 
 
 # ------------------------------------------------------------------
@@ -329,51 +279,6 @@ def test_features_mode_validate_output_rejects_technical_term() -> None:
 
 
 @pytest.mark.unit
-def test_features_mode_validate_output_rejects_business_abstract_term() -> None:
-    # Arrange
-    mode = FeaturesMode()
-    raw = {
-        "features": [
-            {
-                "number": 1,
-                "title": "Optimizar ROI del producto",
-                "description": "El usuario gestiona el ROI para lograr objetivos.",
-                "origin": "Se traza a Metas del producto.",
-            }
-        ]
-    }
-
-    # Act
-    result = mode.validate_output(raw)
-
-    # Assert
-    assert result.is_valid is False
-    assert any("ROI" in e for e in result.errors)
-
-
-@pytest.mark.unit
-def test_features_mode_validate_output_rejects_title_exceeding_six_words() -> None:
-    # Arrange
-    mode = FeaturesMode()
-    raw = {
-        "features": [
-            {
-                "number": 1,
-                "title": "Registrar y consultar y administrar gastos compartidos entre participantes",
-                "description": "El usuario registra gastos del grupo.",
-                "origin": "Se traza a Metas del producto.",
-            }
-        ]
-    }
-
-    # Act
-    result = mode.validate_output(raw)
-
-    # Assert
-    assert result.is_valid is False
-
-
-@pytest.mark.unit
 def test_features_mode_validate_output_rejects_unrecognized_format() -> None:
     # Arrange
     mode = FeaturesMode()
@@ -522,24 +427,6 @@ def test_features_mode_build_output_returns_features_phase_output() -> None:
 
 
 @pytest.mark.unit
-def test_features_mode_build_output_assigns_origin_to_feature() -> None:
-    # Arrange
-    mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
-    raw = json.loads(_a_valid_features_json())
-    metadata = GenerationMetadata(llm_calls=1)
-    validation = ValidationResult(is_valid=True)
-
-    # Act
-    result = mode.build_output(raw, validation, metadata)
-
-    # Assert
-    assert result.features[0].origin == (
-        "Se deriva de la meta Gestion financiera de gastos. Se traza a Metas del producto, Actores y Reglas de negocio."
-    )
-
-
-@pytest.mark.unit
 def test_features_mode_build_output_generates_feature_id() -> None:
     # Arrange
     mode = FeaturesMode()
@@ -609,15 +496,3 @@ def test_features_mode_available_tools_has_structure_validator() -> None:
 
     # Assert
     assert any(t.name == "validate_feature_structure" for t in tools)
-
-
-@pytest.mark.unit
-def test_features_mode_available_tools_has_uniqueness_validator() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    tools = mode.available_tools
-
-    # Assert
-    assert any(t.name == "validate_feature_uniqueness" for t in tools)

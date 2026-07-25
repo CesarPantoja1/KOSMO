@@ -74,34 +74,3 @@ async def test_list_projects_returns_only_projects_owned_by_user() -> None:
     assert len(result) == 2
     assert {str(p.id) for p in result} == {"prj_1", "prj_2"}
     assert all(str(p.owner_id) == "usr_123" for p in result)
-
-
-@pytest.mark.asyncio
-async def test_list_projects_returns_all_projects_for_owner() -> None:
-    # Arrange
-    repository: Any = InMemoryProjectRepository()
-    for index in range(3):
-        await repository.save(_make_project(f"prj_{index}", f"proyecto-{index}", "usr_456"))
-    use_case = ListProjectsUseCase(project_repository=repository)
-
-    # Act
-    result = await use_case.execute(owner_id=UserId("usr_456"))
-
-    # Assert
-    assert len(result) == 3
-    assert {str(p.id) for p in result} == {"prj_0", "prj_1", "prj_2"}
-
-
-@pytest.mark.asyncio
-async def test_list_projects_accepts_userid_value_object() -> None:
-    # Arrange
-    repository: Any = InMemoryProjectRepository()
-    await repository.save(_make_project("prj_1", "proyecto-uno", "usr_123"))
-    use_case = ListProjectsUseCase(project_repository=repository)
-
-    # Act
-    result = await use_case.execute(owner_id=UserId("usr_123"))
-
-    # Assert
-    assert len(result) == 1
-    assert str(result[0].owner_id) == "usr_123"

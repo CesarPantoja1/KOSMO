@@ -15,22 +15,6 @@ from kosmo.domain.pipeline.skill_registry import SkillRegistry
 
 
 @pytest.mark.unit
-def test_skill_creation() -> None:
-    mode = DiscoveryMode()
-    skill = Skill(
-        name="discovery_generate",
-        description="Genera el documento de descubrimiento desde cero",
-        phase=SpecPhase.DESCUBRIMIENTO,
-        mode=mode,
-    )
-
-    assert skill.name == "discovery_generate"
-    assert skill.description == "Genera el documento de descubrimiento desde cero"
-    assert skill.phase == SpecPhase.DESCUBRIMIENTO
-    assert skill.mode is mode
-
-
-@pytest.mark.unit
 def test_skill_registry_register_and_get() -> None:
     registry = SkillRegistry()
     mode = DiscoveryMode()

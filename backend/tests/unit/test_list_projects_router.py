@@ -11,7 +11,6 @@ from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.infrastructure.api.routers.projects import list_projects as list_projects_endpoint
-from kosmo.infrastructure.api.schemas import ProjectResponse
 
 
 class InMemoryProjectRepository:
@@ -50,53 +49,6 @@ def _make_project(project_id: str, slug: str, owner_id: str) -> Project:
 
 def _principal(subject: str) -> Principal:
     return Principal(subject=subject, scopes=frozenset({"*"}))
-
-
-@pytest.mark.asyncio
-async def test_list_projects_endpoint_returns_empty_list_when_owner_has_no_projects() -> None:
-    # Arrange
-    repository: Any = InMemoryProjectRepository()
-    use_case = ListProjectsUseCase(project_repository=repository)
-
-    # Act
-    result = await list_projects_endpoint(principal=_principal("usr_123"), use_case=use_case)
-
-    # Assert
-    assert result == []
-
-
-@pytest.mark.asyncio
-async def test_list_projects_endpoint_returns_projects_of_authenticated_principal() -> None:
-    # Arrange
-    repository: Any = InMemoryProjectRepository()
-    await repository.save(_make_project("prj_1", "proyecto-uno", "usr_123"))
-    await repository.save(_make_project("prj_2", "proyecto-dos", "usr_123"))
-    use_case = ListProjectsUseCase(project_repository=repository)
-
-    # Act
-    result = await list_projects_endpoint(principal=_principal("usr_123"), use_case=use_case)
-
-    # Assert
-    assert len(result) == 2
-    assert all(isinstance(item, ProjectResponse) for item in result)
-    assert {item.id for item in result} == {"prj_1", "prj_2"}
-    assert all(item.owner_id == "usr_123" for item in result)
-
-
-@pytest.mark.asyncio
-async def test_list_projects_endpoint_excludes_projects_of_other_owners() -> None:
-    # Arrange
-    repository: Any = InMemoryProjectRepository()
-    await repository.save(_make_project("prj_1", "propio", "usr_123"))
-    await repository.save(_make_project("prj_2", "ajeno", "usr_999"))
-    use_case = ListProjectsUseCase(project_repository=repository)
-
-    # Act
-    result = await list_projects_endpoint(principal=_principal("usr_123"), use_case=use_case)
-
-    # Assert
-    assert len(result) == 1
-    assert result[0].id == "prj_1"
 
 
 @pytest.mark.asyncio

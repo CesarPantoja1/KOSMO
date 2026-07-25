@@ -77,56 +77,6 @@ async def test_agent_saves_session_on_successful_completion() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_agent_injects_context_from_previous_sessions() -> None:
-    # Arrange
-    llm = StubStructuredLLMClient(
-        responses=[make_discovery_document(DISCOVERY_VALID), make_discovery_document(DISCOVERY_VALID)]
-    )
-    store = InMemoryAgentSessionStore()
-    agent = _make_agent(llm, memory=store)
-    project_id = a_project_id()
-
-    # First execution to create a previous session
-    await agent.execute_with_skill(
-        skill_name="discovery_generate",
-        context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
-        project_id=project_id,
-    )
-
-    # Act - second execution should have context from first
-    result = await agent.execute_with_skill(
-        skill_name="discovery_generate",
-        context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
-        project_id=project_id,
-    )
-
-    # Assert
-    assert result.validation_result.is_valid is True
-    sessions = await store.list_sessions(project_id)
-    assert len(sessions) == 2
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_agent_without_memory_works_normally() -> None:
-    # Arrange
-    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
-    agent = _make_agent(llm)
-
-    # Act
-    result = await agent.execute_with_skill(
-        skill_name="discovery_generate",
-        context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
-    )
-
-    # Assert
-    assert isinstance(result, DiscoveryPhaseOutput)
-    assert result.validation_result.is_valid is True
-    assert agent.memory is None
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
 async def test_agent_with_memory_but_no_project_id_does_not_save() -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])

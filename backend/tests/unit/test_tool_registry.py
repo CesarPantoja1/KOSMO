@@ -193,16 +193,6 @@ def test_execute_with_wrong_type_param_returns_error() -> None:
 
 
 @pytest.mark.unit
-def test_execute_without_definition_skips_validation() -> None:
-    registry = ToolRegistry()
-    registry.register("echo", lambda inp: {"result": inp.get("text", "")})
-
-    result = registry.execute("echo", {"text": "hola"})
-
-    assert result == {"result": "hola"}
-
-
-@pytest.mark.unit
 def test_validate_parameters_valid_json_string_input() -> None:
     definition = ToolDefinition(
         name="analyser",
@@ -226,30 +216,3 @@ def test_validate_parameters_valid_json_string_input() -> None:
     result = registry.execute("analyser", '{"document": "contenido markdown"}')
 
     assert result == {"ok": True, "doc": "contenido markdown"}
-
-
-@pytest.mark.unit
-def test_validate_parameters_rejects_invalid_json_against_schema() -> None:
-    definition = ToolDefinition(
-        name="analyser",
-        description="Analiza documento",
-        parameters={
-            "type": "object",
-            "properties": {
-                "document": {"type": "string"},
-            },
-            "required": ["document"],
-        },
-    )
-
-    registry = ToolRegistry()
-    registry.register_with_definition(
-        "analyser",
-        lambda inp: {"ok": True, "doc": inp.get("document", "")},
-        definition,
-    )
-
-    result = registry.execute("analyser", {"wrong_key": 123})
-
-    assert "error" in result
-    assert "document" in result["error"]

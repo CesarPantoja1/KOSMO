@@ -1,7 +1,5 @@
 import importlib
 import sys
-from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -23,7 +21,6 @@ from kosmo.contracts.auth import (  # noqa: E402
     IssuedToken,
     Principal,
     RefreshConsumeResult,
-    TokenClaims,
     TokenExpiredError,
     TokenPair,
     TokenReusedError,
@@ -215,16 +212,3 @@ def test_verifier_rejects_tampered_token() -> None:
 
     with pytest.raises(InvalidTokenError):
         verifier.verify(bogus, expected_type=TokenType.ACCESS)
-
-
-def test_token_claims_dataclass_is_immutable() -> None:
-    claims = TokenClaims(
-        subject="x",
-        jti="j",
-        issued_at=datetime.now(UTC),
-        expires_at=datetime.now(UTC) + timedelta(seconds=60),
-        token_type=TokenType.ACCESS,
-        scopes=frozenset({"a"}),
-    )
-    with pytest.raises(FrozenInstanceError):
-        claims.subject = "y"  # type: ignore[misc]

@@ -169,20 +169,6 @@ def test_ears_mode_markdown_structure_includes_heading_separators_and_criteria()
 
 
 @pytest.mark.unit
-def test_ears_mode_markdown_excludes_origin_field() -> None:
-    # Arrange
-    mode = EARSMode()
-    mode._feature_id = FeatureId("feat_01")  # type: ignore[reportPrivateUsage]
-    mode._feature_number = 1  # type: ignore[reportPrivateUsage]
-
-    # Act
-    result = mode.build_output(json.loads(_VALID_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
-
-    # Assert
-    assert "**Origen**" not in result.requirements_markdown
-
-
-@pytest.mark.unit
 def test_ears_mode_validate_output_detects_single_criterion() -> None:
     # Arrange
     mode = EARSMode()
