@@ -21,49 +21,7 @@ from kosmo.contracts.sdd.document import (
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def by_slug(self, owner_id: str, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def find_by_slug(self, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def list_by_owner(self, owner_id: str) -> list[Project]:  # noqa: ARG002
-        return []
-
-    async def save(self, project: Project) -> Project:  # type: ignore[override]
-        self.projects[str(project.id)] = project
-        return project
-
-
-class InMemoryDocumentRepository:
-    def __init__(self) -> None:
-        self.documents: dict[str, RichTextDocument] = {}
-
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
-        return self.documents.get(str(project_id))
-
-    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
-        self.documents[str(project_id)] = document
-        return document
-
-    async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
-        return None
-
-    async def save_requirements(
-        self,
-        feature_id: Any,  # noqa: ARG002
-        document: RichTextDocument,  # noqa: ARG002
-    ) -> RichTextDocument:
-        return document
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryProjectRepository
 
 
 @dataclass(frozen=True)

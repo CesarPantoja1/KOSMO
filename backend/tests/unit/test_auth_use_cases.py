@@ -11,24 +11,22 @@ from kosmo.application.auth import (  # noqa: E402
     RevokeSession,
     VerifyAccessToken,
 )
-from kosmo.contracts.audit import AuditEvent  # noqa: E402
 from kosmo.contracts.auth import (  # noqa: E402
     InvalidTokenError,
     IssuedToken,
     Principal,
-    RefreshConsumeResult,
     TokenExpiredError,
     TokenPair,
     TokenReusedError,
     TokenRevokedError,
     TokenType,
 )
+from tests.unit.fakes import InMemoryAuditEventSink, InMemoryStore
 
 security = importlib.import_module("kosmo.infrastructure.security")
 JoseJwtIssuer = security.JoseJwtIssuer
 JoseJwtVerifier = security.JoseJwtVerifier
 JwtSettings = security.JwtSettings
-
 
 # Genera un par de llaves RSA efímero una vez para toda la sesión de prueba.
 _RSA_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -47,62 +45,6 @@ _PUBLIC_PEM: str = (
     )
     .decode()
 )
-
-
-class InMemoryStore:
-    def __init__(self) -> None:
-        self.refresh: dict[str, tuple[str, str | None]] = {}
-        self.revoked_access: set[str] = set()
-        self.families: set[str] = set()
-
-    async def register_refresh(
-        self,
-        *,
-        jti: str,
-        subject: str,
-        ttl_seconds: int,
-        family_id: str | None = None,
-    ) -> None:
-        if ttl_seconds <= 0:
-            return
-        self.refresh[jti] = (subject, family_id)
-        if family_id is not None:
-            self.families.add(family_id)
-
-    async def consume_refresh(self, *, jti: str) -> RefreshConsumeResult | None:
-        entry = self.refresh.pop(jti, None)
-        if entry is None:
-            return None
-        subject, family_id = entry
-        return RefreshConsumeResult(subject=subject, family_id=family_id)
-
-    async def revoke_access(self, *, jti: str, ttl_seconds: int) -> None:
-        if ttl_seconds <= 0:
-            return
-        self.revoked_access.add(jti)
-
-    async def is_access_revoked(self, *, jti: str) -> bool:
-        return jti in self.revoked_access
-
-    async def revoke_refresh(self, *, jti: str) -> None:
-        self.refresh.pop(jti, None)
-
-    async def is_family_alive(self, *, family_id: str) -> bool:
-        return family_id in self.families
-
-    async def revoke_family(self, *, family_id: str) -> None:
-        self.families.discard(family_id)
-        for jti in list(self.refresh):
-            if self.refresh[jti][1] == family_id:
-                del self.refresh[jti]
-
-
-class InMemoryAuditEventSink:
-    def __init__(self) -> None:
-        self.events: list[AuditEvent] = []
-
-    async def record(self, event: AuditEvent) -> None:
-        self.events.append(event)
 
 
 def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:

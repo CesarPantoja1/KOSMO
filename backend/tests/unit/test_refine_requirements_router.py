@@ -19,44 +19,7 @@ from kosmo.infrastructure.api.routers.requirements import (
     RefineRequirementsRequest,
     refine_requirements,
 )
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def save(self, project: Project) -> Project:
-        self.projects[str(project.id)] = project
-        return project
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save(self, feature: Feature) -> Feature:
-        self.features[str(feature.id)] = feature
-        return feature
-
-
-class InMemoryRequirementRepository:
-    def __init__(self) -> None:
-        self._data: dict[str, str] = {}
-
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
-        return self._data.get(str(feature_id))
-
-    async def save(self, feature_id: FeatureId, markdown: str) -> None:
-        self._data[str(feature_id)] = markdown
+from tests.unit.fakes import InMemoryFeatureRepository, InMemoryProjectRepository, InMemoryRequirementRepository
 
 
 class StubRefineAgent:

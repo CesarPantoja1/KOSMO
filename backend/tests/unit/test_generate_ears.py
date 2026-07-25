@@ -26,76 +26,12 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId, UserId
 from kosmo.contracts.sdd.project import Project
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def by_slug(self, owner_id: str, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def find_by_slug(self, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def list_by_owner(self, owner_id: str) -> list[Project]:  # noqa: ARG002
-        return []
-
-    async def save(self, project: Project) -> Project:
-        self.projects[str(project.id)] = project
-        return project
-
-
-class InMemoryDocumentRepository:
-    def __init__(self) -> None:
-        self.documents: dict[str, RichTextDocument] = {}
-
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
-        return self.documents.get(str(project_id))
-
-    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
-        self.documents[str(project_id)] = document
-        return document
-
-    async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
-        return None
-
-    async def save_requirements(
-        self,
-        feature_id: Any,  # noqa: ARG002
-        document: RichTextDocument,  # noqa: ARG002
-    ) -> RichTextDocument:
-        return document
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save_many(self, features: list[Feature]) -> list[Feature]:
-        for f in features:
-            self.features[str(f.id)] = f
-        return features
-
-
-class InMemoryRequirementRepository:
-    def __init__(self) -> None:
-        self.requirements: dict[str, str] = {}
-
-    async def save(self, feature_id: FeatureId, markdown: str) -> None:
-        self.requirements[str(feature_id)] = markdown
-
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
-        return self.requirements.get(str(feature_id))
+from tests.unit.fakes import (
+    InMemoryDocumentRepository,
+    InMemoryFeatureRepository,
+    InMemoryProjectRepository,
+    InMemoryRequirementRepository,
+)
 
 
 class MockAgent:

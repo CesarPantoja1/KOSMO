@@ -5,30 +5,7 @@ import pytest
 from kosmo.application.projects.list_projects import ListProjectsUseCase
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def by_slug(self, owner_id: str, slug: str) -> Project | None:
-        return next(
-            (p for p in self.projects.values() if str(p.owner_id) == owner_id and p.slug == slug),
-            None,
-        )
-
-    async def find_by_slug(self, slug: str) -> Project | None:
-        return next((p for p in self.projects.values() if p.slug == slug), None)
-
-    async def list_by_owner(self, owner_id: str) -> list[Project]:
-        return [p for p in self.projects.values() if str(p.owner_id) == owner_id]
-
-    async def save(self, project: Project) -> Project:  # type: ignore[override]
-        self.projects[str(project.id)] = project
-        return project
+from tests.unit.fakes import InMemoryProjectRepository
 
 
 def _make_project(project_id: str, slug: str, owner_id: str) -> Project:

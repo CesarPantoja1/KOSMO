@@ -13,51 +13,7 @@ from kosmo.contracts.sdd.document import DocumentNode, RichTextDocument, Section
 from kosmo.contracts.sdd.errors import DocumentNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-
-
-class InMemoryDocumentRepository:
-    def __init__(self) -> None:
-        self.documents: dict[str, RichTextDocument] = {}
-
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
-        return self.documents.get(str(project_id))
-
-    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
-        self.documents[str(project_id)] = document
-        return document
-
-    async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
-        return None
-
-    async def save_requirements(
-        self,
-        feature_id: Any,  # noqa: ARG002
-        document: RichTextDocument,  # noqa: ARG002
-    ) -> RichTextDocument:
-        return document
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save(self, feature: Feature) -> Feature:  # type: ignore[override]
-        self.features[str(feature.id)] = feature
-        return feature
-
-    async def save_many(self, features: list[Feature]) -> list[Feature]:
-        for f in features:
-            self.features[str(f.id)] = f
-        return features
-
-    async def next_number(self, project_id: ProjectId) -> int:  # noqa: ARG002
-        return 1
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryFeatureRepository
 
 
 @dataclass

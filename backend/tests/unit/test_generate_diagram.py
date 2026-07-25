@@ -14,7 +14,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ModeloPhaseOutput,
     ValidationResult,
 )
-from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
@@ -22,55 +21,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save(self, feature: Feature) -> Feature:
-        self.features[str(feature.id)] = feature
-        return feature
-
-    async def save_many(self, features: list[Feature]) -> list[Feature]:
-        for f in features:
-            self.features[str(f.id)] = f
-        return features
-
-    async def next_number(self, project_id: ProjectId) -> int:  # noqa: ARG002
-        return 1
-
-
-class InMemoryRequirementRepository:
-    def __init__(self) -> None:
-        self.requirements: dict[str, str] = {}
-
-    async def save(self, feature_id: FeatureId, markdown: str) -> None:
-        self.requirements[str(feature_id)] = markdown
-
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
-        return self.requirements.get(str(feature_id))
-
-
-class InMemoryActivityDiagramRepository:
-    def __init__(self) -> None:
-        self._diagrams: dict[str, DiagramaActividad] = {}
-
-    async def save(self, diagram: DiagramaActividad) -> DiagramaActividad:
-        self._diagrams[str(diagram.feature_id)] = diagram
-        return diagram
-
-    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
-        return self._diagrams.get(str(feature_id))
-
-    async def exists(self, feature_id: FeatureId) -> bool:
-        return str(feature_id) in self._diagrams
+from tests.unit.fakes import InMemoryActivityDiagramRepository, InMemoryFeatureRepository, InMemoryRequirementRepository
 
 
 class MockAgent:
