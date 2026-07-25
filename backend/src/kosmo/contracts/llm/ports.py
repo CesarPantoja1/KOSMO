@@ -39,3 +39,11 @@ class LLMClient(Protocol):
         temperature: float = 0.1,
         max_tokens: int = 4096,
     ) -> LLMResponse: ...
+
+    async def complete_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> T: ...

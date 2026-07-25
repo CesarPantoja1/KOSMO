@@ -92,3 +92,13 @@ class NoopLLMClient:
         max_tokens: int = 4096,
     ) -> LLMResponse:
         return await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+
+    async def complete_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> T:
+        response = await self.complete(prompt, temperature=temperature, max_tokens=max_tokens)
+        return output_type.model_validate(json.loads(response.text))  # type: ignore[reportAttributeAccessIssue]

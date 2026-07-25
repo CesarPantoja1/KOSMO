@@ -37,12 +37,26 @@ class PydanticAILLMClient:
         return LLMResponse(
             text=result.output,
             usage=LLMUsage(
-                prompt_tokens=usage.request_tokens,
+                prompt_tokens=usage.input_tokens,
                 completion_tokens=usage.output_tokens,
                 total_tokens=usage.total_tokens,
             ),
             model=getattr(result, "model_name", ""),
         )
+
+    async def complete_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> T:
+        agent = Agent(model=self._model, system_prompt=prompt.system_prompt, output_type=output_type)  # type: ignore[reportCallIssue]
+        result = await agent.run(
+            prompt.user_prompt,
+            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+        )
+        return result.data  # type: ignore[reportReturnType]
 
     async def complete_json(
         self,
