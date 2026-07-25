@@ -159,11 +159,14 @@ class DiscoveryMode:
         return "\n".join(parts)
 
     def validate_output(self, output: Any) -> ValidationResult:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.sdd.document_converters import markdown_to_document
         from kosmo.domain.sdd.output_guardrails import auto_repair_technical_terms
 
         raw_text: str = ""
-        if isinstance(output, dict) and "document" in output:
+        if isinstance(output, DiscoveryDocument):
+            raw_text = output.document
+        elif isinstance(output, dict) and "document" in output:
             raw_text = str(output["document"])  # type: ignore[reportUnknownArgumentType]
         elif isinstance(output, dict) and "raw_text" in output:
             raw_text = str(output["raw_text"])  # type: ignore[reportUnknownArgumentType]
@@ -223,11 +226,14 @@ class DiscoveryMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> DiscoveryPhaseOutput:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.sdd.document_converters import (
             coerce_markdown_output,
             markdown_to_document,
         )
 
+        if isinstance(raw_output, DiscoveryDocument):
+            raw_output = raw_output.document
         doc = markdown_to_document(coerce_markdown_output(raw_output))
         return DiscoveryPhaseOutput(
             discovery_document=doc,

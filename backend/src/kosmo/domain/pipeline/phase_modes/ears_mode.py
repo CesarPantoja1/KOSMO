@@ -8,6 +8,7 @@ from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,
+    EARSSet,
     GenerationMetadata,
     ValidationResult,
 )
@@ -229,6 +230,18 @@ class EARSMode:
         return "\n".join(parts)
 
     def validate_output(self, output: Any) -> ValidationResult:
+        if isinstance(output, EARSSet):
+            requirements = cast("list[Any]", output.requirements)
+            syntax_result = validate_ears_syntax(requirements)
+            quality_result = validate_ears_quality(requirements)
+            software_result = validate_ears_software_level(requirements)
+            all_errors = syntax_result.errors + quality_result.errors + software_result.errors
+            all_warnings = syntax_result.warnings + quality_result.warnings + software_result.warnings
+            return ValidationResult(
+                is_valid=len(all_errors) == 0,
+                errors=all_errors,
+                warnings=all_warnings,
+            )
         if isinstance(output, dict) and "requirements" in output:
             raw_reqs = cast(object, output["requirements"])
             if not isinstance(raw_reqs, list):
@@ -279,9 +292,12 @@ class EARSMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> EARSPhaseOutput:
+        from kosmo.contracts.pipeline.phase_outputs import EARSSet
         from kosmo.contracts.sdd.ears import EARSRequirement
         from kosmo.domain.sdd.id_generator import IdGenerator
 
+        if isinstance(raw_output, EARSSet):
+            raw_output = {"requirements": [r.model_dump() for r in raw_output.requirements]}
         reqs_data = self._extract_requirements_list(raw_output)
         requirements: list[EARSRequirement] = []
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
+    DiagramSpec,
     GenerationMetadata,
     ModeloPhaseOutput,
     ValidationResult,
@@ -137,6 +138,8 @@ class ModeloMode:
         return "".join(parts)
 
     def validate_output(self, output: Any) -> ValidationResult:
+        if isinstance(output, DiagramSpec):
+            return validate_activity_diagram_syntax(output.diagram_syntax)
         if isinstance(output, dict) and "diagram_syntax" in output:
             diagram = str(cast(object, output["diagram_syntax"]))
             return validate_activity_diagram_syntax(diagram)
@@ -175,6 +178,8 @@ class ModeloMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> ModeloPhaseOutput:
+        if isinstance(raw_output, DiagramSpec):
+            raw_output = {"diagram_syntax": raw_output.diagram_syntax}
 
         diagram_syntax = ""
         if isinstance(raw_output, dict) and "diagram_syntax" in raw_output:

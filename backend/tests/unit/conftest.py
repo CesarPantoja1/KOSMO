@@ -4,11 +4,12 @@ import json
 from typing import Any
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
+from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 
 
-def make_valid_discovery_json(text: str) -> str:
-    return json.dumps({"reasoning": "Documento listo", "final": True, "output": text})
+def make_discovery_document(text: str) -> DiscoveryDocument:
+    return DiscoveryDocument(document=text)
 
 
 DISCOVERY_VALID = (
@@ -59,9 +60,9 @@ DISCOVERY_VALID = (
 )
 
 
-class StubReactLLMClient:
-    def __init__(self, responses: list[str] | None = None) -> None:
-        self._responses: list[str] = responses or []
+class StubStructuredLLMClient:
+    def __init__(self, responses: list[DiscoveryDocument] | None = None) -> None:
+        self._responses: list[DiscoveryDocument] = responses or []
         self._calls: list[PromptTemplate] = []
         self._index = 0
 
@@ -76,11 +77,7 @@ class StubReactLLMClient:
         max_tokens: int = 4096,  # noqa: ARG002
     ) -> LLMResponse:
         self._calls.append(prompt)
-        if self._index < len(self._responses):
-            text = self._responses[self._index]
-            self._index += 1
-        else:
-            text = make_valid_discovery_json(DISCOVERY_VALID)
+        text = json.dumps({"document": DISCOVERY_VALID})
         return LLMResponse(
             text=text,
             usage=LLMUsage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
@@ -93,6 +90,21 @@ class StubReactLLMClient:
         max_tokens: int = 4096,  # noqa: ARG002
     ) -> LLMResponse:
         return await self.complete(prompt, temperature, max_tokens)
+
+    async def complete_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,  # noqa: ARG002
+        max_tokens: int = 4096,  # noqa: ARG002
+    ) -> T:
+        self._calls.append(prompt)
+        if self._index < len(self._responses):
+            result = self._responses[self._index]
+            self._index += 1
+        else:
+            result = make_discovery_document(DISCOVERY_VALID)
+        return result  # type: ignore[return-value]
 
 
 def make_discovery_mode() -> Any:

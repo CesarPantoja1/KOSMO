@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import time
 from typing import Any
@@ -17,24 +16,6 @@ from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.domain.agent_memory.session_factory import create_session
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
-
-_REACT_FORMAT_INSTRUCTIONS = (
-    "FORMATO DE RESPUESTA: Responde UNICAMENTE en JSON con uno de estos dos formatos.\n\n"
-    "1. Para usar una herramienta:\n"
-    '   {"reasoning": "por que necesitas esta herramienta", '
-    '"action": "nombre_herramienta", "input": {"param": "valor"}}\n\n'
-    "2. Para dar la respuesta final:\n"
-    '   {"reasoning": "por que el trabajo esta completo", "final": true, '
-    '"output": "documento completo en markdown"}\n\n'
-    "REGLAS:\n"
-    "- NO escribas texto fuera del JSON.\n"
-    "- El campo 'output' debe contener el documento Markdown completo como una sola "
-    "cadena JSON (usa \\n para los saltos de linea).\n"
-    "- Usa herramientas para verificar tu trabajo antes de responder.\n"
-    "- Si una validacion falla, usa el feedback para corregir y vuelve a responder "
-    "con final=true.\n"
-    "- Agota siempre con una respuesta final=true antes de quedarte sin intentos.\n"
-)
 
 
 class KOSMOAgent:
@@ -100,134 +81,104 @@ class KOSMOAgent:
         project_id: ProjectId | None = None,
         user_instructions: str | None = None,
     ) -> Any:
-        phase = mode.phase_name
-        system_prompt = self._build_react_system_prompt(mode)
+        start_time = time.monotonic()
+        system_prompt = mode.system_prompt
 
         if self._memory is not None and project_id is not None:
             project_context = await self._memory.get_project_context(project_id)
             if project_context.total_sessions > 0:
                 system_prompt = self._inject_context(system_prompt, project_context)
 
-        base_user_prompt = mode.build_user_prompt(context)
-
-        trace_entries: list[str] = []
-        tool_results_entries: list[dict[str, str]] = []
+        user_prompt = mode.build_user_prompt(context)
         last_output: Any = None
         last_validation = ValidationResult(is_valid=False, errors=["No se genero contenido"])
+        llm_calls = 0
 
-        start_time = time.monotonic()
+        for _iteration in range(1, self._max_iterations + 1):
+            try:
+                last_output = await self._llm_client.complete_typed(
+                    prompt=PromptTemplate(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                    ),
+                    output_type=mode.output_type,
+                    temperature=mode.temperature,
+                    max_tokens=mode.max_tokens,
+                )
+            except Exception:
+                break
 
-        conversation: list[str] = [base_user_prompt]
+            llm_calls += 1
+            last_validation = mode.validate_output(last_output)
 
-        for iteration in range(1, self._max_iterations + 1):
-            current_user_prompt = "\n\n".join(conversation)
-
-            temperature = mode.temperature
-            max_tokens = mode.max_tokens
-
-            llm_response = await self._llm_client.complete(
-                prompt=PromptTemplate(
-                    system_prompt=system_prompt,
-                    user_prompt=current_user_prompt,
-                ),
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            conversation.append(llm_response.text)
-
-            parsed = self._parse_react_response(llm_response.text)
-
-            is_final = bool(parsed.get("final"))
-            has_action = bool(parsed.get("action"))
-
-            if is_final or not has_action:
-                raw_output: Any = parsed.get("output", "") if is_final else parsed
-
-                if isinstance(raw_output, str) and raw_output.strip().startswith(("{", "[")):
-                    with contextlib.suppress(json.JSONDecodeError, TypeError):
-                        raw_output = json.loads(raw_output)
-
-                if isinstance(raw_output, str) and raw_output.strip().startswith(("{", "[")):
-                    last_output = raw_output
-                    last_validation = ValidationResult(
-                        is_valid=False,
-                        errors=["El output parece JSON malformado que no se pudo parsear"],
-                    )
-                else:
-                    last_output = raw_output
-                    last_validation = mode.validate_output(last_output)
-
-                trace_entries.append(
-                    f"Paso {iteration}: respuesta final. "
-                    f"Valido={last_validation.is_valid}, "
-                    f"errores={len(last_validation.errors)}"
+            if last_validation.is_valid:
+                total_ms = int((time.monotonic() - start_time) * 1000)
+                metadata = GenerationMetadata(
+                    llm_calls=llm_calls,
+                    retry_count=llm_calls - 1,
+                    generation_time_ms=total_ms,
                 )
 
-                if last_validation.is_valid:
-                    total_ms = int((time.monotonic() - start_time) * 1000)
-                    metadata = GenerationMetadata(
-                        llm_calls=iteration,
-                        total_tokens=llm_response.usage.total_tokens,
-                        retry_count=iteration - 1,
-                        reasoning_log=trace_entries,
-                        tool_results=tool_results_entries,
-                        generation_time_ms=total_ms,
-                        model_used=llm_response.model,
+                if self._memory is not None and project_id is not None:
+                    await self._save_completed_session(
+                        project_id=project_id,
+                        phase=mode.phase_name,
+                        session_type="refinement" if user_instructions else "generation",
+                        skill_name=skill_name,
+                        current_iteration=llm_calls,
+                        output=last_output,
+                        validation=last_validation,
+                        user_instructions=user_instructions,
                     )
 
-                    if self._memory is not None and project_id is not None:
-                        await self._save_completed_session(
-                            project_id=project_id,
-                            phase=phase,
-                            session_type="refinement" if user_instructions else "generation",
-                            skill_name=skill_name,
-                            conversation=conversation,
-                            reasoning_log=trace_entries,
-                            tool_results=tool_results_entries,
-                            current_iteration=iteration,
-                            max_iterations=self._max_iterations,
-                            output=last_output,
-                            validation=last_validation,
-                            total_llm_calls=iteration,
-                            user_instructions=user_instructions,
-                        )
+                return mode.build_output(last_output, last_validation, metadata)
 
-                    return mode.build_output(last_output, last_validation, metadata)
+            user_prompt = mode.build_user_prompt(context) + "\n\n" + mode.build_validation_feedback(last_validation.errors)
 
-                feedback = mode.build_validation_feedback(last_validation.errors)
-                conversation.append(feedback)
-                continue
-
-            # Tool call
-            tool_name = parsed.get("action", "")
-            tool_input = parsed.get("input", {})
-            reasoning = parsed.get("reasoning", "")
-
-            trace_entries.append(
-                f"Paso {iteration}: llamada a herramienta '{tool_name}'. Razonamiento: {reasoning[:120]}"
-            )
-
-            result = self._registry.execute(tool_name, tool_input)
-            tool_results_entries.append({"tool": tool_name, "output": json.dumps(result, default=str)})
-
-            observation = json.dumps(result, default=str)
-            conversation.append(f"## Resultado de la herramienta '{tool_name}'\n\n{observation}")
-
-        # Max iterations reached
         total_ms = int((time.monotonic() - start_time) * 1000)
         metadata = GenerationMetadata(
-            llm_calls=self._max_iterations,
-            total_tokens=0,
-            retry_count=self._max_iterations - 1,
-            reasoning_log=trace_entries,
-            tool_results=tool_results_entries,
+            llm_calls=llm_calls,
+            retry_count=llm_calls - 1 if llm_calls > 0 else 0,
             generation_time_ms=total_ms,
         )
         return mode.build_output(last_output, last_validation, metadata)
 
-    def _build_react_system_prompt(self, mode: PhaseMode) -> str:
-        tools_desc = self._registry.describe_tools(mode.available_tools)
-        return f"{mode.system_prompt}\n\n## Herramientas disponibles\n\n{tools_desc}\n\n{_REACT_FORMAT_INSTRUCTIONS}"
+    async def _save_completed_session(
+        self,
+        *,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        session_type: str,
+        skill_name: str | None,
+        current_iteration: int,
+        output: Any,
+        validation: ValidationResult,
+        user_instructions: str | None,
+    ) -> None:
+        if self._memory is None:
+            return
+
+        output_json = json.dumps(output, default=str) if output else None
+
+        session = create_session(
+            project_id=project_id,
+            session_type=session_type,
+            phase=phase,
+            skill_name=skill_name,
+            max_iterations=self._max_iterations,
+            conversation=[],
+            reasoning_log=[],
+            tool_results=[],
+            current_iteration=current_iteration,
+            is_completed=True,
+            output_json=output_json,
+            validation_is_valid=validation.is_valid,
+            validation_errors=len(validation.errors),
+            total_llm_calls=current_iteration,
+            user_instructions=user_instructions,
+        )
+
+        await self._memory.save_session(session)
 
     def _inject_context(
         self,
@@ -270,78 +221,6 @@ class KOSMOAgent:
 
         return "\n\n".join(parts)
 
-    async def _save_completed_session(
-        self,
-        *,
-        project_id: ProjectId,
-        phase: SpecPhase,
-        session_type: str,
-        skill_name: str | None,
-        conversation: list[str],
-        reasoning_log: list[str],
-        tool_results: list[dict[str, str]],
-        current_iteration: int,
-        max_iterations: int,
-        output: Any,
-        validation: ValidationResult,
-        total_llm_calls: int,
-        user_instructions: str | None,
-    ) -> None:
-        if self._memory is None:
-            return
-
-        output_json = json.dumps(output, default=str) if output else None
-
-        session = create_session(
-            project_id=project_id,
-            session_type=session_type,
-            phase=phase,
-            skill_name=skill_name,
-            max_iterations=max_iterations,
-            conversation=list(conversation),
-            reasoning_log=list(reasoning_log),
-            tool_results=[dict(t) for t in tool_results],
-            current_iteration=current_iteration,
-            is_completed=True,
-            output_json=output_json,
-            validation_is_valid=validation.is_valid,
-            validation_errors=len(validation.errors),
-            total_llm_calls=total_llm_calls,
-            user_instructions=user_instructions,
-        )
-
-        await self._memory.save_session(session)
-
     @property
     def memory(self) -> AgentMemoryPort | None:
         return self._memory
-
-    def _parse_react_response(self, text: str) -> dict[str, Any]:
-        try:
-            if "```json" in text:
-                json_str = text.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)  # type: ignore[reportUnknownVariableType]
-            if "```" in text:
-                json_str = text.split("```")[1].split("```")[0].strip()
-                return json.loads(json_str)  # type: ignore[reportUnknownVariableType]
-            return json.loads(text.strip())  # type: ignore[reportUnknownVariableType]
-        except (json.JSONDecodeError, IndexError, TypeError):
-            extracted = self._extract_output_from_malformed_json(text)
-            if extracted is not None:
-                return {"final": True, "output": extracted, "reasoning": "JSON reparado automaticamente"}
-            return {
-                "final": True,
-                "output": text,
-                "reasoning": "Respuesta no-JSON, tratada como final",
-            }
-
-    @staticmethod
-    def _extract_output_from_malformed_json(text: str) -> str | None:
-        import re
-
-        match = re.search(r'"output"\s*:\s*"((?:[^"\\]|\\.)*)"', text, re.DOTALL)
-        if match:
-            raw = match.group(1)
-            raw = raw.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
-            return raw
-        return None

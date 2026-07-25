@@ -19,9 +19,9 @@ from kosmo.infrastructure.persistence.memory.in_memory_store import (
 from tests.factories import a_project_id
 from tests.unit.conftest import (
     DISCOVERY_VALID,
-    StubReactLLMClient,
+    StubStructuredLLMClient,
+    make_discovery_document,
     make_discovery_mode,
-    make_valid_discovery_json,
 )
 
 
@@ -29,7 +29,7 @@ from tests.unit.conftest import (
 @pytest.mark.unit
 async def test_agent_saves_session_on_successful_completion() -> None:
     # Arrange
-    llm = StubReactLLMClient(responses=[make_valid_discovery_json(DISCOVERY_VALID)])
+    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
     registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
     agent = KOSMOAgent(
@@ -64,7 +64,7 @@ async def test_agent_saves_session_on_successful_completion() -> None:
 @pytest.mark.unit
 async def test_agent_injects_context_from_previous_sessions() -> None:
     # Arrange
-    llm = StubReactLLMClient(responses=[make_valid_discovery_json(DISCOVERY_VALID)])
+    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID), make_discovery_document(DISCOVERY_VALID)])
     registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
     agent = KOSMOAgent(
@@ -100,7 +100,7 @@ async def test_agent_injects_context_from_previous_sessions() -> None:
 @pytest.mark.unit
 async def test_agent_without_memory_works_normally() -> None:
     # Arrange
-    llm = StubReactLLMClient(responses=[make_valid_discovery_json(DISCOVERY_VALID)])
+    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
     registry = ToolRegistry()
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
@@ -125,7 +125,7 @@ async def test_agent_without_memory_works_normally() -> None:
 @pytest.mark.unit
 async def test_agent_with_memory_but_no_project_id_does_not_save() -> None:
     # Arrange
-    llm = StubReactLLMClient(responses=[make_valid_discovery_json(DISCOVERY_VALID)])
+    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
     registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
     agent = KOSMOAgent(
@@ -163,7 +163,7 @@ async def test_agent_saves_correct_session_type(
     expected_session_type: str,
 ) -> None:
     # Arrange
-    llm = StubReactLLMClient(responses=[make_valid_discovery_json(DISCOVERY_VALID)])
+    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
     registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
     agent = KOSMOAgent(
@@ -205,10 +205,10 @@ async def test_sessions_are_isolated_between_projects(
     project_b: ProjectId,
 ) -> None:
     # Arrange
-    llm = StubReactLLMClient(
+    llm = StubStructuredLLMClient(
         responses=[
-            make_valid_discovery_json(DISCOVERY_VALID),
-            make_valid_discovery_json(DISCOVERY_VALID),
+            make_discovery_document(DISCOVERY_VALID),
+            make_discovery_document(DISCOVERY_VALID),
         ]
     )
     registry = ToolRegistry()

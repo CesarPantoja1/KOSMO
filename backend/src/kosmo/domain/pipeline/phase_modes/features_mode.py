@@ -217,6 +217,7 @@ class FeaturesMode:
         return "\n".join(parts)
 
     def validate_output(self, output: Any) -> ValidationResult:
+        from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.domain.pipeline.phase_validators.features_validator import (
             validate_feature_structure,
             validate_feature_uniqueness,
@@ -224,7 +225,9 @@ class FeaturesMode:
 
         features_list: list[dict[str, Any]] = []
 
-        if isinstance(output, dict):
+        if isinstance(output, FeatureSet):
+            features_list = [{"number": f.number, "title": f.title, "description": f.description, "origin": f.origin} for f in output.features]
+        elif isinstance(output, dict):
             output_dict = cast(dict[str, object], output)
             if "features" in output_dict:
                 raw_features = output_dict["features"]
@@ -338,11 +341,14 @@ class FeaturesMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> FeaturesPhaseOutput:
+        from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.contracts.sdd.feature import Feature
         from kosmo.domain.sdd.id_generator import IdGenerator
 
-        features: list[Feature] = []
+        if isinstance(raw_output, FeatureSet):
+            raw_output = {"features": [f.model_dump() for f in raw_output.features]}
         features_list = self._extract_features_list(raw_output)
+        features: list[Feature] = []
         for item in features_list:
             title = str(item.get("title", ""))
             features.append(

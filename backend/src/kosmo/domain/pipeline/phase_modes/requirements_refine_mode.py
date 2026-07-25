@@ -116,8 +116,12 @@ class RequirementsRefineMode:
         return "\n".join(parts)
 
     def validate_output(self, output: Any) -> ValidationResult:
+        from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
+
         text = ""
-        if isinstance(output, str):
+        if isinstance(output, RequirementsDocument):
+            text = output.requirements_markdown.strip()
+        elif isinstance(output, str):
             text = output.strip()
         elif isinstance(output, dict):
             as_dict = cast(dict[str, object], output)
@@ -172,6 +176,10 @@ class RequirementsRefineMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> EARSPhaseOutput:
+        from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
+
+        if isinstance(raw_output, RequirementsDocument):
+            raw_output = raw_output.requirements_markdown
         markdown_text = ""
 
         if isinstance(raw_output, str):
