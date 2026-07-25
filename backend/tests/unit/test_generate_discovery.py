@@ -12,7 +12,6 @@ from kosmo.application.discovery.generate_discovery import (
     GenerateDiscoveryOutput,
     GenerateDiscoveryUseCase,
 )
-from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     DiscoveryPhaseOutput,
     GenerationMetadata,
@@ -75,9 +74,10 @@ class InMemoryDocumentRepository:
 class MockKOSMOAgent:
     output: DiscoveryPhaseOutput
 
-    async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> DiscoveryPhaseOutput:  # noqa: ARG002
+    async def execute_with_skill(
+        self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+    ) -> DiscoveryPhaseOutput:  # noqa: ARG002
         return self.output
-
 
 
 def _make_phase_output(title: str = "Generated Discovery") -> DiscoveryPhaseOutput:
@@ -112,12 +112,10 @@ async def test_generate_discovery_success() -> None:
 
     phase_output = _make_phase_output("Discovery del Proyecto")
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-
         agent=agent,
     )
 
@@ -142,7 +140,6 @@ async def test_generate_discovery_raises_when_project_not_found() -> None:
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-
         agent=agent,
     )
 
@@ -180,12 +177,10 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
             raise RuntimeError("LLM service unavailable")
 
     agent: Any = FailingAgent()
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-
         agent=agent,
     )
 
@@ -224,12 +219,10 @@ async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> 
         generation_metadata=GenerationMetadata(llm_calls=8, total_tokens=0),
     )
     agent: Any = MockKOSMOAgent(output=invalid_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-
         agent=agent,
     )
 
@@ -261,12 +254,10 @@ async def test_generate_discovery_raises_when_document_is_empty() -> None:
         generation_metadata=GenerationMetadata(llm_calls=8, total_tokens=0),
     )
     agent: Any = MockKOSMOAgent(output=empty_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-
         agent=agent,
     )
 
@@ -293,12 +284,10 @@ async def test_generate_discovery_persists_generated_document() -> None:
 
     phase_output = _make_phase_output("Documento Persistido")
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-
         agent=agent,
     )
 

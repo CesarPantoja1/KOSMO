@@ -226,7 +226,10 @@ class FeaturesMode:
         features_list: list[dict[str, Any]] = []
 
         if isinstance(output, FeatureSet):
-            features_list = [{"number": f.number, "title": f.title, "description": f.description, "origin": f.origin} for f in output.features]
+            features_list = [
+                {"number": f.number, "title": f.title, "description": f.description, "origin": f.origin}
+                for f in output.features
+            ]
         elif isinstance(output, dict):
             output_dict = cast(dict[str, object], output)
             if "features" in output_dict:

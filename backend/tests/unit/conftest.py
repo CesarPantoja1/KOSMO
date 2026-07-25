@@ -94,7 +94,7 @@ class StubStructuredLLMClient:
     async def complete_typed[T](
         self,
         prompt: PromptTemplate,
-        output_type: type[T],
+        output_type: type[T],  # noqa: ARG002
         temperature: float = 0.1,  # noqa: ARG002
         max_tokens: int = 4096,  # noqa: ARG002
     ) -> T:

@@ -79,7 +79,9 @@ async def test_agent_saves_session_on_successful_completion() -> None:
 @pytest.mark.unit
 async def test_agent_injects_context_from_previous_sessions() -> None:
     # Arrange
-    llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID), make_discovery_document(DISCOVERY_VALID)])
+    llm = StubStructuredLLMClient(
+        responses=[make_discovery_document(DISCOVERY_VALID), make_discovery_document(DISCOVERY_VALID)]
+    )
     store = InMemoryAgentSessionStore()
     agent = _make_agent(llm, memory=store)
     project_id = a_project_id()

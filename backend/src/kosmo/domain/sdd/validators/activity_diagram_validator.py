@@ -10,7 +10,7 @@ def validate_activity_diagram_syntax(diagram: str) -> ValidationResult:
 
     if not diagram.startswith("@startuml"):
         errors.append("El diagrama debe comenzar con @startuml")
-    
+
     if not diagram.endswith("@enduml"):
         errors.append("El diagrama debe terminar con @enduml")
 
@@ -21,7 +21,7 @@ def validate_activity_diagram_syntax(diagram: str) -> ValidationResult:
 
     if not has_start:
         warnings.append("Es recomendable incluir un nodo inicial 'start'")
-    
+
     if not has_stop:
         warnings.append("Es recomendable incluir un nodo final 'stop' o 'end'")
 
@@ -33,16 +33,14 @@ def validate_activity_diagram_syntax(diagram: str) -> ValidationResult:
     # Validar balance de if / endif
     if_count = sum(1 for line in lines if line.startswith("if ") or line.startswith("if("))
     endif_count = sum(1 for line in lines if line == "endif" or line == "end if")
-    
+
     if if_count > endif_count:
         errors.append(
-            f"Se detectaron condicionales 'if' sin su correspondiente 'endif' "
-            f"({if_count} if vs {endif_count} endif)"
+            f"Se detectaron condicionales 'if' sin su correspondiente 'endif' ({if_count} if vs {endif_count} endif)"
         )
     elif if_count < endif_count:
         errors.append(
-            f"Se detectaron 'endif' sobrantes sin un 'if' correspondiente "
-            f"({if_count} if vs {endif_count} endif)"
+            f"Se detectaron 'endif' sobrantes sin un 'if' correspondiente ({if_count} if vs {endif_count} endif)"
         )
 
     # Validar balance de fork / end merge (concurrencia)
@@ -60,8 +58,4 @@ def validate_activity_diagram_syntax(diagram: str) -> ValidationResult:
             f"({fork_count} fork vs {endmerge_count} end merge)"
         )
 
-    return ValidationResult(
-        is_valid=len(errors) == 0,
-        errors=errors,
-        warnings=warnings
-    )
+    return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)

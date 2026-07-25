@@ -4,11 +4,12 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId
-from pydantic import BaseModel, Field
 
 
 @dataclass(frozen=True)

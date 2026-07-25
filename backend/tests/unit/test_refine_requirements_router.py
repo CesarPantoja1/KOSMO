@@ -14,7 +14,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     GenerationMetadata,
     ValidationResult,
 )
-from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern, SpecPhase
+from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId, UserId
@@ -67,7 +67,9 @@ class StubRefineAgent:
     def __init__(self, output: EARSPhaseOutput) -> None:
         self._output = output
 
-    async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> Any:  # noqa: ARG002
+    async def execute_with_skill(
+        self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+    ) -> Any:  # noqa: ARG002
         return self._output
 
 

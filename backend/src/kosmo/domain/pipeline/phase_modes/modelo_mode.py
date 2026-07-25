@@ -79,6 +79,7 @@ basado en un conjunto de requisitos EARS para una característica específica.
 - PROHIBIDO: Inventar flujos que no estén descritos en los requisitos EARS.
 """
 
+
 class ModeloMode:
     def __init__(self) -> None:
         self._feature_id: FeatureId = FeatureId("")
@@ -114,10 +115,7 @@ class ModeloMode:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "diagram": {
-                            "type": "string",
-                            "description": "Código fuente PlantUML del diagrama."
-                        }
+                        "diagram": {"type": "string", "description": "Código fuente PlantUML del diagrama."}
                     },
                     "required": ["diagram"],
                 },

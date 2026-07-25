@@ -113,7 +113,9 @@ class KOSMOAgent:
 
                 return mode.build_output(last_output, last_validation, metadata)
 
-            user_prompt = mode.build_user_prompt(context) + "\n\n" + mode.build_validation_feedback(last_validation.errors)
+            user_prompt = (
+                mode.build_user_prompt(context) + "\n\n" + mode.build_validation_feedback(last_validation.errors)
+            )
 
         total_ms = int((time.monotonic() - start_time) * 1000)
         metadata = GenerationMetadata(
