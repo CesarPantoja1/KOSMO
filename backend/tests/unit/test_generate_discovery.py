@@ -22,7 +22,6 @@ from kosmo.contracts.sdd.document import (
     DocumentNode,
     RichTextDocument,
     SectionHeading,
-    SpecPhase,
 )
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
@@ -80,17 +79,6 @@ class MockKOSMOAgent:
         return self.output
 
 
-@dataclass(frozen=True)
-class MockContextBuilder:
-    context: DiscoveryPhaseContext
-
-    async def build_context(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase,  # noqa: ARG002
-    ) -> DiscoveryPhaseContext:
-        return self.context
-
 
 def _make_phase_output(title: str = "Generated Discovery") -> DiscoveryPhaseOutput:
     return DiscoveryPhaseOutput(
@@ -125,12 +113,11 @@ async def test_generate_discovery_success() -> None:
     phase_output = _make_phase_output("Discovery del Proyecto")
     agent: Any = MockKOSMOAgent(output=phase_output)
     context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
+
         agent=agent,
     )
 
@@ -151,12 +138,11 @@ async def test_generate_discovery_raises_when_project_not_found() -> None:
     doc_repo: Any = InMemoryDocumentRepository()
     phase_output = _make_phase_output()
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context_builder: Any = MockContextBuilder(context=DiscoveryPhaseContext(project_name="", project_description=""))
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
+
         agent=agent,
     )
 
@@ -195,12 +181,11 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
 
     agent: Any = FailingAgent()
     context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
+
         agent=agent,
     )
 
@@ -240,12 +225,11 @@ async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> 
     )
     agent: Any = MockKOSMOAgent(output=invalid_output)
     context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
+
         agent=agent,
     )
 
@@ -278,12 +262,11 @@ async def test_generate_discovery_raises_when_document_is_empty() -> None:
     )
     agent: Any = MockKOSMOAgent(output=empty_output)
     context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
+
         agent=agent,
     )
 
@@ -311,12 +294,11 @@ async def test_generate_discovery_persists_generated_document() -> None:
     phase_output = _make_phase_output("Documento Persistido")
     agent: Any = MockKOSMOAgent(output=phase_output)
     context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
+
         agent=agent,
     )
 

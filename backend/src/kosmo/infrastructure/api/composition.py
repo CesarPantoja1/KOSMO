@@ -427,7 +427,6 @@ def build_discovery_components(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
             document_repo=document_repo,
-            context_builder=pipeline.context_builder,
             agent=pipeline.agent,
         ),
         get_discovery=GetDiscoveryUseCase(document_repo=document_repo),
