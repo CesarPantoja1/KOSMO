@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from pydantic import BaseModel
@@ -57,6 +58,8 @@ def _extract_balanced(text: str, start: int, open_char: str) -> str | None:
 
 
 class PydanticAILLMClient:
+    _DEFAULT_TIMEOUT_SECONDS = 120
+
     def __init__(self, model: Any) -> None:
         self._model = model
         self._agents: dict[str, Agent[Any]] = {}
@@ -76,9 +79,12 @@ class PydanticAILLMClient:
     ) -> LLMResponse:
         agent = self._get_agent(prompt.system_prompt)
 
-        result = await agent.run(
-            prompt.user_prompt,
-            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+        result = await asyncio.wait_for(
+            agent.run(
+                prompt.user_prompt,
+                model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+            ),
+            timeout=self._DEFAULT_TIMEOUT_SECONDS,
         )
 
         usage = result.usage()
