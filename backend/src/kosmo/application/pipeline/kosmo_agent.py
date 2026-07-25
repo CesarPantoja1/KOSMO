@@ -16,6 +16,7 @@ from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.domain.agent_memory.session_factory import create_session
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
+from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 
 
 class KOSMOAgent:
@@ -43,13 +44,16 @@ class KOSMOAgent:
     ) -> Any:
         if self._skill_registry is None:
             raise ValueError("SkillRegistry no configurado")
+
+        sanitized_instructions = sanitize_user_instructions(user_instructions) if user_instructions else None
+
         mode = self._skill_registry.resolve(skill_name)
         return await self._execute_loop(
             mode,
             context,
             skill_name=skill_name,
             project_id=project_id,
-            user_instructions=user_instructions,
+            user_instructions=sanitized_instructions,
         )
 
     async def _execute_loop(

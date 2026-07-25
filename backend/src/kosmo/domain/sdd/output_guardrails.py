@@ -66,3 +66,45 @@ def detect_implementation_leaks(requirements: list[dict[str, str]]) -> Guardrail
         result = detect_technical_terms(text, section=req.get("id", ""))
         all_violations.extend(result.violations)
     return GuardrailResult(is_valid=len(all_violations) == 0, violations=all_violations)
+
+
+_INJECTION_PATTERNS: list[str] = [
+    r"ignora\s+(todas\s+)?las\s+instrucciones",
+    r"ignore\s+all\s+instructions",
+    r"eres\s+(ahora\s+)?un\s+(nuevo\s+)?",
+    r"you\s+are\s+now\s+a\s+",
+    r"olvida\s+todo\s+lo\s+anterior",
+    r"forget\s+everything",
+    r"act[uú]a\s+como\s+(si\s+fueras\s+)?un\s+",
+    r"reinicia\s+tus\s+instrucciones",
+    r"tu\s+nuevo\s+sistema\s+de\s+prompt",
+    r"sistema:\s*$",
+    r"^system:\s*",
+    r"\[system\]",
+    r"<\|im_start\|>",
+    r"<\|system\|>",
+    r"\[INST\]",
+    r"\[\\INST\]",
+]
+
+_INSTRUCTION_MAX_LENGTH = 2000
+
+
+def sanitize_user_instructions(text: str) -> str:
+    if not text or not text.strip():
+        return text
+
+    if len(text) > _INSTRUCTION_MAX_LENGTH:
+        raise ValueError(
+            f"Las instrucciones no pueden exceder {_INSTRUCTION_MAX_LENGTH} caracteres."
+        )
+
+    for pattern in _INJECTION_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            raise ValueError(
+                "Las instrucciones contienen patrones no permitidos. "
+                "Por favor reformula tu solicitud sin intentar modificar "
+                "el comportamiento base del asistente."
+            )
+
+    return text.strip()
