@@ -1686,6 +1686,7 @@ dependencies = [
     { name = "logfire", extra = ["fastapi", "redis", "sqlalchemy"] },
     { name = "motor" },
     { name = "pgvector" },
+    { name = "prometheus-fastapi-instrumentator" },
     { name = "pydantic" },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
@@ -1725,6 +1726,7 @@ requires-dist = [
     { name = "logfire", extras = ["fastapi", "sqlalchemy", "redis"], specifier = ">=4.32.1" },
     { name = "motor", specifier = ">=3.7.1" },
     { name = "pgvector", specifier = ">=0.4.2" },
+    { name = "prometheus-fastapi-instrumentator", specifier = ">=7.0.0" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-ai", specifier = ">=1.86.1" },
     { name = "pydantic-settings", specifier = ">=2.14.0" },
@@ -2550,6 +2552,28 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8e/22/2de9408ac81acbb8a7d05d4cc064a152ccf33b3d480ebe0cd292153db239/pre_commit-4.6.0.tar.gz", hash = "sha256:718d2208cef53fdc38206e40524a6d4d9576d103eb16f0fec11c875e7716e9d9", size = 198525, upload-time = "2026-04-21T20:31:41.613Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/80/6e/4b28b62ecb6aae56769c34a8ff1d661473ec1e9519e2d5f8b2c150086b26/pre_commit-4.6.0-py2.py3-none-any.whl", hash = "sha256:e2cf246f7299edcabcf15f9b0571fdce06058527f0a06535068a86d38089f29b", size = 226472, upload-time = "2026-04-21T20:31:40.092Z" },
+]
+
+[[package]]
+name = "prometheus-client"
+version = "0.26.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/52/73/f1334c29c2af4cd9dba6c7817e61b611bd0215e2eb5565c6064a4de18802/prometheus_client-0.26.0.tar.gz", hash = "sha256:04a91bcf94e2cf74a44a1a874d651a2e853ed354b6e822f3b7487751465d5c2b", size = 92910, upload-time = "2026-07-24T19:36:41.893Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/a3/b69efbf4143b5b9859b977770bbbabcc2796b702fa69dc40271e45cd5a56/prometheus_client-0.26.0-py3-none-any.whl", hash = "sha256:fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6", size = 64494, upload-time = "2026-07-24T19:36:40.854Z" },
+]
+
+[[package]]
+name = "prometheus-fastapi-instrumentator"
+version = "8.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "prometheus-client" },
+    { name = "starlette" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1b/e9/2065686d1dfa62296fdc158b6e8fd25b0cb3dca09b0632cabeb5ae81fe4d/prometheus_fastapi_instrumentator-8.0.2.tar.gz", hash = "sha256:3c252e748151768a7aefd66824a04a870144f71de48a67aed211749a9ca2a548", size = 21342, upload-time = "2026-06-23T09:39:31.611Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/c7/fa2b3f469a2e6001b829e0d6bc8680755349aa1329a87bf48731e9d5d30a/prometheus_fastapi_instrumentator-8.0.2-py3-none-any.whl", hash = "sha256:746002ec1e2c58b93f61444e1d104de959a9463a6a3f1c8909ac3757e16c3866", size = 20549, upload-time = "2026-06-23T09:39:32.616Z" },
 ]
 
 [[package]]

@@ -38,7 +38,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "container_memory_usage_bytes{name=~\"kosmo-.*\"} / 1024 / 1024",
+          "expr": "container_memory_usage_bytes{name=~\".*kosmo.*\"} / 1024 / 1024",
           "legendFormat": "{{name}}"
         }
       ]
