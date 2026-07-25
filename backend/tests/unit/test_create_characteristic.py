@@ -52,6 +52,7 @@ def _default_mock_suggest() -> Any:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_characteristic_success() -> None:
     repository: Any = InMemoryFeatureRepository()
     mock_suggest: Any = MockSuggestFeaturesUseCase(
@@ -84,6 +85,7 @@ async def test_create_characteristic_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_characteristic_increments_number() -> None:
     repository: Any = InMemoryFeatureRepository()
     use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
@@ -123,6 +125,7 @@ async def test_create_characteristic_increments_number() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_characteristic_title_too_long_raises() -> None:
     repository: Any = InMemoryFeatureRepository()
     use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
@@ -138,6 +141,7 @@ async def test_create_characteristic_title_too_long_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_characteristic_description_too_long_raises() -> None:
     repository: Any = InMemoryFeatureRepository()
     use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
@@ -153,6 +157,7 @@ async def test_create_characteristic_description_too_long_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_characteristic_empty_title_raises() -> None:
     repository: Any = InMemoryFeatureRepository()
     use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())
@@ -168,6 +173,7 @@ async def test_create_characteristic_empty_title_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_characteristic_generates_unique_id_per_call() -> None:
     repository: Any = InMemoryFeatureRepository()
     use_case = CreateCharacteristicUseCase(feature_repo=repository, suggest_use_case=_default_mock_suggest())

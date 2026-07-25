@@ -52,6 +52,7 @@ def _principal() -> Principal:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_manual_returns_201_and_feature_response() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()

@@ -56,6 +56,7 @@ def _make_discovery_document() -> RichTextDocument:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_discovery_returns_document_when_exists() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()
@@ -75,6 +76,7 @@ async def test_get_discovery_returns_document_when_exists() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_discovery_raises_document_not_found_when_missing() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()
@@ -89,6 +91,7 @@ async def test_get_discovery_raises_document_not_found_when_missing() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_discovery_returns_empty_document_when_no_sections() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()

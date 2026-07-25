@@ -69,6 +69,7 @@ class InMemoryRequirementRepository:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_requirements_returns_markdown_when_exists() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -114,6 +115,7 @@ async def test_get_requirements_returns_markdown_when_exists() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_requirements_returns_none_when_not_exists() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -156,6 +158,7 @@ async def test_get_requirements_returns_none_when_not_exists() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_requirements_raises_project_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -176,6 +179,7 @@ async def test_get_requirements_raises_project_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_requirements_raises_feature_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()

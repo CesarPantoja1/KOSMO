@@ -180,6 +180,7 @@ def _issuer_pair() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_register_creates_user_with_argon2_hash() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -194,6 +195,7 @@ async def test_register_creates_user_with_argon2_hash() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_register_rejects_duplicate_email() -> None:
     repo = InMemoryUserRepository()
     register = RegisterUser(user_repository=repo, password_hasher=_hasher(), audit_sink=InMemoryAuditEventSink())
@@ -204,6 +206,7 @@ async def test_register_rejects_duplicate_email() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_authorize_with_valid_credentials_emits_code() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -234,6 +237,7 @@ async def test_authorize_with_valid_credentials_emits_code() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_authorize_with_wrong_password_raises() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -259,6 +263,7 @@ async def test_authorize_with_wrong_password_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_authorize_records_failure_on_bad_credentials() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -287,6 +292,7 @@ async def test_authorize_records_failure_on_bad_credentials() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_authorize_locks_account_after_max_failures() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -323,6 +329,7 @@ async def test_authorize_locks_account_after_max_failures() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_authorize_clears_attempts_on_successful_login() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -362,6 +369,7 @@ async def test_authorize_clears_attempts_on_successful_login() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_exchange_consumes_code_and_emits_pair() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()
@@ -406,6 +414,7 @@ async def test_exchange_consumes_code_and_emits_pair() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_exchange_rejects_mismatched_verifier() -> None:
     repo = InMemoryUserRepository()
     hasher = _hasher()

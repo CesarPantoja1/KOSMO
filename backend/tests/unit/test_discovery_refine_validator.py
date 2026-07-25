@@ -39,6 +39,7 @@ def test_validate_business_level_passes_for_business_document() -> None:
         "microservicios",
     ],
 )
+@pytest.mark.unit
 def test_validate_business_level_flags_technical_term(term: str) -> None:
     # Arrange
     doc = RichTextDocument(

@@ -32,6 +32,7 @@ class InMemoryProjectRepository:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_generates_slug_from_name() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -53,6 +54,7 @@ async def test_create_project_generates_slug_from_name() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_saves_with_correct_fields() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -75,6 +77,7 @@ async def test_create_project_saves_with_correct_fields() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_handles_duplicate_slug_for_same_owner() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -99,6 +102,7 @@ async def test_create_project_handles_duplicate_slug_for_same_owner() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_handles_special_characters_in_name() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()

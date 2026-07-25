@@ -123,6 +123,7 @@ def _make_valid_features_output() -> FeaturesPhaseOutput:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_raises_when_project_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -145,6 +146,7 @@ async def test_generate_features_raises_when_project_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_raises_when_discovery_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -174,6 +176,7 @@ async def test_generate_features_raises_when_discovery_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_generates_features_successfully() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -208,6 +211,7 @@ async def test_generate_features_generates_features_successfully() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_raises_when_llm_fails() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -246,6 +250,7 @@ async def test_generate_features_raises_when_llm_fails() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_persists_generated_features() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()

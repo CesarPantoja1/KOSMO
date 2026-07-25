@@ -168,6 +168,7 @@ def _make_valid_ears_output() -> EARSPhaseOutput:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_ears_success() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
@@ -204,6 +205,7 @@ async def test_generate_ears_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_ears_raises_project_not_found() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
@@ -226,6 +228,7 @@ async def test_generate_ears_raises_project_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_ears_raises_feature_not_found() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
@@ -256,6 +259,7 @@ async def test_generate_ears_raises_feature_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_ears_raises_document_not_found() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
@@ -288,6 +292,7 @@ async def test_generate_ears_raises_document_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_ears_persists_requirements_markdown() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
@@ -325,6 +330,7 @@ async def test_generate_ears_persists_requirements_markdown() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_ears_raises_when_llm_fails() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()

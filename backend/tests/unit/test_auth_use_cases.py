@@ -119,6 +119,7 @@ def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_issue_then_verify_returns_principal() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
@@ -134,6 +135,7 @@ async def test_issue_then_verify_returns_principal() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_revoked_access_rejected() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
@@ -151,6 +153,7 @@ async def test_revoked_access_rejected() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_refresh_rotates_pair() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
@@ -170,6 +173,7 @@ async def test_refresh_rotates_pair() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_access_token_used_as_refresh_is_rejected() -> None:
     issuer, verifier = _build_codec()
     store = InMemoryStore()
@@ -183,6 +187,7 @@ async def test_access_token_used_as_refresh_is_rejected() -> None:
         await refresh_uc.execute(pair.access.token, scopes=frozenset())
 
 
+@pytest.mark.unit
 def test_expired_token_raises() -> None:
     issuer, verifier = _build_codec()
     issued = issuer.issue(subject="user-1", scopes=frozenset(), token_type=TokenType.ACCESS)
@@ -202,6 +207,7 @@ def test_expired_token_raises() -> None:
         verifier.verify(expired_token.token, expected_type=TokenType.ACCESS)
 
 
+@pytest.mark.unit
 def test_verifier_rejects_tampered_token() -> None:
     _, verifier = _build_codec()
     bogus = "eyJhbGciOiJSUzI1NiJ9.bm90LWEtdG9rZW4.signature"

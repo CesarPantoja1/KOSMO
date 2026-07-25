@@ -14,6 +14,7 @@ from tests.factories import a_project_id, a_session
 @pytest.mark.unit
 class TestInMemoryStoreSaveAndLoad:
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_save_and_load_session(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -29,6 +30,7 @@ class TestInMemoryStoreSaveAndLoad:
         assert loaded.project_id == session.project_id
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_load_nonexistent_session_returns_none(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -40,6 +42,7 @@ class TestInMemoryStoreSaveAndLoad:
         assert result is None
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_save_overwrites_existing_session(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -68,6 +71,7 @@ class TestInMemoryStoreSaveAndLoad:
 @pytest.mark.unit
 class TestInMemoryStoreList:
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_list_sessions_by_project(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -99,6 +103,7 @@ class TestInMemoryStoreList:
         ],
     )
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_list_sessions_filtered_by_phase(self, filter_phase: SpecPhase, expected_count: int) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -115,6 +120,7 @@ class TestInMemoryStoreList:
         assert len(results) == expected_count
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_list_sessions_empty_project(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -129,6 +135,7 @@ class TestInMemoryStoreList:
 @pytest.mark.unit
 class TestInMemoryStoreGetLatest:
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_get_latest_session_returns_most_recent(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -146,6 +153,7 @@ class TestInMemoryStoreGetLatest:
         assert result.session_id == s2.session_id
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_get_latest_session_returns_none_when_empty(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -160,6 +168,7 @@ class TestInMemoryStoreGetLatest:
 @pytest.mark.unit
 class TestInMemoryStoreProjectContext:
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_get_project_context_aggregates_sessions(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
@@ -178,6 +187,7 @@ class TestInMemoryStoreProjectContext:
         assert len(context.latest_sessions) == 2
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_get_project_context_empty_project(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()

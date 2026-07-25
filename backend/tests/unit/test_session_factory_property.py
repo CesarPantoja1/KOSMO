@@ -15,6 +15,7 @@ from kosmo.domain.agent_memory.session_factory import create_session, generate_s
     is_completed=st.booleans(),
     user_instructions=st.text(min_size=1, max_size=100),
 )
+@pytest.mark.unit
 def test_create_session_user_instructions_roundtrip(
     is_completed: bool,
     user_instructions: str,
@@ -35,6 +36,7 @@ def test_create_session_user_instructions_roundtrip(
 @pytest.mark.unit
 @pytest.mark.property
 @given(n=st.integers(min_value=1, max_value=100))
+@pytest.mark.unit
 def test_generate_session_id_always_unique_across_calls(n: int) -> None:
     # Act
     ids = [generate_session_id() for _ in range(n)]

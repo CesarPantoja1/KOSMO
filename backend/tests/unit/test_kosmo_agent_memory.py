@@ -100,6 +100,7 @@ async def test_agent_with_memory_but_no_project_id_does_not_save() -> None:
     ],
 )
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_agent_saves_correct_session_type(
     user_instructions: str | None,
     expected_session_type: str,
@@ -135,6 +136,7 @@ async def test_agent_saves_correct_session_type(
     ],
 )
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_sessions_are_isolated_between_projects(
     project_a: ProjectId,
     project_b: ProjectId,

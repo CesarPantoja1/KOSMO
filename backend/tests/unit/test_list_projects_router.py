@@ -48,6 +48,7 @@ def _principal(subject: str) -> Principal:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_list_projects_endpoint_maps_domain_project_to_response() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()

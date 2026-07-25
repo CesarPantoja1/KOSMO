@@ -33,6 +33,7 @@ class InMemoryProjectRepository:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_project_returns_project_when_exists() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -57,6 +58,7 @@ async def test_get_project_returns_project_when_exists() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_project_raises_project_not_found_when_missing() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()

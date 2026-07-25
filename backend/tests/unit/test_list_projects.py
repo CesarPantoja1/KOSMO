@@ -42,6 +42,7 @@ def _make_project(project_id: str, slug: str, owner_id: str) -> Project:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_list_projects_returns_empty_list_when_owner_has_no_projects() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -55,6 +56,7 @@ async def test_list_projects_returns_empty_list_when_owner_has_no_projects() -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_list_projects_returns_only_projects_owned_by_user() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()

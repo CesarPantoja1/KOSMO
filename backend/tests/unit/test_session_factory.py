@@ -12,6 +12,7 @@ from tests.factories import a_session
 
 @pytest.mark.unit
 class TestGenerateSessionId:
+    @pytest.mark.unit
     def test_generates_unique_ids(self) -> None:
         # Arrange / Act
         id1 = generate_session_id()
@@ -25,6 +26,7 @@ class TestGenerateSessionId:
 
 @pytest.mark.unit
 class TestCreateSession:
+    @pytest.mark.unit
     def test_session_is_immutable(self) -> None:
         # Arrange
         session = a_session()
@@ -33,6 +35,7 @@ class TestCreateSession:
         with pytest.raises(FrozenInstanceError):
             session.is_completed = True  # type: ignore[misc]
 
+    @pytest.mark.unit
     def test_conversation_default_is_distinct_per_instance(self) -> None:
         # Act
         s1 = create_session(

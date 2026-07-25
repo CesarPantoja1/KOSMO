@@ -80,6 +80,7 @@ def _make_diagram(feature_id: str = "feat_01") -> DiagramaActividad:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_returns_diagram_when_exists() -> None:
     # Arrange
     feature = _make_feature()
@@ -113,6 +114,7 @@ async def test_get_diagram_returns_diagram_when_exists() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_raises_when_feature_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -135,6 +137,7 @@ async def test_get_diagram_raises_when_feature_not_found() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_raises_when_no_diagram_for_feature() -> None:
     # Arrange
     feature = _make_feature()
@@ -161,6 +164,7 @@ async def test_get_diagram_raises_when_no_diagram_for_feature() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_raises_when_feature_belongs_to_wrong_project() -> None:
     # Arrange
     feature = _make_feature(feature_id="feat_01", project_id="prj_02")

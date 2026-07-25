@@ -81,6 +81,7 @@ def _make_discovery_document() -> RichTextDocument:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_suggest_features_raises_when_discovery_not_found() -> None:
     # Arrange
     doc_repo: Any = InMemoryDocumentRepository()
@@ -101,6 +102,7 @@ async def test_suggest_features_raises_when_discovery_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_suggest_features_returns_suggestions_from_llm() -> None:
     # Arrange
     doc_repo: Any = InMemoryDocumentRepository()
@@ -148,6 +150,7 @@ async def test_suggest_features_returns_suggestions_from_llm() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_suggest_features_excludes_existing_titles() -> None:
     # Arrange
     doc_repo: Any = InMemoryDocumentRepository()
@@ -191,6 +194,7 @@ async def test_suggest_features_excludes_existing_titles() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_suggest_features_strips_identifier_prefix_from_title() -> None:
     # Arrange
     doc_repo: Any = InMemoryDocumentRepository()

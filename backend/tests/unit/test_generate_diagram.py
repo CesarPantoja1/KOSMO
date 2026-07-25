@@ -140,6 +140,7 @@ def _make_valid_modelo_output(feature_id: str = "feat_01") -> ModeloPhaseOutput:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_success() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -167,6 +168,7 @@ async def test_generate_diagram_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_feature_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -187,6 +189,7 @@ async def test_generate_diagram_raises_feature_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_requirements_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -209,6 +212,7 @@ async def test_generate_diagram_raises_requirements_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_llm_invocation_on_agent_failure() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -239,6 +243,7 @@ async def test_generate_diagram_raises_llm_invocation_on_agent_failure() -> None
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_on_invalid_output_type() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -263,6 +268,7 @@ async def test_generate_diagram_raises_on_invalid_output_type() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_persists_diagram() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -291,6 +297,7 @@ async def test_generate_diagram_persists_diagram() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_on_validation_failure() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -321,6 +328,7 @@ async def test_generate_diagram_raises_on_validation_failure() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_on_empty_diagram_syntax() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()

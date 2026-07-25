@@ -93,6 +93,7 @@ def _make_phase_output(title: str = "Generated Discovery") -> DiscoveryPhaseOutp
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_success() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -126,6 +127,7 @@ async def test_generate_discovery_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_when_project_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -148,6 +150,7 @@ async def test_generate_discovery_raises_when_project_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_when_llm_fails() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -188,6 +191,7 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -231,6 +235,7 @@ async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_when_document_is_empty() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -265,6 +270,7 @@ async def test_generate_discovery_raises_when_document_is_empty() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_persists_generated_document() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()

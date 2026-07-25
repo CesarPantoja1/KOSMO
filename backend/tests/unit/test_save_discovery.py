@@ -46,6 +46,7 @@ def _make_discovery_document(title: str = "Test Discovery") -> RichTextDocument:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_discovery_persists_document() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()
@@ -64,6 +65,7 @@ async def test_save_discovery_persists_document() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_discovery_returns_saved_document() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()
@@ -82,6 +84,7 @@ async def test_save_discovery_returns_saved_document() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_discovery_overwrites_existing_document() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()

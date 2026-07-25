@@ -36,6 +36,7 @@ class InMemoryFeatureRepository:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_selected_features_saves_with_correct_numbering() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
@@ -63,6 +64,7 @@ async def test_save_selected_features_saves_with_correct_numbering() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_selected_features_assigns_project_id() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
@@ -86,6 +88,7 @@ async def test_save_selected_features_assigns_project_id() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_selected_features_returns_saved_features() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
@@ -115,6 +118,7 @@ async def test_save_selected_features_returns_saved_features() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_selected_features_strips_identifier_prefix() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
