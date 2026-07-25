@@ -77,3 +77,4 @@ services:
 networks:
   default:
     name: kosmo-network
+    external: true
