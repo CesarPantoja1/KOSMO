@@ -94,9 +94,6 @@ _FEATURES_SYSTEM_PROMPT = (
 
 
 class FeaturesMode:
-    def __init__(self) -> None:
-        self._existing_titles: list[str] = []
-        self._project_id: ProjectId = ProjectId("")
 
     @property
     def phase_name(self) -> SpecPhase:
@@ -173,8 +170,6 @@ class FeaturesMode:
     ) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
-        self._existing_titles = []
-
         discovery_md = ""
         existing_titles_list: list[str] = []
         user_prefs: list[Any] = []
@@ -183,8 +178,6 @@ class FeaturesMode:
             discovery_md = document_to_markdown(context.discovery_document)
             existing_titles_list = context.existing_feature_titles
             user_prefs = context.user_preferences
-            if isinstance(context, FeaturesPhaseContext):
-                self._project_id = context.project_id
         elif isinstance(context, EARSPhaseContext):
             discovery_md = document_to_markdown(context.discovery_document)
             user_prefs = context.user_preferences
@@ -197,8 +190,7 @@ class FeaturesMode:
         ]
 
         if existing_titles_list:
-            self._existing_titles = list(existing_titles_list)
-            existing_list = "\n".join(f"- {title}" for title in self._existing_titles)
+            existing_list = "\n".join(f"- {title}" for title in existing_titles_list)
             parts.append(
                 f"\n## Características Existentes (NO DUPLICAR NI REPETIR ESTAS CARACTERÍSTICAS):\n\n{existing_list}"
             )
@@ -216,12 +208,17 @@ class FeaturesMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:
+        from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext, SuggestFeaturesContext
         from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.domain.pipeline.phase_validators.features_validator import (
             validate_feature_structure,
             validate_feature_uniqueness,
         )
+
+        existing_titles: list[str] = []
+        if isinstance(context, (FeaturesPhaseContext, SuggestFeaturesContext)):
+            existing_titles = context.existing_feature_titles
 
         features_list: list[dict[str, Any]] = []
 
@@ -295,12 +292,12 @@ class FeaturesMode:
             )
 
         struct_result = validate_feature_structure(features_list)
-        uniq_result = validate_feature_uniqueness(features_list, self._existing_titles)
+        uniq_result = validate_feature_uniqueness(features_list, existing_titles)
 
         all_errors = struct_result.errors + uniq_result.errors
         all_warnings = struct_result.warnings + uniq_result.warnings
 
-        if not self._existing_titles:
+        if not existing_titles:
             count = len(features_list)
             if count != FIRST_GENERATION_COUNT:
                 all_errors.append(
@@ -343,10 +340,17 @@ class FeaturesMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> FeaturesPhaseOutput:
+        from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext
         from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.contracts.sdd.feature import Feature
         from kosmo.domain.sdd.id_generator import IdGenerator
+
+        project_id = ProjectId("")
+        if isinstance(context, FeaturesPhaseContext):
+            project_id = context.project_id
 
         if isinstance(raw_output, FeatureSet):
             raw_output = {"features": [f.model_dump() for f in raw_output.features]}
@@ -361,7 +365,7 @@ class FeaturesMode:
                     title=title,
                     slug=title.lower().replace(" ", "-"),
                     description=str(item.get("description", "")),
-                    project_id=self._project_id,
+                    project_id=project_id,
                     origin=str(item.get("origin", "")),
                 )
             )

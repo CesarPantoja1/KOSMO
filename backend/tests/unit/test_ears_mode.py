@@ -8,7 +8,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.ears import EARSPattern
-from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 
 _VALID_METADATA = GenerationMetadata(llm_calls=1, total_tokens=10)
@@ -119,8 +118,6 @@ _EARS_JSON_EMPTY = json.dumps({"requirements": []})
 def test_ears_mode_build_output_returns_ears_phase_output() -> None:
     # Arrange
     mode = EARSMode()
-    mode._feature_id = FeatureId("feat_01")  # type: ignore[reportPrivateUsage]
-    mode._feature_number = 1  # type: ignore[reportPrivateUsage]
 
     # Act
     result = mode.build_output(json.loads(_VALID_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
@@ -141,16 +138,14 @@ def test_ears_mode_build_output_returns_ears_phase_output() -> None:
 def test_ears_mode_markdown_structure_includes_heading_separators_and_criteria() -> None:
     # Arrange
     mode = EARSMode()
-    mode._feature_id = FeatureId("feat_01")  # type: ignore[reportPrivateUsage]
-    mode._feature_number = 1  # type: ignore[reportPrivateUsage]
 
     # Act
     result = mode.build_output(json.loads(_VALID_EARS_JSON), _VALID_VALIDATION, _VALID_METADATA)
 
     # Assert
-    assert "### REQ-1.1 Presentación de montos con dos decimales" in result.requirements_markdown
-    assert "### REQ-1.2 Cálculo de cuota al registrar gasto" in result.requirements_markdown
-    assert "### REQ-1.3 Impedir registro con un solo participante" in result.requirements_markdown
+    assert "### REQ-0.1 Presentación de montos con dos decimales" in result.requirements_markdown
+    assert "### REQ-0.2 Cálculo de cuota al registrar gasto" in result.requirements_markdown
+    assert "### REQ-0.3 Impedir registro con un solo participante" in result.requirements_markdown
     assert "**Ubicuo**" in result.requirements_markdown
     assert "**Basado en eventos**" in result.requirements_markdown
     assert "**Determinado por estado**" in result.requirements_markdown

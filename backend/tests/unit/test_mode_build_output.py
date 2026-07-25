@@ -7,7 +7,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     GenerationMetadata,
     ValidationResult,
 )
-from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import DiscoveryRefineMode
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
@@ -159,8 +158,6 @@ def test_features_mode_build_output_returns_features_phase_output() -> None:
 def test_ears_mode_build_output_returns_ears_phase_output() -> None:
     # Arrange
     mode = EARSMode()
-    mode._feature_id = FeatureId("feat_01")  # type: ignore[reportPrivateUsage]
-    mode._feature_number = 1  # type: ignore[reportPrivateUsage]
     import json
 
     # Act

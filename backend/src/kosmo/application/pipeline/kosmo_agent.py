@@ -128,7 +128,7 @@ class KOSMOAgent:
                 break
 
             llm_calls += 1
-            last_validation = mode.validate_output(last_output)
+            last_validation = mode.validate_output(last_output, context=context)
 
             conversation.append(
                 json.dumps(
@@ -163,7 +163,7 @@ class KOSMOAgent:
                         conversation=conversation,
                     )
 
-                return mode.build_output(last_output, last_validation, metadata)
+                return mode.build_output(last_output, last_validation, metadata, context=context)
 
             delay_s = min(1.0 * (2 ** (iteration - 1)), 30.0)
             await asyncio.sleep(delay_s)
@@ -191,7 +191,7 @@ class KOSMOAgent:
                 is_completed=False,
             )
 
-        return mode.build_output(last_output, last_validation, metadata)
+        return mode.build_output(last_output, last_validation, metadata, context=context)
 
     async def _save_completed_session(
         self,

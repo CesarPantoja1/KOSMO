@@ -59,9 +59,6 @@ Escapa TODOS los saltos de línea como \\n y TODAS las comillas dobles como
 
 
 class RequirementsRefineMode:
-    def __init__(self) -> None:
-        self._feature_id: FeatureId = FeatureId("")
-        self._feature_number: int = 0
 
     @property
     def phase_name(self) -> SpecPhase:
@@ -90,8 +87,6 @@ class RequirementsRefineMode:
         return []
 
     def build_user_prompt(self, context: RequirementsRefinePhaseContext) -> str:
-        self._feature_id = context.feature.id
-        self._feature_number = context.feature_number
 
         val = validate_refine_input_exists(context.current_requirements_markdown)
         if not val.is_valid:
@@ -115,7 +110,7 @@ class RequirementsRefineMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
         from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
 
         text = ""
@@ -175,8 +170,17 @@ class RequirementsRefineMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> EARSPhaseOutput:
+        from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
         from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
+
+        feature_id: FeatureId = FeatureId("")
+        feature_number: int = 0
+        if isinstance(context, RequirementsRefinePhaseContext):
+            feature_id = context.feature.id
+            feature_number = context.feature_number
 
         if isinstance(raw_output, RequirementsDocument):
             raw_output = raw_output.requirements_markdown
@@ -191,8 +195,8 @@ class RequirementsRefineMode:
 
         if markdown_text:
             return EARSPhaseOutput(
-                feature_id=self._feature_id,
-                feature_number=self._feature_number,
+                feature_id=feature_id,
+                feature_number=feature_number,
                 requirements=[],
                 requirements_markdown=markdown_text,
                 validation_result=validation_result,
@@ -232,8 +236,8 @@ class RequirementsRefineMode:
             requirements.append(
                 EARSRequirement(
                     id=RequirementId(IdGenerator.generate("requirement")),
-                    feature_id=self._feature_id,
-                    feature_number=self._feature_number,
+                    feature_id=feature_id,
+                    feature_number=feature_number,
                     requirement_number=i,
                     title=str(item.get("title", "")),  # type: ignore[reportUnknownArgumentType]
                     pattern=pattern,
@@ -246,8 +250,8 @@ class RequirementsRefineMode:
         markdown_str = self._requirements_to_markdown(requirements)
 
         return EARSPhaseOutput(
-            feature_id=self._feature_id,
-            feature_number=self._feature_number,
+            feature_id=feature_id,
+            feature_number=feature_number,
             requirements=requirements,
             requirements_markdown=markdown_str,
             validation_result=validation_result,

@@ -95,7 +95,7 @@ class DiscoveryRefineMode:
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
         from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
             validate_business_level,
@@ -156,6 +156,8 @@ class DiscoveryRefineMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,  # noqa: ARG002 — parte del protocolo PhaseMode
     ) -> DiscoveryPhaseOutput:
         from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.sdd.document_converters import (

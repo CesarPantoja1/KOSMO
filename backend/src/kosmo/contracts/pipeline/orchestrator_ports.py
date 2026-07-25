@@ -102,7 +102,7 @@ class PhaseMode(Protocol):
         | ModeloPhaseContext,
     ) -> str: ...
 
-    def validate_output(self, output: Any) -> ValidationResult: ...
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult: ...
 
     def build_retry_prompt(
         self,
@@ -118,6 +118,8 @@ class PhaseMode(Protocol):
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> Any: ...
 
 

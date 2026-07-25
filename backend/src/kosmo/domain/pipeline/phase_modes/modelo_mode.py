@@ -81,8 +81,6 @@ basado en un conjunto de requisitos EARS para una característica específica.
 
 
 class ModeloMode:
-    def __init__(self) -> None:
-        self._feature_id: FeatureId = FeatureId("")
 
     @property
     def phase_name(self) -> SpecPhase:
@@ -123,8 +121,6 @@ class ModeloMode:
         ]
 
     def build_user_prompt(self, context: ModeloPhaseContext) -> str:
-        self._feature_id = context.feature_id
-
         parts = [f"## Característica ID: {context.feature_id}\n\n"]
         parts.append("## Requisitos EARS\n\n")
         parts.append(context.ears_requirements)
@@ -135,7 +131,7 @@ class ModeloMode:
 
         return "".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
         if isinstance(output, DiagramSpec):
             return validate_activity_diagram_syntax(output.diagram_syntax)
         if isinstance(output, dict) and "diagram_syntax" in output:
@@ -175,7 +171,15 @@ class ModeloMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> ModeloPhaseOutput:
+        from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
+
+        feature_id = FeatureId("")
+        if isinstance(context, ModeloPhaseContext):
+            feature_id = context.feature_id
+
         if isinstance(raw_output, DiagramSpec):
             raw_output = {"diagram_syntax": raw_output.diagram_syntax}
 
@@ -184,7 +188,7 @@ class ModeloMode:
             diagram_syntax = str(cast(object, raw_output["diagram_syntax"]))
 
         return ModeloPhaseOutput(
-            feature_id=self._feature_id,
+            feature_id=feature_id,
             diagram_syntax=diagram_syntax,
             validation_result=validation_result,
             generation_metadata=metadata,

@@ -226,11 +226,14 @@ def test_features_mode_build_user_prompt_omits_five_count_on_subsequent_generati
 def test_features_mode_validate_output_accepts_four_field_format() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._existing_titles = ["Caracteristica existente"]  # type: ignore[reportPrivateUsage]
+    context = SuggestFeaturesContext(
+        discovery_document=_a_discovery_document(),
+        existing_feature_titles=["Caracteristica existente"],
+    )
     raw = json.loads(_a_valid_features_json())
 
     # Act
-    result = mode.validate_output(raw)
+    result = mode.validate_output(raw, context=context)
 
     # Assert
     assert result.is_valid is True
@@ -241,11 +244,14 @@ def test_features_mode_validate_output_accepts_four_field_format() -> None:
 def test_features_mode_validate_output_accepts_raw_text_json() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._existing_titles = ["Caracteristica existente"]  # type: ignore[reportPrivateUsage]
+    context = SuggestFeaturesContext(
+        discovery_document=_a_discovery_document(),
+        existing_feature_titles=["Caracteristica existente"],
+    )
     output: dict[str, str] = {"raw_text": _a_valid_features_json()}
 
     # Act
-    result = mode.validate_output(output)
+    result = mode.validate_output(output, context=context)
 
     # Assert
     assert result.is_valid is True
@@ -387,11 +393,14 @@ def test_features_mode_validate_output_rejects_wrong_count_on_first_generation()
 def test_features_mode_validate_output_skips_count_check_on_subsequent_generation() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._existing_titles = ["Feature existente"]  # type: ignore[reportPrivateUsage]
+    context = SuggestFeaturesContext(
+        discovery_document=_a_discovery_document(),
+        existing_feature_titles=["Feature existente"],
+    )
     raw = json.loads(_a_valid_features_json())
 
     # Act
-    result = mode.validate_output(raw)
+    result = mode.validate_output(raw, context=context)
 
     # Assert
     assert result.is_valid is True
@@ -406,13 +415,17 @@ def test_features_mode_validate_output_skips_count_check_on_subsequent_generatio
 def test_features_mode_build_output_returns_features_phase_output() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
+    build_context = FeaturesPhaseContext(
+        discovery_document=_a_discovery_document(),
+        project_id=ProjectId("prj_test"),
+        existing_feature_titles=[],
+    )
     raw = json.loads(_a_valid_features_json())
     metadata = GenerationMetadata(llm_calls=1)
     validation = ValidationResult(is_valid=True)
 
     # Act
-    result = mode.build_output(raw, validation, metadata)
+    result = mode.build_output(raw, validation, metadata, context=build_context)
 
     # Assert
     assert isinstance(result, FeaturesPhaseOutput)
@@ -426,13 +439,17 @@ def test_features_mode_build_output_returns_features_phase_output() -> None:
 def test_features_mode_build_output_generates_feature_id() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
+    build_context = FeaturesPhaseContext(
+        discovery_document=_a_discovery_document(),
+        project_id=ProjectId("prj_test"),
+        existing_feature_titles=[],
+    )
     raw = json.loads(_a_valid_features_json())
     metadata = GenerationMetadata(llm_calls=1)
     validation = ValidationResult(is_valid=True)
 
     # Act
-    result = mode.build_output(raw, validation, metadata)
+    result = mode.build_output(raw, validation, metadata, context=build_context)
 
     # Assert
     assert str(result.features[0].id).startswith("feat_")
@@ -442,13 +459,17 @@ def test_features_mode_build_output_generates_feature_id() -> None:
 def test_features_mode_build_output_assigns_display_id_from_number() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
+    build_context = FeaturesPhaseContext(
+        discovery_document=_a_discovery_document(),
+        project_id=ProjectId("prj_test"),
+        existing_feature_titles=[],
+    )
     raw = json.loads(_a_valid_features_json())
     metadata = GenerationMetadata(llm_calls=1)
     validation = ValidationResult(is_valid=True)
 
     # Act
-    result = mode.build_output(raw, validation, metadata)
+    result = mode.build_output(raw, validation, metadata, context=build_context)
 
     # Assert
     assert result.features[0].display_id == "C01"
