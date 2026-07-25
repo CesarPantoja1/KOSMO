@@ -57,6 +57,8 @@ from kosmo.contracts.pipeline.phase_outputs import (
 )
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
+from kosmo.domain.pipeline.guard_registry import GuardRegistry
+from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
@@ -78,8 +80,6 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
     validate_feature_structure,
     validate_feature_uniqueness,
 )
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
-from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.sdd.validators.activity_diagram_validator import (
     validate_activity_diagram_syntax,
@@ -89,14 +89,14 @@ from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_software_level,
     validate_ears_syntax,
 )
-from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
-from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
 from kosmo.infrastructure.llm.knowledge_tools import (
     build_find_similar_sessions,
     build_get_downstream_artifacts,
     build_get_phase_document,
 )
+from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
+from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
     SqlAlchemyAgentSessionStore,
 )

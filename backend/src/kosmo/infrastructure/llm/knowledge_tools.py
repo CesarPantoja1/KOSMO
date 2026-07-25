@@ -47,7 +47,10 @@ def build_get_phase_document(
         if phase == SpecPhase.DESCUBRIMIENTO:
             doc = await document_repo.get_discovery(pid)
         else:
-            return f"La fase {phase.value} no tiene documento asociado directamente. Usa get_downstream_artifacts para caracteristicas y requisitos."
+            return (
+                f"La fase {phase.value} no tiene documento asociado directamente. "
+                "Usa get_downstream_artifacts para caracteristicas y requisitos."
+            )
 
         if doc is None:
             return f"No se encontro documento para la fase {phase.value}"
@@ -113,7 +116,7 @@ def build_get_downstream_artifacts(
 ) -> tuple[KnowledgeToolDef, KnowledgeToolHandler]:
     tool_def = KnowledgeToolDef(
         name="get_downstream_artifacts",
-        description="Recupera los artefactos relacionados con una caracteristica (features hijas, requisitos asociados)",
+        description=("Recupera artefactos relacionados con una caracteristica (features hijas, requisitos asociados)"),
         parameters={
             "type": "object",
             "properties": {
@@ -127,7 +130,6 @@ def build_get_downstream_artifacts(
     )
 
     async def handler(input_data: dict[str, Any]) -> str:
-        from kosmo.contracts.sdd.ids import FeatureId
 
         feature_id_str = input_data.get("feature_id", "")
         if not feature_id_str:

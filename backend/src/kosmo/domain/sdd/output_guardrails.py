@@ -95,9 +95,7 @@ def sanitize_user_instructions(text: str) -> str:
         return text
 
     if len(text) > _INSTRUCTION_MAX_LENGTH:
-        raise ValueError(
-            f"Las instrucciones no pueden exceder {_INSTRUCTION_MAX_LENGTH} caracteres."
-        )
+        raise ValueError(f"Las instrucciones no pueden exceder {_INSTRUCTION_MAX_LENGTH} caracteres.")
 
     for pattern in _INJECTION_PATTERNS:
         if re.search(pattern, text, re.IGNORECASE):

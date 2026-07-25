@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from typing import TYPE_CHECKING, Any
@@ -21,7 +22,6 @@ from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 
 if TYPE_CHECKING:
     from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
-    from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
 
 
 class KOSMOAgent:
@@ -32,7 +32,7 @@ class KOSMOAgent:
         max_iterations: int = 8,
         skill_registry: SkillRegistry | None = None,
         memory: AgentMemoryPort | None = None,
-        embedding_generator: EmbeddingGenerator | None = None,
+        embedding_generator: Any = None,
         knowledge_tools: KnowledgeToolRegistry | None = None,
     ) -> None:
         self._llm_client = llm_client
@@ -40,7 +40,7 @@ class KOSMOAgent:
         self._max_iterations = max_iterations
         self._skill_registry: SkillRegistry | None = skill_registry
         self._memory = memory
-        self._embedder: EmbeddingGenerator | None = embedding_generator
+        self._embedder: Any = embedding_generator  # EmbeddingGenerator
         self._knowledge_tools: KnowledgeToolRegistry | None = knowledge_tools
 
     async def execute_with_skill(
@@ -168,9 +168,7 @@ class KOSMOAgent:
             delay_s = min(1.0 * (2 ** (iteration - 1)), 30.0)
             await asyncio.sleep(delay_s)
 
-            user_prompt = (
-                base_user_prompt + "\n\n" + mode.build_validation_feedback(last_validation.errors)
-            )
+            user_prompt = base_user_prompt + "\n\n" + mode.build_validation_feedback(last_validation.errors)
 
         total_ms = int((time.monotonic() - start_time) * 1000)
         metadata = GenerationMetadata(
@@ -260,8 +258,7 @@ class KOSMOAgent:
 
         tool_prompt = PromptTemplate(
             system_prompt=(
-                system_prompt
-                + "\n\nIMPORTANTE: Antes de generar, puedes consultar herramientas de conocimiento "
+                system_prompt + "\n\nIMPORTANTE: Antes de generar, puedes consultar herramientas de conocimiento "
                 "para obtener informacion adicional. Responde SOLO con uno de estos formatos:\n\n"
                 '- [TOOL: nombre] {"arg": "valor"}  (para consultar una herramienta)\n'
                 "- [CONTINUE]  (si ya tienes suficiente contexto)\n\n"
@@ -445,9 +442,7 @@ def _parse_tool_call(text: str) -> tuple[str | None, dict[str, Any]]:
     if brace_start != -1:
         brace_end = text.find("}", brace_start)
         if brace_end != -1:
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 args = json.loads(text[brace_start : brace_end + 1])
-            except (json.JSONDecodeError, TypeError):
-                pass
 
     return tool_name, args

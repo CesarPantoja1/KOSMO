@@ -10,7 +10,7 @@ from typing import Any
 class KnowledgeToolDef:
     name: str
     description: str
-    parameters: dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)  # type: ignore[reportUnknownVariableType]
 
 
 KnowledgeToolHandler = Callable[[dict[str, Any]], Awaitable[str]]
