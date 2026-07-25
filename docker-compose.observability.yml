@@ -56,6 +56,7 @@ services:
   tempo:
     image: grafana/tempo:2.7.0
     container_name: kosmo-tempo
+    user: root
     restart: unless-stopped
     command: -config.file=/etc/tempo/tempo-config.yml
     volumes:
