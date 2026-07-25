@@ -100,8 +100,11 @@ def instrument_app(
     logfire.instrument_sqlalchemy(engine=db_engine)
     logfire.instrument_redis(capture_statement=False)
 
-    from prometheus_fastapi_instrumentator import (  # pyright: ignore[reportMissingImports]
-        Instrumentator,  # pyright: ignore[reportUnknownVariableType]
-    )
+    try:
+        from prometheus_fastapi_instrumentator import (  # pyright: ignore[reportMissingImports]
+            Instrumentator,  # pyright: ignore[reportUnknownVariableType]
+        )
 
-    Instrumentator().instrument(app).expose(app)  # pyright: ignore[reportUnknownMemberType]
+        Instrumentator().instrument(app).expose(app)  # pyright: ignore[reportUnknownMemberType]
+    except ImportError:
+        pass

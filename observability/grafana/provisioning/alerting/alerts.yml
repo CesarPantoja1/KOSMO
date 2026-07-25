@@ -12,6 +12,9 @@ groups:
         data:
           - refId: A
             datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
             model:
               expr: sum(rate(http_requests_total{status=~"5.."}[5m])) > 0.1
               intervalMs: 1000
@@ -28,6 +31,9 @@ groups:
         data:
           - refId: A
             datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
             model:
               expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 80
               intervalMs: 1000
