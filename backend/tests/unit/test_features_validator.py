@@ -297,39 +297,24 @@ def test_validate_feature_structure_fails_when_number_is_not_int() -> None:
 
 
 @pytest.mark.unit
-def test_validate_feature_structure_fails_when_title_too_short() -> None:
+@pytest.mark.parametrize(
+    "field,value,error_keyword",
+    [
+        ("title", "ab", "título"),
+        ("description", "Corto", "descripción"),
+        ("origin", "Corto", "origen"),
+    ],
+)
+def test_validate_feature_structure_fails_when_field_too_short(field: str, value: str, error_keyword: str) -> None:
     # Arrange
-    feat = _a_valid_feature(title="ab")
+    feat = _a_valid_feature(**{field: value})
 
     # Act
     result = validate_feature_structure([feat])
 
     # Assert
     assert result.is_valid is False
-
-
-@pytest.mark.unit
-def test_validate_feature_structure_fails_when_description_too_short() -> None:
-    # Arrange
-    feat = _a_valid_feature(description="Corto")
-
-    # Act
-    result = validate_feature_structure([feat])
-
-    # Assert
-    assert result.is_valid is False
-
-
-@pytest.mark.unit
-def test_validate_feature_structure_fails_when_origin_too_short() -> None:
-    # Arrange
-    feat = _a_valid_feature(origin="Corto")
-
-    # Act
-    result = validate_feature_structure([feat])
-
-    # Assert
-    assert result.is_valid is False
+    assert any(error_keyword in e for e in result.errors)
 
 
 # ------------------------------------------------------------------
