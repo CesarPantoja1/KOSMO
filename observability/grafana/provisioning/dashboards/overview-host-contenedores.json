@@ -38,8 +38,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "container_memory_working_set_bytes{name=~\".+\"} / 1024 / 1024 or container_memory_working_set_bytes{id=~\".+docker.+\"} / 1024 / 1024",
-          "legendFormat": "{{name}}{{container_name}}{{id}}"
+          "expr": "container_memory_working_set_bytes{name=~\".+\"} / 1024 / 1024",
+          "legendFormat": "{{name}}"
         }
       ]
     }
