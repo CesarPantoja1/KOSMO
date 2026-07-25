@@ -38,7 +38,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "label_replace(label_replace(container_memory_working_set_bytes{id=~\".*docker.*\"} / 1024 / 1024, \"nombre\", \"$1\", \"id\", \".*/system.slice:(.*)\"), \"nombre\", \"Contenedor Docker ($1)\", \"nombre\", \"system.slice:docker:(.*)\")",
+          "expr": "process_resident_memory_bytes{job=\"kosmo-backend\"} / 1024 / 1024",
+          "legendFormat": "kosmo-backend (App)"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "label_replace(label_replace(container_memory_working_set_bytes{id=~\".*docker.*\"} / 1024 / 1024, \"nombre\", \"$1\", \"id\", \".*/system.slice:(.*)\"), \"nombre\", \"Docker Container ($1)\", \"nombre\", \"system.slice:docker:(.*)\")",
           "legendFormat": "{{nombre}}"
         }
       ]
