@@ -16,7 +16,7 @@ class PydanticAILLMClient:
         self,
         prompt: PromptTemplate,
         temperature: float = 0.3,
-        max_tokens: int = 4096,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> LLMResponse:
         agent = Agent(model=self._model, system_prompt=prompt.system_prompt)  # type: ignore[reportCallIssue]
 
