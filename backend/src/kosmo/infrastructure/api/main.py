@@ -26,7 +26,7 @@ from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirements import router as requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
-from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
+from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
 
 # Metadatos OpenAPI
 
@@ -263,6 +263,8 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
     lifespan=lifespan,
 )
+
+instrument_prometheus(app)
 
 app.add_middleware(
     CORSMiddleware,
