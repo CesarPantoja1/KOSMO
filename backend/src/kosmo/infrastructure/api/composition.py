@@ -78,7 +78,6 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
     validate_feature_structure,
     validate_feature_uniqueness,
 )
-from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.domain.sdd.validators.activity_diagram_validator import (
@@ -253,7 +252,6 @@ class PipelineComponents:
     context_builder: ContextBuilder
     agent: AgentPort
     refine_agent: AgentPort
-    orchestrator: SequentialOrchestrator
     tool_registry: ToolRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
@@ -391,14 +389,13 @@ def build_pipeline_components(
     )
 
     # 10. Instanciar el orquestador secuencial
-    orchestrator = SequentialOrchestrator()
+    # ponytail: eliminado, ningún use case lo invocaba. Las transiciones las gobierna el frontend.
 
     return PipelineComponents(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
         refine_agent=refine_agent,
-        orchestrator=orchestrator,
         tool_registry=tool_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
