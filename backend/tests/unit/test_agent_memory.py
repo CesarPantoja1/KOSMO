@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from kosmo.contracts.agent_memory import AgentSessionSummary
+from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 from kosmo.infrastructure.persistence.memory.in_memory_store import (
@@ -188,14 +189,98 @@ class TestInMemoryStoreProjectContext:
 
     @pytest.mark.asyncio
     @pytest.mark.unit
-    async def test_get_project_context_empty_project(self) -> None:
+    async def test_get_project_context_populates_common_validation_errors(self) -> None:
         # Arrange
         store = InMemoryAgentSessionStore()
+        project_id = a_project_id()
+        s1 = a_session(
+            project_id=project_id, is_completed=False,
+            validation_error_messages=["error A", "error B"],
+        )
+        s2 = a_session(
+            project_id=project_id, is_completed=False,
+            validation_error_messages=["error A", "error C"],
+        )
+        s3 = a_session(
+            project_id=project_id, is_completed=False,
+            validation_error_messages=["error A"],
+        )
+        await store.save_session(s1)
+        await store.save_session(s2)
+        await store.save_session(s3)
 
         # Act
-        context = await store.get_project_context(ProjectId("prj_empty"))
+        context = await store.get_project_context(project_id)
 
         # Assert
-        assert context.project_id == ProjectId("prj_empty")
-        assert context.total_sessions == 0
-        assert context.latest_sessions == {}
+        assert "error A (x3)" in context.common_validation_errors
+        assert "error B (x1)" in context.common_validation_errors
+        assert "error C (x1)" in context.common_validation_errors
+        assert len(context.common_validation_errors) == 3
+
+    @pytest.mark.asyncio
+    @pytest.mark.unit
+    async def test_get_project_context_skips_completed_sessions_for_errors(self) -> None:
+        # Arrange
+        store = InMemoryAgentSessionStore()
+        project_id = a_project_id()
+        s1 = a_session(
+            project_id=project_id, is_completed=True,
+            validation_error_messages=["error ignorado"],
+        )
+        await store.save_session(s1)
+
+        # Act
+        context = await store.get_project_context(project_id)
+
+        # Assert
+        assert context.common_validation_errors == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_agent_session_stores_validation_error_messages() -> None:
+    # Arrange
+    from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
+    from kosmo.contracts.pipeline.orchestrator_ports import Skill
+    from kosmo.domain.pipeline.guard_registry import GuardRegistry
+    from kosmo.domain.pipeline.skill_registry import SkillRegistry
+    from tests.factories import a_project_id
+    from tests.unit.conftest import (
+        StubStructuredLLMClient,
+        make_discovery_document,
+        make_discovery_mode,
+    )
+
+    invalid_doc = make_discovery_document("## Test\n\nAPI REST")
+    llm = StubStructuredLLMClient(responses=[invalid_doc, invalid_doc])
+    store = InMemoryAgentSessionStore()
+    agent = KOSMOAgent(
+        llm_client=llm,  # type: ignore[reportArgumentType]
+        guard_registry=GuardRegistry(),
+        max_iterations=2,
+        skill_registry=SkillRegistry(),
+        memory=store,  # type: ignore[reportArgumentType]
+    )
+    agent._skill_registry.register(  # type: ignore[reportOptionalMemberAccess]
+        Skill(
+            name="discovery_generate", description="Test", phase=SpecPhase.DESCUBRIMIENTO,
+            mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    project_id = a_project_id()
+
+    # Act
+    await agent.execute_with_skill(
+        skill_name="discovery_generate",
+        context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
+        project_id=project_id,
+    )
+
+    # Assert
+    sessions = await store.list_sessions(project_id)
+    assert len(sessions) == 1
+    saved = await store.load_session(sessions[0].session_id)
+    assert saved is not None
+    assert saved.is_completed is False
+    assert len(saved.validation_error_messages) > 0

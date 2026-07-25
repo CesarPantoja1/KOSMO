@@ -261,6 +261,7 @@ class KOSMOAgent:
             output_json=output_json,
             validation_is_valid=validation.is_valid,
             validation_errors=len(validation.errors),
+            validation_error_messages=validation.errors[:10],
             total_llm_calls=current_iteration,
             user_instructions=user_instructions,
             embedding=embedding,

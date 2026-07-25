@@ -32,6 +32,7 @@ def create_session(
     user_instructions: str | None = None,
     embedding: list[float] | None = None,
     reflection: str | None = None,
+    validation_error_messages: list[str] | None = None,
 ) -> AgentSession:
     now = datetime.now(UTC)
     return AgentSession(
@@ -53,6 +54,7 @@ def create_session(
         user_instructions=user_instructions,
         embedding=embedding,
         reflection=reflection,
+        validation_error_messages=validation_error_messages or [],
         created_at=now,
         updated_at=now,
     )

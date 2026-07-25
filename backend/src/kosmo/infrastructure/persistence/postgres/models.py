@@ -125,6 +125,9 @@ class AgentSessionModel(Base):
     output_json: Mapped[str | None] = mapped_column(pg.JSONB(), nullable=True)
     validation_is_valid: Mapped[bool] = mapped_column(default=False, nullable=False)
     validation_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_error_messages: Mapped[list[Any]] = mapped_column(
+        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
+    )
     total_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     user_instructions: Mapped[str | None] = mapped_column(Text(), nullable=True)

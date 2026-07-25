@@ -44,6 +44,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             model.output_json = _safe_json_dump(session.output_json)
             model.validation_is_valid = session.validation_is_valid
             model.validation_errors = session.validation_errors
+            model.validation_error_messages = list(session.validation_error_messages)
             model.total_llm_calls = session.total_llm_calls
             model.user_instructions = session.user_instructions
             model.embedding = list(session.embedding) if session.embedding else None
@@ -104,6 +105,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
                 latest[key] = s
 
         reflections: list[str] = []
+        error_counter: dict[str, int] = {}
         async with self._session_factory() as db:
             stmt = (
                 select(AgentSessionModel.reflection)
@@ -117,10 +119,27 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
                 if row[0]:
                     reflections.append(str(row[0]))
 
+            errors_stmt = (
+                select(AgentSessionModel.validation_error_messages)
+                .where(AgentSessionModel.project_id == str(project_id))
+                .where(AgentSessionModel.is_completed == False)  # noqa: E712
+                .where(AgentSessionModel.validation_error_messages.isnot(None))
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(20)
+            )
+            errors_result = await db.execute(errors_stmt)
+            for (msgs,) in errors_result.fetchall():
+                for msg in (msgs or []):  # type: ignore[reportUnknownVariableType]
+                    error_counter[str(msg)] = error_counter.get(str(msg), 0) + 1  # type: ignore[reportUnknownArgumentType]
+
+        common_errors = [f"{msg} (x{count})" for msg, count in
+            sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
+
         return ProjectMemoryContext(
             project_id=project_id,
             latest_sessions=latest,
             total_sessions=len(summaries),
+            common_validation_errors=common_errors,
             recent_reflections=reflections,
         )
 
@@ -191,6 +210,7 @@ def _model_to_session(model: AgentSessionModel) -> AgentSession:
         output_json=_safe_json_dump(model.output_json),
         validation_is_valid=model.validation_is_valid,
         validation_errors=model.validation_errors,
+        validation_error_messages=[str(m) for m in (model.validation_error_messages or [])],
         total_llm_calls=model.total_llm_calls,
         user_instructions=model.user_instructions,
         embedding=list(model.embedding) if model.embedding else None,

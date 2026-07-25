@@ -62,6 +62,14 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
                 latest[key] = s
 
         reflections: list[str] = []
+        error_counter: dict[str, int] = {}
+        failed_sessions = [s for s in self._store.values() if s.project_id == project_id
+            and not s.is_completed and s.validation_error_messages]
+        failed_sessions.sort(key=lambda s: s.created_at, reverse=True)
+        for s in failed_sessions[:20]:
+            for msg in s.validation_error_messages:
+                error_counter[msg] = error_counter.get(msg, 0) + 1
+
         for session in self._store.values():
             if session.project_id != project_id:
                 continue
@@ -76,10 +84,14 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         )
         reflections = reflections[:5]
 
+        common_errors = [f"{msg} (x{count})" for msg, count in
+            sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
+
         return ProjectMemoryContext(
             project_id=project_id,
             latest_sessions=latest,
             total_sessions=len(summaries),
+            common_validation_errors=common_errors,
             recent_reflections=reflections,
         )
 

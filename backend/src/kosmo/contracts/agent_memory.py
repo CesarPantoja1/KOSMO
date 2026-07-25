@@ -19,6 +19,7 @@ class AgentSession:
     conversation: list[str] = field(default_factory=list[str])
     reasoning_log: list[str] = field(default_factory=list[str])
     tool_results: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    validation_error_messages: list[str] = field(default_factory=list[str])
 
     current_iteration: int = 0
     max_iterations: int = 8
