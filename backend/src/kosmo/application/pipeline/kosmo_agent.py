@@ -146,6 +146,21 @@ class KOSMOAgent:
             retry_count=llm_calls - 1 if llm_calls > 0 else 0,
             generation_time_ms=total_ms,
         )
+
+        if self._memory is not None and project_id is not None:
+            await self._save_completed_session(
+                project_id=project_id,
+                phase=mode.phase_name,
+                session_type="refinement" if user_instructions else "generation",
+                skill_name=skill_name,
+                current_iteration=llm_calls,
+                output=last_output,
+                validation=last_validation,
+                user_instructions=user_instructions,
+                conversation=conversation,
+                is_completed=False,
+            )
+
         return mode.build_output(last_output, last_validation, metadata)
 
     async def _save_completed_session(
@@ -160,6 +175,7 @@ class KOSMOAgent:
         validation: ValidationResult,
         user_instructions: str | None,
         conversation: list[str] | None = None,
+        is_completed: bool = True,
     ) -> None:
         if self._memory is None:
             return
@@ -176,7 +192,7 @@ class KOSMOAgent:
             reasoning_log=[],
             tool_results=[],
             current_iteration=current_iteration,
-            is_completed=True,
+            is_completed=is_completed,
             output_json=output_json,
             validation_is_valid=validation.is_valid,
             validation_errors=len(validation.errors),
