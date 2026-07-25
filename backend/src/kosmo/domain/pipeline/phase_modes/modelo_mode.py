@@ -93,7 +93,7 @@ class ModeloMode:
 
     @property
     def max_tokens(self) -> int:
-        return 4096
+        return 8192
 
     @property
     def output_type(self) -> type[BaseModel]:
