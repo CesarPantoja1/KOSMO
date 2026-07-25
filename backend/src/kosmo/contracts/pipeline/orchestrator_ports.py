@@ -90,6 +90,9 @@ class PhaseMode(Protocol):
     @property
     def max_tokens(self) -> int: ...
 
+    @property
+    def output_type(self) -> type[Any]: ...
+
     def build_user_prompt(
         self,
         context: DiscoveryPhaseContext

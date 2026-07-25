@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -90,7 +92,13 @@ class ModeloMode:
 
     @property
     def max_tokens(self) -> int:
-        return 8192
+        return 4096
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import DiagramSpec
+
+        return DiagramSpec
 
     @property
     def system_prompt(self) -> str:

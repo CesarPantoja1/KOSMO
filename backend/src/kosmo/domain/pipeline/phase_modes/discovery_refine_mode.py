@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -47,6 +49,12 @@ class DiscoveryRefineMode:
     @property
     def max_tokens(self) -> int:
         return 8192
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
+
+        return DiscoveryDocument
 
     @property
     def system_prompt(self) -> str:

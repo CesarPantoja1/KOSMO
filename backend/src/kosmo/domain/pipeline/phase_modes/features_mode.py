@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import (
@@ -107,6 +109,12 @@ class FeaturesMode:
     @property
     def max_tokens(self) -> int:
         return 4096
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import FeatureSet
+
+        return FeatureSet
 
     @property
     def system_prompt(self) -> str:
