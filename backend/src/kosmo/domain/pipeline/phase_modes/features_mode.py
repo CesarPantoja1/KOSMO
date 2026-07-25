@@ -25,7 +25,7 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 FIRST_GENERATION_COUNT = 5
 
 _FEATURES_SYSTEM_PROMPT = (
-    "Eres un diseñador de producto experto. Aplicas ReAct internamente.\n"
+    "Eres un diseñador de producto experto.\n"
     "Las Características operan a nivel de usuario: cada característica expresa "
     "lo que el usuario desea lograr, no lo que el software hace. En este nivel "
     "no existe todavía un sistema ni una aplicación.\n\n"

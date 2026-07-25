@@ -18,7 +18,7 @@ from kosmo.domain.pipeline.phase_validators.discovery_validator import (
 )
 
 _DISCOVERY_SYSTEM_PROMPT = (
-    "Eres un analista de negocio sénior. Aplicas ReAct internamente.\n"
+    "Eres un analista de negocio sénior.\n"
     "El Descubrimiento opera EXCLUSIVAMENTE a nivel de negocio: captura y valida "
     "el entendimiento del dominio del problema y la oportunidad que el producto "
     "aborda, sin referencia alguna a tecnología, componentes de software ni a "

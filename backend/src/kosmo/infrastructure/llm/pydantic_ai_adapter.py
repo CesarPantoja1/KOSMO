@@ -2,10 +2,58 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
 from pydantic_ai.agent import Agent
 from pydantic_ai.settings import ModelSettings
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
+
+
+def _extract_json(text: str) -> str | None:
+    """Extrae el primer objeto o array JSON del texto, tolerando markdown y texto circundante."""
+    # Quitar fences markdown (```json ... ``` o ``` ... ```)
+    if "```json" in text:
+        text = text.split("```json", 1)[1]
+        if "```" in text:
+            text = text.split("```", 1)[0]
+    elif text.count("```") >= 2:
+        parts = text.split("```")
+        text = parts[1]
+
+    # Buscar el primer { o [
+    for start_char in ("{", "["):
+        idx = text.find(start_char)
+        if idx != -1:
+            return _extract_balanced(text, idx, start_char)
+
+    return None
+
+
+def _extract_balanced(text: str, start: int, open_char: str) -> str | None:
+    close_char = "}" if open_char == "{" else "]"
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == open_char:
+            depth += 1
+        elif ch == close_char:
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
 
 
 class PydanticAILLMClient:
@@ -51,12 +99,32 @@ class PydanticAILLMClient:
         temperature: float = 0.1,
         max_tokens: int = 4096,
     ) -> T:
-        agent = Agent(model=self._model, system_prompt=prompt.system_prompt, output_type=output_type)  # type: ignore[reportCallIssue]
-        result = await agent.run(
-            prompt.user_prompt,
-            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
-        )
-        return result.data  # type: ignore[reportReturnType]
+        response = await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+        text = response.text.strip()
+
+        # Intentar extraer JSON incluso si hay texto circundante o markdown
+        json_text = _extract_json(text)
+        if json_text:
+            try:
+                return output_type.model_validate_json(json_text)  # type: ignore[reportReturnType]
+            except Exception:
+                pass
+
+        # Si el texto completo es JSON valido
+        if text.startswith("{") or text.startswith("["):
+            try:
+                return output_type.model_validate_json(text)  # type: ignore[reportReturnType]
+            except Exception:
+                pass
+
+        # Fallback para modelos de un solo campo (DiscoveryDocument, RequirementsDocument, DiagramSpec)
+        if issubclass(output_type, BaseModel):
+            field_names = list(output_type.model_fields.keys())
+            if len(field_names) == 1:
+                return output_type.model_validate({field_names[0]: text})  # type: ignore[reportReturnType]
+
+        msg = f"No se pudo convertir la respuesta del LLM a {output_type.__name__}"
+        raise ValueError(msg)
 
     async def complete_json(
         self,
