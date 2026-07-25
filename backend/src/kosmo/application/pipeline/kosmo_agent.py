@@ -15,8 +15,8 @@ from kosmo.contracts.pipeline.phase_outputs import (
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.domain.agent_memory.session_factory import create_session
+from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
-from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 
 if TYPE_CHECKING:
@@ -27,14 +27,14 @@ class KOSMOAgent:
     def __init__(
         self,
         llm_client: LLMClient,
-        registry: ToolRegistry,
+        guard_registry: GuardRegistry,
         max_iterations: int = 8,
         skill_registry: SkillRegistry | None = None,
         memory: AgentMemoryPort | None = None,
         embedding_generator: EmbeddingGenerator | None = None,
     ) -> None:
         self._llm_client = llm_client
-        self._registry = registry
+        self._guard_registry = guard_registry
         self._max_iterations = max_iterations
         self._skill_registry: SkillRegistry | None = skill_registry
         self._memory = memory

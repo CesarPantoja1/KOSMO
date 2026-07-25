@@ -78,8 +78,8 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
     validate_feature_structure,
     validate_feature_uniqueness,
 )
+from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
-from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.domain.sdd.validators.activity_diagram_validator import (
     validate_activity_diagram_syntax,
 )
@@ -252,7 +252,7 @@ class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
     agent: AgentPort
-    tool_registry: ToolRegistry
+    guard_registry: GuardRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
 
@@ -299,41 +299,41 @@ def build_pipeline_components(
         project_repo=project_repo,
     )
 
-    # 4. Configurar el registro de herramientas con los validadores existentes
-    tool_registry = ToolRegistry()
-    tool_registry.register(
+    # 4. Configurar el registro de guardrails con los validadores existentes
+    guard_registry = GuardRegistry()
+    guard_registry.register(
         "validate_discovery_structure",
         lambda inp: _adapt_validation_result(validate_discovery_structure(_markdown_input(inp))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_discovery_quality",
         lambda inp: _adapt_validation_result(validate_discovery_quality(_markdown_input(inp))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_business_level",
         lambda inp: _adapt_validation_result(validate_business_level(_markdown_input(inp))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_feature_structure",
         lambda inp: _adapt_validation_result(_validate_features_input(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_feature_uniqueness",
         lambda inp: _adapt_validation_result(validate_feature_uniqueness(_extract_array(inp, "features"))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_ears_syntax",
         lambda inp: _adapt_validation_result(_validate_ears_syntax_raw(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_ears_quality",
         lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_ears_software_level",
         lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_activity_diagram_syntax",
         lambda inp: _adapt_validation_result(validate_activity_diagram_syntax(str(inp.get("diagram", "")))),
     )
@@ -402,7 +402,7 @@ def build_pipeline_components(
 
     agent = KOSMOAgent(
         llm_client=llm_client,
-        registry=tool_registry,
+        guard_registry=guard_registry,
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
         embedding_generator=embedding_generator,
@@ -412,7 +412,7 @@ def build_pipeline_components(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
-        tool_registry=tool_registry,
+        guard_registry=guard_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
     )

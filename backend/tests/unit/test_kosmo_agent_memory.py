@@ -8,8 +8,8 @@ from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
-from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.infrastructure.persistence.memory.in_memory_store import (
     InMemoryAgentSessionStore,
 )
@@ -23,7 +23,7 @@ from tests.unit.conftest import (
 
 
 def _make_agent(llm, max_iterations=3, memory=None):
-    registry = ToolRegistry()
+    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -35,7 +35,7 @@ def _make_agent(llm, max_iterations=3, memory=None):
     )
     return KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
+        guard_registry=guard_registry,
         max_iterations=max_iterations,
         skill_registry=skill_reg,
         memory=memory,  # type: ignore[reportArgumentType]

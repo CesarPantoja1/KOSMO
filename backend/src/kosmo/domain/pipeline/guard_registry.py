@@ -36,8 +36,8 @@ def _matches_type(value: Any, expected_type: str) -> bool:
     return True
 
 
-class ToolRegistry:
-    """Registro de herramientas del agente que mapea nombres a callables.
+class GuardRegistry:
+    """Registro de guardrails del agente que mapea nombres a callables.
 
     Soporta registro simple (solo callable) y registro con definicion
     que habilita validacion de parametros contra un JSON schema.
