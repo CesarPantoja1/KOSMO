@@ -6,7 +6,6 @@ from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import ModeloPhaseOutput
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
@@ -67,8 +66,8 @@ class GenerateActivityDiagramUseCase:
         )
 
         try:
-            phase_output = await self._agent.execute(
-                phase=SpecPhase.MODELO,
+            phase_output = await self._agent.execute_with_skill(
+                skill_name="modelo_generate",
                 context=context,
             )
         except Exception as exc:

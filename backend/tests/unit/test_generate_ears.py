@@ -106,7 +106,7 @@ class MockAgent:
     def __init__(self, output: Any) -> None:
         self._output = output
 
-    async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+    async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> Any:  # noqa: ARG002
         return self._output
 
 
@@ -346,7 +346,7 @@ async def test_generate_ears_raises_when_llm_fails() -> None:
     await feat_repo.save_many([feature])
 
     class FailingAgent:
-        async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+        async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> Any:  # noqa: ARG002
             raise RuntimeError("LLM service unavailable")
 
     agent = FailingAgent()

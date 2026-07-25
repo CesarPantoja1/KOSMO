@@ -73,8 +73,8 @@ class GenerateDiscoveryUseCase:
         )
 
         try:
-            phase_output = await self._agent.execute(
-                phase=SpecPhase.DESCUBRIMIENTO,
+            phase_output = await self._agent.execute_with_skill(
+                skill_name="discovery_generate",
                 context=context,
             )
         except Exception as exc:

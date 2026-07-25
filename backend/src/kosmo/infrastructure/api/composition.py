@@ -251,7 +251,6 @@ class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
     agent: AgentPort
-    refine_agent: AgentPort
     tool_registry: ToolRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
@@ -299,15 +298,7 @@ def build_pipeline_components(
         project_repo=project_repo,
     )
 
-    # 4. Configurar modos de fase
-    modes = {
-        SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
-        SpecPhase.CARACTERISTICAS: FeaturesMode(),
-        SpecPhase.REQUISITOS: EARSMode(),
-        SpecPhase.MODELO: ModeloMode(),
-    }
-
-    # 5. Configurar el registro de herramientas con los validadores existentes
+    # 4. Configurar el registro de herramientas con los validadores existentes
     tool_registry = ToolRegistry()
     tool_registry.register(
         "validate_discovery_structure",
@@ -349,15 +340,7 @@ def build_pipeline_components(
     # 6. Instanciar el repositorio de memoria del agente
     agent_memory = SqlAlchemyAgentSessionStore(session_factory)
 
-    # 7. Instanciar el agente KOSMO con el registro de herramientas y memoria
-    agent = KOSMOAgent(
-        llm_client=llm_client,
-        registry=tool_registry,
-        modes=modes,  # type: ignore[reportArgumentType]
-        memory=agent_memory,  # type: ignore[reportArgumentType]
-    )
-
-    # 8. Instanciar el SkillRegistry y registrar los skills
+    # 7. Instanciar el SkillRegistry y registrar todos los skills
     skill_registry = SkillRegistry()
     skill_registry.register(
         Skill(
@@ -375,27 +358,51 @@ def build_pipeline_components(
             mode=DiscoveryRefineMode(),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="features_generate",
+            description="Genera caracteristicas a partir del descubrimiento",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=FeaturesMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="ears_generate",
+            description="Genera requisitos EARS para una caracteristica",
+            phase=SpecPhase.REQUISITOS,
+            mode=EARSMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="requirements_refine",
+            description="Refina requisitos EARS existentes",
+            phase=SpecPhase.REQUISITOS,
+            mode=RequirementsRefineMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="modelo_generate",
+            description="Genera diagrama de actividad UML desde requisitos EARS",
+            phase=SpecPhase.MODELO,
+            mode=ModeloMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
-    # 9. Instanciar el agente de refinamiento con DiscoveryRefineMode y memoria
-    refine_agent = KOSMOAgent(
+    # 8. Instanciar el agente unico con el SkillRegistry y memoria
+    agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
-        modes={
-            SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode(),
-            SpecPhase.REQUISITOS: RequirementsRefineMode(),
-        },  # type: ignore[reportArgumentType]
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
     )
-
-    # 10. Instanciar el orquestador secuencial
-    # ponytail: eliminado, ningún use case lo invocaba. Las transiciones las gobierna el frontend.
 
     return PipelineComponents(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
-        refine_agent=refine_agent,
         tool_registry=tool_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
@@ -429,7 +436,7 @@ def build_discovery_components(
             project_repo=project_repo,
             document_repo=document_repo,
             context_builder=pipeline.context_builder,
-            agent=pipeline.refine_agent,
+            agent=pipeline.agent,
         ),
     )
 
@@ -512,7 +519,7 @@ def build_requirements_components(
             project_repo=project_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
-            agent=pipeline.refine_agent,
+            agent=pipeline.agent,
         ),
     )
 

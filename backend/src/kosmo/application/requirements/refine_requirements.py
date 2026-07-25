@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import EARSPhaseOutput
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
@@ -79,8 +78,8 @@ class RefineRequirementsUseCase:
         )
 
         try:
-            phase_output = await self._agent.execute(
-                phase=SpecPhase.REQUISITOS,
+            phase_output = await self._agent.execute_with_skill(
+                skill_name="requirements_refine",
                 context=context,
             )
         except Exception as exc:

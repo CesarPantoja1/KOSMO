@@ -122,4 +122,11 @@ class PhaseMode(Protocol):
 
 
 class AgentPort(Protocol):
-    async def execute(self, phase: SpecPhase, context: Any) -> Any: ...
+    async def execute_with_skill(
+        self,
+        skill_name: str,
+        context: Any,
+        *,
+        project_id: Any | None = None,
+        user_instructions: str | None = None,
+    ) -> Any: ...

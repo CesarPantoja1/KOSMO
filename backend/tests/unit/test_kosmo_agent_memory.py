@@ -8,10 +8,12 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
+from kosmo.contracts.pipeline.orchestrator_ports import Skill
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.infrastructure.persistence.memory.in_memory_store import (
     InMemoryAgentSessionStore,
@@ -25,25 +27,38 @@ from tests.unit.conftest import (
 )
 
 
+def _make_agent(llm, max_iterations=3, memory=None):
+    registry = ToolRegistry()
+    skill_reg = SkillRegistry()
+    skill_reg.register(
+        Skill(
+            name="discovery_generate",
+            description="Test skill",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    return KOSMOAgent(
+        llm_client=llm,  # type: ignore[reportArgumentType]
+        registry=registry,
+        max_iterations=max_iterations,
+        skill_registry=skill_reg,
+        memory=memory,  # type: ignore[reportArgumentType]
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_agent_saves_session_on_successful_completion() -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
-    registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-        memory=store,  # type: ignore[reportArgumentType]
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, memory=store)
     project_id = a_project_id()
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
         project_id=project_id,
     )
@@ -65,27 +80,20 @@ async def test_agent_saves_session_on_successful_completion() -> None:
 async def test_agent_injects_context_from_previous_sessions() -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID), make_discovery_document(DISCOVERY_VALID)])
-    registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-        memory=store,  # type: ignore[reportArgumentType]
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, memory=store)
     project_id = a_project_id()
 
     # First execution to create a previous session
-    await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
         project_id=project_id,
     )
 
     # Act - second execution should have context from first
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
         project_id=project_id,
     )
@@ -101,17 +109,11 @@ async def test_agent_injects_context_from_previous_sessions() -> None:
 async def test_agent_without_memory_works_normally() -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
-    registry = ToolRegistry()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm)
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
     )
 
@@ -126,19 +128,12 @@ async def test_agent_without_memory_works_normally() -> None:
 async def test_agent_with_memory_but_no_project_id_does_not_save() -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
-    registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-        memory=store,  # type: ignore[reportArgumentType]
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, memory=store)
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
     )
 
@@ -164,20 +159,13 @@ async def test_agent_saves_correct_session_type(
 ) -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
-    registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-        memory=store,  # type: ignore[reportArgumentType]
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, memory=store)
     project_id = a_project_id()
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
         project_id=project_id,
         user_instructions=user_instructions,
@@ -211,24 +199,17 @@ async def test_sessions_are_isolated_between_projects(
             make_discovery_document(DISCOVERY_VALID),
         ]
     )
-    registry = ToolRegistry()
     store = InMemoryAgentSessionStore()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-        memory=store,  # type: ignore[reportArgumentType]
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, memory=store)
 
     # Act
-    await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="A", project_description="A"),
         project_id=project_a,
     )
-    await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="B", project_description="B"),
         project_id=project_b,
     )

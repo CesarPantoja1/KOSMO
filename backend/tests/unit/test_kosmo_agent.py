@@ -6,11 +6,13 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
+from kosmo.contracts.pipeline.orchestrator_ports import Skill
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     DiscoveryPhaseOutput,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from tests.unit.conftest import (
     DISCOVERY_VALID,
@@ -20,22 +22,36 @@ from tests.unit.conftest import (
 )
 
 
+def _make_agent(llm, max_iterations=3, memory=None):
+    registry = ToolRegistry()
+    skill_reg = SkillRegistry()
+    skill_reg.register(
+        Skill(
+            name="discovery_generate",
+            description="Test skill",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    return KOSMOAgent(
+        llm_client=llm,  # type: ignore[reportArgumentType]
+        registry=registry,
+        max_iterations=max_iterations,
+        skill_registry=skill_reg,
+        memory=memory,  # type: ignore[reportArgumentType]
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_kosmo_agent_execute_single_step_success() -> None:
     # Arrange
     llm = StubStructuredLLMClient(responses=[make_discovery_document(DISCOVERY_VALID)])
-    registry = ToolRegistry()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm)
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
     )
 
@@ -54,17 +70,11 @@ async def test_kosmo_agent_execute_retries_on_validation_failure() -> None:
     invalid_doc = make_discovery_document("## Vision del producto\n\nAPI REST")
     valid_doc = make_discovery_document(DISCOVERY_VALID)
     llm = StubStructuredLLMClient(responses=[invalid_doc, valid_doc])
-    registry = ToolRegistry()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=3,
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm)
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
     )
 
@@ -80,17 +90,11 @@ async def test_kosmo_agent_execute_stops_at_max_iterations() -> None:
     # Arrange
     always_invalid = make_discovery_document("## Test\n\nContenido insuficiente")
     llm = StubStructuredLLMClient(responses=[always_invalid, always_invalid, always_invalid])
-    registry = ToolRegistry()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=2,
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, max_iterations=2)
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
     )
 
@@ -101,7 +105,22 @@ async def test_kosmo_agent_execute_stops_at_max_iterations() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_kosmo_agent_raises_when_mode_missing() -> None:
+async def test_kosmo_agent_raises_when_skill_not_found() -> None:
+    # Arrange
+    llm = StubStructuredLLMClient()
+    agent = _make_agent(llm)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="Skill "):
+        await agent.execute_with_skill(
+            skill_name="nonexistent_skill",
+            context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_kosmo_agent_raises_when_no_skill_registry() -> None:
     # Arrange
     llm = StubStructuredLLMClient()
     registry = ToolRegistry()
@@ -111,9 +130,9 @@ async def test_kosmo_agent_raises_when_mode_missing() -> None:
     )
 
     # Act & Assert
-    with pytest.raises(ValueError, match="No hay modo"):
-        await agent.execute(
-            phase=SpecPhase.DESCUBRIMIENTO,
+    with pytest.raises(ValueError, match="SkillRegistry"):
+        await agent.execute_with_skill(
+            skill_name="discovery_generate",
             context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
         )
 
@@ -136,17 +155,11 @@ async def test_kosmo_agent_raises_when_llm_fails() -> None:
             raise RuntimeError(msg)
 
     llm = FailingLLMClient()
-    registry = ToolRegistry()
-    agent = KOSMOAgent(
-        llm_client=llm,  # type: ignore[reportArgumentType]
-        registry=registry,
-        max_iterations=2,
-    )
-    agent._modes[SpecPhase.DESCUBRIMIENTO] = make_discovery_mode()  # type: ignore[reportPrivateUsage]
+    agent = _make_agent(llm, max_iterations=2)
 
     # Act
-    result = await agent.execute(
-        phase=SpecPhase.DESCUBRIMIENTO,
+    result = await agent.execute_with_skill(
+        skill_name="discovery_generate",
         context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
     )
 

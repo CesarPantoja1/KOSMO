@@ -76,7 +76,7 @@ class InMemoryDocumentRepository:
 class MockKOSMOAgent:
     output: DiscoveryPhaseOutput
 
-    async def execute(self, phase: SpecPhase, context: Any) -> DiscoveryPhaseOutput:  # noqa: ARG002
+    async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> DiscoveryPhaseOutput:  # noqa: ARG002
         return self.output
 
 
@@ -183,10 +183,13 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
     await project_repo.save(project)
 
     class FailingAgent:
-        async def execute(
+        async def execute_with_skill(
             self,
-            phase: SpecPhase,  # noqa: ARG002
+            skill_name: str,  # noqa: ARG002
             context: Any,  # noqa: ARG002
+            *,
+            project_id: Any = None,  # noqa: ARG002
+            user_instructions: str | None = None,  # noqa: ARG002
         ) -> DiscoveryPhaseOutput:
             raise RuntimeError("LLM service unavailable")
 

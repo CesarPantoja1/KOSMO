@@ -91,7 +91,7 @@ class InMemoryFeatureRepository:
 class MockAgent:
     output: Any
 
-    async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+    async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> Any:  # noqa: ARG002
         return self.output
 
 
@@ -226,7 +226,7 @@ async def test_generate_features_raises_when_llm_fails() -> None:
     await doc_repo.save_discovery(ProjectId("prj_llm_fail"), _make_discovery_document())
 
     class FailingAgent:
-        async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+        async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> Any:  # noqa: ARG002
             raise RuntimeError("LLM service unavailable")
 
     agent: Any = FailingAgent()

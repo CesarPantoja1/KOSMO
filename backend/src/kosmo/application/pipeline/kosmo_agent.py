@@ -23,14 +23,12 @@ class KOSMOAgent:
         self,
         llm_client: LLMClient,
         registry: ToolRegistry,
-        modes: dict[SpecPhase, PhaseMode] | None = None,
         max_iterations: int = 8,
         skill_registry: SkillRegistry | None = None,
         memory: AgentMemoryPort | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._registry = registry
-        self._modes: dict[SpecPhase, PhaseMode] = modes or {}
         self._max_iterations = max_iterations
         self._skill_registry: SkillRegistry | None = skill_registry
         self._memory = memory
@@ -50,24 +48,6 @@ class KOSMOAgent:
             mode,
             context,
             skill_name=skill_name,
-            project_id=project_id,
-            user_instructions=user_instructions,
-        )
-
-    async def execute(
-        self,
-        phase: SpecPhase,
-        context: Any,
-        *,
-        project_id: ProjectId | None = None,
-        user_instructions: str | None = None,
-    ) -> Any:
-        mode = self._modes.get(phase)
-        if mode is None:
-            raise ValueError(f"No hay modo para la fase {phase.value}")
-        return await self._execute_loop(
-            mode,
-            context,
             project_id=project_id,
             user_instructions=user_instructions,
         )

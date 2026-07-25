@@ -67,7 +67,7 @@ class StubRefineAgent:
     def __init__(self, output: EARSPhaseOutput) -> None:
         self._output = output
 
-    async def execute(self, phase: SpecPhase, context: Any) -> Any:  # noqa: ARG002
+    async def execute_with_skill(self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None) -> Any:  # noqa: ARG002
         return self._output
 
 
