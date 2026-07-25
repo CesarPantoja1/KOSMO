@@ -64,6 +64,33 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
             total_sessions=len(summaries),
         )
 
+    async def get_similar_sessions(
+        self,
+        embedding: list[float],
+        *,
+        limit: int = 5,
+        exclude_project_id: ProjectId | None = None,
+    ) -> list[AgentSessionSummary]:
+        scored: list[tuple[float, AgentSessionSummary]] = []
+        for session in self._store.values():
+            if exclude_project_id is not None and session.project_id == exclude_project_id:
+                continue
+            if session.embedding is None:
+                continue
+            sim = _cosine_similarity(embedding, session.embedding)
+            scored.append((sim, _to_summary(session)))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [s for _, s in scored[:limit]]
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(y * y for y in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
 
 def _to_summary(session: AgentSession) -> AgentSessionSummary:
     return AgentSessionSummary(

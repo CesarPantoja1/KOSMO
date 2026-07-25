@@ -31,6 +31,8 @@ class AgentSession:
 
     user_instructions: str | None = None
 
+    embedding: list[float] | None = None
+
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -76,6 +78,14 @@ class AgentMemoryPort(Protocol):
     ) -> AgentSession | None: ...
 
     async def get_project_context(self, project_id: ProjectId) -> ProjectMemoryContext: ...
+
+    async def get_similar_sessions(
+        self,
+        embedding: list[float],
+        *,
+        limit: int = 5,
+        exclude_project_id: ProjectId | None = None,
+    ) -> list[AgentSessionSummary]: ...
 
 
 class AgentMemoryError(Exception):

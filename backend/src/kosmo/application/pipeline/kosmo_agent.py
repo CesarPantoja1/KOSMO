@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
@@ -19,6 +19,9 @@ from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 
+if TYPE_CHECKING:
+    from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
+
 
 class KOSMOAgent:
     def __init__(
@@ -28,12 +31,14 @@ class KOSMOAgent:
         max_iterations: int = 8,
         skill_registry: SkillRegistry | None = None,
         memory: AgentMemoryPort | None = None,
+        embedding_generator: EmbeddingGenerator | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._registry = registry
         self._max_iterations = max_iterations
         self._skill_registry: SkillRegistry | None = skill_registry
         self._memory = memory
+        self._embedder: EmbeddingGenerator | None = embedding_generator
 
     async def execute_with_skill(
         self,
@@ -75,6 +80,18 @@ class KOSMOAgent:
                 system_prompt = self._inject_context(system_prompt, project_context)
 
         base_user_prompt = mode.build_user_prompt(context)
+
+        if self._embedder is not None and self._memory is not None and project_id is not None:
+            query_embedding = await self._embedder.embed(base_user_prompt)
+            if query_embedding is not None:
+                similar = await self._memory.get_similar_sessions(
+                    query_embedding,
+                    limit=3,
+                    exclude_project_id=project_id,
+                )
+                if similar:
+                    system_prompt = self._inject_cross_project_context(system_prompt, similar)
+
         user_prompt = base_user_prompt
         last_output: Any = None
         last_validation = ValidationResult(is_valid=False, errors=["No se genero contenido"])
@@ -182,6 +199,11 @@ class KOSMOAgent:
 
         output_json = json.dumps(output, default=str) if output else None
 
+        embedding: list[float] | None = None
+        if self._embedder is not None and output is not None:
+            text = self._embedder.text_for_embedding(output, validation.errors)
+            embedding = await self._embedder.embed(text)
+
         session = create_session(
             project_id=project_id,
             session_type=session_type,
@@ -198,6 +220,7 @@ class KOSMOAgent:
             validation_errors=len(validation.errors),
             total_llm_calls=current_iteration,
             user_instructions=user_instructions,
+            embedding=embedding,
         )
 
         await self._memory.save_session(session)
@@ -242,6 +265,32 @@ class KOSMOAgent:
             )
 
         return "\n\n".join(parts)
+
+    def _inject_cross_project_context(
+        self,
+        system_prompt: str,
+        similar: list[Any],
+    ) -> str:
+        from kosmo.contracts.agent_memory import AgentSessionSummary
+
+        lines: list[str] = [
+            system_prompt,
+            "## Sesiones similares en otros proyectos\n\n"
+            "Los siguientes proyectos tienen sesiones con contenido similar "
+            "al que vas a generar. Usa esta informacion para mantener "
+            "consistencia en el estilo y nivel de detalle:\n",
+        ]
+        for s in similar:
+            if not isinstance(s, AgentSessionSummary):
+                continue
+            lines.append(
+                f"- Proyecto {s.project_id}, fase {s.phase.value} ({s.session_type}): "
+                f"{'completada' if s.is_completed else 'incompleta'}, "
+                f"{s.total_llm_calls} llamadas LLM"
+            )
+            if s.user_instructions:
+                lines.append(f"  Instrucciones: {s.user_instructions}")
+        return "\n".join(lines)
 
     @property
     def memory(self) -> AgentMemoryPort | None:

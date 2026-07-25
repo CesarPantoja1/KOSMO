@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.agent_memory import (
@@ -46,6 +46,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             model.validation_errors = session.validation_errors
             model.total_llm_calls = session.total_llm_calls
             model.user_instructions = session.user_instructions
+            model.embedding = list(session.embedding) if session.embedding else None
             model.updated_at = datetime.now(UTC)
 
             await db.commit()
@@ -106,6 +107,53 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             total_sessions=len(summaries),
         )
 
+    async def get_similar_sessions(
+        self,
+        embedding: list[float],
+        *,
+        limit: int = 5,
+        exclude_project_id: ProjectId | None = None,
+    ) -> list[AgentSessionSummary]:
+        async with self._session_factory() as db:
+            embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+            stmt = text(
+                "SELECT id FROM agent_sessions "
+                "WHERE embedding IS NOT NULL "
+                + ("AND project_id != :exclude_id " if exclude_project_id else "")
+                + "ORDER BY embedding <-> :embedding::vector "
+                "LIMIT :limit"
+            )
+            params: dict[str, object] = {
+                "embedding": embedding_str,
+                "limit": limit,
+            }
+            if exclude_project_id is not None:
+                params["exclude_id"] = str(exclude_project_id)
+
+            result = await db.execute(stmt, params)
+            rows = result.fetchall()
+            summaries: list[AgentSessionSummary] = []
+            for row in rows:
+                session = await self.load_session(AgentMemoryId(str(row[0])))
+                if session is not None:
+                    summaries.append(_to_summary(session))
+            return summaries
+
+
+def _to_summary(session: AgentSession) -> AgentSessionSummary:
+    return AgentSessionSummary(
+        session_id=session.session_id,
+        project_id=session.project_id,
+        session_type=session.session_type,
+        phase=session.phase,
+        skill_name=session.skill_name,
+        is_completed=session.is_completed,
+        total_llm_calls=session.total_llm_calls,
+        validation_errors=session.validation_errors,
+        user_instructions=session.user_instructions,
+        created_at=session.created_at,
+    )
+
 
 def _model_to_session(model: AgentSessionModel) -> AgentSession:
     return AgentSession(
@@ -128,6 +176,7 @@ def _model_to_session(model: AgentSessionModel) -> AgentSession:
         validation_errors=model.validation_errors,
         total_llm_calls=model.total_llm_calls,
         user_instructions=model.user_instructions,
+        embedding=list(model.embedding) if model.embedding else None,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

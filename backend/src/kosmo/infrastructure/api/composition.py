@@ -90,6 +90,7 @@ from kosmo.domain.sdd.validators.ears_validator import (
 )
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
+from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
 from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
     SqlAlchemyAgentSessionStore,
 )
@@ -392,11 +393,19 @@ def build_pipeline_components(
     )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
+
+    embedding_generator: EmbeddingGenerator | None = None
+    if settings.llm_provider.lower() == "openai" and settings.llm_api_key:
+        embedding_generator = EmbeddingGenerator(
+            api_key=settings.llm_api_key.get_secret_value(),
+        )
+
     agent = KOSMOAgent(
         llm_client=llm_client,
         registry=tool_registry,
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
+        embedding_generator=embedding_generator,
     )
 
     return PipelineComponents(

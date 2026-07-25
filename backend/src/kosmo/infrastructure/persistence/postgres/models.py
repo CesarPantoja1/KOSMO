@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Integer, String, Text, func, text
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -127,6 +128,8 @@ class AgentSessionModel(Base):
     total_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     user_instructions: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
