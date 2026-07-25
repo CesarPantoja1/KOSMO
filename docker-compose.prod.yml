@@ -1,0 +1,75 @@
+# KOSMO Production Stack (Oracle Cloud / Supabase / Cloudflare Tunnel)
+#
+# Services:
+# - frontend: Next.js + Bun (Stateless, built for production)
+# - backend: FastAPI + uvicorn (Stateless, connects to Supabase)
+# - nginx: Reverse Proxy & API Gateway
+# - cloudflared: Exposes Nginx to the internet securely
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # We pass these so they can be baked in at build time if they exist in the .env file
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-KOSMO}
+        NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-production}
+        NEXT_PUBLIC_AUTH_DISABLED: ${NEXT_PUBLIC_AUTH_DISABLED:-true}
+        NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
+    image: kosmo-frontend:prod
+    container_name: kosmo-frontend
+    init: true
+    env_file:
+      - .env
+    environment:
+      PORT: "3000"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: kosmo-backend:prod
+    container_name: kosmo-backend
+    init: true
+    env_file:
+      - .env
+    environment:
+      # We override some defaults to ensure they are production-ready if not specified in .env
+      ENV: production
+      PORT: "8000"
+      AUTH_DISABLED: "true"
+      # The user must provide DATABASE_URL in .env pointing to Supabase
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3); sys.exit(0 if r.status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: kosmo-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: kosmo-cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - nginx
+    restart: unless-stopped

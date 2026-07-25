@@ -16,13 +16,13 @@ class PydanticAILLMClient:
         self,
         prompt: PromptTemplate,
         temperature: float = 0.3,
-        max_tokens: int = 4096,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> LLMResponse:
         agent = Agent(model=self._model, system_prompt=prompt.system_prompt)  # type: ignore[reportCallIssue]
 
         result = await agent.run(
             prompt.user_prompt,
-            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+            model_settings=ModelSettings(temperature=temperature),
         )
         text = result.output
 
