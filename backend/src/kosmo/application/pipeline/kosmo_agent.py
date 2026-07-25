@@ -96,13 +96,25 @@ class KOSMOAgent:
                     system_prompt = self._inject_cross_project_context(system_prompt, similar)
 
         knowledge_context = ""
+        tool_invocations: list[dict[str, Any]] = []
+        reason_entries: list[str] = []
         if self._knowledge_tools is not None:
             tools_desc = self._knowledge_tools.describe_for_llm()
             if tools_desc:
                 tool_system_prompt = system_prompt + "\n\n" + tools_desc
-                knowledge_context = await self._resolve_knowledge_tools(
+                knowledge_context, tool_invocations = await self._resolve_knowledge_tools(
                     tool_system_prompt, base_user_prompt, project_id
                 )
+                if knowledge_context:
+                    reason_entries.append("pre_consulta_tools: herramientas consultadas: " + ", ".join(
+                        t["tool"] for t in tool_invocations if t.get("found")
+                    ) or "ninguna encontrada")
+                else:
+                    reason_entries.append("pre_consulta_tools: sin consulta de herramientas")
+            else:
+                reason_entries.append("pre_consulta_tools: sin herramientas registradas")
+        else:
+            reason_entries.append("pre_consulta_tools: no disponible")
 
         user_prompt = base_user_prompt
         if knowledge_context:
@@ -161,6 +173,8 @@ class KOSMOAgent:
                         validation=last_validation,
                         user_instructions=user_instructions,
                         conversation=conversation,
+                        reasoning_log=reason_entries,
+                        tool_results=tool_invocations,
                     )
 
                 return mode.build_output(last_output, last_validation, metadata, context=context)
@@ -188,6 +202,8 @@ class KOSMOAgent:
                 validation=last_validation,
                 user_instructions=user_instructions,
                 conversation=conversation,
+                reasoning_log=reason_entries,
+                tool_results=tool_invocations,
                 is_completed=False,
             )
 
@@ -205,6 +221,8 @@ class KOSMOAgent:
         validation: ValidationResult,
         user_instructions: str | None,
         conversation: list[str] | None = None,
+        reasoning_log: list[str] | None = None,
+        tool_results: list[dict[str, Any]] | None = None,
         is_completed: bool = True,
     ) -> None:
         if self._memory is None:
@@ -225,6 +243,10 @@ class KOSMOAgent:
             validation=validation,
         )
 
+        reason_entries = (reasoning_log or []) + (
+            [f"reflexion: {reflection}"] if reflection else []
+        )
+
         session = create_session(
             project_id=project_id,
             session_type=session_type,
@@ -232,8 +254,8 @@ class KOSMOAgent:
             skill_name=skill_name,
             max_iterations=self._max_iterations,
             conversation=conversation or [],
-            reasoning_log=[],
-            tool_results=[],
+            reasoning_log=reason_entries,
+            tool_results=tool_results or [],
             current_iteration=current_iteration,
             is_completed=is_completed,
             output_json=output_json,
@@ -252,9 +274,9 @@ class KOSMOAgent:
         system_prompt: str,
         user_prompt: str,
         project_id: ProjectId | None,
-    ) -> str:
+    ) -> tuple[str, list[dict[str, Any]]]:
         if self._knowledge_tools is None:
-            return ""
+            return ("", [])
 
         tool_prompt = PromptTemplate(
             system_prompt=(
@@ -268,6 +290,7 @@ class KOSMOAgent:
         )
 
         collected: list[str] = []
+        invocations: list[dict[str, Any]] = []
         for _ in range(3):
             try:
                 response = await self._llm_client.complete(
@@ -290,17 +313,24 @@ class KOSMOAgent:
                 tool_args.setdefault("project_id", str(project_id))
 
             result = await self._knowledge_tools.execute(tool_name, tool_args)
-            if result is None:
+            not_found = result is None
+            if not_found:
                 collected.append(f"[TOOL: {tool_name}] Herramienta no encontrada")
-                continue
+            else:
+                collected.append(f"[TOOL: {tool_name}]\n{result}")
 
-            collected.append(f"[TOOL: {tool_name}]\n{result}")
+            invocations.append({
+                "tool": tool_name,
+                "args": {k: str(v)[:200] for k, v in tool_args.items()},
+                "result_snippet": (result or "herramienta no encontrada")[:500],
+                "found": not not_found,
+            })
             tool_prompt = PromptTemplate(
                 system_prompt=tool_prompt.system_prompt,
                 user_prompt=user_prompt + "\n\n" + collected[-1] + "\n\nResponde [CONTINUE] o [TOOL: ...]",
             )
 
-        return "\n\n".join(collected)
+        return ("\n\n".join(collected), invocations)
 
     async def _generate_reflection(
         self,
