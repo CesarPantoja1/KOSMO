@@ -36,18 +36,6 @@ _REACT_FORMAT_INSTRUCTIONS = (
     "- Agota siempre con una respuesta final=true antes de quedarte sin intentos.\n"
 )
 
-_PHASE_TEMPERATURES: dict[SpecPhase, float] = {
-    SpecPhase.DESCUBRIMIENTO: 0.3,
-    SpecPhase.CARACTERISTICAS: 0.4,
-    SpecPhase.REQUISITOS: 0.3,
-}
-
-_PHASE_MAX_TOKENS: dict[SpecPhase, int] = {
-    SpecPhase.DESCUBRIMIENTO: 8192,
-    SpecPhase.CARACTERISTICAS: 4096,
-    SpecPhase.REQUISITOS: 8192,
-}
-
 
 class KOSMOAgent:
     def __init__(
@@ -135,8 +123,8 @@ class KOSMOAgent:
         for iteration in range(1, self._max_iterations + 1):
             current_user_prompt = "\n\n".join(conversation)
 
-            temperature = _PHASE_TEMPERATURES.get(phase, 0.3)
-            max_tokens = _PHASE_MAX_TOKENS.get(phase, 4096)
+            temperature = mode.temperature
+            max_tokens = mode.max_tokens
 
             llm_response = await self._llm_client.complete(
                 prompt=PromptTemplate(

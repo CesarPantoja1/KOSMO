@@ -101,6 +101,14 @@ class FeaturesMode:
         return SpecPhase.CARACTERISTICAS
 
     @property
+    def temperature(self) -> float:
+        return 0.4
+
+    @property
+    def max_tokens(self) -> int:
+        return 4096
+
+    @property
     def system_prompt(self) -> str:
         return _FEATURES_SYSTEM_PROMPT
 

@@ -85,6 +85,14 @@ class ModeloMode:
         return SpecPhase.MODELO
 
     @property
+    def temperature(self) -> float:
+        return 0.2
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
     def system_prompt(self) -> str:
         return _MODELO_SYSTEM_PROMPT
 
@@ -109,7 +117,7 @@ class ModeloMode:
 
     def build_user_prompt(self, context: ModeloPhaseContext) -> str:
         self._feature_id = context.feature_id
-        
+
         parts = [f"## Característica ID: {context.feature_id}\n\n"]
         parts.append("## Requisitos EARS\n\n")
         parts.append(context.ears_requirements)
@@ -124,7 +132,7 @@ class ModeloMode:
         if isinstance(output, dict) and "diagram_syntax" in output:
             diagram = str(cast(object, output["diagram_syntax"]))
             return validate_activity_diagram_syntax(diagram)
-        
+
         return ValidationResult(
             is_valid=False,
             errors=["Formato de salida no reconocido. Se esperaba un JSON con 'diagram_syntax'."],
@@ -159,7 +167,7 @@ class ModeloMode:
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
     ) -> ModeloPhaseOutput:
-        
+
         diagram_syntax = ""
         if isinstance(raw_output, dict) and "diagram_syntax" in raw_output:
             diagram_syntax = str(cast(object, raw_output["diagram_syntax"]))

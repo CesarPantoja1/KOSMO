@@ -84,6 +84,12 @@ class PhaseMode(Protocol):
     @property
     def available_tools(self) -> list[ToolDefinition]: ...
 
+    @property
+    def temperature(self) -> float: ...
+
+    @property
+    def max_tokens(self) -> int: ...
+
     def build_user_prompt(
         self,
         context: DiscoveryPhaseContext

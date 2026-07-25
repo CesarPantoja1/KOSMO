@@ -138,6 +138,14 @@ class EARSMode:
         return SpecPhase.REQUISITOS
 
     @property
+    def temperature(self) -> float:
+        return 0.3
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
     def system_prompt(self) -> str:
         return _EARS_SYSTEM_PROMPT
 

@@ -41,6 +41,14 @@ class DiscoveryRefineMode:
         return SpecPhase.DESCUBRIMIENTO
 
     @property
+    def temperature(self) -> float:
+        return 0.3
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
     def system_prompt(self) -> str:
         return _DISCOVERY_REFINE_SYSTEM_PROMPT
 
