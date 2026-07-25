@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -131,6 +132,9 @@ class KOSMOAgent:
                     )
 
                 return mode.build_output(last_output, last_validation, metadata)
+
+            delay_s = min(1.0 * (2 ** (iteration - 1)), 30.0)
+            await asyncio.sleep(delay_s)
 
             user_prompt = (
                 base_user_prompt + "\n\n" + mode.build_validation_feedback(last_validation.errors)
