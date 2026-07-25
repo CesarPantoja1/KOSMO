@@ -22,7 +22,7 @@ class PydanticAILLMClient:
 
         result = await agent.run(
             prompt.user_prompt,
-            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+            model_settings=ModelSettings(temperature=temperature),
         )
         text = result.output
 
