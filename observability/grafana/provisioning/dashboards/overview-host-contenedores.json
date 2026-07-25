@@ -38,7 +38,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "container_memory_working_set_bytes{image!=\"\"} / 1024 / 1024",
+          "expr": "container_memory_working_set_bytes{name=~\".+\"} / 1024 / 1024",
           "legendFormat": "{{name}}"
         }
       ]
