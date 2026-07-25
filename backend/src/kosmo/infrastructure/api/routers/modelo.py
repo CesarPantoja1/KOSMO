@@ -84,8 +84,8 @@ async def generate_diagram(
         "id": str(output.diagram.id),
         "feature_id": str(output.diagram.feature_id),
         "diagram_syntax": output.diagram.diagram_syntax,
-        "created_at": output.diagram.created_at.isoformat(),
-        "updated_at": output.diagram.updated_at.isoformat(),
+        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
+        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -120,6 +120,6 @@ async def get_diagram(
         "id": str(output.diagram.id),
         "feature_id": str(output.diagram.feature_id),
         "diagram_syntax": output.diagram.diagram_syntax,
-        "created_at": output.diagram.created_at.isoformat(),
-        "updated_at": output.diagram.updated_at.isoformat(),
+        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
+        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
     }
