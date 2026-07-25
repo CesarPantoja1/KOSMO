@@ -20,6 +20,7 @@ from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 
 if TYPE_CHECKING:
+    from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
     from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
 
 
@@ -32,6 +33,7 @@ class KOSMOAgent:
         skill_registry: SkillRegistry | None = None,
         memory: AgentMemoryPort | None = None,
         embedding_generator: EmbeddingGenerator | None = None,
+        knowledge_tools: KnowledgeToolRegistry | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._guard_registry = guard_registry
@@ -39,6 +41,7 @@ class KOSMOAgent:
         self._skill_registry: SkillRegistry | None = skill_registry
         self._memory = memory
         self._embedder: EmbeddingGenerator | None = embedding_generator
+        self._knowledge_tools: KnowledgeToolRegistry | None = knowledge_tools
 
     async def execute_with_skill(
         self,
@@ -92,7 +95,19 @@ class KOSMOAgent:
                 if similar:
                     system_prompt = self._inject_cross_project_context(system_prompt, similar)
 
+        knowledge_context = ""
+        if self._knowledge_tools is not None:
+            tools_desc = self._knowledge_tools.describe_for_llm()
+            if tools_desc:
+                tool_system_prompt = system_prompt + "\n\n" + tools_desc
+                knowledge_context = await self._resolve_knowledge_tools(
+                    tool_system_prompt, base_user_prompt, project_id
+                )
+
         user_prompt = base_user_prompt
+        if knowledge_context:
+            user_prompt += "\n\n## Informacion adicional recuperada\n\n" + knowledge_context
+
         last_output: Any = None
         last_validation = ValidationResult(is_valid=False, errors=["No se genero contenido"])
         llm_calls = 0
@@ -234,6 +249,62 @@ class KOSMOAgent:
 
         await self._memory.save_session(session)
 
+    async def _resolve_knowledge_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        project_id: ProjectId | None,
+    ) -> str:
+        if self._knowledge_tools is None:
+            return ""
+
+        tool_prompt = PromptTemplate(
+            system_prompt=(
+                system_prompt
+                + "\n\nIMPORTANTE: Antes de generar, puedes consultar herramientas de conocimiento "
+                "para obtener informacion adicional. Responde SOLO con uno de estos formatos:\n\n"
+                '- [TOOL: nombre] {"arg": "valor"}  (para consultar una herramienta)\n'
+                "- [CONTINUE]  (si ya tienes suficiente contexto)\n\n"
+                "El resultado de la herramienta se te proporcionara y podras continuar."
+            ),
+            user_prompt=user_prompt,
+        )
+
+        collected: list[str] = []
+        for _ in range(3):
+            try:
+                response = await self._llm_client.complete(
+                    prompt=tool_prompt,
+                    temperature=0.1,
+                    max_tokens=200,
+                )
+            except Exception:
+                break
+
+            text = response.text.strip()
+            if "[CONTINUE]" in text:
+                break
+
+            tool_name, tool_args = _parse_tool_call(text)
+            if tool_name is None:
+                break
+
+            if project_id is not None:
+                tool_args.setdefault("project_id", str(project_id))
+
+            result = await self._knowledge_tools.execute(tool_name, tool_args)
+            if result is None:
+                collected.append(f"[TOOL: {tool_name}] Herramienta no encontrada")
+                continue
+
+            collected.append(f"[TOOL: {tool_name}]\n{result}")
+            tool_prompt = PromptTemplate(
+                system_prompt=tool_prompt.system_prompt,
+                user_prompt=user_prompt + "\n\n" + collected[-1] + "\n\nResponde [CONTINUE] o [TOOL: ...]",
+            )
+
+        return "\n\n".join(collected)
+
     async def _generate_reflection(
         self,
         *,
@@ -358,3 +429,25 @@ class KOSMOAgent:
     @property
     def memory(self) -> AgentMemoryPort | None:
         return self._memory
+
+
+def _parse_tool_call(text: str) -> tuple[str | None, dict[str, Any]]:
+    marker = "[TOOL:"
+    if marker not in text:
+        return None, {}
+
+    idx = text.index(marker) + len(marker)
+    end_name = text.index("]", idx) if "]" in text[idx:] else len(text)
+    tool_name = text[idx:end_name].strip()
+
+    args: dict[str, Any] = {}
+    brace_start = text.find("{", end_name)
+    if brace_start != -1:
+        brace_end = text.find("}", brace_start)
+        if brace_end != -1:
+            try:
+                args = json.loads(text[brace_start : brace_end + 1])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return tool_name, args

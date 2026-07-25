@@ -79,6 +79,7 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
     validate_feature_uniqueness,
 )
 from kosmo.domain.pipeline.guard_registry import GuardRegistry
+from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.sdd.validators.activity_diagram_validator import (
     validate_activity_diagram_syntax,
@@ -91,6 +92,11 @@ from kosmo.domain.sdd.validators.ears_validator import (
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
+from kosmo.infrastructure.llm.knowledge_tools import (
+    build_find_similar_sessions,
+    build_get_downstream_artifacts,
+    build_get_phase_document,
+)
 from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
     SqlAlchemyAgentSessionStore,
 )
@@ -293,6 +299,7 @@ def build_pipeline_components(
     # 2. Instanciar los repositorios disponibles
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
 
     context_builder = ContextBuilder(
         document_repo=document_repo,
@@ -400,12 +407,19 @@ def build_pipeline_components(
             api_key=settings.llm_api_key.get_secret_value(),
         )
 
+    knowledge_tools = KnowledgeToolRegistry()
+    knowledge_tools.register(*build_get_phase_document(document_repo))
+    knowledge_tools.register(*build_get_downstream_artifacts(feature_repo))
+    if embedding_generator is not None:
+        knowledge_tools.register(*build_find_similar_sessions(agent_memory, embedding_generator))
+
     agent = KOSMOAgent(
         llm_client=llm_client,
         guard_registry=guard_registry,
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
         embedding_generator=embedding_generator,
+        knowledge_tools=knowledge_tools,
     )
 
     return PipelineComponents(
