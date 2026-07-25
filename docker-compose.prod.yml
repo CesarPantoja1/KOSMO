@@ -73,3 +73,7 @@ services:
     depends_on:
       - nginx
     restart: unless-stopped
+
+networks:
+  default:
+    name: kosmo-network

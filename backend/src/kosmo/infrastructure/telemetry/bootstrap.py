@@ -99,3 +99,9 @@ def instrument_app(
     logfire.instrument_fastapi(app, **fastapi_kwargs)
     logfire.instrument_sqlalchemy(engine=db_engine)
     logfire.instrument_redis(capture_statement=False)
+
+    from prometheus_fastapi_instrumentator import (  # pyright: ignore[reportMissingImports]
+        Instrumentator,  # pyright: ignore[reportUnknownVariableType]
+    )
+
+    Instrumentator().instrument(app).expose(app)  # pyright: ignore[reportUnknownMemberType]
