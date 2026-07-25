@@ -31,6 +31,7 @@ def create_session(
     total_llm_calls: int = 0,
     user_instructions: str | None = None,
     embedding: list[float] | None = None,
+    reflection: str | None = None,
 ) -> AgentSession:
     now = datetime.now(UTC)
     return AgentSession(
@@ -51,6 +52,7 @@ def create_session(
         total_llm_calls=total_llm_calls,
         user_instructions=user_instructions,
         embedding=embedding,
+        reflection=reflection,
         created_at=now,
         updated_at=now,
     )

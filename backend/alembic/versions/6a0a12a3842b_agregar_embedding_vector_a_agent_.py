@@ -1,4 +1,4 @@
-"""agregar embedding vector a agent_sessions
+"""agregar embedding y reflection a agent_sessions
 
 Revision ID: 6a0a12a3842b
 Revises: 84ab07bdb13c
@@ -24,7 +24,12 @@ def upgrade() -> None:
         "agent_sessions",
         sa.Column("embedding", Vector(1536), nullable=True),
     )
+    op.add_column(
+        "agent_sessions",
+        sa.Column("reflection", sa.Text(), nullable=True),
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("agent_sessions", "reflection")
     op.drop_column("agent_sessions", "embedding")

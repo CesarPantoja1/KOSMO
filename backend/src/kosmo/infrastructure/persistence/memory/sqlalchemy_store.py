@@ -47,6 +47,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             model.total_llm_calls = session.total_llm_calls
             model.user_instructions = session.user_instructions
             model.embedding = list(session.embedding) if session.embedding else None
+            model.reflection = session.reflection
             model.updated_at = datetime.now(UTC)
 
             await db.commit()
@@ -101,10 +102,26 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             key = f"{s.session_type}:{s.phase.value}"
             if key not in latest or s.created_at > latest[key].created_at:
                 latest[key] = s
+
+        reflections: list[str] = []
+        async with self._session_factory() as db:
+            stmt = (
+                select(AgentSessionModel.reflection)
+                .where(AgentSessionModel.project_id == str(project_id))
+                .where(AgentSessionModel.reflection.isnot(None))
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(5)
+            )
+            result = await db.execute(stmt)
+            for row in result.fetchall():
+                if row[0]:
+                    reflections.append(str(row[0]))
+
         return ProjectMemoryContext(
             project_id=project_id,
             latest_sessions=latest,
             total_sessions=len(summaries),
+            recent_reflections=reflections,
         )
 
     async def get_similar_sessions(
@@ -177,6 +194,7 @@ def _model_to_session(model: AgentSessionModel) -> AgentSession:
         total_llm_calls=model.total_llm_calls,
         user_instructions=model.user_instructions,
         embedding=list(model.embedding) if model.embedding else None,
+        reflection=model.reflection,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

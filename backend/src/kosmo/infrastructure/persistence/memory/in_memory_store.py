@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from kosmo.contracts.agent_memory import (
     AgentMemoryPort,
     AgentSession,
@@ -58,10 +60,27 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
             key = f"{s.session_type}:{s.phase.value}"
             if key not in latest or s.created_at > latest[key].created_at:
                 latest[key] = s
+
+        reflections: list[str] = []
+        for session in self._store.values():
+            if session.project_id != project_id:
+                continue
+            if session.reflection and session.reflection.strip():
+                reflections.append(session.reflection)
+        reflections.sort(
+            key=lambda _r: next(
+                (s.created_at for s in self._store.values() if s.reflection == _r),
+                datetime.min.replace(tzinfo=UTC),
+            ),
+            reverse=True,
+        )
+        reflections = reflections[:5]
+
         return ProjectMemoryContext(
             project_id=project_id,
             latest_sessions=latest,
             total_sessions=len(summaries),
+            recent_reflections=reflections,
         )
 
     async def get_similar_sessions(

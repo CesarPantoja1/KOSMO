@@ -204,6 +204,14 @@ class KOSMOAgent:
             text = self._embedder.text_for_embedding(output, validation.errors)
             embedding = await self._embedder.embed(text)
 
+        reflection = await self._generate_reflection(
+            phase=phase,
+            session_type=session_type,
+            is_completed=is_completed,
+            current_iteration=current_iteration,
+            validation=validation,
+        )
+
         session = create_session(
             project_id=project_id,
             session_type=session_type,
@@ -221,9 +229,57 @@ class KOSMOAgent:
             total_llm_calls=current_iteration,
             user_instructions=user_instructions,
             embedding=embedding,
+            reflection=reflection,
         )
 
         await self._memory.save_session(session)
+
+    async def _generate_reflection(
+        self,
+        *,
+        phase: SpecPhase,
+        session_type: str,
+        is_completed: bool,
+        current_iteration: int,
+        validation: ValidationResult,
+    ) -> str | None:
+        if is_completed and current_iteration == 1 and validation.is_valid:
+            return None
+
+        status = "completada exitosamente" if is_completed else "fallida"
+        errors_text = "; ".join(validation.errors[:5]) if validation.errors else "ninguno"
+
+        prompt = PromptTemplate(
+            system_prompt=(
+                "Eres un analista de calidad que revisa sesiones de un agente de IA. "
+                "Genera UNA sola leccion aprendida en espanol, en maximo 2 oraciones, "
+                "que ayude al agente a mejorar en futuras sesiones. "
+                "Se especifico: menciona que patron evitar o que enfoque usar. "
+                "Responde solo con el texto de la leccion, sin prefijos ni markdown."
+            ),
+            user_prompt=(
+                f"Fase: {phase.value}\n"
+                f"Tipo: {session_type}\n"
+                f"Estado: {status}\n"
+                f"Iteraciones usadas: {current_iteration} de {self._max_iterations}\n"
+                f"Errores de validacion: {errors_text}\n\n"
+                "Genera una leccion aprendida:"
+            ),
+        )
+
+        try:
+            result = await self._llm_client.complete(
+                prompt=prompt,
+                temperature=0.3,
+                max_tokens=150,
+            )
+            text = result.text.strip()
+            if text and len(text) > 10:
+                return text
+        except Exception:
+            pass
+
+        return None
 
     def _inject_context(
         self,
@@ -262,6 +318,13 @@ class KOSMOAgent:
             parts.append(
                 "Errores de validacion frecuentes en sesiones previas:\n"
                 + "\n".join(f"- {e}" for e in project_context.common_validation_errors)
+            )
+
+        if project_context.recent_reflections:
+            parts.append(
+                "## Reflexiones de sesiones previas\n\n"
+                + "\n".join(f"- {r}" for r in project_context.recent_reflections)
+                + "\n\nAplica estas lecciones aprendidas para evitar repetir errores."
             )
 
         return "\n\n".join(parts)

@@ -33,6 +33,8 @@ class AgentSession:
 
     embedding: list[float] | None = None
 
+    reflection: str | None = None
+
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -57,6 +59,7 @@ class ProjectMemoryContext:
     latest_sessions: dict[str, AgentSessionSummary]
     total_sessions: int
     common_validation_errors: list[str] = field(default_factory=list[str])
+    recent_reflections: list[str] = field(default_factory=list[str])
 
 
 class AgentMemoryPort(Protocol):
