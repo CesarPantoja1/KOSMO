@@ -83,8 +83,6 @@ services:
     privileged: true
     devices:
       - /dev/kmsg
-    command:
-      - '--docker_only=true'
     volumes:
       - /:/rootfs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
