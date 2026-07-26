@@ -92,8 +92,10 @@ from kosmo.domain.sdd.validators.ears_validator import (
 from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
 from kosmo.infrastructure.llm.knowledge_tools import (
     build_find_similar_sessions,
+    build_get_diagram_for_feature,
     build_get_downstream_artifacts,
     build_get_phase_document,
+    build_get_requirements_for_feature,
 )
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
@@ -300,6 +302,8 @@ def build_pipeline_components(
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
 
     context_builder = ContextBuilder(
         document_repo=document_repo,
@@ -410,6 +414,8 @@ def build_pipeline_components(
     knowledge_tools = KnowledgeToolRegistry()
     knowledge_tools.register(*build_get_phase_document(document_repo))
     knowledge_tools.register(*build_get_downstream_artifacts(feature_repo))
+    knowledge_tools.register(*build_get_requirements_for_feature(requirement_repo))
+    knowledge_tools.register(*build_get_diagram_for_feature(diagram_repo))
     if embedding_generator is not None:
         knowledge_tools.register(*build_find_similar_sessions(agent_memory, embedding_generator))
 

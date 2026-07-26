@@ -6,7 +6,12 @@ from typing import Any
 from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository
+from kosmo.contracts.sdd.repositories import (
+    ActivityDiagramRepository,
+    DocumentRepository,
+    FeatureRepository,
+    RequirementRepository,
+)
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolDef, KnowledgeToolHandler
 
 
@@ -147,5 +152,69 @@ def build_get_downstream_artifacts(
             "origin": feature.origin,
         }
         return json.dumps(info, ensure_ascii=False, indent=2)
+
+    return tool_def, handler
+
+
+def build_get_requirements_for_feature(
+    requirement_repo: RequirementRepository,
+) -> tuple[KnowledgeToolDef, KnowledgeToolHandler]:
+    tool_def = KnowledgeToolDef(
+        name="get_requirements_for_feature",
+        description="Recupera los requisitos EARS en markdown de una caracteristica",
+        parameters={
+            "type": "object",
+            "properties": {
+                "feature_id": {
+                    "type": "string",
+                    "description": "ID de la caracteristica a consultar (ej. feat_01KT...)",
+                },
+            },
+            "required": ["feature_id"],
+        },
+    )
+
+    async def handler(input_data: dict[str, Any]) -> str:
+        feature_id_str = input_data.get("feature_id", "")
+        if not feature_id_str:
+            return "Error: parametro 'feature_id' requerido"
+
+        markdown = await requirement_repo.by_feature_id(FeatureId(feature_id_str))
+        if not markdown:
+            return f"No se encontraron requisitos EARS para la caracteristica {feature_id_str}"
+
+        return markdown[:4000]
+
+    return tool_def, handler
+
+
+def build_get_diagram_for_feature(
+    diagram_repo: ActivityDiagramRepository,
+) -> tuple[KnowledgeToolDef, KnowledgeToolHandler]:
+    tool_def = KnowledgeToolDef(
+        name="get_diagram_for_feature",
+        description="Recupera el diagrama de actividad PlantUML de una caracteristica",
+        parameters={
+            "type": "object",
+            "properties": {
+                "feature_id": {
+                    "type": "string",
+                    "description": "ID de la caracteristica a consultar (ej. feat_01KT...)",
+                },
+            },
+            "required": ["feature_id"],
+        },
+    )
+
+    async def handler(input_data: dict[str, Any]) -> str:
+        feature_id_str = input_data.get("feature_id", "")
+        if not feature_id_str:
+            return "Error: parametro 'feature_id' requerido"
+
+        diagram = await diagram_repo.by_feature_id(FeatureId(feature_id_str))
+        if diagram is None:
+            return f"No se encontro diagrama para la caracteristica {feature_id_str}"
+
+        return diagram.diagram_syntax[:4000]
 
     return tool_def, handler
