@@ -199,6 +199,28 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             models = result.scalars().all()
             return [_model_to_summary(m) for m in models]
 
+    async def count_completed_by_phase(
+        self,
+        *,
+        since_session_id: AgentMemoryId | None = None,
+    ) -> dict[str, int]:
+        from sqlalchemy import func
+
+        async with self._session_factory() as db:
+            conditions = [AgentSessionModel.is_completed == True]  # noqa: E712
+            if since_session_id is not None:
+                subq = select(AgentSessionModel.created_at).where(
+                    AgentSessionModel.id == since_session_id
+                ).scalar_subquery()
+                conditions.append(AgentSessionModel.created_at > subq)
+            stmt = (
+                select(AgentSessionModel.phase, func.count())
+                .where(*conditions)
+                .group_by(AgentSessionModel.phase)
+            )
+            result = await db.execute(stmt)
+            return {str(row[0]): int(row[1]) for row in result.fetchall()}
+
 
 class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -265,6 +287,7 @@ def _to_summary(session: AgentSession) -> AgentSessionSummary:
         validation_errors=session.validation_errors,
         user_instructions=session.user_instructions,
         created_at=session.created_at,
+        reflection=session.reflection,
     )
 
 
@@ -310,6 +333,7 @@ def _model_to_summary(model: AgentSessionModel) -> AgentSessionSummary:
         validation_errors=model.validation_errors,
         user_instructions=model.user_instructions,
         created_at=model.created_at,
+        reflection=model.reflection,
     )
 
 

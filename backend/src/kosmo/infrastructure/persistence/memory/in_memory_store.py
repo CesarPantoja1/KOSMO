@@ -125,6 +125,26 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         sessions = sorted(self._store.values(), key=lambda s: s.created_at, reverse=True)
         return [_to_summary(s) for s in sessions[:limit]]
 
+    async def count_completed_by_phase(
+        self,
+        *,
+        since_session_id: AgentMemoryId | None = None,
+    ) -> dict[str, int]:
+        cutoff: datetime | None = None
+        if since_session_id is not None:
+            ref = self._store.get(since_session_id)
+            if ref is not None:
+                cutoff = ref.created_at
+        counts: dict[str, int] = {}
+        for s in self._store.values():
+            if not s.is_completed:
+                continue
+            if cutoff is not None and s.created_at <= cutoff:
+                continue
+            key = s.phase.value
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))
@@ -147,6 +167,7 @@ def _to_summary(session: AgentSession) -> AgentSessionSummary:
         validation_errors=session.validation_errors,
         user_instructions=session.user_instructions,
         created_at=session.created_at,
+        reflection=session.reflection,
     )
 
 

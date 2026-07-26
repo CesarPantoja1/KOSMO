@@ -63,6 +63,7 @@ class AgentSessionSummary:
     validation_errors: int
     user_instructions: str | None
     created_at: datetime
+    reflection: str | None = None
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,12 @@ class AgentMemoryPort(Protocol):
         *,
         limit: int = 50,
     ) -> list[AgentSessionSummary]: ...
+
+    async def count_completed_by_phase(
+        self,
+        *,
+        since_session_id: AgentMemoryId | None = None,
+    ) -> dict[str, int]: ...
 
 
 class KnowledgePatternStore(Protocol):

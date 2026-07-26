@@ -34,9 +34,9 @@ class ConsolidateKnowledgePatterns:
         completed = [s for s in sessions if s.is_completed]
         by_phase: dict[SpecPhase, list[str]] = {}
         for s in completed:
-            by_phase.setdefault(s.phase, []).append(
-                s.user_instructions or ""
-            )
+            snippet = s.reflection or s.user_instructions or ""
+            if snippet.strip():
+                by_phase.setdefault(s.phase, []).append(snippet)
 
         result: dict[str, int] = {}
         for phase, snippets in by_phase.items():
@@ -58,12 +58,12 @@ class ConsolidateKnowledgePatterns:
         prompt = PromptTemplate(
             system_prompt=(
                 "Eres un analista de patrones. Tu tarea es extraer practicas recurrentes "
-                "o errores repetidos a partir de instrucciones de usuarios en sesiones "
+                "o errores repetidos a partir de reflexiones del agente en sesiones "
                 f"de fase {phase.value}. Devuelve un JSON con la clave 'patterns', "
-                "cada item con 'pattern' (texto) y 'support' (numero de instrucciones "
+                "cada item con 'pattern' (texto) y 'support' (numero de reflexiones "
                 "que respaldan el patron, estimado). Maximo 5 patrones."
             ),
-            user_prompt=f"Instrucciones:\n\n{context}",
+            user_prompt=f"Reflexiones:\n\n{context}",
         )
         try:
             response = await self._llm_client.complete(prompt, temperature=0.2, max_tokens=2000)

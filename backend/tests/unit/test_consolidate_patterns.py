@@ -74,7 +74,7 @@ async def test_consolidate_creates_patterns() -> None:
     for _ in range(10):
         await memory.save_session(a_session(
             is_completed=True, phase=SpecPhase.DESCUBRIMIENTO,
-            user_instructions="agrega mas reglas de negocio",
+            reflection="el negocio necesita reglas de validacion de moneda y limites de transaccion",
         ))
 
     # Act
@@ -99,7 +99,7 @@ async def test_consolidate_skips_phase_with_insufficient_sessions() -> None:
 
     await memory.save_session(a_session(
         is_completed=True, phase=SpecPhase.MODELO,
-        user_instructions="simplifica el diagrama",
+        reflection="simplifica el diagrama de actividad",
     ))
 
     # Act
@@ -121,7 +121,7 @@ async def test_consolidate_purges_old_patterns_on_replace() -> None:
     for _ in range(5):
         await memory.save_session(a_session(
             is_completed=True, phase=SpecPhase.DESCUBRIMIENTO,
-            user_instructions="mejora el alcance",
+            reflection="mejora el alcance del documento",
         ))
 
     # Act — first consolidation
@@ -134,3 +134,42 @@ async def test_consolidate_purges_old_patterns_on_replace() -> None:
     # Assert
     patterns = await pattern_store.list_patterns(phase=SpecPhase.DESCUBRIMIENTO)
     assert len(patterns) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_count_completed_by_phase_in_memory() -> None:
+    # Arrange
+    memory = InMemoryAgentSessionStore()
+
+    for _ in range(3):
+        await memory.save_session(a_session(is_completed=True, phase=SpecPhase.DESCUBRIMIENTO))
+    for _ in range(2):
+        await memory.save_session(a_session(is_completed=True, phase=SpecPhase.MODELO))
+    await memory.save_session(a_session(is_completed=False, phase=SpecPhase.DESCUBRIMIENTO))
+
+    # Act
+    counts = await memory.count_completed_by_phase()
+
+    # Assert
+    assert counts == {"descubrimiento": 3, "modelo": 2}
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_count_completed_by_phase_since_session() -> None:
+    # Arrange
+    memory = InMemoryAgentSessionStore()
+
+    s1 = a_session(is_completed=True, phase=SpecPhase.DESCUBRIMIENTO)
+    await memory.save_session(s1)
+    s2 = a_session(is_completed=True, phase=SpecPhase.DESCUBRIMIENTO)
+    await memory.save_session(s2)
+    s3 = a_session(is_completed=True, phase=SpecPhase.DESCUBRIMIENTO)
+    await memory.save_session(s3)
+
+    # Act — count sessions after s1
+    counts = await memory.count_completed_by_phase(since_session_id=s1.session_id)
+
+    # Assert
+    assert counts.get("descubrimiento", 0) == 2  # s2, s3

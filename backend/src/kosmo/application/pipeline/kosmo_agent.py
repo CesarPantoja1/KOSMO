@@ -24,6 +24,8 @@ from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 if TYPE_CHECKING:
     from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 
+_CONSOLIDATION_THRESHOLD = 5
+
 
 class KOSMOAgent:
     def __init__(
@@ -36,6 +38,7 @@ class KOSMOAgent:
         embedding_generator: Any = None,
         knowledge_tools: KnowledgeToolRegistry | None = None,
         pattern_store: KnowledgePatternStore | None = None,
+        consolidation_threshold: int = _CONSOLIDATION_THRESHOLD,
     ) -> None:
         self._llm_client = llm_client
         self._guard_registry = guard_registry
@@ -45,6 +48,7 @@ class KOSMOAgent:
         self._embedder: Any = embedding_generator  # EmbeddingGenerator
         self._knowledge_tools: KnowledgeToolRegistry | None = knowledge_tools
         self._pattern_store = pattern_store
+        self._consolidation_threshold = consolidation_threshold
 
     async def execute_with_skill(
         self,
@@ -315,6 +319,24 @@ class KOSMOAgent:
 
         await self._memory.save_session(session)
 
+        if is_completed and self._pattern_store is not None:
+            asyncio.create_task(self._consolidate_async())
+
+    async def _consolidate_async(self) -> None:
+        if self._memory is None or self._pattern_store is None:
+            return
+        from kosmo.application.knowledge import ConsolidateInput, ConsolidateKnowledgePatterns
+
+        counts = await self._memory.count_completed_by_phase()
+        for _phase, count in counts.items():
+            if count >= self._consolidation_threshold and count % self._consolidation_threshold == 0:
+                uc = ConsolidateKnowledgePatterns(
+                    memory=self._memory,
+                    pattern_store=self._pattern_store,
+                    llm_client=self._llm_client,
+                )
+                await uc.execute(ConsolidateInput(sessions_limit=min(count * 2, 100)))
+
     async def _resolve_knowledge_tools(
         self,
         system_prompt: str,
@@ -416,9 +438,6 @@ class KOSMOAgent:
         current_iteration: int,
         validation: ValidationResult,
     ) -> str | None:
-        if is_completed and current_iteration == 1 and validation.is_valid:
-            return None
-
         status = "completada exitosamente" if is_completed else "fallida"
         errors_text = "; ".join(validation.errors[:5]) if validation.errors else "ninguno"
 
