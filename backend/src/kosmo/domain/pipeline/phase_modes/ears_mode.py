@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,
+    EARSSet,
     GenerationMetadata,
     ValidationResult,
 )
@@ -129,17 +132,35 @@ Genera requisitos distribuidos en al menos 4 categorías:
 
 
 class EARSMode:
-    def __init__(self) -> None:
-        self._feature_id: FeatureId = FeatureId("")
-        self._feature_number: int = 0
 
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.REQUISITOS
 
     @property
+    def temperature(self) -> float:
+        return 0.3
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import EARSSet
+
+        return EARSSet
+
+    @property
     def system_prompt(self) -> str:
-        return _EARS_SYSTEM_PROMPT
+        base = _EARS_SYSTEM_PROMPT
+        from kosmo.domain.sdd.few_shot.loader import load_example
+
+        example = load_example(SpecPhase.REQUISITOS)
+        if example:
+            header = "\n\n## Ejemplo de referencia (no copies literalmente; adapta al contexto del usuario)\n\n"
+            base += header + example
+        return base
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
@@ -192,8 +213,6 @@ class EARSMode:
         ]
 
     def build_user_prompt(self, context: EARSPhaseContext) -> str:
-        self._feature_id = context.feature.id
-        self._feature_number = context.feature_number
         parts = ["## Documento de Descubrimiento\n\n"]
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
@@ -212,7 +231,19 @@ class EARSMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+        if isinstance(output, EARSSet):
+            requirements = cast("list[Any]", output.requirements)
+            syntax_result = validate_ears_syntax(requirements)
+            quality_result = validate_ears_quality(requirements)
+            software_result = validate_ears_software_level(requirements)
+            all_errors = syntax_result.errors + quality_result.errors + software_result.errors
+            all_warnings = syntax_result.warnings + quality_result.warnings + software_result.warnings
+            return ValidationResult(
+                is_valid=len(all_errors) == 0,
+                errors=all_errors,
+                warnings=all_warnings,
+            )
         if isinstance(output, dict) and "requirements" in output:
             raw_reqs = cast(object, output["requirements"])
             if not isinstance(raw_reqs, list):
@@ -262,10 +293,22 @@ class EARSMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> EARSPhaseOutput:
+        from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
+        from kosmo.contracts.pipeline.phase_outputs import EARSSet
         from kosmo.contracts.sdd.ears import EARSRequirement
         from kosmo.domain.sdd.id_generator import IdGenerator
 
+        feature_id: FeatureId = FeatureId("")
+        feature_number: int = 0
+        if isinstance(context, EARSPhaseContext):
+            feature_id = context.feature.id
+            feature_number = context.feature_number
+
+        if isinstance(raw_output, EARSSet):
+            raw_output = {"requirements": [r.model_dump() for r in raw_output.requirements]}
         reqs_data = self._extract_requirements_list(raw_output)
         requirements: list[EARSRequirement] = []
 
@@ -294,8 +337,8 @@ class EARSMode:
             requirements.append(
                 EARSRequirement(
                     id=RequirementId(IdGenerator.generate("requirement")),
-                    feature_id=self._feature_id,
-                    feature_number=self._feature_number,
+                    feature_id=feature_id,
+                    feature_number=feature_number,
                     requirement_number=i,
                     title=str(item.get("title", "")),  # type: ignore[reportUnknownArgumentType]
                     pattern=pattern,
@@ -308,8 +351,8 @@ class EARSMode:
         markdown_str = self._requirements_to_markdown(requirements)
 
         return EARSPhaseOutput(
-            feature_id=self._feature_id,
-            feature_number=self._feature_number,
+            feature_id=feature_id,
+            feature_number=feature_number,
             requirements=requirements,
             requirements_markdown=markdown_str,
             validation_result=validation_result,

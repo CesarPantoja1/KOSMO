@@ -22,3 +22,27 @@ class IpRateLimiter:
                 detail=f"Demasiadas solicitudes. Intente de nuevo en {retry_after} segundos.",
                 headers={"Retry-After": str(retry_after)},
             )
+
+
+class ProjectGenerationRateLimiter:
+    def __init__(self, requests_per_hour: int) -> None:
+        self._limit = requests_per_hour
+
+    async def __call__(self, request: Request, project_id: str = "") -> None:
+        if not project_id:
+            project_id = request.path_params.get("project_id", "unknown")
+        redis = getattr(request.app.state, "redis", None)
+        if redis is None:
+            return
+        key = f"gen:rate:{project_id}"
+        count = int(await redis.incr(key))
+        if count == 1:
+            await redis.expire(key, 3600)
+        if count > self._limit:
+            ttl = int(await redis.ttl(key))
+            retry_after = max(ttl, 1)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Limite de generaciones excedido para el proyecto. Intente de nuevo en {retry_after} segundos.",
+                headers={"Retry-After": str(retry_after)},
+            )

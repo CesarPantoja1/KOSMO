@@ -39,8 +39,12 @@ def a_session(
     output_json: str | None = None,
     validation_is_valid: bool = False,
     validation_errors: int = 0,
+    validation_error_messages: list[str] | None = None,
+    embedding: list[float] | None = None,
+    embedding_model: str | None = None,
     total_llm_calls: int = 0,
     user_instructions: str | None = None,
+    reflection: str | None = None,
     created_at: datetime | None = None,
     updated_at: datetime | None = None,
 ) -> AgentSession:
@@ -60,8 +64,12 @@ def a_session(
         output_json=output_json,
         validation_is_valid=validation_is_valid,
         validation_errors=validation_errors,
+        validation_error_messages=validation_error_messages or [],
+        embedding=embedding,
+        embedding_model=embedding_model,
         total_llm_calls=total_llm_calls,
         user_instructions=user_instructions,
+        reflection=reflection,
         created_at=created_at or now,
         updated_at=updated_at or now,
     )
@@ -78,6 +86,7 @@ def a_session_summary(
     total_llm_calls: int = 0,
     validation_errors: int = 0,
     user_instructions: str | None = None,
+    reflection: str | None = None,
     created_at: datetime | None = None,
 ) -> AgentSessionSummary:
     return AgentSessionSummary(
@@ -91,6 +100,7 @@ def a_session_summary(
         validation_errors=validation_errors,
         user_instructions=user_instructions,
         created_at=created_at or datetime.now(UTC),
+        reflection=reflection,
     )
 
 

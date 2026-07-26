@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -57,13 +59,24 @@ Escapa TODOS los saltos de línea como \\n y TODAS las comillas dobles como
 
 
 class RequirementsRefineMode:
-    def __init__(self) -> None:
-        self._feature_id: FeatureId = FeatureId("")
-        self._feature_number: int = 0
 
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.REQUISITOS
+
+    @property
+    def temperature(self) -> float:
+        return 0.3
+
+    @property
+    def max_tokens(self) -> int:
+        return 4096
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
+
+        return RequirementsDocument
 
     @property
     def system_prompt(self) -> str:
@@ -74,8 +87,6 @@ class RequirementsRefineMode:
         return []
 
     def build_user_prompt(self, context: RequirementsRefinePhaseContext) -> str:
-        self._feature_id = context.feature.id
-        self._feature_number = context.feature_number
 
         val = validate_refine_input_exists(context.current_requirements_markdown)
         if not val.is_valid:
@@ -99,9 +110,13 @@ class RequirementsRefineMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+        from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
+
         text = ""
-        if isinstance(output, str):
+        if isinstance(output, RequirementsDocument):
+            text = output.requirements_markdown.strip()
+        elif isinstance(output, str):
             text = output.strip()
         elif isinstance(output, dict):
             as_dict = cast(dict[str, object], output)
@@ -155,7 +170,20 @@ class RequirementsRefineMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> EARSPhaseOutput:
+        from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
+        from kosmo.contracts.pipeline.phase_outputs import RequirementsDocument
+
+        feature_id: FeatureId = FeatureId("")
+        feature_number: int = 0
+        if isinstance(context, RequirementsRefinePhaseContext):
+            feature_id = context.feature.id
+            feature_number = context.feature_number
+
+        if isinstance(raw_output, RequirementsDocument):
+            raw_output = raw_output.requirements_markdown
         markdown_text = ""
 
         if isinstance(raw_output, str):
@@ -167,8 +195,8 @@ class RequirementsRefineMode:
 
         if markdown_text:
             return EARSPhaseOutput(
-                feature_id=self._feature_id,
-                feature_number=self._feature_number,
+                feature_id=feature_id,
+                feature_number=feature_number,
                 requirements=[],
                 requirements_markdown=markdown_text,
                 validation_result=validation_result,
@@ -208,8 +236,8 @@ class RequirementsRefineMode:
             requirements.append(
                 EARSRequirement(
                     id=RequirementId(IdGenerator.generate("requirement")),
-                    feature_id=self._feature_id,
-                    feature_number=self._feature_number,
+                    feature_id=feature_id,
+                    feature_number=feature_number,
                     requirement_number=i,
                     title=str(item.get("title", "")),  # type: ignore[reportUnknownArgumentType]
                     pattern=pattern,
@@ -222,8 +250,8 @@ class RequirementsRefineMode:
         markdown_str = self._requirements_to_markdown(requirements)
 
         return EARSPhaseOutput(
-            feature_id=self._feature_id,
-            feature_number=self._feature_number,
+            feature_id=feature_id,
+            feature_number=feature_number,
             requirements=requirements,
             requirements_markdown=markdown_str,
             validation_result=validation_result,

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
-from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
@@ -67,12 +67,11 @@ class RefineDiscoveryUseCase:
         )
 
         try:
-            # Nota: Usamos SpecPhase.DESCUBRIMIENTO porque el DiscoveryRefineMode
-            # utiliza esta fase por diseño de la arquitectura. El agente instanciado
-            # para este endpoint debe tener registrado DiscoveryRefineMode en esta llave.
-            phase_output = await self._agent.execute(
-                phase=SpecPhase.DESCUBRIMIENTO,
+            phase_output = await self._agent.execute_with_skill(
+                skill_name="discovery_refine",
                 context=context,
+                project_id=input_data.project_id,
+                user_instructions=input_data.instructions,
             )
         except Exception as exc:
             raise LLMInvocationError(

@@ -1,41 +1,14 @@
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
-
 from kosmo.application.projects.create_project import CreateProjectUseCase
-from kosmo.contracts.sdd.ids import ProjectId, UserId
-from kosmo.contracts.sdd.project import Project
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def by_slug(self, owner_id: str, slug: str) -> Project | None:
-        return next(
-            (p for p in self.projects.values() if str(p.owner_id) == owner_id and p.slug == slug),
-            None,
-        )
-
-    async def find_by_slug(self, slug: str) -> Project | None:
-        return next((p for p in self.projects.values() if p.slug == slug), None)
-
-    async def list_by_owner(self, owner_id: str) -> list[Project]:
-        return [p for p in self.projects.values() if str(p.owner_id) == owner_id]
-
-    async def save(self, project: Project) -> Project:  # type: ignore[override]
-        self.projects[str(project.id)] = project
-        return project
+from kosmo.contracts.sdd.ids import UserId
+from tests.unit.fakes import InMemoryProjectRepository
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_generates_slug_from_name() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -57,6 +30,7 @@ async def test_create_project_generates_slug_from_name() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_saves_with_correct_fields() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -79,6 +53,7 @@ async def test_create_project_saves_with_correct_fields() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_handles_duplicate_slug_for_same_owner() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()
@@ -103,6 +78,7 @@ async def test_create_project_handles_duplicate_slug_for_same_owner() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_create_project_handles_special_characters_in_name() -> None:
     # Arrange
     repository: Any = InMemoryProjectRepository()

@@ -21,12 +21,13 @@ from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.features import router as features_router
+from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirements import router as requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
-from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app
+from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
 
 # Metadatos OpenAPI
 
@@ -241,6 +242,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.generate_diagram = modelo_components.generate_diagram
     app.state.get_diagram = modelo_components.get_diagram
 
+    from kosmo.application.knowledge import ConsolidateKnowledgePatterns
+
+    consolidate_uc = ConsolidateKnowledgePatterns(
+        memory=pipeline_components.agent_memory,
+        pattern_store=pipeline_components.pattern_store,
+        llm_client=pipeline_components.llm_client,
+    )
+    app.state.consolidate_patterns = consolidate_uc
+
     instrument_app(settings, app=app, db_engine=db_engine)
     try:
         yield
@@ -264,6 +274,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+instrument_prometheus(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],
@@ -281,6 +293,7 @@ app.include_router(features_router)
 app.include_router(requirements_router)
 app.include_router(modelo_router)
 app.include_router(schemas_router)
+app.include_router(knowledge_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)

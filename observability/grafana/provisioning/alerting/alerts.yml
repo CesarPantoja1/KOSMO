@@ -1,0 +1,45 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: KOSMO-Alerts
+    folder: KOSMO
+    interval: 1m
+    rules:
+      - uid: high-error-rate
+        title: Tasa de Errores HTTP Alta
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: sum(rate(http_requests_total{status=~"5.."}[5m])) > 0.1
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: La tasa de errores 5xx del backend ha superado el 10% en los últimos 5 minutos.
+
+      - uid: high-disk-usage
+        title: Uso de Disco del Host Alto
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 80
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: El uso de disco en el servidor Oracle Cloud ha superado el 80%.

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from pgvector.sqlalchemy import Vector  # pyright: ignore[reportMissingTypeStubs]
 from sqlalchemy import DateTime, Integer, String, Text, func, text
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -124,9 +125,17 @@ class AgentSessionModel(Base):
     output_json: Mapped[str | None] = mapped_column(pg.JSONB(), nullable=True)
     validation_is_valid: Mapped[bool] = mapped_column(default=False, nullable=False)
     validation_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_error_messages: Mapped[list[Any]] = mapped_column(
+        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
+    )
     total_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     user_instructions: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    embedding: Mapped[list[float] | None] = mapped_column(Vector, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    reflection: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -141,3 +150,13 @@ class ActivityDiagramModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
+
+class KnowledgePatternModel(Base):
+    __tablename__ = "knowledge_patterns"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    pattern_text: Mapped[str] = mapped_column(Text(), nullable=False)
+    support_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

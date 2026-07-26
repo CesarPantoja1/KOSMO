@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -16,7 +18,7 @@ from kosmo.domain.pipeline.phase_validators.discovery_validator import (
 )
 
 _DISCOVERY_SYSTEM_PROMPT = (
-    "Eres un analista de negocio sénior. Aplicas ReAct internamente.\n"
+    "Eres un analista de negocio sénior.\n"
     "El Descubrimiento opera EXCLUSIVAMENTE a nivel de negocio: captura y valida "
     "el entendimiento del dominio del problema y la oportunidad que el producto "
     "aborda, sin referencia alguna a tecnología, componentes de software ni a "
@@ -96,7 +98,14 @@ class DiscoveryMode:
 
     @property
     def system_prompt(self) -> str:
-        return _DISCOVERY_SYSTEM_PROMPT
+        base = _DISCOVERY_SYSTEM_PROMPT
+        from kosmo.domain.sdd.few_shot.loader import load_example
+
+        example = load_example(SpecPhase.DESCUBRIMIENTO)
+        if example:
+            header = "\n\n## Ejemplo de referencia (no copies literalmente; adapta al contexto del usuario)\n\n"
+            base += header + example
+        return base
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
@@ -131,6 +140,20 @@ class DiscoveryMode:
             ),
         ]
 
+    @property
+    def temperature(self) -> float:
+        return 0.3
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
+
+        return DiscoveryDocument
+
     def build_user_prompt(self, context: DiscoveryPhaseContext) -> str:
         parts = [
             "## Proyecto\n",
@@ -142,12 +165,15 @@ class DiscoveryMode:
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.sdd.document_converters import markdown_to_document
         from kosmo.domain.sdd.output_guardrails import auto_repair_technical_terms
 
         raw_text: str = ""
-        if isinstance(output, dict) and "document" in output:
+        if isinstance(output, DiscoveryDocument):
+            raw_text = output.document
+        elif isinstance(output, dict) and "document" in output:
             raw_text = str(output["document"])  # type: ignore[reportUnknownArgumentType]
         elif isinstance(output, dict) and "raw_text" in output:
             raw_text = str(output["raw_text"])  # type: ignore[reportUnknownArgumentType]
@@ -206,12 +232,17 @@ class DiscoveryMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,  # noqa: ARG002 — parte del protocolo PhaseMode
     ) -> DiscoveryPhaseOutput:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.sdd.document_converters import (
             coerce_markdown_output,
             markdown_to_document,
         )
 
+        if isinstance(raw_output, DiscoveryDocument):
+            raw_output = raw_output.document
         doc = markdown_to_document(coerce_markdown_output(raw_output))
         return DiscoveryPhaseOutput(
             discovery_document=doc,

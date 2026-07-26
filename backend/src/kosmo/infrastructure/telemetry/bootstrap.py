@@ -82,17 +82,25 @@ def configure_telemetry(settings: Settings) -> None:
     _configure_logfire(settings)
 
 
+def instrument_prometheus(app: FastAPI) -> None:
+    """Instrumenta FastAPI con prometheus-fastapi-instrumentator antes del startup."""
+    try:
+        from prometheus_fastapi_instrumentator import (  # pyright: ignore[reportMissingImports]
+            Instrumentator,  # pyright: ignore[reportUnknownVariableType]
+        )
+
+        Instrumentator().instrument(app).expose(app)  # pyright: ignore[reportUnknownMemberType]
+    except ImportError:
+        pass
+
+
 def instrument_app(
     settings: Settings,
     *,
     app: FastAPI,
     db_engine: AsyncEngine,
 ) -> None:
-    """Aplica auto-instrumentación a los componentes IO una vez compuestos.
-
-    FastAPI y SQLAlchemy reciben handles concretos; Redis se instrumenta a nivel
-    de módulo, por eso no requiere el cliente.
-    """
+    """Aplica auto-instrumentación a los componentes IO en lifespan."""
 
     del settings
     fastapi_kwargs: dict[str, Any] = {"capture_headers": False}

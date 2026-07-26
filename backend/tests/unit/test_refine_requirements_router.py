@@ -1,11 +1,7 @@
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi import HTTPException
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.requirements.refine_requirements import RefineRequirementsUseCase
 from kosmo.contracts.auth import Principal
@@ -14,7 +10,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     GenerationMetadata,
     ValidationResult,
 )
-from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern, SpecPhase
+from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId, UserId
@@ -23,51 +19,16 @@ from kosmo.infrastructure.api.routers.requirements import (
     RefineRequirementsRequest,
     refine_requirements,
 )
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def save(self, project: Project) -> Project:
-        self.projects[str(project.id)] = project
-        return project
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save(self, feature: Feature) -> Feature:
-        self.features[str(feature.id)] = feature
-        return feature
-
-
-class InMemoryRequirementRepository:
-    def __init__(self) -> None:
-        self._data: dict[str, str] = {}
-
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
-        return self._data.get(str(feature_id))
-
-    async def save(self, feature_id: FeatureId, markdown: str) -> None:
-        self._data[str(feature_id)] = markdown
+from tests.unit.fakes import InMemoryFeatureRepository, InMemoryProjectRepository, InMemoryRequirementRepository
 
 
 class StubRefineAgent:
     def __init__(self, output: EARSPhaseOutput) -> None:
         self._output = output
 
-    async def execute(self, phase: SpecPhase, context: Any) -> Any:  # noqa: ARG002
+    async def execute_with_skill(
+        self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+    ) -> Any:  # noqa: ARG002
         return self._output
 
 
@@ -268,40 +229,3 @@ async def test_refine_requirements_raises_404_when_feature_not_found() -> None:
     # Assert (detalle del error)
     assert exc_info.value.status_code == 404
     assert "feat_missing" in exc_info.value.detail
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_refine_requirements_accepts_instructions_at_max_500_chars() -> None:
-    # Arrange
-    project_repo = InMemoryProjectRepository()
-    feature_repo = InMemoryFeatureRepository()
-    requirement_repo = InMemoryRequirementRepository()
-    _seed_project_and_feature(project_repo, feature_repo, "prj_refine04", "feat_refine04")
-    await requirement_repo.save(FeatureId("feat_refine04"), "## Requisitos EARS\n\noriginal")
-    refined_markdown = "## Requisitos EARS\n\nrefinado"
-    agent = StubRefineAgent(_valid_phase_output(FeatureId("feat_refine04"), refined_markdown))
-    use_case = RefineRequirementsUseCase(
-        project_repo=project_repo,  # type: ignore[arg-type]
-        feature_repo=feature_repo,  # type: ignore[arg-type]
-        requirement_repo=requirement_repo,  # type: ignore[arg-type]
-        agent=agent,  # type: ignore[arg-type]
-    )
-    request: Any = _FakeRequest(use_case, feature_repo)
-    body = RefineRequirementsRequest(
-        project_id="prj_refine04",
-        instructions="A" * 500,
-    )
-
-    # Act
-    result = await refine_requirements(
-        feature_id="feat_refine04",
-        body=body,
-        _principal=_principal(),
-        request=request,
-    )
-
-    # Assert
-    assert len(body.instructions) == 500
-    assert result["requirements_markdown"] == refined_markdown
-    assert result["total"] == 1

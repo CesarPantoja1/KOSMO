@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import (
@@ -23,7 +25,7 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 FIRST_GENERATION_COUNT = 5
 
 _FEATURES_SYSTEM_PROMPT = (
-    "Eres un diseñador de producto experto. Aplicas ReAct internamente.\n"
+    "Eres un diseñador de producto experto.\n"
     "Las Características operan a nivel de usuario: cada característica expresa "
     "lo que el usuario desea lograr, no lo que el software hace. En este nivel "
     "no existe todavía un sistema ni una aplicación.\n\n"
@@ -92,17 +94,35 @@ _FEATURES_SYSTEM_PROMPT = (
 
 
 class FeaturesMode:
-    def __init__(self) -> None:
-        self._existing_titles: list[str] = []
-        self._project_id: ProjectId = ProjectId("")
 
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.CARACTERISTICAS
 
     @property
+    def temperature(self) -> float:
+        return 0.4
+
+    @property
+    def max_tokens(self) -> int:
+        return 4096
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import FeatureSet
+
+        return FeatureSet
+
+    @property
     def system_prompt(self) -> str:
-        return _FEATURES_SYSTEM_PROMPT
+        base = _FEATURES_SYSTEM_PROMPT
+        from kosmo.domain.sdd.few_shot.loader import load_example
+
+        example = load_example(SpecPhase.CARACTERISTICAS)
+        if example:
+            header = "\n\n## Ejemplo de referencia (no copies literalmente; adapta al contexto del usuario)\n\n"
+            base += header + example
+        return base
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
@@ -157,8 +177,6 @@ class FeaturesMode:
     ) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
 
-        self._existing_titles = []
-
         discovery_md = ""
         existing_titles_list: list[str] = []
         user_prefs: list[Any] = []
@@ -167,8 +185,6 @@ class FeaturesMode:
             discovery_md = document_to_markdown(context.discovery_document)
             existing_titles_list = context.existing_feature_titles
             user_prefs = context.user_preferences
-            if isinstance(context, FeaturesPhaseContext):
-                self._project_id = context.project_id
         elif isinstance(context, EARSPhaseContext):
             discovery_md = document_to_markdown(context.discovery_document)
             user_prefs = context.user_preferences
@@ -181,8 +197,7 @@ class FeaturesMode:
         ]
 
         if existing_titles_list:
-            self._existing_titles = list(existing_titles_list)
-            existing_list = "\n".join(f"- {title}" for title in self._existing_titles)
+            existing_list = "\n".join(f"- {title}" for title in existing_titles_list)
             parts.append(
                 f"\n## Características Existentes (NO DUPLICAR NI REPETIR ESTAS CARACTERÍSTICAS):\n\n{existing_list}"
             )
@@ -200,15 +215,26 @@ class FeaturesMode:
 
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:
+        from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext, SuggestFeaturesContext
+        from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.domain.pipeline.phase_validators.features_validator import (
             validate_feature_structure,
             validate_feature_uniqueness,
         )
 
+        existing_titles: list[str] = []
+        if isinstance(context, (FeaturesPhaseContext, SuggestFeaturesContext)):
+            existing_titles = context.existing_feature_titles
+
         features_list: list[dict[str, Any]] = []
 
-        if isinstance(output, dict):
+        if isinstance(output, FeatureSet):
+            features_list = [
+                {"number": f.number, "title": f.title, "description": f.description, "origin": f.origin}
+                for f in output.features
+            ]
+        elif isinstance(output, dict):
             output_dict = cast(dict[str, object], output)
             if "features" in output_dict:
                 raw_features = output_dict["features"]
@@ -273,12 +299,12 @@ class FeaturesMode:
             )
 
         struct_result = validate_feature_structure(features_list)
-        uniq_result = validate_feature_uniqueness(features_list, self._existing_titles)
+        uniq_result = validate_feature_uniqueness(features_list, existing_titles)
 
         all_errors = struct_result.errors + uniq_result.errors
         all_warnings = struct_result.warnings + uniq_result.warnings
 
-        if not self._existing_titles:
+        if not existing_titles:
             count = len(features_list)
             if count != FIRST_GENERATION_COUNT:
                 all_errors.append(
@@ -321,12 +347,22 @@ class FeaturesMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> FeaturesPhaseOutput:
+        from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext
+        from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.contracts.sdd.feature import Feature
         from kosmo.domain.sdd.id_generator import IdGenerator
 
-        features: list[Feature] = []
+        project_id = ProjectId("")
+        if isinstance(context, FeaturesPhaseContext):
+            project_id = context.project_id
+
+        if isinstance(raw_output, FeatureSet):
+            raw_output = {"features": [f.model_dump() for f in raw_output.features]}
         features_list = self._extract_features_list(raw_output)
+        features: list[Feature] = []
         for item in features_list:
             title = str(item.get("title", ""))
             features.append(
@@ -336,7 +372,7 @@ class FeaturesMode:
                     title=title,
                     slug=title.lower().replace(" ", "-"),
                     description=str(item.get("description", "")),
-                    project_id=self._project_id,
+                    project_id=project_id,
                     origin=str(item.get("origin", "")),
                 )
             )

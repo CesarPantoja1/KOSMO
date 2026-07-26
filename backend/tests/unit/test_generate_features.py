@@ -1,11 +1,7 @@
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.features.generate_features import (
     GenerateFeaturesInput,
@@ -26,72 +22,16 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def by_slug(self, owner_id: str, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def find_by_slug(self, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def list_by_owner(self, owner_id: str) -> list[Project]:  # noqa: ARG002
-        return []
-
-    async def save(self, project: Project) -> Project:
-        self.projects[str(project.id)] = project
-        return project
-
-
-class InMemoryDocumentRepository:
-    def __init__(self) -> None:
-        self.documents: dict[str, RichTextDocument] = {}
-
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
-        return self.documents.get(str(project_id))
-
-    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
-        self.documents[str(project_id)] = document
-        return document
-
-    async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
-        return None
-
-    async def save_requirements(
-        self,
-        feature_id: Any,  # noqa: ARG002
-        document: RichTextDocument,  # noqa: ARG002
-    ) -> RichTextDocument:
-        return document
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save_many(self, features: list[Feature]) -> list[Feature]:
-        for f in features:
-            self.features[str(f.id)] = f
-        return features
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryFeatureRepository, InMemoryProjectRepository
 
 
 @dataclass
 class MockAgent:
     output: Any
 
-    async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+    async def execute_with_skill(
+        self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+    ) -> Any:  # noqa: ARG002
         return self.output
 
 
@@ -125,6 +65,7 @@ def _make_valid_features_output() -> FeaturesPhaseOutput:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_raises_when_project_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -147,6 +88,7 @@ async def test_generate_features_raises_when_project_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_raises_when_discovery_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -176,6 +118,7 @@ async def test_generate_features_raises_when_discovery_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_generates_features_successfully() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -210,6 +153,7 @@ async def test_generate_features_generates_features_successfully() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_raises_when_llm_fails() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -226,7 +170,9 @@ async def test_generate_features_raises_when_llm_fails() -> None:
     await doc_repo.save_discovery(ProjectId("prj_llm_fail"), _make_discovery_document())
 
     class FailingAgent:
-        async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+        async def execute_with_skill(
+            self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+        ) -> Any:  # noqa: ARG002
             raise RuntimeError("LLM service unavailable")
 
     agent: Any = FailingAgent()
@@ -246,6 +192,44 @@ async def test_generate_features_raises_when_llm_fails() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_features_raises_on_validation_failure() -> None:
+    # Arrange
+    project_repo: Any = InMemoryProjectRepository()
+    doc_repo: Any = InMemoryDocumentRepository()
+    feat_repo: Any = InMemoryFeatureRepository()
+    project = Project(
+        id=ProjectId("prj_invalid"),
+        name="Test Project",
+        slug="test-project",
+        description="Testing",
+        owner_id=UserId("usr_test"),
+    )
+    await project_repo.save(project)
+    await doc_repo.save_discovery(ProjectId("prj_invalid"), _make_discovery_document())
+    invalid_output = FeaturesPhaseOutput(
+        features=[],
+        validation_result=ValidationResult(is_valid=False, errors=["Titulo excede seis palabras"]),
+        generation_metadata=GenerationMetadata(llm_calls=1),
+    )
+    agent: Any = MockAgent(output=invalid_output)
+    use_case = GenerateFeaturesUseCase(
+        project_repo=project_repo,
+        document_repo=doc_repo,
+        feature_repo=feat_repo,
+        agent=agent,
+    )
+
+    # Act & Assert
+    with pytest.raises(LLMInvocationError) as exc_info:
+        await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_invalid")))
+
+    assert exc_info.value.problem.status == 502
+    assert "Titulo excede seis palabras" in exc_info.value.problem.detail
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_features_persists_generated_features() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()

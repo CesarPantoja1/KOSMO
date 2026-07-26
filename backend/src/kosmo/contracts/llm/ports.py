@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
 class PromptTemplate:
     system_prompt: str
     user_prompt: str
+
+
+@dataclass(frozen=True)
+class ToolCallRecord:
+    name: str
+    args: dict[str, Any]
+    result_snippet: str = ""
 
 
 @dataclass(frozen=True)
@@ -39,3 +47,37 @@ class LLMClient(Protocol):
         temperature: float = 0.1,
         max_tokens: int = 4096,
     ) -> LLMResponse: ...
+
+    async def complete_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> T: ...
+
+    @property
+    def supports_native_tools(self) -> bool: ...
+
+    async def complete_with_tools(
+        self,
+        prompt: PromptTemplate,
+        tools: list[dict[str, Any]],
+        tool_handler: Callable[[str, dict[str, Any]], Awaitable[str | None]],
+        temperature: float = 0.1,
+        max_tokens: int = 2000,
+    ) -> tuple[str, list[ToolCallRecord]]: ...
+
+
+class Embedder(Protocol):
+    @property
+    def model_name(self) -> str: ...
+
+    async def embed(self, text: str) -> list[float] | None: ...
+
+    @staticmethod
+    def text_for_embedding(output: object, validation_errors: list[str]) -> str:
+        parts = [str(output)[:2000]]
+        if validation_errors:
+            parts.append("Errores: " + "; ".join(validation_errors[:5]))
+        return "\n".join(parts)

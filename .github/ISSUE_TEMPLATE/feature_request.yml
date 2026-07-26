@@ -1,0 +1,65 @@
+name: "✨ Solicitud de funcionalidad"
+description: "Propón una nueva funcionalidad o mejora para KOSMO"
+title: "[FEATURE]: "
+labels:
+  - enhancement
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe la funcionalidad o mejora que propones para KOSMO.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: Explica qué problema se busca resolver.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solución propuesta
+      description: Describe cómo debería funcionar la nueva funcionalidad.
+    validations:
+      required: true
+
+  - type: textarea
+    id: value
+    attributes:
+      label: Valor para el usuario
+      description: Explica qué beneficio recibiría el usuario.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación preliminares
+      placeholder: |
+        - Dado que...
+        - Cuando...
+        - Entonces...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Describe otras soluciones evaluadas.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Información adicional
+      description: Agrega referencias, diseños, capturas o documentación relacionada.
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verificación
+      options:
+        - label: Confirmo que revisé que esta funcionalidad no haya sido solicitada anteriormente.
+          required: true

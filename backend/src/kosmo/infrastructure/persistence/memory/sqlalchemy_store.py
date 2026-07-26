@@ -3,18 +3,19 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.agent_memory import (
     AgentMemoryPort,
     AgentSession,
     AgentSessionSummary,
+    KnowledgePattern,
     ProjectMemoryContext,
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
-from kosmo.infrastructure.persistence.postgres.models import AgentSessionModel
+from kosmo.infrastructure.persistence.postgres.models import AgentSessionModel, KnowledgePatternModel
 
 
 class SqlAlchemyAgentSessionStore(AgentMemoryPort):
@@ -44,10 +45,25 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             model.output_json = _safe_json_dump(session.output_json)
             model.validation_is_valid = session.validation_is_valid
             model.validation_errors = session.validation_errors
+            model.validation_error_messages = list(session.validation_error_messages)
             model.total_llm_calls = session.total_llm_calls
             model.user_instructions = session.user_instructions
+            model.embedding = list(session.embedding) if session.embedding else None
+            model.embedding_model = session.embedding_model
+            model.reflection = session.reflection
             model.updated_at = datetime.now(UTC)
 
+            await db.commit()
+
+    async def update_reflection(self, session_id: AgentMemoryId, reflection: str) -> None:
+        async with self._session_factory() as db:
+            stmt = select(AgentSessionModel).where(AgentSessionModel.id == session_id)
+            result = await db.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return
+            model.reflection = reflection
+            model.updated_at = datetime.now(UTC)
             await db.commit()
 
     async def load_session(self, session_id: AgentMemoryId) -> AgentSession | None:
@@ -100,11 +116,190 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             key = f"{s.session_type}:{s.phase.value}"
             if key not in latest or s.created_at > latest[key].created_at:
                 latest[key] = s
+
+        reflections: list[str] = []
+        error_counter: dict[str, int] = {}
+        async with self._session_factory() as db:
+            stmt = (
+                select(AgentSessionModel.reflection)
+                .where(AgentSessionModel.project_id == str(project_id))
+                .where(AgentSessionModel.reflection.isnot(None))
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(5)
+            )
+            result = await db.execute(stmt)
+            for row in result.fetchall():
+                if row[0]:
+                    reflections.append(str(row[0]))
+
+            errors_stmt = (
+                select(AgentSessionModel.validation_error_messages)
+                .where(AgentSessionModel.project_id == str(project_id))
+                .where(AgentSessionModel.is_completed == False)  # noqa: E712
+                .where(AgentSessionModel.validation_error_messages.isnot(None))
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(20)
+            )
+            errors_result = await db.execute(errors_stmt)
+            for (msgs,) in errors_result.fetchall():
+                for msg in (msgs or []):  # type: ignore[reportUnknownVariableType]
+                    error_counter[str(msg)] = error_counter.get(str(msg), 0) + 1  # type: ignore[reportUnknownArgumentType]
+
+        common_errors = [f"{msg} (x{count})" for msg, count in
+            sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
+
         return ProjectMemoryContext(
             project_id=project_id,
             latest_sessions=latest,
             total_sessions=len(summaries),
+            common_validation_errors=common_errors,
+            recent_reflections=reflections,
         )
+
+    async def get_similar_sessions(
+        self,
+        embedding: list[float],
+        *,
+        limit: int = 5,
+        exclude_project_id: ProjectId | None = None,
+        model: str | None = None,
+    ) -> list[AgentSessionSummary]:
+        async with self._session_factory() as db:
+            embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+            filters = "WHERE embedding IS NOT NULL"
+            if exclude_project_id:
+                filters += " AND project_id != :exclude_id"
+            if model:
+                filters += " AND embedding_model = :model"
+            stmt = text(
+                f"SELECT id FROM agent_sessions "
+                f"{filters} "
+                "ORDER BY embedding <-> :embedding::vector "
+                "LIMIT :limit"
+            )
+            params: dict[str, object] = {
+                "embedding": embedding_str,
+                "limit": limit,
+            }
+            if exclude_project_id is not None:
+                params["exclude_id"] = str(exclude_project_id)
+            if model:
+                params["model"] = model
+
+            result = await db.execute(stmt, params)
+            rows = result.fetchall()
+            summaries: list[AgentSessionSummary] = []
+            for row in rows:
+                session = await self.load_session(AgentMemoryId(str(row[0])))
+                if session is not None:
+                    summaries.append(_to_summary(session))
+            return summaries
+
+    async def list_recent_sessions_global(
+        self,
+        *,
+        limit: int = 50,
+    ) -> list[AgentSessionSummary]:
+        async with self._session_factory() as db:
+            stmt = (
+                select(AgentSessionModel)
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            models = result.scalars().all()
+            return [_model_to_summary(m) for m in models]
+
+    async def count_completed_by_phase(
+        self,
+        *,
+        since_session_id: AgentMemoryId | None = None,
+    ) -> dict[str, int]:
+        from sqlalchemy import func
+
+        async with self._session_factory() as db:
+            conditions = [AgentSessionModel.is_completed == True]  # noqa: E712
+            if since_session_id is not None:
+                subq = select(AgentSessionModel.created_at).where(
+                    AgentSessionModel.id == since_session_id
+                ).scalar_subquery()
+                conditions.append(AgentSessionModel.created_at > subq)
+            stmt = (
+                select(AgentSessionModel.phase, func.count())
+                .where(*conditions)
+                .group_by(AgentSessionModel.phase)
+            )
+            result = await db.execute(stmt)
+            return {str(row[0]): int(row[1]) for row in result.fetchall()}
+
+
+class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def replace_patterns(
+        self,
+        phase: SpecPhase,
+        patterns: list[KnowledgePattern],
+    ) -> None:
+        async with self._session_factory() as db:
+            delete_stmt = select(KnowledgePatternModel).where(
+                KnowledgePatternModel.phase == phase.value
+            )
+            result = await db.execute(delete_stmt)
+            for existing in result.scalars().all():
+                await db.delete(existing)
+            for p in patterns:
+                db.add(
+                    KnowledgePatternModel(
+                        id=p.pattern_id,
+                        phase=p.phase.value,
+                        pattern_text=p.pattern_text,
+                        support_count=p.support_count,
+                    )
+                )
+            await db.commit()
+
+    async def list_patterns(
+        self,
+        phase: SpecPhase | None = None,
+        *,
+        limit: int = 10,
+    ) -> list[KnowledgePattern]:
+        async with self._session_factory() as db:
+            stmt = select(KnowledgePatternModel)
+            if phase is not None:
+                stmt = stmt.where(KnowledgePatternModel.phase == phase.value)
+            stmt = stmt.order_by(KnowledgePatternModel.support_count.desc()).limit(limit)
+            result = await db.execute(stmt)
+            models = result.scalars().all()
+            return [
+                KnowledgePattern(
+                    pattern_id=m.id,
+                    phase=SpecPhase(m.phase),
+                    pattern_text=m.pattern_text,
+                    support_count=m.support_count,
+                    created_at=m.created_at,
+                    updated_at=m.updated_at,
+                )
+                for m in models
+            ]
+
+
+def _to_summary(session: AgentSession) -> AgentSessionSummary:
+    return AgentSessionSummary(
+        session_id=session.session_id,
+        project_id=session.project_id,
+        session_type=session.session_type,
+        phase=session.phase,
+        skill_name=session.skill_name,
+        is_completed=session.is_completed,
+        total_llm_calls=session.total_llm_calls,
+        validation_errors=session.validation_errors,
+        user_instructions=session.user_instructions,
+        created_at=session.created_at,
+        reflection=session.reflection,
+    )
 
 
 def _model_to_session(model: AgentSessionModel) -> AgentSession:
@@ -126,8 +321,12 @@ def _model_to_session(model: AgentSessionModel) -> AgentSession:
         output_json=_safe_json_dump(model.output_json),
         validation_is_valid=model.validation_is_valid,
         validation_errors=model.validation_errors,
+        validation_error_messages=[str(m) for m in (model.validation_error_messages or [])],
         total_llm_calls=model.total_llm_calls,
         user_instructions=model.user_instructions,
+        embedding=list(model.embedding) if model.embedding else None,
+        embedding_model=model.embedding_model,
+        reflection=model.reflection,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -145,6 +344,7 @@ def _model_to_summary(model: AgentSessionModel) -> AgentSessionSummary:
         validation_errors=model.validation_errors,
         user_instructions=model.user_instructions,
         created_at=model.created_at,
+        reflection=model.reflection,
     )
 
 
