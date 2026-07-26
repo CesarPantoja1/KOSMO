@@ -102,7 +102,14 @@ class ModeloMode:
 
     @property
     def system_prompt(self) -> str:
-        return _MODELO_SYSTEM_PROMPT
+        base = _MODELO_SYSTEM_PROMPT
+        from kosmo.domain.sdd.few_shot.loader import load_example
+
+        example = load_example(SpecPhase.MODELO)
+        if example:
+            header = "\n\n## Ejemplo de referencia (no copies literalmente; adapta al contexto del usuario)\n\n"
+            base += header + example
+        return base
 
     @property
     def available_tools(self) -> list[ToolDefinition]:

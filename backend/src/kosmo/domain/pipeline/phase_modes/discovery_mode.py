@@ -98,7 +98,14 @@ class DiscoveryMode:
 
     @property
     def system_prompt(self) -> str:
-        return _DISCOVERY_SYSTEM_PROMPT
+        base = _DISCOVERY_SYSTEM_PROMPT
+        from kosmo.domain.sdd.few_shot.loader import load_example
+
+        example = load_example(SpecPhase.DESCUBRIMIENTO)
+        if example:
+            header = "\n\n## Ejemplo de referencia (no copies literalmente; adapta al contexto del usuario)\n\n"
+            base += header + example
+        return base
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
