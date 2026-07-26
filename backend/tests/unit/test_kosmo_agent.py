@@ -198,3 +198,105 @@ async def test_execute_with_skill_allows_clean_project_name() -> None:
     # Assert
     assert result.validation_result.is_valid is True
     assert result.generation_metadata.llm_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> None:
+    # Arrange
+    from kosmo.contracts.llm.ports import LLMResponse, PromptTemplate
+    from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolDef, KnowledgeToolRegistry
+    from kosmo.infrastructure.persistence.memory.in_memory_store import InMemoryAgentSessionStore
+    from tests.factories import a_project_id
+
+    tool_calls = 0
+
+    tool_calls = 0
+
+    class StubToolLLM:
+        def __init__(self, responses: list[object]) -> None:
+            self._responses = responses
+            self._index = 0
+
+        async def complete(  # noqa: PLR6301
+            self, prompt: PromptTemplate, temperature: float = 0.3, max_tokens: int = 4096  # noqa: ARG002
+        ) -> LLMResponse:
+            nonlocal tool_calls
+            tool_calls += 1
+            if tool_calls % 2 == 1:
+                return LLMResponse(text='[TOOL: test_tool] {"query": "fix"}')
+            return LLMResponse(text="[CONTINUE]")
+
+        async def complete_json(  # noqa: PLR6301
+            self, prompt: PromptTemplate, temperature: float = 0.1, max_tokens: int = 4096  # noqa: ARG002
+        ) -> LLMResponse:
+            return await self.complete(prompt, temperature, max_tokens)
+
+        async def complete_typed[T](  # noqa: PLR6301
+            self,
+            prompt: PromptTemplate,  # noqa: ARG002
+            output_type: type[T],  # noqa: ARG002
+            temperature: float = 0.1,  # noqa: ARG002
+            max_tokens: int = 4096,  # noqa: ARG002
+        ) -> T:
+            result = self._responses[self._index] if self._index < len(self._responses) else self._responses[-1]
+            self._index += 1
+            return result  # type: ignore[reportReturnType]
+
+        @property
+        def supports_native_tools(self) -> bool:
+            return False
+
+        async def complete_with_tools(  # noqa: PLR6301
+            self,
+            prompt: PromptTemplate,  # noqa: ARG002
+            tools: list[dict[str, object]],  # noqa: ARG002
+            tool_handler: object,  # noqa: ARG002
+            temperature: float = 0.1,  # noqa: ARG002
+            max_tokens: int = 2000,  # noqa: ARG002
+        ) -> tuple[str, list[object]]:
+            return ("", [])
+
+    invalid = make_discovery_document("## Test\n\nAPI REST")
+    valid = make_discovery_document(DISCOVERY_VALID)
+    llm = StubToolLLM([invalid, valid])
+    store = InMemoryAgentSessionStore()
+    guard_registry = GuardRegistry()
+    skill_reg = SkillRegistry()
+    skill_reg.register(Skill(
+        name="discovery_generate", description="Test", phase=SpecPhase.DESCUBRIMIENTO,
+        mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+    ))
+    knowledge_tools = KnowledgeToolRegistry()
+
+    async def _test_tool(input_data: dict[str, object]) -> str:  # noqa: ARG001
+        return "contexto adicional del retry"
+
+    knowledge_tools.register(
+        KnowledgeToolDef(name="test_tool", description="Test", parameters={"type": "object"}),
+        _test_tool,
+    )
+    agent = KOSMOAgent(
+        llm_client=llm,  # type: ignore[reportArgumentType]
+        guard_registry=guard_registry,
+        max_iterations=3,
+        skill_registry=skill_reg,
+        memory=store,  # type: ignore[reportArgumentType]
+        knowledge_tools=knowledge_tools,
+    )
+    project_id = a_project_id()
+
+    # Act
+    await agent.execute_with_skill(
+        skill_name="discovery_generate",
+        context=DiscoveryPhaseContext(project_name="Test", project_description="Test"),
+        project_id=project_id,
+    )
+
+    # Assert
+    sessions = await store.list_sessions(project_id)
+    assert len(sessions) == 1
+    saved = await store.load_session(sessions[0].session_id)
+    assert saved is not None
+    assert any("retry_tools" in entry for entry in saved.reasoning_log)
+    assert len(saved.tool_results) >= 2

@@ -186,7 +186,38 @@ class KOSMOAgent:
             delay_s = min(1.0 * (2 ** (iteration - 1)), 30.0)
             await asyncio.sleep(delay_s)
 
-            user_prompt = base_user_prompt + "\n\n" + mode.build_validation_feedback(last_validation.errors)
+            retry_context = ""
+            if (
+                self._knowledge_tools is not None
+                and last_validation.errors
+                and iteration < self._max_iterations
+            ):
+                error_list = "; ".join(last_validation.errors[:5])
+                retry_system_prompt = (
+                    system_prompt + "\n\nLa validacion del contenido generado fallo "
+                    "con los siguientes errores. Puedes consultar herramientas "
+                    "para corregir antes de reintentar."
+                )
+                retry_user_prompt = f"Errores de validacion: {error_list}"
+                try:
+                    retry_context, retry_records = await self._resolve_knowledge_tools(
+                        retry_system_prompt, retry_user_prompt, project_id
+                    )
+                    if retry_records:
+                        tool_invocations.extend(retry_records)
+                        reason_entries.append(
+                            f"retry_tools: iteracion {iteration}"
+                            + " herramientas: "
+                            + ", ".join(r["tool"] for r in retry_records if r.get("found"))
+                        )
+                except Exception:
+                    pass
+
+            feedback = mode.build_validation_feedback(last_validation.errors)
+            user_prompt = base_user_prompt
+            if retry_context:
+                user_prompt += "\n\n## Informacion adicional del retry\n\n" + retry_context
+            user_prompt += "\n\n" + feedback
 
         total_ms = int((time.monotonic() - start_time) * 1000)
         metadata = GenerationMetadata(
