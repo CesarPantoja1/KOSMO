@@ -37,6 +37,7 @@ def _make_async_session_mock(returned_model: ActivityDiagramModel | None = None)
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_inserts_when_no_existing_diagram() -> None:
     # Arrange
     diagram = _make_diagram()
@@ -61,6 +62,7 @@ async def test_save_inserts_when_no_existing_diagram() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_updates_when_diagram_exists_for_feature() -> None:
     # Arrange
     first = _make_diagram(feature_id="feat_01")

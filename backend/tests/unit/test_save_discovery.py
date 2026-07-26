@@ -1,10 +1,6 @@
-import sys
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.discovery.save_discovery import (
     SaveDiscoveryInput,
@@ -13,28 +9,7 @@ from kosmo.application.discovery.save_discovery import (
 )
 from kosmo.contracts.sdd.document import DocumentNode, RichTextDocument, SectionHeading
 from kosmo.contracts.sdd.ids import ProjectId
-
-
-class InMemoryDocumentRepository:
-    def __init__(self) -> None:
-        self.documents: dict[str, RichTextDocument] = {}
-
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
-        return self.documents.get(str(project_id))
-
-    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
-        self.documents[str(project_id)] = document
-        return document
-
-    async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
-        return None
-
-    async def save_requirements(
-        self,
-        feature_id: Any,  # noqa: ARG002
-        document: RichTextDocument,  # noqa: ARG002
-    ) -> RichTextDocument:
-        return document
+from tests.unit.fakes import InMemoryDocumentRepository
 
 
 def _make_discovery_document(title: str = "Test Discovery") -> RichTextDocument:
@@ -50,6 +25,7 @@ def _make_discovery_document(title: str = "Test Discovery") -> RichTextDocument:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_discovery_persists_document() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()
@@ -68,6 +44,7 @@ async def test_save_discovery_persists_document() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_discovery_returns_saved_document() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()
@@ -86,6 +63,7 @@ async def test_save_discovery_returns_saved_document() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_save_discovery_overwrites_existing_document() -> None:
     # Arrange
     repository: Any = InMemoryDocumentRepository()

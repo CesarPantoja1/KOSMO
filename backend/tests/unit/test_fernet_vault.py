@@ -5,12 +5,14 @@ from kosmo.contracts.auth import EncryptedSecret, InvalidTokenError
 from kosmo.infrastructure.security import FernetSecretCipher
 
 
+@pytest.mark.unit
 def test_encrypt_then_decrypt_roundtrip() -> None:
     cipher = FernetSecretCipher(Fernet.generate_key().decode("utf-8"))
     secret = cipher.encrypt(b"sk-anthropic-abcdef")
     assert cipher.decrypt(secret) == b"sk-anthropic-abcdef"
 
 
+@pytest.mark.unit
 def test_decrypt_with_wrong_key_raises() -> None:
     cipher_a = FernetSecretCipher(Fernet.generate_key().decode("utf-8"))
     cipher_b = FernetSecretCipher(Fernet.generate_key().decode("utf-8"))
@@ -19,6 +21,7 @@ def test_decrypt_with_wrong_key_raises() -> None:
         cipher_b.decrypt(secret)
 
 
+@pytest.mark.unit
 def test_decrypt_tampered_ciphertext_raises() -> None:
     cipher = FernetSecretCipher(Fernet.generate_key().decode("utf-8"))
     with pytest.raises(InvalidTokenError):

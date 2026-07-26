@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
+from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
 
 _DISCOVERY_DOC = "\n\n".join(
     f"## {section}\n\nContenido de ejemplo para la sección de {section.lower()}."
@@ -92,3 +92,27 @@ class NoopLLMClient:
         max_tokens: int = 4096,
     ) -> LLMResponse:
         return await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+
+    async def complete_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> T:
+        response = await self.complete(prompt, temperature=temperature, max_tokens=max_tokens)
+        return output_type.model_validate(json.loads(response.text))  # type: ignore[reportAttributeAccessIssue]
+
+    @property
+    def supports_native_tools(self) -> bool:
+        return False
+
+    async def complete_with_tools(  # noqa: ARG002
+        self,
+        prompt: PromptTemplate,  # noqa: ARG002
+        tools: list[dict[str, object]],  # noqa: ARG002
+        tool_handler: object,  # noqa: ARG002
+        temperature: float = 0.1,  # noqa: ARG002
+        max_tokens: int = 2000,  # noqa: ARG002
+    ) -> tuple[str, list[ToolCallRecord]]:
+        return ("", [])

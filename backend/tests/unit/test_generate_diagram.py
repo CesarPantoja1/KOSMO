@@ -14,7 +14,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ModeloPhaseOutput,
     ValidationResult,
 )
-from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
@@ -22,62 +21,16 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save(self, feature: Feature) -> Feature:
-        self.features[str(feature.id)] = feature
-        return feature
-
-    async def save_many(self, features: list[Feature]) -> list[Feature]:
-        for f in features:
-            self.features[str(f.id)] = f
-        return features
-
-    async def next_number(self, project_id: ProjectId) -> int:  # noqa: ARG002
-        return 1
-
-
-class InMemoryRequirementRepository:
-    def __init__(self) -> None:
-        self.requirements: dict[str, str] = {}
-
-    async def save(self, feature_id: FeatureId, markdown: str) -> None:
-        self.requirements[str(feature_id)] = markdown
-
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
-        return self.requirements.get(str(feature_id))
-
-
-class InMemoryActivityDiagramRepository:
-    def __init__(self) -> None:
-        self._diagrams: dict[str, DiagramaActividad] = {}
-
-    async def save(self, diagram: DiagramaActividad) -> DiagramaActividad:
-        self._diagrams[str(diagram.feature_id)] = diagram
-        return diagram
-
-    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
-        return self._diagrams.get(str(feature_id))
-
-    async def exists(self, feature_id: FeatureId) -> bool:
-        return str(feature_id) in self._diagrams
+from tests.unit.fakes import InMemoryActivityDiagramRepository, InMemoryFeatureRepository, InMemoryRequirementRepository
 
 
 class MockAgent:
     def __init__(self, output: Any) -> None:
         self._output = output
 
-    async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+    async def execute_with_skill(
+        self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+    ) -> Any:  # noqa: ARG002
         return self._output
 
 
@@ -138,6 +91,7 @@ def _make_valid_modelo_output(feature_id: str = "feat_01") -> ModeloPhaseOutput:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_success() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -165,6 +119,7 @@ async def test_generate_diagram_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_feature_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -185,6 +140,7 @@ async def test_generate_diagram_raises_feature_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_requirements_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -207,6 +163,7 @@ async def test_generate_diagram_raises_requirements_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_llm_invocation_on_agent_failure() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -217,7 +174,9 @@ async def test_generate_diagram_raises_llm_invocation_on_agent_failure() -> None
     await req_repo.save(FeatureId("feat_01"), _make_ears_requirements_markdown())
 
     class FailingAgent:
-        async def execute(self, phase: Any, context: Any) -> Any:  # noqa: ARG002
+        async def execute_with_skill(
+            self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+        ) -> Any:  # noqa: ARG002
             raise RuntimeError("LLM service unavailable")
 
     agent = FailingAgent()
@@ -235,6 +194,7 @@ async def test_generate_diagram_raises_llm_invocation_on_agent_failure() -> None
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_on_invalid_output_type() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -259,6 +219,7 @@ async def test_generate_diagram_raises_on_invalid_output_type() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_persists_diagram() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -287,6 +248,7 @@ async def test_generate_diagram_persists_diagram() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_on_validation_failure() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -317,6 +279,7 @@ async def test_generate_diagram_raises_on_validation_failure() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_raises_on_empty_diagram_syntax() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()

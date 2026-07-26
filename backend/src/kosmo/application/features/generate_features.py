@@ -7,7 +7,6 @@ from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     FeaturesPhaseOutput,
 )
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ProjectId
@@ -73,9 +72,10 @@ class GenerateFeaturesUseCase:
         )
 
         try:
-            phase_output = await self._agent.execute(
-                phase=SpecPhase.CARACTERISTICAS,
+            phase_output = await self._agent.execute_with_skill(
+                skill_name="features_generate",
                 context=context,
+                project_id=input_data.project_id,
             )
         except Exception as exc:
             raise LLMInvocationError(

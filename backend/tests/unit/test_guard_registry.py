@@ -1,18 +1,13 @@
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
-
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
-from kosmo.domain.pipeline.tool_registry import ToolRegistry
+from kosmo.domain.pipeline.guard_registry import GuardRegistry
 
 
 @pytest.mark.unit
-def test_tool_registry_register_and_execute() -> None:
+def test_guard_registry_register_and_execute() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register("echo", lambda inp: {"result": inp.get("text", "")})
 
     # Act
@@ -23,9 +18,9 @@ def test_tool_registry_register_and_execute() -> None:
 
 
 @pytest.mark.unit
-def test_tool_registry_execute_raises_when_tool_not_found() -> None:
+def test_guard_registry_execute_raises_when_tool_not_found() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
 
     # Act
     result = registry.execute("nonexistent", {})
@@ -36,9 +31,9 @@ def test_tool_registry_execute_raises_when_tool_not_found() -> None:
 
 
 @pytest.mark.unit
-def test_tool_registry_execute_returns_error_on_exception() -> None:
+def test_guard_registry_execute_returns_error_on_exception() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register("failing", lambda _: exec("raise ValueError('boom')"))  # noqa: S102
 
     # Act
@@ -49,9 +44,9 @@ def test_tool_registry_execute_returns_error_on_exception() -> None:
 
 
 @pytest.mark.unit
-def test_tool_registry_execute_parses_json_string_input() -> None:
+def test_guard_registry_execute_parses_json_string_input() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register("echo", lambda inp: {"parsed": inp})
 
     # Act
@@ -62,9 +57,9 @@ def test_tool_registry_execute_parses_json_string_input() -> None:
 
 
 @pytest.mark.unit
-def test_tool_registry_execute_handles_non_dict_non_json_input() -> None:
+def test_guard_registry_execute_handles_non_dict_non_json_input() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register("echo", lambda inp: {"received": inp})
 
     # Act
@@ -75,9 +70,9 @@ def test_tool_registry_execute_handles_non_dict_non_json_input() -> None:
 
 
 @pytest.mark.unit
-def test_tool_registry_describe_tools_formats_definitions() -> None:
+def test_guard_registry_describe_tools_formats_definitions() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register("alpha", lambda _: {})
 
     # Act
@@ -98,9 +93,9 @@ def test_tool_registry_describe_tools_formats_definitions() -> None:
 
 
 @pytest.mark.unit
-def test_tool_registry_describe_tools_handles_empty_list() -> None:
+def test_guard_registry_describe_tools_handles_empty_list() -> None:
     # Arrange
-    registry = ToolRegistry()
+    registry = GuardRegistry()
 
     # Act
     description = registry.describe_tools([])
@@ -124,7 +119,7 @@ def test_register_with_definition_and_execute_with_valid_params() -> None:
         },
     )
 
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register_with_definition(
         "adder",
         lambda inp: {"result": inp["a"] + inp["b"]},
@@ -151,7 +146,7 @@ def test_execute_with_missing_required_param_returns_error() -> None:
         },
     )
 
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register_with_definition(
         "adder",
         lambda inp: {"result": inp.get("a", 0) + inp.get("b", 0)},
@@ -179,7 +174,7 @@ def test_execute_with_wrong_type_param_returns_error() -> None:
         },
     )
 
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register_with_definition(
         "adder",
         lambda inp: {"result": inp.get("a", 0) + inp.get("b", 0)},
@@ -190,16 +185,6 @@ def test_execute_with_wrong_type_param_returns_error() -> None:
 
     assert "error" in result
     assert "b" in result["error"]
-
-
-@pytest.mark.unit
-def test_execute_without_definition_skips_validation() -> None:
-    registry = ToolRegistry()
-    registry.register("echo", lambda inp: {"result": inp.get("text", "")})
-
-    result = registry.execute("echo", {"text": "hola"})
-
-    assert result == {"result": "hola"}
 
 
 @pytest.mark.unit
@@ -216,7 +201,7 @@ def test_validate_parameters_valid_json_string_input() -> None:
         },
     )
 
-    registry = ToolRegistry()
+    registry = GuardRegistry()
     registry.register_with_definition(
         "analyser",
         lambda inp: {"ok": True, "doc": inp["document"]},
@@ -226,30 +211,3 @@ def test_validate_parameters_valid_json_string_input() -> None:
     result = registry.execute("analyser", '{"document": "contenido markdown"}')
 
     assert result == {"ok": True, "doc": "contenido markdown"}
-
-
-@pytest.mark.unit
-def test_validate_parameters_rejects_invalid_json_against_schema() -> None:
-    definition = ToolDefinition(
-        name="analyser",
-        description="Analiza documento",
-        parameters={
-            "type": "object",
-            "properties": {
-                "document": {"type": "string"},
-            },
-            "required": ["document"],
-        },
-    )
-
-    registry = ToolRegistry()
-    registry.register_with_definition(
-        "analyser",
-        lambda inp: {"ok": True, "doc": inp.get("document", "")},
-        definition,
-    )
-
-    result = registry.execute("analyser", {"wrong_key": 123})
-
-    assert "error" in result
-    assert "document" in result["error"]

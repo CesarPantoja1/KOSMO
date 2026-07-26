@@ -43,6 +43,7 @@ def _make_mock_request(generate_uc: Any = None, get_uc: Any = None) -> MagicMock
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_endpoint_success() -> None:
     now = datetime.now(UTC)
     diagram = DiagramaActividad(
@@ -78,6 +79,7 @@ async def test_generate_diagram_endpoint_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_endpoint_feature_not_found() -> None:
     mock_uc = MagicMock()
     mock_uc.execute = AsyncMock(side_effect=FeatureNotFoundError(feature_id="feat_missing"))
@@ -92,6 +94,7 @@ async def test_generate_diagram_endpoint_feature_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_diagram_endpoint_llm_error() -> None:
     mock_uc = MagicMock()
     mock_uc.execute = AsyncMock(side_effect=LLMInvocationError(detail="LLM failed"))
@@ -106,6 +109,7 @@ async def test_generate_diagram_endpoint_llm_error() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_endpoint_success() -> None:
     now = datetime.now(UTC)
     diagram = DiagramaActividad(
@@ -129,6 +133,7 @@ async def test_get_diagram_endpoint_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_endpoint_not_found() -> None:
     mock_uc = MagicMock()
     mock_uc.execute = AsyncMock(side_effect=DiagramNotFoundError(feature_id="feat_01"))

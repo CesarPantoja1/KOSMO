@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
+    DiagramSpec,
     GenerationMetadata,
     ModeloPhaseOutput,
     ValidationResult,
@@ -76,17 +79,37 @@ basado en un conjunto de requisitos EARS para una característica específica.
 - PROHIBIDO: Inventar flujos que no estén descritos en los requisitos EARS.
 """
 
+
 class ModeloMode:
-    def __init__(self) -> None:
-        self._feature_id: FeatureId = FeatureId("")
 
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.MODELO
 
     @property
+    def temperature(self) -> float:
+        return 0.2
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import DiagramSpec
+
+        return DiagramSpec
+
+    @property
     def system_prompt(self) -> str:
-        return _MODELO_SYSTEM_PROMPT
+        base = _MODELO_SYSTEM_PROMPT
+        from kosmo.domain.sdd.few_shot.loader import load_example
+
+        example = load_example(SpecPhase.MODELO)
+        if example:
+            header = "\n\n## Ejemplo de referencia (no copies literalmente; adapta al contexto del usuario)\n\n"
+            base += header + example
+        return base
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
@@ -97,10 +120,7 @@ class ModeloMode:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "diagram": {
-                            "type": "string",
-                            "description": "Código fuente PlantUML del diagrama."
-                        }
+                        "diagram": {"type": "string", "description": "Código fuente PlantUML del diagrama."}
                     },
                     "required": ["diagram"],
                 },
@@ -108,8 +128,6 @@ class ModeloMode:
         ]
 
     def build_user_prompt(self, context: ModeloPhaseContext) -> str:
-        self._feature_id = context.feature_id
-        
         parts = [f"## Característica ID: {context.feature_id}\n\n"]
         parts.append("## Requisitos EARS\n\n")
         parts.append(context.ears_requirements)
@@ -120,11 +138,13 @@ class ModeloMode:
 
         return "".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+        if isinstance(output, DiagramSpec):
+            return validate_activity_diagram_syntax(output.diagram_syntax)
         if isinstance(output, dict) and "diagram_syntax" in output:
             diagram = str(cast(object, output["diagram_syntax"]))
             return validate_activity_diagram_syntax(diagram)
-        
+
         return ValidationResult(
             is_valid=False,
             errors=["Formato de salida no reconocido. Se esperaba un JSON con 'diagram_syntax'."],
@@ -158,14 +178,24 @@ class ModeloMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> ModeloPhaseOutput:
-        
+        from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
+
+        feature_id = FeatureId("")
+        if isinstance(context, ModeloPhaseContext):
+            feature_id = context.feature_id
+
+        if isinstance(raw_output, DiagramSpec):
+            raw_output = {"diagram_syntax": raw_output.diagram_syntax}
+
         diagram_syntax = ""
         if isinstance(raw_output, dict) and "diagram_syntax" in raw_output:
             diagram_syntax = str(cast(object, raw_output["diagram_syntax"]))
 
         return ModeloPhaseOutput(
-            feature_id=self._feature_id,
+            feature_id=feature_id,
             diagram_syntax=diagram_syntax,
             validation_result=validation_result,
             generation_metadata=metadata,

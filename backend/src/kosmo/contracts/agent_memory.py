@@ -9,6 +9,16 @@ from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 
 
 @dataclass(frozen=True)
+class KnowledgePattern:
+    pattern_id: str
+    phase: SpecPhase
+    pattern_text: str
+    support_count: int = 1
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
 class AgentSession:
     session_id: AgentMemoryId
     project_id: ProjectId
@@ -19,6 +29,7 @@ class AgentSession:
     conversation: list[str] = field(default_factory=list[str])
     reasoning_log: list[str] = field(default_factory=list[str])
     tool_results: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    validation_error_messages: list[str] = field(default_factory=list[str])
 
     current_iteration: int = 0
     max_iterations: int = 8
@@ -30,6 +41,11 @@ class AgentSession:
     total_llm_calls: int = 0
 
     user_instructions: str | None = None
+
+    embedding: list[float] | None = None
+    embedding_model: str | None = None
+
+    reflection: str | None = None
 
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -47,6 +63,7 @@ class AgentSessionSummary:
     validation_errors: int
     user_instructions: str | None
     created_at: datetime
+    reflection: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,10 +72,13 @@ class ProjectMemoryContext:
     latest_sessions: dict[str, AgentSessionSummary]
     total_sessions: int
     common_validation_errors: list[str] = field(default_factory=list[str])
+    recent_reflections: list[str] = field(default_factory=list[str])
 
 
 class AgentMemoryPort(Protocol):
     async def save_session(self, session: AgentSession) -> None: ...
+
+    async def update_reflection(self, session_id: AgentMemoryId, reflection: str) -> None: ...
 
     async def load_session(self, session_id: AgentMemoryId) -> AgentSession | None: ...
 
@@ -76,6 +96,42 @@ class AgentMemoryPort(Protocol):
     ) -> AgentSession | None: ...
 
     async def get_project_context(self, project_id: ProjectId) -> ProjectMemoryContext: ...
+
+    async def get_similar_sessions(
+        self,
+        embedding: list[float],
+        *,
+        limit: int = 5,
+        exclude_project_id: ProjectId | None = None,
+        model: str | None = None,
+    ) -> list[AgentSessionSummary]: ...
+
+    async def list_recent_sessions_global(
+        self,
+        *,
+        limit: int = 50,
+    ) -> list[AgentSessionSummary]: ...
+
+    async def count_completed_by_phase(
+        self,
+        *,
+        since_session_id: AgentMemoryId | None = None,
+    ) -> dict[str, int]: ...
+
+
+class KnowledgePatternStore(Protocol):
+    async def replace_patterns(
+        self,
+        phase: SpecPhase,
+        patterns: list[KnowledgePattern],
+    ) -> None: ...
+
+    async def list_patterns(
+        self,
+        phase: SpecPhase | None = None,
+        *,
+        limit: int = 10,
+    ) -> list[KnowledgePattern]: ...
 
 
 class AgentMemoryError(Exception):

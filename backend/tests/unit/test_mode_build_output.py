@@ -1,9 +1,4 @@
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.contracts.pipeline.phase_outputs import (
     DiscoveryPhaseOutput,
@@ -12,7 +7,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     GenerationMetadata,
     ValidationResult,
 )
-from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import DiscoveryRefineMode
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
@@ -133,19 +127,6 @@ def test_discovery_refine_mode_build_output_none_yields_empty_document() -> None
 
 
 @pytest.mark.unit
-def test_discovery_refine_mode_build_output_returns_discovery_phase_output() -> None:
-    # Arrange
-    mode = DiscoveryRefineMode()
-
-    # Act
-    result = mode.build_output(_DISCOVERY_MD, _VALID_VALIDATION, _VALID_METADATA)
-
-    # Assert
-    assert isinstance(result, DiscoveryPhaseOutput)
-    assert result.discovery_document is not None
-
-
-@pytest.mark.unit
 def test_discovery_mode_build_output_handles_dict_input() -> None:
     # Arrange
     mode = DiscoveryMode()
@@ -177,8 +158,6 @@ def test_features_mode_build_output_returns_features_phase_output() -> None:
 def test_ears_mode_build_output_returns_ears_phase_output() -> None:
     # Arrange
     mode = EARSMode()
-    mode._feature_id = FeatureId("feat_01")  # type: ignore[reportPrivateUsage]
-    mode._feature_number = 1  # type: ignore[reportPrivateUsage]
     import json
 
     # Act

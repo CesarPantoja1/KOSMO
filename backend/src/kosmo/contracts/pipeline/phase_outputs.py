@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
@@ -75,3 +77,49 @@ class ModeloPhaseOutput:
     diagram_syntax: str
     validation_result: ValidationResult
     generation_metadata: GenerationMetadata
+
+
+# ── Modelos de salida estructurada del LLM (pydantic-ai output_type) ──
+
+
+class DiscoveryDocument(BaseModel):
+    document: str = Field(description="Documento de descubrimiento completo en markdown")
+
+
+class FeatureSpec(BaseModel):
+    number: int
+    title: str
+    description: str
+    origin: str
+
+
+class FeatureSet(BaseModel):
+    features: list[FeatureSpec] = Field(description="Lista de caracteristicas generadas")
+
+
+class AcceptanceCriterionSpec(BaseModel):
+    scenario: str
+    given: str
+    when: str
+    then: str
+
+
+class EARSRequirementSpec(BaseModel):
+    code: str
+    title: str
+    pattern: str
+    statement: str
+    origin: str
+    acceptance_criteria: list[AcceptanceCriterionSpec]
+
+
+class EARSSet(BaseModel):
+    requirements: list[EARSRequirementSpec]
+
+
+class RequirementsDocument(BaseModel):
+    requirements_markdown: str = Field(description="Documento de requisitos completo en markdown")
+
+
+class DiagramSpec(BaseModel):
+    diagram_syntax: str = Field(description="Codigo fuente PlantUML del diagrama de actividad")

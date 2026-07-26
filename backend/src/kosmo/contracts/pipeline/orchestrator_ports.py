@@ -84,6 +84,15 @@ class PhaseMode(Protocol):
     @property
     def available_tools(self) -> list[ToolDefinition]: ...
 
+    @property
+    def temperature(self) -> float: ...
+
+    @property
+    def max_tokens(self) -> int: ...
+
+    @property
+    def output_type(self) -> type[Any]: ...
+
     def build_user_prompt(
         self,
         context: DiscoveryPhaseContext
@@ -93,7 +102,7 @@ class PhaseMode(Protocol):
         | ModeloPhaseContext,
     ) -> str: ...
 
-    def validate_output(self, output: Any) -> ValidationResult: ...
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult: ...
 
     def build_retry_prompt(
         self,
@@ -109,8 +118,17 @@ class PhaseMode(Protocol):
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,
     ) -> Any: ...
 
 
 class AgentPort(Protocol):
-    async def execute(self, phase: SpecPhase, context: Any) -> Any: ...
+    async def execute_with_skill(
+        self,
+        skill_name: str,
+        context: Any,
+        *,
+        project_id: Any | None = None,
+        user_instructions: str | None = None,
+    ) -> Any: ...

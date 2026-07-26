@@ -16,44 +16,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ActivityDiagramId, FeatureId, ProjectId
-
-
-class InMemoryFeatureRepository:
-    def __init__(self) -> None:
-        self.features: dict[str, Feature] = {}
-
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self.features.get(str(feature_id))
-
-    async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
-
-    async def save(self, feature: Feature) -> Feature:
-        self.features[str(feature.id)] = feature
-        return feature
-
-    async def save_many(self, features: list[Feature]) -> list[Feature]:
-        for f in features:
-            self.features[str(f.id)] = f
-        return features
-
-    async def next_number(self, project_id: ProjectId) -> int:  # noqa: ARG002
-        return 1
-
-
-class InMemoryActivityDiagramRepository:
-    def __init__(self) -> None:
-        self._diagrams: dict[str, DiagramaActividad] = {}
-
-    async def save(self, diagram: DiagramaActividad) -> DiagramaActividad:
-        self._diagrams[str(diagram.feature_id)] = diagram
-        return diagram
-
-    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
-        return self._diagrams.get(str(feature_id))
-
-    async def exists(self, feature_id: FeatureId) -> bool:
-        return str(feature_id) in self._diagrams
+from tests.unit.fakes import InMemoryActivityDiagramRepository, InMemoryFeatureRepository
 
 
 def _make_feature(feature_id: str = "feat_01", project_id: str = "prj_01") -> Feature:
@@ -80,6 +43,7 @@ def _make_diagram(feature_id: str = "feat_01") -> DiagramaActividad:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_returns_diagram_when_exists() -> None:
     # Arrange
     feature = _make_feature()
@@ -113,6 +77,7 @@ async def test_get_diagram_returns_diagram_when_exists() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_raises_when_feature_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -135,6 +100,7 @@ async def test_get_diagram_raises_when_feature_not_found() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_raises_when_no_diagram_for_feature() -> None:
     # Arrange
     feature = _make_feature()
@@ -161,6 +127,7 @@ async def test_get_diagram_raises_when_no_diagram_for_feature() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_diagram_raises_when_feature_belongs_to_wrong_project() -> None:
     # Arrange
     feature = _make_feature(feature_id="feat_01", project_id="prj_02")

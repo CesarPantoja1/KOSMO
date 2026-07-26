@@ -23,6 +23,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     CreateCharacteristicRequest,
     FeatureResponse,
@@ -34,6 +35,8 @@ router = APIRouter(
     prefix="/api/v1/projects/{project_id}/features",
     tags=["features"],
 )
+
+_generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
 
 
 def _generate_features(request: Request) -> GenerateFeaturesUseCase:
@@ -84,6 +87,7 @@ def _feature_repo(request: Request) -> FeatureRepository:
 async def generate_features(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
 ) -> list[FeatureResponse]:
     try:

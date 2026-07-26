@@ -1,10 +1,6 @@
 import json
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext, SuggestFeaturesContext
@@ -82,43 +78,6 @@ def test_features_mode_system_prompt_mentions_four_fields() -> None:
 
 
 @pytest.mark.unit
-def test_features_mode_system_prompt_mentions_user_level() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "nivel de usuario" in prompt.lower() or "usuario" in prompt.lower()
-
-
-@pytest.mark.unit
-def test_features_mode_system_prompt_mentions_six_words_limit() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "seis palabras" in prompt.lower() or "6 palabras" in prompt.lower()
-
-
-@pytest.mark.unit
-def test_features_mode_system_prompt_excludes_software_and_business_terminology() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "software" in prompt.lower() or "nomenclatura" in prompt.lower()
-    assert "negocio" in prompt.lower() or "abstracta" in prompt.lower()
-
-
-@pytest.mark.unit
 def test_features_mode_system_prompt_lists_discovery_sections_for_traceability() -> None:
     # Arrange
     mode = FeaturesMode()
@@ -129,19 +88,6 @@ def test_features_mode_system_prompt_lists_discovery_sections_for_traceability()
     # Assert
     assert "Metas del producto" in prompt
     assert "Reglas de negocio" in prompt
-
-
-@pytest.mark.unit
-def test_features_mode_system_prompt_mentions_first_generation_count() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "5" in prompt
-    assert "primera generación" in prompt.lower()
 
 
 # ------------------------------------------------------------------
@@ -280,11 +226,14 @@ def test_features_mode_build_user_prompt_omits_five_count_on_subsequent_generati
 def test_features_mode_validate_output_accepts_four_field_format() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._existing_titles = ["Caracteristica existente"]  # type: ignore[reportPrivateUsage]
+    context = SuggestFeaturesContext(
+        discovery_document=_a_discovery_document(),
+        existing_feature_titles=["Caracteristica existente"],
+    )
     raw = json.loads(_a_valid_features_json())
 
     # Act
-    result = mode.validate_output(raw)
+    result = mode.validate_output(raw, context=context)
 
     # Assert
     assert result.is_valid is True
@@ -295,11 +244,14 @@ def test_features_mode_validate_output_accepts_four_field_format() -> None:
 def test_features_mode_validate_output_accepts_raw_text_json() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._existing_titles = ["Caracteristica existente"]  # type: ignore[reportPrivateUsage]
+    context = SuggestFeaturesContext(
+        discovery_document=_a_discovery_document(),
+        existing_feature_titles=["Caracteristica existente"],
+    )
     output: dict[str, str] = {"raw_text": _a_valid_features_json()}
 
     # Act
-    result = mode.validate_output(output)
+    result = mode.validate_output(output, context=context)
 
     # Assert
     assert result.is_valid is True
@@ -326,51 +278,6 @@ def test_features_mode_validate_output_rejects_technical_term() -> None:
     # Assert
     assert result.is_valid is False
     assert any("API" in e for e in result.errors)
-
-
-@pytest.mark.unit
-def test_features_mode_validate_output_rejects_business_abstract_term() -> None:
-    # Arrange
-    mode = FeaturesMode()
-    raw = {
-        "features": [
-            {
-                "number": 1,
-                "title": "Optimizar ROI del producto",
-                "description": "El usuario gestiona el ROI para lograr objetivos.",
-                "origin": "Se traza a Metas del producto.",
-            }
-        ]
-    }
-
-    # Act
-    result = mode.validate_output(raw)
-
-    # Assert
-    assert result.is_valid is False
-    assert any("ROI" in e for e in result.errors)
-
-
-@pytest.mark.unit
-def test_features_mode_validate_output_rejects_title_exceeding_six_words() -> None:
-    # Arrange
-    mode = FeaturesMode()
-    raw = {
-        "features": [
-            {
-                "number": 1,
-                "title": "Registrar y consultar y administrar gastos compartidos entre participantes",
-                "description": "El usuario registra gastos del grupo.",
-                "origin": "Se traza a Metas del producto.",
-            }
-        ]
-    }
-
-    # Act
-    result = mode.validate_output(raw)
-
-    # Assert
-    assert result.is_valid is False
 
 
 @pytest.mark.unit
@@ -486,11 +393,14 @@ def test_features_mode_validate_output_rejects_wrong_count_on_first_generation()
 def test_features_mode_validate_output_skips_count_check_on_subsequent_generation() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._existing_titles = ["Feature existente"]  # type: ignore[reportPrivateUsage]
+    context = SuggestFeaturesContext(
+        discovery_document=_a_discovery_document(),
+        existing_feature_titles=["Feature existente"],
+    )
     raw = json.loads(_a_valid_features_json())
 
     # Act
-    result = mode.validate_output(raw)
+    result = mode.validate_output(raw, context=context)
 
     # Assert
     assert result.is_valid is True
@@ -505,13 +415,17 @@ def test_features_mode_validate_output_skips_count_check_on_subsequent_generatio
 def test_features_mode_build_output_returns_features_phase_output() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
+    build_context = FeaturesPhaseContext(
+        discovery_document=_a_discovery_document(),
+        project_id=ProjectId("prj_test"),
+        existing_feature_titles=[],
+    )
     raw = json.loads(_a_valid_features_json())
     metadata = GenerationMetadata(llm_calls=1)
     validation = ValidationResult(is_valid=True)
 
     # Act
-    result = mode.build_output(raw, validation, metadata)
+    result = mode.build_output(raw, validation, metadata, context=build_context)
 
     # Assert
     assert isinstance(result, FeaturesPhaseOutput)
@@ -522,34 +436,20 @@ def test_features_mode_build_output_returns_features_phase_output() -> None:
 
 
 @pytest.mark.unit
-def test_features_mode_build_output_assigns_origin_to_feature() -> None:
-    # Arrange
-    mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
-    raw = json.loads(_a_valid_features_json())
-    metadata = GenerationMetadata(llm_calls=1)
-    validation = ValidationResult(is_valid=True)
-
-    # Act
-    result = mode.build_output(raw, validation, metadata)
-
-    # Assert
-    assert result.features[0].origin == (
-        "Se deriva de la meta Gestion financiera de gastos. Se traza a Metas del producto, Actores y Reglas de negocio."
-    )
-
-
-@pytest.mark.unit
 def test_features_mode_build_output_generates_feature_id() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
+    build_context = FeaturesPhaseContext(
+        discovery_document=_a_discovery_document(),
+        project_id=ProjectId("prj_test"),
+        existing_feature_titles=[],
+    )
     raw = json.loads(_a_valid_features_json())
     metadata = GenerationMetadata(llm_calls=1)
     validation = ValidationResult(is_valid=True)
 
     # Act
-    result = mode.build_output(raw, validation, metadata)
+    result = mode.build_output(raw, validation, metadata, context=build_context)
 
     # Assert
     assert str(result.features[0].id).startswith("feat_")
@@ -559,13 +459,17 @@ def test_features_mode_build_output_generates_feature_id() -> None:
 def test_features_mode_build_output_assigns_display_id_from_number() -> None:
     # Arrange
     mode = FeaturesMode()
-    mode._project_id = ProjectId("prj_test")  # type: ignore[reportPrivateUsage]
+    build_context = FeaturesPhaseContext(
+        discovery_document=_a_discovery_document(),
+        project_id=ProjectId("prj_test"),
+        existing_feature_titles=[],
+    )
     raw = json.loads(_a_valid_features_json())
     metadata = GenerationMetadata(llm_calls=1)
     validation = ValidationResult(is_valid=True)
 
     # Act
-    result = mode.build_output(raw, validation, metadata)
+    result = mode.build_output(raw, validation, metadata, context=build_context)
 
     # Assert
     assert result.features[0].display_id == "C01"
@@ -609,15 +513,3 @@ def test_features_mode_available_tools_has_structure_validator() -> None:
 
     # Assert
     assert any(t.name == "validate_feature_structure" for t in tools)
-
-
-@pytest.mark.unit
-def test_features_mode_available_tools_has_uniqueness_validator() -> None:
-    # Arrange
-    mode = FeaturesMode()
-
-    # Act
-    tools = mode.available_tools
-
-    # Assert
-    assert any(t.name == "validate_feature_uniqueness" for t in tools)

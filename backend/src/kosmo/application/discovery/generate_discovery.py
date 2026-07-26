@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
+from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
-from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
-from kosmo.domain.pipeline.context_builder import ContextBuilder
 
 
 @dataclass(frozen=True)
@@ -24,40 +24,17 @@ class GenerateDiscoveryOutput:
 
 
 class GenerateDiscoveryUseCase:
-    """Caso de uso: genera el documento de descubrimiento mediante IA.
-
-    Orquesta la generación del documento de descubrimiento:
-    1. Verifica que el proyecto existe.
-    2. Construye el contexto de fase mediante el ContextBuilder.
-    3. Delega al KOSMOAgent la generación del documento.
-    4. Persiste el documento resultante en el DocumentRepository.
-    5. Gestiona los fallos del servicio de IA mediante LLMInvocationError.
-    """
-
     def __init__(
         self,
         project_repo: ProjectRepository,
         document_repo: DocumentRepository,
-        context_builder: ContextBuilder,
         agent: AgentPort,
     ) -> None:
         self._project_repo = project_repo
         self._document_repo = document_repo
-        self._context_builder = context_builder
         self._agent = agent
 
     async def execute(self, input_data: GenerateDiscoveryInput) -> GenerateDiscoveryOutput:
-        """Ejecuta la generación del documento de descubrimiento.
-
-        Args:
-            input_data: Contiene el project_id del proyecto a procesar.
-
-        Returns:
-            GenerateDiscoveryOutput con el documento generado y los metadatos del agente.
-
-        Raises:
-            LLMInvocationError: Si el servicio de IA falla durante la generación.
-        """
         from kosmo.contracts.sdd.errors import ProjectNotFoundError
 
         project = await self._project_repo.by_id(input_data.project_id)
@@ -67,15 +44,16 @@ class GenerateDiscoveryUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery",
             )
 
-        context = await self._context_builder.build_context(
-            project_id=input_data.project_id,
-            phase=SpecPhase.DESCUBRIMIENTO,
+        context = DiscoveryPhaseContext(
+            project_name=project.name,
+            project_description=project.description,
         )
 
         try:
-            phase_output = await self._agent.execute(
-                phase=SpecPhase.DESCUBRIMIENTO,
+            phase_output = await self._agent.execute_with_skill(
+                skill_name="discovery_generate",
                 context=context,
+                project_id=input_data.project_id,
             )
         except Exception as exc:
             raise LLMInvocationError(

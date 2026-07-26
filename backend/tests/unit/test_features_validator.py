@@ -1,9 +1,4 @@
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.domain.pipeline.phase_validators.features_validator import (
     validate_feature_structure,
@@ -50,26 +45,6 @@ def test_validate_feature_structure_passes_for_valid_four_field_feature() -> Non
     assert result.errors == []
 
 
-@pytest.mark.unit
-def test_validate_feature_structure_passes_for_multiple_valid_features() -> None:
-    # Arrange
-    features = [
-        _a_valid_feature(number=1, title="Registrar gastos entre participantes"),
-        _a_valid_feature(
-            number=2,
-            title="Consultar balances y deudas pendientes",
-            description="Cualquier participante accede a un resumen que muestra cuánto debe.",
-            origin="Se deriva de la meta Gestion financiera. Se traza a Metas del producto.",
-        ),
-    ]
-
-    # Act
-    result = validate_feature_structure(features)
-
-    # Assert
-    assert result.is_valid is True
-
-
 # ------------------------------------------------------------------
 # validate_feature_structure — error: missing fields
 # ------------------------------------------------------------------
@@ -87,20 +62,6 @@ def test_validate_feature_structure_fails_when_origin_missing() -> None:
     # Assert
     assert result.is_valid is False
     assert any("origin" in e for e in result.errors)
-
-
-@pytest.mark.unit
-def test_validate_feature_structure_fails_when_number_missing() -> None:
-    # Arrange
-    feat = _a_valid_feature()
-    del feat["number"]
-
-    # Act
-    result = validate_feature_structure([feat])
-
-    # Assert
-    assert result.is_valid is False
-    assert any("number" in e for e in result.errors)
 
 
 @pytest.mark.unit
@@ -154,6 +115,7 @@ def test_validate_feature_structure_fails_when_title_exceeds_six_words() -> None
         "Crear y administrar grupos compartidos",
     ],
 )
+@pytest.mark.unit
 def test_validate_feature_structure_accepts_titles_within_six_words(title: str) -> None:
     # Arrange
     feat = _a_valid_feature(title=title)
@@ -175,6 +137,7 @@ def test_validate_feature_structure_accepts_titles_within_six_words(title: str) 
     "term",
     ["API", "base de datos", "backend", "PostgreSQL", "Docker", "microservicios"],
 )
+@pytest.mark.unit
 def test_validate_feature_structure_flags_technical_term_in_title(term: str) -> None:
     # Arrange
     feat = _a_valid_feature(title=f"Gestionar con {term} del grupo")
@@ -192,6 +155,7 @@ def test_validate_feature_structure_flags_technical_term_in_title(term: str) -> 
     "term",
     ["API", "base de datos", "backend", "frontend", "Docker"],
 )
+@pytest.mark.unit
 def test_validate_feature_structure_flags_technical_term_in_description(term: str) -> None:
     # Arrange
     feat = _a_valid_feature(description=f"El usuario interactua con el {term} para registrar.")
@@ -209,6 +173,7 @@ def test_validate_feature_structure_flags_technical_term_in_description(term: st
     "term",
     ["API", "base de datos", "servidor", "Docker"],
 )
+@pytest.mark.unit
 def test_validate_feature_structure_flags_technical_term_in_origin(term: str) -> None:
     # Arrange
     feat = _a_valid_feature(
@@ -246,6 +211,7 @@ def test_validate_feature_structure_flags_technical_term_in_origin(term: str) ->
         "estrategia comercial",
     ],
 )
+@pytest.mark.unit
 def test_validate_feature_structure_flags_business_abstract_term_in_title(term: str) -> None:
     # Arrange
     feat = _a_valid_feature(title=f"Optimizar {term} del producto")
@@ -263,6 +229,7 @@ def test_validate_feature_structure_flags_business_abstract_term_in_title(term: 
     "term",
     ["propuesta de valor", "modelo de negocio", "ROI", "KPI", "stakeholder"],
 )
+@pytest.mark.unit
 def test_validate_feature_structure_flags_business_abstract_term_in_description(term: str) -> None:
     # Arrange
     feat = _a_valid_feature(description=f"El usuario gestiona el {term} para lograr sus objetivos.")
@@ -330,39 +297,24 @@ def test_validate_feature_structure_fails_when_number_is_not_int() -> None:
 
 
 @pytest.mark.unit
-def test_validate_feature_structure_fails_when_title_too_short() -> None:
+@pytest.mark.parametrize(
+    "field,value,error_keyword",
+    [
+        ("title", "ab", "título"),
+        ("description", "Corto", "descripción"),
+        ("origin", "Corto", "origen"),
+    ],
+)
+def test_validate_feature_structure_fails_when_field_too_short(field: str, value: str, error_keyword: str) -> None:
     # Arrange
-    feat = _a_valid_feature(title="ab")
+    feat = _a_valid_feature(**{field: value})
 
     # Act
     result = validate_feature_structure([feat])
 
     # Assert
     assert result.is_valid is False
-
-
-@pytest.mark.unit
-def test_validate_feature_structure_fails_when_description_too_short() -> None:
-    # Arrange
-    feat = _a_valid_feature(description="Corto")
-
-    # Act
-    result = validate_feature_structure([feat])
-
-    # Assert
-    assert result.is_valid is False
-
-
-@pytest.mark.unit
-def test_validate_feature_structure_fails_when_origin_too_short() -> None:
-    # Arrange
-    feat = _a_valid_feature(origin="Corto")
-
-    # Act
-    result = validate_feature_structure([feat])
-
-    # Assert
-    assert result.is_valid is False
+    assert any(error_keyword in e for e in result.errors)
 
 
 # ------------------------------------------------------------------

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -39,6 +41,20 @@ class DiscoveryRefineMode:
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.DESCUBRIMIENTO
+
+    @property
+    def temperature(self) -> float:
+        return 0.3
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
+
+        return DiscoveryDocument
 
     @property
     def system_prompt(self) -> str:
@@ -79,7 +95,8 @@ class DiscoveryRefineMode:
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
         return "\n".join(parts)
 
-    def validate_output(self, output: Any) -> ValidationResult:
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
             validate_business_level,
         )
@@ -87,7 +104,9 @@ class DiscoveryRefineMode:
         from kosmo.domain.sdd.output_guardrails import auto_repair_technical_terms
 
         raw_text: str = ""
-        if isinstance(output, dict) and "document" in output:
+        if isinstance(output, DiscoveryDocument):
+            raw_text = output.document
+        elif isinstance(output, dict) and "document" in output:
             raw_text = str(output["document"])  # type: ignore[reportUnknownArgumentType]
         elif isinstance(output, dict) and "raw_text" in output:
             raw_text = str(output["raw_text"])  # type: ignore[reportUnknownArgumentType]
@@ -137,12 +156,17 @@ class DiscoveryRefineMode:
         raw_output: Any,
         validation_result: ValidationResult,
         metadata: GenerationMetadata,
+        *,
+        context: Any = None,  # noqa: ARG002 — parte del protocolo PhaseMode
     ) -> DiscoveryPhaseOutput:
+        from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
         from kosmo.domain.sdd.document_converters import (
             coerce_markdown_output,
             markdown_to_document,
         )
 
+        if isinstance(raw_output, DiscoveryDocument):
+            raw_output = raw_output.document
         doc = markdown_to_document(coerce_markdown_output(raw_output))
         return DiscoveryPhaseOutput(
             discovery_document=doc,

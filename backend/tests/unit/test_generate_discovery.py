@@ -1,18 +1,13 @@
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import pytest
-
-sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
 
 from kosmo.application.discovery.generate_discovery import (
     GenerateDiscoveryInput,
     GenerateDiscoveryOutput,
     GenerateDiscoveryUseCase,
 )
-from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     DiscoveryPhaseOutput,
     GenerationMetadata,
@@ -22,74 +17,21 @@ from kosmo.contracts.sdd.document import (
     DocumentNode,
     RichTextDocument,
     SectionHeading,
-    SpecPhase,
 )
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
-
-
-class InMemoryProjectRepository:
-    def __init__(self) -> None:
-        self.projects: dict[str, Project] = {}
-
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self.projects.get(str(project_id))
-
-    async def by_slug(self, owner_id: str, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def find_by_slug(self, slug: str) -> Project | None:  # noqa: ARG002
-        return None
-
-    async def list_by_owner(self, owner_id: str) -> list[Project]:  # noqa: ARG002
-        return []
-
-    async def save(self, project: Project) -> Project:  # type: ignore[override]
-        self.projects[str(project.id)] = project
-        return project
-
-
-class InMemoryDocumentRepository:
-    def __init__(self) -> None:
-        self.documents: dict[str, RichTextDocument] = {}
-
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
-        return self.documents.get(str(project_id))
-
-    async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
-        self.documents[str(project_id)] = document
-        return document
-
-    async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
-        return None
-
-    async def save_requirements(
-        self,
-        feature_id: Any,  # noqa: ARG002
-        document: RichTextDocument,  # noqa: ARG002
-    ) -> RichTextDocument:
-        return document
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryProjectRepository
 
 
 @dataclass(frozen=True)
 class MockKOSMOAgent:
     output: DiscoveryPhaseOutput
 
-    async def execute(self, phase: SpecPhase, context: Any) -> DiscoveryPhaseOutput:  # noqa: ARG002
+    async def execute_with_skill(
+        self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
+    ) -> DiscoveryPhaseOutput:  # noqa: ARG002
         return self.output
-
-
-@dataclass(frozen=True)
-class MockContextBuilder:
-    context: DiscoveryPhaseContext
-
-    async def build_context(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase,  # noqa: ARG002
-    ) -> DiscoveryPhaseContext:
-        return self.context
 
 
 def _make_phase_output(title: str = "Generated Discovery") -> DiscoveryPhaseOutput:
@@ -109,6 +51,7 @@ def _make_phase_output(title: str = "Generated Discovery") -> DiscoveryPhaseOutp
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_success() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -124,13 +67,10 @@ async def test_generate_discovery_success() -> None:
 
     phase_output = _make_phase_output("Discovery del Proyecto")
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
         agent=agent,
     )
 
@@ -145,18 +85,17 @@ async def test_generate_discovery_success() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_when_project_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
     phase_output = _make_phase_output()
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context_builder: Any = MockContextBuilder(context=DiscoveryPhaseContext(project_name="", project_description=""))
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
         agent=agent,
     )
 
@@ -169,6 +108,7 @@ async def test_generate_discovery_raises_when_project_not_found() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_when_llm_fails() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -183,21 +123,21 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
     await project_repo.save(project)
 
     class FailingAgent:
-        async def execute(
+        async def execute_with_skill(
             self,
-            phase: SpecPhase,  # noqa: ARG002
+            skill_name: str,  # noqa: ARG002
             context: Any,  # noqa: ARG002
+            *,
+            project_id: Any = None,  # noqa: ARG002
+            user_instructions: str | None = None,  # noqa: ARG002
         ) -> DiscoveryPhaseOutput:
             raise RuntimeError("LLM service unavailable")
 
     agent: Any = FailingAgent()
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
         agent=agent,
     )
 
@@ -209,6 +149,7 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -236,13 +177,10 @@ async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> 
         generation_metadata=GenerationMetadata(llm_calls=8, total_tokens=0),
     )
     agent: Any = MockKOSMOAgent(output=invalid_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
         agent=agent,
     )
 
@@ -255,6 +193,7 @@ async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_raises_when_document_is_empty() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -274,13 +213,10 @@ async def test_generate_discovery_raises_when_document_is_empty() -> None:
         generation_metadata=GenerationMetadata(llm_calls=8, total_tokens=0),
     )
     agent: Any = MockKOSMOAgent(output=empty_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
         agent=agent,
     )
 
@@ -292,6 +228,7 @@ async def test_generate_discovery_raises_when_document_is_empty() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_discovery_persists_generated_document() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
@@ -307,13 +244,10 @@ async def test_generate_discovery_persists_generated_document() -> None:
 
     phase_output = _make_phase_output("Documento Persistido")
     agent: Any = MockKOSMOAgent(output=phase_output)
-    context = DiscoveryPhaseContext(project_name="Test Project", project_description="Description")
-    context_builder: Any = MockContextBuilder(context=context)
 
     use_case = GenerateDiscoveryUseCase(
         project_repo=project_repo,
         document_repo=doc_repo,
-        context_builder=context_builder,
         agent=agent,
     )
 

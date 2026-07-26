@@ -47,16 +47,18 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.config import Settings
-from kosmo.contracts.agent_memory import AgentMemoryPort
+from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
-from kosmo.contracts.llm.ports import LLMClient
+from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
+from kosmo.domain.pipeline.guard_registry import GuardRegistry
+from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
@@ -78,9 +80,7 @@ from kosmo.domain.pipeline.phase_validators.features_validator import (
     validate_feature_structure,
     validate_feature_uniqueness,
 )
-from kosmo.domain.pipeline.sequential_orchestrator import SequentialOrchestrator
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
-from kosmo.domain.pipeline.tool_registry import ToolRegistry
 from kosmo.domain.sdd.validators.activity_diagram_validator import (
     validate_activity_diagram_syntax,
 )
@@ -89,10 +89,19 @@ from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_software_level,
     validate_ears_syntax,
 )
+from kosmo.infrastructure.llm.embedder import OpenAIEmbedder
+from kosmo.infrastructure.llm.knowledge_tools import (
+    build_find_similar_sessions,
+    build_get_diagram_for_feature,
+    build_get_downstream_artifacts,
+    build_get_phase_document,
+    build_get_requirements_for_feature,
+)
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
     SqlAlchemyAgentSessionStore,
+    SqlAlchemyKnowledgePatternStore,
 )
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
@@ -252,11 +261,10 @@ class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
     agent: AgentPort
-    refine_agent: AgentPort
-    orchestrator: SequentialOrchestrator
-    tool_registry: ToolRegistry
+    guard_registry: GuardRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
+    pattern_store: KnowledgePatternStore
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -295,55 +303,50 @@ def build_pipeline_components(
     # 2. Instanciar los repositorios disponibles
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
 
     context_builder = ContextBuilder(
         document_repo=document_repo,
         project_repo=project_repo,
     )
 
-    # 4. Configurar modos de fase
-    modes = {
-        SpecPhase.DESCUBRIMIENTO: DiscoveryMode(),
-        SpecPhase.CARACTERISTICAS: FeaturesMode(),
-        SpecPhase.REQUISITOS: EARSMode(),
-        SpecPhase.MODELO: ModeloMode(),
-    }
-
-    # 5. Configurar el registro de herramientas con los validadores existentes
-    tool_registry = ToolRegistry()
-    tool_registry.register(
+    # 4. Configurar el registro de guardrails con los validadores existentes
+    guard_registry = GuardRegistry()
+    guard_registry.register(
         "validate_discovery_structure",
         lambda inp: _adapt_validation_result(validate_discovery_structure(_markdown_input(inp))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_discovery_quality",
         lambda inp: _adapt_validation_result(validate_discovery_quality(_markdown_input(inp))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_business_level",
         lambda inp: _adapt_validation_result(validate_business_level(_markdown_input(inp))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_feature_structure",
         lambda inp: _adapt_validation_result(_validate_features_input(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_feature_uniqueness",
         lambda inp: _adapt_validation_result(validate_feature_uniqueness(_extract_array(inp, "features"))),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_ears_syntax",
         lambda inp: _adapt_validation_result(_validate_ears_syntax_raw(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_ears_quality",
         lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_ears_software_level",
         lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
     )
-    tool_registry.register(
+    guard_registry.register(
         "validate_activity_diagram_syntax",
         lambda inp: _adapt_validation_result(validate_activity_diagram_syntax(str(inp.get("diagram", "")))),
     )
@@ -351,15 +354,7 @@ def build_pipeline_components(
     # 6. Instanciar el repositorio de memoria del agente
     agent_memory = SqlAlchemyAgentSessionStore(session_factory)
 
-    # 7. Instanciar el agente KOSMO con el registro de herramientas y memoria
-    agent = KOSMOAgent(
-        llm_client=llm_client,
-        registry=tool_registry,
-        modes=modes,  # type: ignore[reportArgumentType]
-        memory=agent_memory,  # type: ignore[reportArgumentType]
-    )
-
-    # 8. Instanciar el SkillRegistry y registrar los skills
+    # 7. Instanciar el SkillRegistry y registrar todos los skills
     skill_registry = SkillRegistry()
     skill_registry.register(
         Skill(
@@ -377,31 +372,91 @@ def build_pipeline_components(
             mode=DiscoveryRefineMode(),  # type: ignore[reportArgumentType]
         )
     )
-
-    # 9. Instanciar el agente de refinamiento con DiscoveryRefineMode y memoria
-    refine_agent = KOSMOAgent(
-        llm_client=llm_client,
-        registry=tool_registry,
-        modes={
-            SpecPhase.DESCUBRIMIENTO: DiscoveryRefineMode(),
-            SpecPhase.REQUISITOS: RequirementsRefineMode(),
-        },  # type: ignore[reportArgumentType]
-        skill_registry=skill_registry,
-        memory=agent_memory,  # type: ignore[reportArgumentType]
+    skill_registry.register(
+        Skill(
+            name="features_generate",
+            description="Genera caracteristicas a partir del descubrimiento",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=FeaturesMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="ears_generate",
+            description="Genera requisitos EARS para una caracteristica",
+            phase=SpecPhase.REQUISITOS,
+            mode=EARSMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="requirements_refine",
+            description="Refina requisitos EARS existentes",
+            phase=SpecPhase.REQUISITOS,
+            mode=RequirementsRefineMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="modelo_generate",
+            description="Genera diagrama de actividad UML desde requisitos EARS",
+            phase=SpecPhase.MODELO,
+            mode=ModeloMode(),  # type: ignore[reportArgumentType]
+        )
     )
 
-    # 10. Instanciar el orquestador secuencial
-    orchestrator = SequentialOrchestrator()
+    # 8. Instanciar el agente unico con el SkillRegistry y memoria
+
+    def _build_embedder() -> Embedder | None:
+        if settings.embedding_provider == "none":
+            return None
+        if settings.embedding_provider == "openai" and settings.llm_api_key:
+            return OpenAIEmbedder(api_key=settings.llm_api_key.get_secret_value())
+        if settings.embedding_provider == "fastembed":
+            from kosmo.infrastructure.llm.local_embedder import FastembedEmbedder
+
+            return FastembedEmbedder()
+        if settings.embedding_provider == "auto":
+            if settings.llm_provider.lower() == "openai" and settings.llm_api_key:
+                return OpenAIEmbedder(api_key=settings.llm_api_key.get_secret_value())
+            try:
+                from kosmo.infrastructure.llm.local_embedder import FastembedEmbedder
+
+                return FastembedEmbedder()
+            except ImportError:
+                return None
+        return None
+
+    embedding_generator = _build_embedder()
+
+    pattern_store = SqlAlchemyKnowledgePatternStore(session_factory)
+
+    knowledge_tools = KnowledgeToolRegistry()
+    knowledge_tools.register(*build_get_phase_document(document_repo))
+    knowledge_tools.register(*build_get_downstream_artifacts(feature_repo))
+    knowledge_tools.register(*build_get_requirements_for_feature(requirement_repo))
+    knowledge_tools.register(*build_get_diagram_for_feature(diagram_repo))
+    if embedding_generator is not None:
+        knowledge_tools.register(*build_find_similar_sessions(agent_memory, embedding_generator))
+
+    agent = KOSMOAgent(
+        llm_client=llm_client,
+        guard_registry=guard_registry,
+        skill_registry=skill_registry,
+        memory=agent_memory,  # type: ignore[reportArgumentType]
+        embedding_generator=embedding_generator,
+        knowledge_tools=knowledge_tools,
+        pattern_store=pattern_store,  # type: ignore[reportArgumentType]
+    )
 
     return PipelineComponents(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
-        refine_agent=refine_agent,
-        orchestrator=orchestrator,
-        tool_registry=tool_registry,
+        guard_registry=guard_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
+        pattern_store=pattern_store,
     )
 
 
@@ -423,7 +478,6 @@ def build_discovery_components(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
             document_repo=document_repo,
-            context_builder=pipeline.context_builder,
             agent=pipeline.agent,
         ),
         get_discovery=GetDiscoveryUseCase(document_repo=document_repo),
@@ -432,7 +486,7 @@ def build_discovery_components(
             project_repo=project_repo,
             document_repo=document_repo,
             context_builder=pipeline.context_builder,
-            agent=pipeline.refine_agent,
+            agent=pipeline.agent,
         ),
     )
 
@@ -515,7 +569,7 @@ def build_requirements_components(
             project_repo=project_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
-            agent=pipeline.refine_agent,
+            agent=pipeline.agent,
         ),
     )
 
