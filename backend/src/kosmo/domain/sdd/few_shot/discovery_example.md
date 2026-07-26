@@ -1,6 +1,6 @@
 ## Visión del producto
 
-El producto ayuda a las familias a organizar y repartir gastos compartidos de forma equitativa y transparente entre todos los participantes del hogar de manera simple y efectiva sin complicaciones adicionales.
+GastoJusto ayuda a las familias a organizar y repartir gastos compartidos de forma equitativa y transparente entre todos los participantes del hogar de manera simple y efectiva sin complicaciones adicionales.
 
 ## Espacio del problema
 
