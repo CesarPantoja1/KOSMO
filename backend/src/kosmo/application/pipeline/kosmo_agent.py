@@ -284,6 +284,35 @@ class KOSMOAgent:
         if self._knowledge_tools is None:
             return ("", [])
 
+        if getattr(self._llm_client, "supports_native_tools", False):
+            try:
+                text, records = await self._llm_client.complete_with_tools(
+                    PromptTemplate(
+                        system_prompt=system_prompt + (
+                            "\n\nPuedes consultar las herramientas disponibles para obtener "
+                            "informacion adicional antes de responder. Si tienes suficiente contexto, "
+                            "responde listo sin consultar herramientas."
+                        ),
+                        user_prompt=user_prompt,
+                    ),
+                    tools=self._knowledge_tools.defs(),
+                    tool_handler=self._knowledge_tools.execute,
+                    temperature=0.1,
+                    max_tokens=2000,
+                )
+                invocations: list[dict[str, Any]] = [
+                    {
+                        "tool": r.name,
+                        "args": {k: str(v)[:200] for k, v in r.args.items()},
+                        "result_snippet": r.result_snippet[:500],
+                        "found": "error" not in r.result_snippet.lower()[:20],
+                    }
+                    for r in records
+                ]
+                return (text.strip(), invocations)
+            except Exception:
+                pass
+
         tool_prompt = PromptTemplate(
             system_prompt=(
                 system_prompt + "\n\nIMPORTANTE: Antes de generar, puedes consultar herramientas de conocimiento "
@@ -296,7 +325,7 @@ class KOSMOAgent:
         )
 
         collected: list[str] = []
-        invocations: list[dict[str, Any]] = []
+        invocations = []
         for _ in range(3):
             try:
                 response = await self._llm_client.complete(

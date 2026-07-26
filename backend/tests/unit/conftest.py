@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
+from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryDocument
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 
@@ -105,6 +105,20 @@ class StubStructuredLLMClient:
         else:
             result = make_discovery_document(DISCOVERY_VALID)
         return result  # type: ignore[return-value]
+
+    @property
+    def supports_native_tools(self) -> bool:
+        return False
+
+    async def complete_with_tools(  # noqa: ARG002
+        self,
+        prompt: PromptTemplate,  # noqa: ARG002
+        tools: list[dict[str, object]],  # noqa: ARG002
+        tool_handler: object,  # noqa: ARG002
+        temperature: float = 0.1,  # noqa: ARG002
+        max_tokens: int = 2000,  # noqa: ARG002
+    ) -> tuple[str, list[ToolCallRecord]]:
+        return ("", [])
 
 
 def make_discovery_mode() -> Any:

@@ -227,6 +227,20 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
         ) -> T:
             return output_type.model_validate({"document": DISCOVERY_VALID})  # type: ignore[reportReturnType]
 
+        @property
+        def supports_native_tools(self) -> bool:
+            return False
+
+        async def complete_with_tools(  # noqa: PLR6301
+            self,
+            prompt: PromptTemplate,  # noqa: ARG002
+            tools: list[dict[str, object]],  # noqa: ARG002
+            tool_handler: object,  # noqa: ARG002
+            temperature: float = 0.1,  # noqa: ARG002
+            max_tokens: int = 2000,  # noqa: ARG002
+        ) -> tuple[str, list[object]]:
+            return ("", [])
+
     llm = StubToolCallLLMClient()
     store = InMemoryAgentSessionStore()
     guard_registry = GuardRegistry()

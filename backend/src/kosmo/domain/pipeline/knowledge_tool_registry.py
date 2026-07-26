@@ -52,3 +52,9 @@ class KnowledgeToolRegistry:
     @property
     def tool_names(self) -> list[str]:
         return list(self._tools.keys())
+
+    def defs(self) -> list[dict[str, Any]]:
+        return [
+            {"name": def_.name, "description": def_.description, "parameters": def_.parameters}
+            for def_, _ in self._tools.values()
+        ]

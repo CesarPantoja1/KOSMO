@@ -6,8 +6,9 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic_ai.agent import Agent
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.tools import Tool
 
-from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate
+from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
 
 
 def _extract_json(text: str) -> str | None:
@@ -139,3 +140,48 @@ class PydanticAILLMClient:
         max_tokens: int = 4096,
     ) -> LLMResponse:
         return await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+
+    @property
+    def supports_native_tools(self) -> bool:
+        return True
+
+    async def complete_with_tools(
+        self,
+        prompt: PromptTemplate,
+        tools: list[dict[str, Any]],
+        tool_handler: Any,
+        temperature: float = 0.1,
+        max_tokens: int = 2000,
+    ) -> tuple[str, list[ToolCallRecord]]:
+        records: list[ToolCallRecord] = []
+
+        def _make_tool_fn(name: str):
+            async def tool_fn(**kwargs: object) -> str:
+                args: dict[str, Any] = dict(kwargs)
+                result = await tool_handler(name, args)
+                records.append(
+                    ToolCallRecord(name=name, args=args, result_snippet=(result or "")[:500])
+                )
+                return result
+            tool_fn.__name__ = name  # type: ignore[reportFunctionMemberAccess]
+            return tool_fn
+
+        pydantic_tools = [
+            Tool(
+                _make_tool_fn(t["name"]),
+                name=t["name"],
+                description=t.get("description", ""),
+            )
+            for t in tools
+        ]
+
+        agent: Agent[Any] = Agent(self._model, system_prompt=prompt.system_prompt, tools=pydantic_tools)  # type: ignore[reportCallIssue]
+        result = await asyncio.wait_for(
+            agent.run(
+                prompt.user_prompt,
+                model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+            ),
+            timeout=self._DEFAULT_TIMEOUT_SECONDS,
+        )
+
+        return (result.output or "", records)
