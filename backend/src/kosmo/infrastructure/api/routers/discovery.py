@@ -23,12 +23,15 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import DiscoveryResponse, RefineDiscoveryRequest
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/discovery",
     tags=["discovery"],
 )
+
+_generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
 
 
 def _generate_discovery(request: Request) -> GenerateDiscoveryUseCase:
@@ -76,6 +79,7 @@ def _refine_discovery(request: Request) -> RefineDiscoveryUseCase:
 async def generate_discovery(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateDiscoveryUseCase, Depends(_generate_discovery)],
 ) -> DiscoveryResponse:
     try:
@@ -203,6 +207,7 @@ async def refine_discovery(
     project_id: str,
     payload: Annotated[RefineDiscoveryRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[RefineDiscoveryUseCase, Depends(_refine_discovery)],
 ) -> DiscoveryResponse:
     try:
