@@ -81,6 +81,8 @@ class RefineRequirementsUseCase:
             phase_output = await self._agent.execute_with_skill(
                 skill_name="requirements_refine",
                 context=context,
+                project_id=input_data.project_id,
+                user_instructions=input_data.user_instructions,
             )
         except Exception as exc:
             raise LLMInvocationError(

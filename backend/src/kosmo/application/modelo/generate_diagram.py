@@ -69,6 +69,7 @@ class GenerateActivityDiagramUseCase:
             phase_output = await self._agent.execute_with_skill(
                 skill_name="modelo_generate",
                 context=context,
+                project_id=input_data.project_id,
             )
         except Exception as exc:
             raise LLMInvocationError(

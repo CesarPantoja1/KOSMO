@@ -55,6 +55,17 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
 
             await db.commit()
 
+    async def update_reflection(self, session_id: AgentMemoryId, reflection: str) -> None:
+        async with self._session_factory() as db:
+            stmt = select(AgentSessionModel).where(AgentSessionModel.id == session_id)
+            result = await db.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return
+            model.reflection = reflection
+            model.updated_at = datetime.now(UTC)
+            await db.commit()
+
     async def load_session(self, session_id: AgentMemoryId) -> AgentSession | None:
         async with self._session_factory() as db:
             stmt = select(AgentSessionModel).where(AgentSessionModel.id == session_id)

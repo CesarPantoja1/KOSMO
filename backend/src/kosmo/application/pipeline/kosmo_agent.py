@@ -15,7 +15,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 from kosmo.domain.agent_memory.session_factory import create_session
 from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
@@ -283,18 +283,6 @@ class KOSMOAgent:
             text = self._embedder.text_for_embedding(output, validation.errors)
             embedding = await self._embedder.embed(text)
 
-        reflection = await self._generate_reflection(
-            phase=phase,
-            session_type=session_type,
-            is_completed=is_completed,
-            current_iteration=current_iteration,
-            validation=validation,
-        )
-
-        reason_entries = (reasoning_log or []) + (
-            [f"reflexion: {reflection}"] if reflection else []
-        )
-
         session = create_session(
             project_id=project_id,
             session_type=session_type,
@@ -302,7 +290,7 @@ class KOSMOAgent:
             skill_name=skill_name,
             max_iterations=self._max_iterations,
             conversation=conversation or [],
-            reasoning_log=reason_entries,
+            reasoning_log=reasoning_log or [],
             tool_results=tool_results or [],
             current_iteration=current_iteration,
             is_completed=is_completed,
@@ -314,28 +302,56 @@ class KOSMOAgent:
             user_instructions=user_instructions,
             embedding=embedding,
             embedding_model=self._embedder.model_name if self._embedder else None,
-            reflection=reflection,
+            reflection=None,
         )
 
         await self._memory.save_session(session)
 
-        if is_completed and self._pattern_store is not None:
-            asyncio.create_task(self._consolidate_async())
+        asyncio.create_task(self._reflect_and_consolidate(
+            session_id=session.session_id,
+            phase=phase,
+            session_type=session_type,
+            is_completed=is_completed,
+            current_iteration=current_iteration,
+            validation=validation,
+        ))
 
-    async def _consolidate_async(self) -> None:
-        if self._memory is None or self._pattern_store is None:
+    async def _reflect_and_consolidate(
+        self,
+        *,
+        session_id: AgentMemoryId,
+        phase: SpecPhase,
+        session_type: str,
+        is_completed: bool,
+        current_iteration: int,
+        validation: ValidationResult,
+    ) -> None:
+        if self._memory is None:
             return
-        from kosmo.application.knowledge import ConsolidateInput, ConsolidateKnowledgePatterns
 
-        counts = await self._memory.count_completed_by_phase()
-        for _phase, count in counts.items():
-            if count >= self._consolidation_threshold and count % self._consolidation_threshold == 0:
-                uc = ConsolidateKnowledgePatterns(
-                    memory=self._memory,
-                    pattern_store=self._pattern_store,
-                    llm_client=self._llm_client,
-                )
-                await uc.execute(ConsolidateInput(sessions_limit=min(count * 2, 100)))
+        reflection = await self._generate_reflection(
+            phase=phase,
+            session_type=session_type,
+            is_completed=is_completed,
+            current_iteration=current_iteration,
+            validation=validation,
+        )
+
+        if reflection:
+            await self._memory.update_reflection(session_id, reflection)
+
+        if is_completed and self._pattern_store is not None:
+            counts = await self._memory.count_completed_by_phase()
+            for _phase, count in counts.items():
+                if count >= self._consolidation_threshold and count % self._consolidation_threshold == 0:
+                    from kosmo.application.knowledge import ConsolidateInput, ConsolidateKnowledgePatterns
+
+                    uc = ConsolidateKnowledgePatterns(
+                        memory=self._memory,
+                        pattern_store=self._pattern_store,
+                        llm_client=self._llm_client,
+                    )
+                    await uc.execute(ConsolidateInput(sessions_limit=min(count * 2, 100)))
 
     async def _resolve_knowledge_tools(
         self,

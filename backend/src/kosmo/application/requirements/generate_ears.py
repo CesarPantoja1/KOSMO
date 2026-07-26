@@ -92,6 +92,7 @@ class GenerateEARSUseCase:
             phase_output = await self._agent.execute_with_skill(
                 skill_name="ears_generate",
                 context=context,
+                project_id=input_data.project_id,
             )
         except Exception as exc:
             raise LLMInvocationError(

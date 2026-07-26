@@ -20,6 +20,34 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
     async def save_session(self, session: AgentSession) -> None:
         self._store[session.session_id] = session
 
+    async def update_reflection(self, session_id: AgentMemoryId, reflection: str) -> None:
+        session = self._store.get(session_id)
+        if session is not None:
+            self._store[session_id] = AgentSession(
+                session_id=session.session_id,
+                project_id=session.project_id,
+                session_type=session.session_type,
+                phase=session.phase,
+                skill_name=session.skill_name,
+                conversation=session.conversation,
+                reasoning_log=list(session.reasoning_log) + [f"reflexion: {reflection}"],
+                tool_results=session.tool_results,
+                current_iteration=session.current_iteration,
+                max_iterations=session.max_iterations,
+                is_completed=session.is_completed,
+                output_json=session.output_json,
+                validation_is_valid=session.validation_is_valid,
+                validation_errors=session.validation_errors,
+                validation_error_messages=session.validation_error_messages,
+                total_llm_calls=session.total_llm_calls,
+                user_instructions=session.user_instructions,
+                embedding=session.embedding,
+                embedding_model=session.embedding_model,
+                reflection=reflection,
+                created_at=session.created_at,
+                updated_at=datetime.now(UTC),
+            )
+
     async def load_session(self, session_id: AgentMemoryId) -> AgentSession | None:
         return self._store.get(session_id)
 
