@@ -1,0 +1,80 @@
+name: "🐛 Reporte de error"
+description: "Reporta un comportamiento inesperado o un error en KOSMO"
+title: "[BUG]: "
+labels:
+  - bug
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar este problema. Completa la información solicitada.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del error
+      description: Describe claramente qué ocurrió.
+      placeholder: Explica el comportamiento observado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+      description: Describe qué debería haber ocurrido.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      description: Enumera los pasos necesarios para reproducir el error.
+      placeholder: |
+        1. Ingresar a...
+        2. Seleccionar...
+        3. Presionar...
+        4. Observar el error...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Entorno
+      options:
+        - Desarrollo
+        - Pruebas
+        - Producción
+        - Local
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Navegador o dispositivo
+      placeholder: "Ejemplo: Chrome 150 en Windows 11"
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia
+      description: Agrega capturas, videos, registros o mensajes de error.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Información adicional
+      description: Agrega cualquier otro dato relevante.
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verificación
+      options:
+        - label: Confirmo que revisé que este error no haya sido reportado anteriormente.
+          required: true
