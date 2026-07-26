@@ -284,3 +284,43 @@ async def test_agent_session_stores_validation_error_messages() -> None:
     assert saved is not None
     assert saved.is_completed is False
     assert len(saved.validation_error_messages) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_similar_sessions_filters_by_model() -> None:
+    # Arrange
+    store = InMemoryAgentSessionStore()
+    v1 = [0.1, 0.2, 0.3, 0.4]
+    v2 = [0.2, 0.3, 0.4, 0.5]
+    s_openai = a_session(embedding=v1, embedding_model="text-embedding-3-small")
+    s_local = a_session(embedding=v2, embedding_model="all-MiniLM-L6-v2")
+    s_no_model = a_session(embedding=v1, embedding_model=None)
+    await store.save_session(s_openai)
+    await store.save_session(s_local)
+    await store.save_session(s_no_model)
+
+    # Act
+    results = await store.get_similar_sessions(v1, model="text-embedding-3-small")
+
+    # Assert
+    assert len(results) == 1
+    result_session = await store.load_session(results[0].session_id)
+    assert result_session is not None
+    assert result_session.embedding_model == "text-embedding-3-small"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_similar_sessions_no_model_filter_returns_all() -> None:
+    # Arrange
+    store = InMemoryAgentSessionStore()
+    v = [0.1, 0.2, 0.3, 0.4]
+    await store.save_session(a_session(embedding=v, embedding_model="openai"))
+    await store.save_session(a_session(embedding=v, embedding_model="fastembed"))
+
+    # Act
+    results = await store.get_similar_sessions(v)
+
+    # Assert
+    assert len(results) == 2

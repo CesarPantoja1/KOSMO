@@ -50,7 +50,7 @@ from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
-from kosmo.contracts.llm.ports import LLMClient
+from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
@@ -89,7 +89,7 @@ from kosmo.domain.sdd.validators.ears_validator import (
     validate_ears_software_level,
     validate_ears_syntax,
 )
-from kosmo.infrastructure.llm.embedder import EmbeddingGenerator
+from kosmo.infrastructure.llm.embedder import OpenAIEmbedder
 from kosmo.infrastructure.llm.knowledge_tools import (
     build_find_similar_sessions,
     build_get_diagram_for_feature,
@@ -405,11 +405,27 @@ def build_pipeline_components(
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
-    embedding_generator: EmbeddingGenerator | None = None
-    if settings.llm_provider.lower() == "openai" and settings.llm_api_key:
-        embedding_generator = EmbeddingGenerator(
-            api_key=settings.llm_api_key.get_secret_value(),
-        )
+    def _build_embedder() -> Embedder | None:
+        if settings.embedding_provider == "none":
+            return None
+        if settings.embedding_provider == "openai" and settings.llm_api_key:
+            return OpenAIEmbedder(api_key=settings.llm_api_key.get_secret_value())
+        if settings.embedding_provider == "fastembed":
+            from kosmo.infrastructure.llm.local_embedder import FastembedEmbedder
+
+            return FastembedEmbedder()
+        if settings.embedding_provider == "auto":
+            if settings.llm_provider.lower() == "openai" and settings.llm_api_key:
+                return OpenAIEmbedder(api_key=settings.llm_api_key.get_secret_value())
+            try:
+                from kosmo.infrastructure.llm.local_embedder import FastembedEmbedder
+
+                return FastembedEmbedder()
+            except ImportError:
+                return None
+        return None
+
+    embedding_generator = _build_embedder()
 
     knowledge_tools = KnowledgeToolRegistry()
     knowledge_tools.register(*build_get_phase_document(document_repo))

@@ -101,12 +101,15 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         *,
         limit: int = 5,
         exclude_project_id: ProjectId | None = None,
+        model: str | None = None,
     ) -> list[AgentSessionSummary]:
         scored: list[tuple[float, AgentSessionSummary]] = []
         for session in self._store.values():
             if exclude_project_id is not None and session.project_id == exclude_project_id:
                 continue
             if session.embedding is None:
+                continue
+            if model is not None and session.embedding_model != model:
                 continue
             sim = _cosine_similarity(embedding, session.embedding)
             scored.append((sim, _to_summary(session)))

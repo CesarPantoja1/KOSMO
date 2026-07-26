@@ -48,6 +48,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             model.total_llm_calls = session.total_llm_calls
             model.user_instructions = session.user_instructions
             model.embedding = list(session.embedding) if session.embedding else None
+            model.embedding_model = session.embedding_model
             model.reflection = session.reflection
             model.updated_at = datetime.now(UTC)
 
@@ -149,14 +150,19 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
         *,
         limit: int = 5,
         exclude_project_id: ProjectId | None = None,
+        model: str | None = None,
     ) -> list[AgentSessionSummary]:
         async with self._session_factory() as db:
             embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+            filters = "WHERE embedding IS NOT NULL"
+            if exclude_project_id:
+                filters += " AND project_id != :exclude_id"
+            if model:
+                filters += " AND embedding_model = :model"
             stmt = text(
-                "SELECT id FROM agent_sessions "
-                "WHERE embedding IS NOT NULL "
-                + ("AND project_id != :exclude_id " if exclude_project_id else "")
-                + "ORDER BY embedding <-> :embedding::vector "
+                f"SELECT id FROM agent_sessions "
+                f"{filters} "
+                "ORDER BY embedding <-> :embedding::vector "
                 "LIMIT :limit"
             )
             params: dict[str, object] = {
@@ -165,6 +171,8 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             }
             if exclude_project_id is not None:
                 params["exclude_id"] = str(exclude_project_id)
+            if model:
+                params["model"] = model
 
             result = await db.execute(stmt, params)
             rows = result.fetchall()
@@ -214,6 +222,7 @@ def _model_to_session(model: AgentSessionModel) -> AgentSession:
         total_llm_calls=model.total_llm_calls,
         user_instructions=model.user_instructions,
         embedding=list(model.embedding) if model.embedding else None,
+        embedding_model=model.embedding_model,
         reflection=model.reflection,
         created_at=model.created_at,
         updated_at=model.updated_at,

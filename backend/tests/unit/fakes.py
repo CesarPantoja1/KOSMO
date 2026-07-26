@@ -109,6 +109,29 @@ class InMemoryActivityDiagramRepository:
         return self._diagrams.get(str(feature_id))
 
 
+class StubEmbedder:
+    def __init__(self, model_name: str = "stub-embedder", dimensions: int = 4) -> None:
+        self._model_name = model_name
+        self._dims = dimensions
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    async def embed(self, text: str) -> list[float] | None:  # noqa: ARG002
+        import hashlib
+
+        h = hashlib.sha256(text.encode()).digest()
+        return [float(b) / 255.0 for b in h[: self._dims]]
+
+    @staticmethod
+    def text_for_embedding(output: object, validation_errors: list[str]) -> str:
+        parts = [str(output)[:2000]]
+        if validation_errors:
+            parts.append("Errores: " + "; ".join(validation_errors[:5]))
+        return "\n".join(parts)
+
+
 class InMemoryAuditEventSink:
     def __init__(self) -> None:
         self.events: list[AuditEvent] = []

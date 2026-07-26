@@ -33,6 +33,7 @@ class AgentSession:
     user_instructions: str | None = None
 
     embedding: list[float] | None = None
+    embedding_model: str | None = None
 
     reflection: str | None = None
 
@@ -89,6 +90,7 @@ class AgentMemoryPort(Protocol):
         *,
         limit: int = 5,
         exclude_project_id: ProjectId | None = None,
+        model: str | None = None,
     ) -> list[AgentSessionSummary]: ...
 
 

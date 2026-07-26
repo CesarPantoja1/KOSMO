@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     llm_model: str
     llm_api_key: SecretStr | None = None
 
+    # Embeddings
+    embedding_provider: Literal["auto", "openai", "fastembed", "none"] = "auto"
+
     # API
     api_version: str = "v1"
     cors_allowed_origins: str = "*"

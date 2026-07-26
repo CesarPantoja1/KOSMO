@@ -33,6 +33,7 @@ def create_session(
     embedding: list[float] | None = None,
     reflection: str | None = None,
     validation_error_messages: list[str] | None = None,
+    embedding_model: str | None = None,
 ) -> AgentSession:
     now = datetime.now(UTC)
     return AgentSession(
@@ -44,6 +45,7 @@ def create_session(
         conversation=conversation or [],
         reasoning_log=reasoning_log or [],
         tool_results=tool_results or [],
+        validation_error_messages=validation_error_messages or [],
         current_iteration=current_iteration,
         max_iterations=max_iterations,
         is_completed=is_completed,
@@ -53,8 +55,8 @@ def create_session(
         total_llm_calls=total_llm_calls,
         user_instructions=user_instructions,
         embedding=embedding,
+        embedding_model=embedding_model,
         reflection=reflection,
-        validation_error_messages=validation_error_messages or [],
         created_at=now,
         updated_at=now,
     )

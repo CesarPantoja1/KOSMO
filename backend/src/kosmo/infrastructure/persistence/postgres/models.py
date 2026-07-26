@@ -132,7 +132,8 @@ class AgentSessionModel(Base):
 
     user_instructions: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     reflection: Mapped[str | None] = mapped_column(Text(), nullable=True)
 

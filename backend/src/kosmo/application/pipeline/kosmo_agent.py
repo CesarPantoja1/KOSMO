@@ -94,6 +94,7 @@ class KOSMOAgent:
                     query_embedding,
                     limit=3,
                     exclude_project_id=project_id,
+                    model=self._embedder.model_name if self._embedder else None,
                 )
                 if similar:
                     system_prompt = self._inject_cross_project_context(system_prompt, similar)
@@ -268,6 +269,7 @@ class KOSMOAgent:
             total_llm_calls=current_iteration,
             user_instructions=user_instructions,
             embedding=embedding,
+            embedding_model=self._embedder.model_name if self._embedder else None,
             reflection=reflection,
         )
 
