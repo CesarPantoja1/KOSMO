@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import json
 import time
 from typing import TYPE_CHECKING, Any
@@ -55,6 +56,8 @@ class KOSMOAgent:
             raise ValueError("SkillRegistry no configurado")
 
         sanitized_instructions = sanitize_user_instructions(user_instructions) if user_instructions else None
+
+        context = _sanitize_context(context)
 
         mode = self._skill_registry.resolve(skill_name)
         return await self._execute_loop(
@@ -477,3 +480,12 @@ def _parse_tool_call(text: str) -> tuple[str | None, dict[str, Any]]:
                 args = json.loads(text[brace_start : brace_end + 1])
 
     return tool_name, args
+
+
+def _sanitize_context(context: Any) -> Any:
+    replacements: dict[str, str] = {}
+    for field_name in ("project_name", "project_description"):
+        value = getattr(context, field_name, None)
+        if isinstance(value, str) and value:
+            replacements[field_name] = sanitize_user_instructions(value)
+    return dataclasses.replace(context, **replacements) if replacements else context
