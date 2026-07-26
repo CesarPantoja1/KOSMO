@@ -47,7 +47,7 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.config import Settings
-from kosmo.contracts.agent_memory import AgentMemoryPort
+from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
@@ -101,6 +101,7 @@ from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
 from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
     SqlAlchemyAgentSessionStore,
+    SqlAlchemyKnowledgePatternStore,
 )
 from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyAuditEventSink,
@@ -263,6 +264,7 @@ class PipelineComponents:
     guard_registry: GuardRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
+    pattern_store: KnowledgePatternStore
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -427,6 +429,8 @@ def build_pipeline_components(
 
     embedding_generator = _build_embedder()
 
+    pattern_store = SqlAlchemyKnowledgePatternStore(session_factory)
+
     knowledge_tools = KnowledgeToolRegistry()
     knowledge_tools.register(*build_get_phase_document(document_repo))
     knowledge_tools.register(*build_get_downstream_artifacts(feature_repo))
@@ -442,6 +446,7 @@ def build_pipeline_components(
         memory=agent_memory,  # type: ignore[reportArgumentType]
         embedding_generator=embedding_generator,
         knowledge_tools=knowledge_tools,
+        pattern_store=pattern_store,  # type: ignore[reportArgumentType]
     )
 
     return PipelineComponents(
@@ -451,6 +456,7 @@ def build_pipeline_components(
         guard_registry=guard_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
+        pattern_store=pattern_store,
     )
 
 

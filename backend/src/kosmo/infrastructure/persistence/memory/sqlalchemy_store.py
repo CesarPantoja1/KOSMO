@@ -10,11 +10,12 @@ from kosmo.contracts.agent_memory import (
     AgentMemoryPort,
     AgentSession,
     AgentSessionSummary,
+    KnowledgePattern,
     ProjectMemoryContext,
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
-from kosmo.infrastructure.persistence.postgres.models import AgentSessionModel
+from kosmo.infrastructure.persistence.postgres.models import AgentSessionModel, KnowledgePatternModel
 
 
 class SqlAlchemyAgentSessionStore(AgentMemoryPort):
@@ -182,6 +183,74 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
                 if session is not None:
                     summaries.append(_to_summary(session))
             return summaries
+
+    async def list_recent_sessions_global(
+        self,
+        *,
+        limit: int = 50,
+    ) -> list[AgentSessionSummary]:
+        async with self._session_factory() as db:
+            stmt = (
+                select(AgentSessionModel)
+                .order_by(AgentSessionModel.created_at.desc())
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            models = result.scalars().all()
+            return [_model_to_summary(m) for m in models]
+
+
+class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def replace_patterns(
+        self,
+        phase: SpecPhase,
+        patterns: list[KnowledgePattern],
+    ) -> None:
+        async with self._session_factory() as db:
+            delete_stmt = select(KnowledgePatternModel).where(
+                KnowledgePatternModel.phase == phase.value
+            )
+            result = await db.execute(delete_stmt)
+            for existing in result.scalars().all():
+                await db.delete(existing)
+            for p in patterns:
+                db.add(
+                    KnowledgePatternModel(
+                        id=p.pattern_id,
+                        phase=p.phase.value,
+                        pattern_text=p.pattern_text,
+                        support_count=p.support_count,
+                    )
+                )
+            await db.commit()
+
+    async def list_patterns(
+        self,
+        phase: SpecPhase | None = None,
+        *,
+        limit: int = 10,
+    ) -> list[KnowledgePattern]:
+        async with self._session_factory() as db:
+            stmt = select(KnowledgePatternModel)
+            if phase is not None:
+                stmt = stmt.where(KnowledgePatternModel.phase == phase.value)
+            stmt = stmt.order_by(KnowledgePatternModel.support_count.desc()).limit(limit)
+            result = await db.execute(stmt)
+            models = result.scalars().all()
+            return [
+                KnowledgePattern(
+                    pattern_id=m.id,
+                    phase=SpecPhase(m.phase),
+                    pattern_text=m.pattern_text,
+                    support_count=m.support_count,
+                    created_at=m.created_at,
+                    updated_at=m.updated_at,
+                )
+                for m in models
+            ]
 
 
 def _to_summary(session: AgentSession) -> AgentSessionSummary:

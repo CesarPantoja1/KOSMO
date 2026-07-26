@@ -7,7 +7,7 @@ import json
 import time
 from typing import TYPE_CHECKING, Any
 
-from kosmo.contracts.agent_memory import AgentMemoryPort
+from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -35,6 +35,7 @@ class KOSMOAgent:
         memory: AgentMemoryPort | None = None,
         embedding_generator: Any = None,
         knowledge_tools: KnowledgeToolRegistry | None = None,
+        pattern_store: KnowledgePatternStore | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._guard_registry = guard_registry
@@ -43,6 +44,7 @@ class KOSMOAgent:
         self._memory = memory
         self._embedder: Any = embedding_generator  # EmbeddingGenerator
         self._knowledge_tools: KnowledgeToolRegistry | None = knowledge_tools
+        self._pattern_store = pattern_store
 
     async def execute_with_skill(
         self,
@@ -98,6 +100,13 @@ class KOSMOAgent:
                 )
                 if similar:
                     system_prompt = self._inject_cross_project_context(system_prompt, similar)
+
+        if self._pattern_store is not None:
+            patterns = await self._pattern_store.list_patterns(
+                phase=mode.phase_name, limit=5
+            )
+            if patterns:
+                system_prompt = self._inject_patterns(system_prompt, patterns)
 
         knowledge_context = ""
         tool_invocations: list[dict[str, Any]] = []
@@ -517,6 +526,21 @@ class KOSMOAgent:
             )
             if s.user_instructions:
                 lines.append(f"  Instrucciones: {s.user_instructions}")
+        return "\n".join(lines)
+
+    def _inject_patterns(
+        self,
+        system_prompt: str,
+        patterns: list[Any],
+    ) -> str:
+        lines: list[str] = [
+            system_prompt,
+            "## Patrones aprendidos entre proyectos\n\n"
+            "Los siguientes patrones se han identificado al analizar sesiones "
+            "de multiples proyectos. Usa esta informacion para mejorar la calidad:\n",
+        ]
+        for p in patterns:
+            lines.append(f"- {p.pattern_text} (respaldado por {p.support_count} proyectos)")
         return "\n".join(lines)
 
     @property

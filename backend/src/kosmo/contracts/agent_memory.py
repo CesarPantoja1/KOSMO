@@ -9,6 +9,16 @@ from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 
 
 @dataclass(frozen=True)
+class KnowledgePattern:
+    pattern_id: str
+    phase: SpecPhase
+    pattern_text: str
+    support_count: int = 1
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
 class AgentSession:
     session_id: AgentMemoryId
     project_id: ProjectId
@@ -92,6 +102,27 @@ class AgentMemoryPort(Protocol):
         exclude_project_id: ProjectId | None = None,
         model: str | None = None,
     ) -> list[AgentSessionSummary]: ...
+
+    async def list_recent_sessions_global(
+        self,
+        *,
+        limit: int = 50,
+    ) -> list[AgentSessionSummary]: ...
+
+
+class KnowledgePatternStore(Protocol):
+    async def replace_patterns(
+        self,
+        phase: SpecPhase,
+        patterns: list[KnowledgePattern],
+    ) -> None: ...
+
+    async def list_patterns(
+        self,
+        phase: SpecPhase | None = None,
+        *,
+        limit: int = 10,
+    ) -> list[KnowledgePattern]: ...
 
 
 class AgentMemoryError(Exception):

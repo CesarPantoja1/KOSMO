@@ -6,6 +6,7 @@ from kosmo.contracts.agent_memory import (
     AgentMemoryPort,
     AgentSession,
     AgentSessionSummary,
+    KnowledgePattern,
     ProjectMemoryContext,
 )
 from kosmo.contracts.sdd.document import SpecPhase
@@ -116,6 +117,14 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         scored.sort(key=lambda x: x[0], reverse=True)
         return [s for _, s in scored[:limit]]
 
+    async def list_recent_sessions_global(
+        self,
+        *,
+        limit: int = 50,
+    ) -> list[AgentSessionSummary]:
+        sessions = sorted(self._store.values(), key=lambda s: s.created_at, reverse=True)
+        return [_to_summary(s) for s in sessions[:limit]]
+
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))
@@ -139,3 +148,29 @@ def _to_summary(session: AgentSession) -> AgentSessionSummary:
         user_instructions=session.user_instructions,
         created_at=session.created_at,
     )
+
+
+class InMemoryKnowledgePatternStore:
+    def __init__(self) -> None:
+        self._patterns: dict[str, list[KnowledgePattern]] = {}
+
+    async def replace_patterns(
+        self,
+        phase: SpecPhase,
+        patterns: list[KnowledgePattern],
+    ) -> None:
+        self._patterns[phase.value] = patterns
+
+    async def list_patterns(
+        self,
+        phase: SpecPhase | None = None,
+        *,
+        limit: int = 10,
+    ) -> list[KnowledgePattern]:
+        results: list[KnowledgePattern] = []
+        for phase_key, pats in self._patterns.items():
+            if phase is not None and phase_key != phase.value:
+                continue
+            results.extend(pats)
+        results.sort(key=lambda p: p.support_count, reverse=True)
+        return results[:limit]
