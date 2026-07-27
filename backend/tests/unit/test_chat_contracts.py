@@ -5,6 +5,7 @@ import pytest
 from kosmo.contracts import (
     ChatHistoryId,
     ChatMessageId,
+    ChatRepository,
     ChatRole,
     DiffCambio,
     EstadoPlanCambio,
@@ -151,5 +152,136 @@ def test_historial_chat_empty_and_add_message():
     assert historial3.message_count == 2
     assert historial3.last_message == msg2
     assert historial3.messages == (msg1, msg2)
+
+
+class FakeChatRepository:
+    def __init__(self) -> None:
+        self.messages: list[MensajeChat] = []
+        self.plans: list[PlanCambio] = []
+
+    async def save_message(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        message: MensajeChat,
+        context_id: str | None = None,
+    ) -> MensajeChat:
+        self.messages.append(message)
+        return message
+
+    async def get_history(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        context_id: str | None = None,
+    ) -> HistorialChat | None:
+        return HistorialChat(
+            id=ChatHistoryId(f"{phase}:{project_id}"),
+            project_id=project_id,
+            phase=phase,
+            context_id=context_id,
+            messages=tuple(self.messages),
+        )
+
+    async def save_history(self, history: HistorialChat) -> HistorialChat:
+        self.messages = list(history.messages)
+        return history
+
+    async def add_plan_change(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        change: PlanCambio,
+    ) -> PlanCambio:
+        self.plans.append(change)
+        return change
+
+    async def list_plan_changes(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase | None = None,
+    ) -> list[PlanCambio]:
+        return self.plans
+
+    async def update_plan_change_status(
+        self,
+        project_id: ProjectId,
+        change_id: PlanChangeId,
+        status: EstadoPlanCambio,
+        user_version: str | None = None,
+    ) -> PlanCambio | None:
+        for idx, item in enumerate(self.plans):
+            if item.id == change_id:
+                updated = PlanCambio(
+                    id=item.id,
+                    section=item.section,
+                    description=item.description,
+                    diff=item.diff,
+                    status=status,
+                    origin=item.origin,
+                    rationale=item.rationale,
+                    user_version=user_version or item.user_version,
+                )
+                self.plans[idx] = updated
+                return updated
+        return None
+
+    async def remove_plan_change(
+        self,
+        project_id: ProjectId,
+        change_id: PlanChangeId,
+    ) -> bool:
+        initial_len = len(self.plans)
+        self.plans = [p for p in self.plans if p.id != change_id]
+        return len(self.plans) < initial_len
+
+    async def clear_plan(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase | None = None,
+    ) -> None:
+        self.plans.clear()
+
+
+@pytest.mark.asyncio
+async def test_chat_repository_protocol_implementation():
+    repo: ChatRepository = FakeChatRepository()
+    project_id = ProjectId("prj_test")
+
+    msg = MensajeChat(
+        id=ChatMessageId("msg_10"),
+        role=ChatRole.USER,
+        content="Ampliar alcance",
+    )
+    saved_msg = await repo.save_message(project_id, SpecPhase.DESCUBRIMIENTO, msg)
+    assert saved_msg.id == "msg_10"
+
+    history = await repo.get_history(project_id, SpecPhase.DESCUBRIMIENTO)
+    assert history is not None
+    assert history.message_count == 1
+
+    change = PlanCambio(
+        id=PlanChangeId("chg_1"),
+        section="§1 Visión",
+        description="Ajuste de visión",
+        diff=DiffCambio(before="v1", after="v2"),
+    )
+    await repo.add_plan_change(project_id, SpecPhase.DESCUBRIMIENTO, change)
+    plans = await repo.list_plan_changes(project_id, SpecPhase.DESCUBRIMIENTO)
+    assert len(plans) == 1
+
+    updated = await repo.update_plan_change_status(
+        project_id,
+        PlanChangeId("chg_1"),
+        EstadoPlanCambio.ACCEPTED,
+    )
+    assert updated is not None
+    assert updated.status == EstadoPlanCambio.ACCEPTED
+
+    removed = await repo.remove_plan_change(project_id, PlanChangeId("chg_1"))
+    assert removed is True
+    plans_after = await repo.list_plan_changes(project_id)
+    assert len(plans_after) == 0
+
 
 

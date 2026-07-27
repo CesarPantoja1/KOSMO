@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Protocol
 
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
@@ -80,5 +81,61 @@ class HistorialChat:
     @property
     def last_message(self) -> MensajeChat | None:
         return self.messages[-1] if self.messages else None
+
+
+class ChatRepository(Protocol):
+    async def save_message(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        message: MensajeChat,
+        context_id: str | None = None,
+    ) -> MensajeChat: ...
+
+    async def get_history(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        context_id: str | None = None,
+    ) -> HistorialChat | None: ...
+
+    async def save_history(
+        self,
+        history: HistorialChat,
+    ) -> HistorialChat: ...
+
+    async def add_plan_change(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        change: PlanCambio,
+    ) -> PlanCambio: ...
+
+    async def list_plan_changes(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase | None = None,
+    ) -> list[PlanCambio]: ...
+
+    async def update_plan_change_status(
+        self,
+        project_id: ProjectId,
+        change_id: PlanChangeId,
+        status: EstadoPlanCambio,
+        user_version: str | None = None,
+    ) -> PlanCambio | None: ...
+
+    async def remove_plan_change(
+        self,
+        project_id: ProjectId,
+        change_id: PlanChangeId,
+    ) -> bool: ...
+
+    async def clear_plan(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase | None = None,
+    ) -> None: ...
+
 
 

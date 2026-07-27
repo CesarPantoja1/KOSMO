@@ -1,4 +1,5 @@
 from kosmo.contracts.chat import (
+    ChatRepository,
     ChatRole,
     DiffCambio,
     EstadoPlanCambio,
@@ -12,6 +13,7 @@ from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId
 __all__ = [
     "ChatHistoryId",
     "ChatMessageId",
+    "ChatRepository",
     "ChatRole",
     "DiffCambio",
     "EstadoPlanCambio",
@@ -21,5 +23,6 @@ __all__ = [
     "PlanChangeId",
     "SugerenciaCambio",
 ]
+
 
 
