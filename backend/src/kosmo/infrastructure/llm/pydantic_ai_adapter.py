@@ -159,10 +159,9 @@ class PydanticAILLMClient:
             async def tool_fn(**kwargs: object) -> str:
                 args: dict[str, Any] = dict(kwargs)
                 result = await tool_handler(name, args)
-                records.append(
-                    ToolCallRecord(name=name, args=args, result_snippet=(result or "")[:500])
-                )
+                records.append(ToolCallRecord(name=name, args=args, result_snippet=(result or "")[:500]))
                 return result
+
             tool_fn.__name__ = name  # type: ignore[reportFunctionMemberAccess]
             return tool_fn
 

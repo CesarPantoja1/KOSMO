@@ -81,7 +81,6 @@ basado en un conjunto de requisitos EARS para una característica específica.
 
 
 class ModeloMode:
-
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.MODELO

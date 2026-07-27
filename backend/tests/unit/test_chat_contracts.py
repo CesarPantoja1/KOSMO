@@ -282,6 +282,3 @@ async def test_chat_repository_protocol_implementation():
     assert removed is True
     plans_after = await repo.list_plan_changes(project_id)
     assert len(plans_after) == 0
-
-
-

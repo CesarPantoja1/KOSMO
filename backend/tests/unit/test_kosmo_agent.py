@@ -219,7 +219,10 @@ async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> N
             self._index = 0
 
         async def complete(  # noqa: PLR6301
-            self, prompt: PromptTemplate, temperature: float = 0.3, max_tokens: int = 4096  # noqa: ARG002
+            self,
+            prompt: PromptTemplate,
+            temperature: float = 0.3,
+            max_tokens: int = 4096,  # noqa: ARG002
         ) -> LLMResponse:
             nonlocal tool_calls
             tool_calls += 1
@@ -228,7 +231,10 @@ async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> N
             return LLMResponse(text="[CONTINUE]")
 
         async def complete_json(  # noqa: PLR6301
-            self, prompt: PromptTemplate, temperature: float = 0.1, max_tokens: int = 4096  # noqa: ARG002
+            self,
+            prompt: PromptTemplate,
+            temperature: float = 0.1,
+            max_tokens: int = 4096,  # noqa: ARG002
         ) -> LLMResponse:
             return await self.complete(prompt, temperature, max_tokens)
 
@@ -263,10 +269,14 @@ async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> N
     store = InMemoryAgentSessionStore()
     guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
-    skill_reg.register(Skill(
-        name="discovery_generate", description="Test", phase=SpecPhase.DESCUBRIMIENTO,
-        mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
-    ))
+    skill_reg.register(
+        Skill(
+            name="discovery_generate",
+            description="Test",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+        )
+    )
     knowledge_tools = KnowledgeToolRegistry()
 
     async def _test_tool(input_data: dict[str, object]) -> str:  # noqa: ARG001

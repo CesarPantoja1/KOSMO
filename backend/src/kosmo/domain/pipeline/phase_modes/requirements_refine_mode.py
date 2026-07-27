@@ -59,7 +59,6 @@ Escapa TODOS los saltos de línea como \\n y TODAS las comillas dobles como
 
 
 class RequirementsRefineMode:
-
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.REQUISITOS

@@ -106,9 +106,7 @@ class KOSMOAgent:
                     system_prompt = self._inject_cross_project_context(system_prompt, similar)
 
         if self._pattern_store is not None:
-            patterns = await self._pattern_store.list_patterns(
-                phase=mode.phase_name, limit=5
-            )
+            patterns = await self._pattern_store.list_patterns(phase=mode.phase_name, limit=5)
             if patterns:
                 system_prompt = self._inject_patterns(system_prompt, patterns)
 
@@ -123,9 +121,11 @@ class KOSMOAgent:
                     tool_system_prompt, base_user_prompt, project_id
                 )
                 if knowledge_context:
-                    reason_entries.append("pre_consulta_tools: herramientas consultadas: " + ", ".join(
-                        t["tool"] for t in tool_invocations if t.get("found")
-                    ) or "ninguna encontrada")
+                    reason_entries.append(
+                        "pre_consulta_tools: herramientas consultadas: "
+                        + ", ".join(t["tool"] for t in tool_invocations if t.get("found"))
+                        or "ninguna encontrada"
+                    )
                 else:
                     reason_entries.append("pre_consulta_tools: sin consulta de herramientas")
             else:
@@ -200,11 +200,7 @@ class KOSMOAgent:
             await asyncio.sleep(delay_s)
 
             retry_context = ""
-            if (
-                self._knowledge_tools is not None
-                and last_validation.errors
-                and iteration < self._max_iterations
-            ):
+            if self._knowledge_tools is not None and last_validation.errors and iteration < self._max_iterations:
                 error_list = "; ".join(last_validation.errors[:5])
                 retry_system_prompt = (
                     system_prompt + "\n\nLa validacion del contenido generado fallo "
@@ -307,14 +303,16 @@ class KOSMOAgent:
 
         await self._memory.save_session(session)
 
-        asyncio.create_task(self._reflect_and_consolidate(
-            session_id=session.session_id,
-            phase=phase,
-            session_type=session_type,
-            is_completed=is_completed,
-            current_iteration=current_iteration,
-            validation=validation,
-        ))
+        asyncio.create_task(
+            self._reflect_and_consolidate(
+                session_id=session.session_id,
+                phase=phase,
+                session_type=session_type,
+                is_completed=is_completed,
+                current_iteration=current_iteration,
+                validation=validation,
+            )
+        )
 
     async def _reflect_and_consolidate(
         self,
@@ -366,7 +364,8 @@ class KOSMOAgent:
             try:
                 text, records = await self._llm_client.complete_with_tools(
                     PromptTemplate(
-                        system_prompt=system_prompt + (
+                        system_prompt=system_prompt
+                        + (
                             "\n\nPuedes consultar las herramientas disponibles para obtener "
                             "informacion adicional antes de responder. Si tienes suficiente contexto, "
                             "responde listo sin consultar herramientas."
@@ -432,12 +431,14 @@ class KOSMOAgent:
             else:
                 collected.append(f"[TOOL: {tool_name}]\n{result}")
 
-            invocations.append({
-                "tool": tool_name,
-                "args": {k: str(v)[:200] for k, v in tool_args.items()},
-                "result_snippet": (result or "herramienta no encontrada")[:500],
-                "found": not not_found,
-            })
+            invocations.append(
+                {
+                    "tool": tool_name,
+                    "args": {k: str(v)[:200] for k, v in tool_args.items()},
+                    "result_snippet": (result or "herramienta no encontrada")[:500],
+                    "found": not not_found,
+                }
+            )
             tool_prompt = PromptTemplate(
                 system_prompt=tool_prompt.system_prompt,
                 user_prompt=user_prompt + "\n\n" + collected[-1] + "\n\nResponde [CONTINUE] o [TOOL: ...]",

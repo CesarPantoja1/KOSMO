@@ -94,7 +94,6 @@ _FEATURES_SYSTEM_PROMPT = (
 
 
 class FeaturesMode:
-
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.CARACTERISTICAS

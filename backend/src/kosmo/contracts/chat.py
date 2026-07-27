@@ -136,6 +136,3 @@ class ChatRepository(Protocol):
         project_id: ProjectId,
         phase: SpecPhase | None = None,
     ) -> None: ...
-
-
-
