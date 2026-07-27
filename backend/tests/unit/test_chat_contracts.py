@@ -3,15 +3,19 @@ from datetime import UTC, datetime
 import pytest
 
 from kosmo.contracts import (
+    ChatHistoryId,
     ChatMessageId,
     ChatRole,
     DiffCambio,
     EstadoPlanCambio,
+    HistorialChat,
     MensajeChat,
     PlanCambio,
     PlanChangeId,
     SugerenciaCambio,
 )
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import ProjectId
 
 
 def test_mensaje_chat_creation_without_suggested_change():
@@ -109,4 +113,43 @@ def test_plan_cambio_full_attributes_and_immutability():
 
     with pytest.raises(AttributeError):
         cambio.status = EstadoPlanCambio.ACCEPTED  # type: ignore[misc]
+
+
+def test_historial_chat_empty_and_add_message():
+    historial = HistorialChat(
+        id=ChatHistoryId("discovery:prj_001"),
+        project_id=ProjectId("prj_001"),
+        phase=SpecPhase.DESCUBRIMIENTO,
+    )
+
+    assert historial.id == "discovery:prj_001"
+    assert historial.project_id == "prj_001"
+    assert historial.phase == SpecPhase.DESCUBRIMIENTO
+    assert historial.context_id is None
+    assert historial.message_count == 0
+    assert historial.last_message is None
+
+    msg1 = MensajeChat(
+        id=ChatMessageId("msg_1"),
+        role=ChatRole.USER,
+        content="Hola",
+    )
+    historial2 = historial.add_message(msg1)
+
+    # Inmutabilidad
+    assert historial.message_count == 0
+    assert historial2.message_count == 1
+    assert historial2.last_message == msg1
+
+    msg2 = MensajeChat(
+        id=ChatMessageId("msg_2"),
+        role=ChatRole.ASSISTANT,
+        content="¿En qué puedo ayudarte?",
+    )
+    historial3 = historial2.add_message(msg2)
+
+    assert historial3.message_count == 2
+    assert historial3.last_message == msg2
+    assert historial3.messages == (msg1, msg2)
+
 
