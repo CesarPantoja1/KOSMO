@@ -59,6 +59,7 @@ from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
+from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
@@ -402,6 +403,14 @@ def build_pipeline_components(
             description="Genera diagrama de actividad UML desde requisitos EARS",
             phase=SpecPhase.MODELO,
             mode=ModeloMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="discovery_chat",
+            description="Chat conversacional de descubrimiento a nivel de negocio",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DiscoveryChatMode(),  # type: ignore[reportArgumentType]
         )
     )
 
