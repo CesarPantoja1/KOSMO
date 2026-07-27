@@ -6,7 +6,10 @@ from kosmo.contracts import (
     ChatMessageId,
     ChatRole,
     DiffCambio,
+    EstadoPlanCambio,
     MensajeChat,
+    PlanCambio,
+    PlanChangeId,
     SugerenciaCambio,
 )
 
@@ -63,3 +66,47 @@ def test_mensaje_chat_immutability():
 
     with pytest.raises(AttributeError):
         msg.content = "Nuevo contenido"  # type: ignore[misc]
+
+
+def test_plan_cambio_default_values():
+    diff = DiffCambio(before="nacional", after="LATAM")
+    cambio = PlanCambio(
+        id=PlanChangeId("chg_100"),
+        section="§2 Alcance del producto",
+        description="Ampliar alcance a LATAM",
+        diff=diff,
+    )
+
+    assert cambio.id == "chg_100"
+    assert cambio.section == "§2 Alcance del producto"
+    assert cambio.description == "Ampliar alcance a LATAM"
+    assert cambio.diff.before == "nacional"
+    assert cambio.diff.after == "LATAM"
+    assert cambio.status == EstadoPlanCambio.PENDING
+    assert cambio.status == "pending"
+    assert cambio.origin == "Chat Descubrimiento"
+    assert cambio.rationale is None
+    assert cambio.user_version is None
+
+
+def test_plan_cambio_full_attributes_and_immutability():
+    diff = DiffCambio(before="v1", after="v2")
+    cambio = PlanCambio(
+        id=PlanChangeId("chg_101"),
+        section="§3 Monedas",
+        description="Soporte multimoneda",
+        diff=diff,
+        status=EstadoPlanCambio.CONFLICT,
+        origin="Chat Descubrimiento",
+        rationale="Cambiaste §2 de nacionales a LATAM.",
+        user_version="v1_manual",
+    )
+
+    assert cambio.status == EstadoPlanCambio.CONFLICT
+    assert cambio.origin == "Chat Descubrimiento"
+    assert cambio.rationale == "Cambiaste §2 de nacionales a LATAM."
+    assert cambio.user_version == "v1_manual"
+
+    with pytest.raises(AttributeError):
+        cambio.status = EstadoPlanCambio.ACCEPTED  # type: ignore[misc]
+

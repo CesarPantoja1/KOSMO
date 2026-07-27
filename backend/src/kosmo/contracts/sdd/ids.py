@@ -12,4 +12,6 @@ PipelineId = NewType("PipelineId", str)
 AgentMemoryId = NewType("AgentMemoryId", str)
 ActivityDiagramId = NewType("ActivityDiagramId", str)
 ChatMessageId = NewType("ChatMessageId", str)
+PlanChangeId = NewType("PlanChangeId", str)
+
 
