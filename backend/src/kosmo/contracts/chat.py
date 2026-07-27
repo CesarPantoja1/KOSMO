@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
 
+from pydantic import BaseModel
+
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
 
@@ -34,6 +36,7 @@ class SugerenciaCambio:
     section: str
     description: str
     diff: DiffCambio
+    rationale: str | None = None
 
 
 @dataclass(frozen=True)
@@ -136,3 +139,16 @@ class ChatRepository(Protocol):
         project_id: ProjectId,
         phase: SpecPhase | None = None,
     ) -> None: ...
+
+
+class SugerenciaCambioLLM(BaseModel):
+    section: str
+    description: str
+    diff_before: str
+    diff_after: str
+    rationale: str | None = None
+
+
+class RespuestaChatLLM(BaseModel):
+    content: str
+    change_suggestion: SugerenciaCambioLLM | None = None

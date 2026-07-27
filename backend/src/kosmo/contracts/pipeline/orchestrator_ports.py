@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryPhaseContext,
@@ -16,6 +16,9 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+
+if TYPE_CHECKING:
+    from kosmo.contracts.chat import MensajeChat
 
 
 @dataclass(frozen=True)
@@ -132,3 +135,10 @@ class AgentPort(Protocol):
         project_id: Any | None = None,
         user_instructions: str | None = None,
     ) -> Any: ...
+
+    async def execute_conversation(
+        self,
+        skill_name: str,
+        messages: list[MensajeChat],
+        context: Any,
+    ) -> MensajeChat: ...

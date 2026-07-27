@@ -15,6 +15,8 @@ _PREFIX_MAP: dict[str, str] = {
     "agent_memory": "agm_",
     "activity_diagram": "dia_",
     "knowledge_pattern": "kpat_",
+    "chat_message": "msg_",
+    "plan_change": "chg_",
 }
 
 
