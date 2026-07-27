@@ -178,6 +178,17 @@ jobs:
       run:
         working-directory: backend
 
+    env:
+      ENV: development
+      LOG_LEVEL: INFO
+      JWT_PRIVATE_KEY_PATH: ./tmp/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: ./tmp/jwt_public.pem
+      FERNET_MASTER_KEY: gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
+      DATABASE_URL: postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_dev
+      LLM_PROVIDER: noop
+      LLM_MODEL: noop
+
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -265,8 +276,11 @@ jobs:
           --health-retries 5
 
     env:
-      ENV: test
+      ENV: development
       LOG_LEVEL: INFO
+      JWT_PRIVATE_KEY_PATH: ./tmp/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: ./tmp/jwt_public.pem
+      FERNET_MASTER_KEY: gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
 
       DATABASE_URL: postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_test
       MONGO_URL: mongodb://localhost:27017/kosmo_agent_memory_test
@@ -274,6 +288,7 @@ jobs:
 
       LLM_PROVIDER: noop
       LLM_MODEL: noop
+
 
     steps:
       - name: Checkout repository
