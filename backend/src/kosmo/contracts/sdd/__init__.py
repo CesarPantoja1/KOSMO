@@ -5,6 +5,7 @@ from kosmo.contracts.sdd.ids import (
     ActivityDiagramId,
     ApiKey,
     AuditId,
+    ChatMessageId,
     FeatureId,
     PipelineId,
     ProjectId,
@@ -21,6 +22,7 @@ __all__ = [
     "ActivityDiagramRepository",
     "ApiKey",
     "AuditId",
+    "ChatMessageId",
     "DiagramNotFoundError",
     "DiagramaActividad",
     "Feature",
@@ -33,3 +35,4 @@ __all__ = [
     "TaskId",
     "UserId",
 ]
+
