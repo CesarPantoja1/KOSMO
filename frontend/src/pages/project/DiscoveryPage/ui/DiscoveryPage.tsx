@@ -36,6 +36,8 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
+	const fetchAndHydratePlan = useAppStore((s) => s.fetchAndHydratePlan);
+
 	useEffect(() => {
 		if (!currentProject) {
 			router.push('/proyecto');
@@ -48,6 +50,8 @@ const DiscoveryPage = () => {
 				const data = await getDiscovery(currentProject.id);
 				setMarkdown(data.content);
 				savedContentRef.current = data.content;
+				// Sprint 4 (T9) — Sincronizar e hidratar el plan desde el backend
+				fetchAndHydratePlan(currentProject.id, 'discovery');
 			} catch (err) {
 				const errorStatus =
 					err && typeof err === 'object' && 'status' in err
@@ -72,7 +76,7 @@ const DiscoveryPage = () => {
 		};
 
 		fetchDiscovery();
-	}, [currentProject, router]);
+	}, [currentProject, router, fetchAndHydratePlan]);
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
