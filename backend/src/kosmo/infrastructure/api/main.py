@@ -23,6 +23,7 @@ from kosmo.infrastructure.api.routers.discovery import router as discovery_route
 from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
+from kosmo.infrastructure.api.routers.plan import router as plan_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirements import router as requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
@@ -228,6 +229,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.refine_discovery = discovery_components.refine_discovery
     app.state.process_discovery_chat_message = discovery_components.process_discovery_chat_message
     app.state.get_discovery_chat_history = discovery_components.get_discovery_chat_history
+    app.state.manage_plan_changes = discovery_components.manage_plan_changes
     app.state.generate_features = features_components.generate_features
     app.state.suggest_features = features_components.suggest_features
     app.state.save_selected_features = features_components.save_selected_features
@@ -290,6 +292,7 @@ app.add_middleware(RequestLoggingMiddleware)
 if not settings.auth_disabled:
     app.include_router(auth_router)
 app.include_router(projects_router)
+app.include_router(plan_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
 app.include_router(requirements_router)

@@ -6,12 +6,12 @@ y pueden referenciar entidades de dominio para conversión I/O sin invertir capa
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from kosmo.contracts.auth import TokenPair
-from kosmo.contracts.chat import HistorialChat, MensajeChat
+from kosmo.contracts.chat import HistorialChat, MensajeChat, PlanCambio
 
 # Enumeraciones de negocio
 
@@ -619,3 +619,106 @@ class ChatHistoryResponse(BaseModel):
             context=str(history.project_id),
             messages=[ChatMessage.from_domain(msg) for msg in history.messages],
         )
+
+
+class PlanChangeView(BaseModel):
+    """Representa un cambio propuesto en el plan de cambios."""
+
+    id: str = Field(description="ID del cambio (chg_ + ULID)")
+    section: str = Field(description="Sección del documento afectada")
+    description: str = Field(description="Descripción corta del cambio (máx 150 chars)")
+    diff: ChangeSuggestion = Field(description="Diff antes/después generado por la IA")
+    status: str = Field(description="Estado del cambio: pending, added, discarded, applied, conflict")
+    origin: str = Field(description="Origen del cambio: chat, consistency, manual")
+    created_at: datetime = Field(description="Timestamp de creación")
+    rationale: str | None = Field(default=None, description="Justificación del cambio")
+
+    @classmethod
+    def from_domain(cls, change: PlanCambio) -> "PlanChangeView":
+        from datetime import UTC, datetime
+
+        return cls(
+            id=str(change.id),
+            section=change.section,
+            description=change.description,
+            diff=ChangeSuggestion(
+                section=change.section,
+                diff_before=change.diff.before,
+                diff_after=change.diff.after,
+                rationale=change.rationale,
+            ),
+            status=change.status.value if hasattr(change.status, "value") else str(change.status),
+            origin=change.origin,
+            created_at=datetime.now(UTC),
+            rationale=change.rationale,
+        )
+
+
+class PlanStateView(BaseModel):
+    """Estado actual del plan de cambios de un proyecto."""
+
+    project_id: str = Field(description="ID del proyecto asociado al plan")
+    phase: str = Field(description="Fase del proyecto")
+    context: str = Field(description="Contexto del plan (ej. feature_id o project_id)")
+    changes: list[PlanChangeView] = Field(description="Cambios acumulados en el plan")
+    pending_count: int = Field(description="Número de cambios en estado pending o added")
+    conflict_count: int = Field(description="Número de cambios con conflicto")
+
+    @classmethod
+    def from_domain(cls, state: Any) -> "PlanStateView":
+        return cls(
+            project_id=str(state.project_id),
+            phase=str(state.phase.value if hasattr(state.phase, "value") else state.phase),
+            context=state.context_id or "",
+            changes=[PlanChangeView.from_domain(c) for c in state.changes],
+            pending_count=state.pending_count,
+            conflict_count=state.conflict_count,
+        )
+
+
+class AddPlanChangeRequest(BaseModel):
+    """Payload para agregar un cambio al plan."""
+
+    model_config = ConfigDict(extra="forbid")
+    change_id: str = Field(description="ID de la sugerencia (chg_ + ULID)")
+
+
+class PhaseNotificationView(BaseModel):
+    """Notificación de fases afectadas por propagación de cambios."""
+
+    phase: str = Field(description="Fase afectada")
+    affected_count: int = Field(description="Cantidad de artefactos afectados en esta fase")
+    affected_ids: list[str] = Field(description="IDs de los artefactos afectados")
+
+
+class PhaseNotificationList(BaseModel):
+    affected_phases: list[PhaseNotificationView] = Field(
+        description="Fases notificadas con sus artefactos desactualizados"
+    )
+
+
+class FailedChangeView(BaseModel):
+    """Representa un cambio que falló al aplicarse."""
+
+    id: str = Field(description="ID del cambio que falló")
+    reason: str = Field(description="Motivo del fallo")
+
+
+class BatchResultView(BaseModel):
+    """Resultado de aplicar un lote de cambios."""
+
+    applied_count: int = Field(description="Número de cambios aplicados con éxito")
+    failed_count: int = Field(description="Número de cambios que fallaron al aplicarse")
+    failed_changes: list[FailedChangeView] = Field(default=[], description="Cambios que fallaron, con el motivo")
+    propagation: PhaseNotificationList | None = Field(
+        default=None, description="Fases notificadas tras la aplicación (si corresponde)"
+    )
+
+
+class ApplyBatchRequest(BaseModel):
+    """Payload para aplicar un lote de cambios."""
+
+    model_config = ConfigDict(extra="forbid")
+    phase: str = Field(description="Fase a la cual aplicar los cambios")
+    context: str | None = Field(default=None, description="Contexto específico de los cambios")
+    changes: list[str] = Field(description="IDs de los cambios a aplicar")

@@ -479,6 +479,7 @@ class DiscoveryComponents:
     refine_discovery: RefineDiscoveryUseCase
     process_discovery_chat_message: ProcessDiscoveryChatMessageUseCase
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
+    manage_plan_changes: Any
 
 
 def build_discovery_components(
@@ -487,6 +488,7 @@ def build_discovery_components(
 ) -> DiscoveryComponents:
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
+    from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
     from kosmo.infrastructure.persistence.memory.in_memory_store import InMemoryChatRepository
@@ -515,6 +517,10 @@ def build_discovery_components(
             agent=pipeline.agent,
         ),
         get_discovery_chat_history=GetDiscoveryChatHistoryUseCase(
+            project_repo=project_repo,
+            chat_repo=chat_repo,
+        ),
+        manage_plan_changes=ManagePlanChangesUseCase(
             project_repo=project_repo,
             chat_repo=chat_repo,
         ),
