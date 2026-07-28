@@ -8,6 +8,11 @@ from kosmo.application.discovery.get_discovery import (
     GetDiscoveryOutput,
     GetDiscoveryUseCase,
 )
+from kosmo.application.discovery.process_discovery_chat_message import (
+    ProcessDiscoveryChatMessageInput,
+    ProcessDiscoveryChatMessageOutput,
+    ProcessDiscoveryChatMessageUseCase,
+)
 from kosmo.application.discovery.refine_discovery import (
     RefineDiscoveryInput,
     RefineDiscoveryOutput,
@@ -26,6 +31,9 @@ __all__ = [
     "GetDiscoveryInput",
     "GetDiscoveryOutput",
     "GetDiscoveryUseCase",
+    "ProcessDiscoveryChatMessageInput",
+    "ProcessDiscoveryChatMessageOutput",
+    "ProcessDiscoveryChatMessageUseCase",
     "RefineDiscoveryInput",
     "RefineDiscoveryOutput",
     "RefineDiscoveryUseCase",

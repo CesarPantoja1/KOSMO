@@ -58,6 +58,7 @@ class MensajeChat:
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     suggested_change: SugerenciaCambio | None = None
+    error: str | None = None
 
 
 @dataclass(frozen=True)
