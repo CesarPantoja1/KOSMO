@@ -281,7 +281,7 @@ class InMemoryChatRepository(ChatRepository):
         project_id: ProjectId,  # noqa: ARG002
         change_id: PlanChangeId,
         status: EstadoPlanCambio,
-        user_version: str | None = None
+        user_version: str | None = None,
     ) -> PlanCambio | None:
         for changes in self._plan_changes.values():
             for i, c in enumerate(changes):
