@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -113,9 +115,9 @@ class SqlAlchemyChatRepository(ChatRepository):
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
 
-            serialized_messages = []
+            serialized_messages: list[dict[str, Any]] = []
             for m in history.messages:
-                msg_dict = {
+                msg_dict: dict[str, Any] = {
                     "id": str(m.id),
                     "role": m.role.value,
                     "content": m.content,
@@ -245,7 +247,8 @@ class SqlAlchemyChatRepository(ChatRepository):
         async with self._session_factory() as session:
             result = await session.execute(stmt)
             await session.commit()
-            return result.rowcount > 0
+            rc = getattr(result, "rowcount", 0)
+            return bool(rc > 0)
 
     async def clear_plan(
         self,
