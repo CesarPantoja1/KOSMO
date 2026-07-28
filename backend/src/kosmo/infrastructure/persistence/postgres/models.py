@@ -160,3 +160,38 @@ class KnowledgePatternModel(Base):
     support_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ChatHistoryModel(Base):
+    __tablename__ = "chat_histories"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    messages: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class PlanChangeModel(Base):
+    __tablename__ = "plan_changes"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    section: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(Text(), nullable=False)
+    diff_before: Mapped[str] = mapped_column(Text(), nullable=False)
+    diff_after: Mapped[str] = mapped_column(Text(), nullable=False)
+    rationale: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    origin: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_version: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

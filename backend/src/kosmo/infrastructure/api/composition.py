@@ -491,9 +491,9 @@ def build_discovery_components(
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
-    from kosmo.infrastructure.persistence.memory.in_memory_store import InMemoryChatRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
-    chat_repo = InMemoryChatRepository()
+    chat_repo = SqlAlchemyChatRepository(session_factory)
 
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
