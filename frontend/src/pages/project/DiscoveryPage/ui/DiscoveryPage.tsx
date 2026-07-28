@@ -1,6 +1,6 @@
 'use client';
 
-import { ChatbotPopup, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
+import { Chatbot, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
 import { useAppStore } from 'app/store/app.store';
 import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
@@ -200,20 +200,12 @@ const DiscoveryPage = () => {
 				/>
 			)}
 
-			{isChatbotOpen && (
-				<ChatbotPopup
-					placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
-					onClose={() => setIsChatbotOpen(false)}
-					onSubmitInstructions={handleRefine}
-				/>
-			)}
-
 			{pendingNavigationPath && (
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
 			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
-				<div className='page-header'>
+				<div className='page-header flex-8/12'>
 					<h2 className='text-base-800 text-3xl font-bold'>
 						Descubrimiento del proyecto
 					</h2>
@@ -243,10 +235,8 @@ const DiscoveryPage = () => {
 							</button>
 						</div>
 					)}
-				</div>
 
-				{!isLoading && (
-					<div className='flex-1 min-h-0'>
+					{!isLoading && (
 						<MarkdownEditor
 							key={editorKey}
 							ref={editorRef}
@@ -256,8 +246,24 @@ const DiscoveryPage = () => {
 							onMaximize={() => setEditorMaximized(true)}
 							onMinimize={() => setEditorMaximized(false)}
 						/>
-					</div>
-				)}
+					)}
+				</div>
+
+				<div
+					className={`chatbot
+						${
+							isChatbotOpen
+								? 'opacity-100 translate-x-0 flex-4/12'
+								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+						}
+				`}
+				>
+					<Chatbot
+						placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
+						onClose={() => setIsChatbotOpen(false)}
+						onSubmitInstructions={handleRefine}
+					/>
+				</div>
 			</div>
 		</>
 	);

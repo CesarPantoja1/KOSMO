@@ -102,9 +102,13 @@ body {
 }
 
 .page-container {
-	@apply flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4;
+	@apply flex h-full min-h-0 overflow-hidden pt-2;
 }
 
 .page-header {
 	@apply flex flex-col gap-3;
+}
+
+.chatbot {
+	@apply overflow-hidden transition-all duration-300 ease-in-out;
 }

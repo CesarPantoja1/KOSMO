@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { ChatbotPopup, PlantUmlViewer } from '@/feature';
+import { Chatbot, PlantUmlViewer } from '@/feature';
 import {
 	Ai,
 	ArrowRight,
@@ -100,7 +100,10 @@ const ModelingPage = () => {
 			setPlantumlMaximized(false);
 
 			try {
-				const content = await getCharacteristicRequirements(projectId, characteristicId).catch(() => '');
+				const content = await getCharacteristicRequirements(
+					projectId,
+					characteristicId,
+				).catch(() => '');
 				if (cancelled) return;
 				if (content) {
 					setHasRequirements(characteristicId, true);
@@ -127,7 +130,8 @@ const ModelingPage = () => {
 					}
 				}
 			} catch {
-				if (!cancelled) toast.error('Error al cargar la información de la característica');
+				if (!cancelled)
+					toast.error('Error al cargar la información de la característica');
 			} finally {
 				if (!cancelled) {
 					setIsLoadingRequirements(false);
@@ -229,12 +233,12 @@ const ModelingPage = () => {
 
 	if (isLoading) {
 		return (
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex flex-col gap-3'>
+			<div className='page-container'>
+				<div className='page-header'>
 					<h2 className='text-3xl font-bold text-base-800'>Diagramas</h2>
 					<p className='text-base-600 text-lg'>
-						Usar el asistente AI para generar diagramas UML de acuerdo a los
-						requisitos EARS generados.
+						Usar el asistente AI para generar diagramas UML de acuerdo a los requisitos
+						EARS generados.
 					</p>
 					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
 						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
@@ -269,11 +273,11 @@ const ModelingPage = () => {
 
 	const hasReqs = Boolean(
 		selectedCharacteristic &&
-			(selectedCharacteristic.requirements || hasRequirements[selectedCharacteristic.id]),
+		(selectedCharacteristic.requirements || hasRequirements[selectedCharacteristic.id]),
 	);
 	const hasDiag = Boolean(
 		selectedCharacteristic &&
-			(plantumlSource.trim() !== '' || hasDiagram[selectedCharacteristic.id]),
+		(plantumlSource.trim() !== '' || hasDiagram[selectedCharacteristic.id]),
 	);
 
 	return (
@@ -286,7 +290,7 @@ const ModelingPage = () => {
 			)}
 
 			{isChatbotOpen && (
-				<ChatbotPopup
+				<Chatbot
 					placeholder='ej., "Haz que el diagrama de actividad sea más conciso y claro"'
 					onClose={() => setIsChatbotOpen(false)}
 					onSubmitInstructions={handleRefine}
@@ -314,8 +318,8 @@ const ModelingPage = () => {
 				<div className='page-header'>
 					<h2 className='text-3xl font-bold text-base-800'>Diagramas</h2>
 					<p className='text-base-600 text-lg'>
-						Usar el asistente AI para generar diagramas UML de acuerdo a los
-						requisitos EARS generados.
+						Usar el asistente AI para generar diagramas UML de acuerdo a los requisitos
+						EARS generados.
 					</p>
 
 					{!isEditorMaximized && !isPlantumlMaximized && (
@@ -341,7 +345,7 @@ const ModelingPage = () => {
 					)}
 				</div>
 
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
+				<div className='flex gap-4 flex-1 min-h-0'>
 					<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
 						<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
 							Lista de Características
@@ -357,7 +361,8 @@ const ModelingPage = () => {
 								const isSelected = c.id === selectedId;
 								const cHasReq = Boolean(c.requirements || hasRequirements[c.id]);
 								const cHasDiag = Boolean(
-									hasDiagram[c.id] || (c.id === selectedId && plantumlSource.trim() !== ''),
+									hasDiagram[c.id] ||
+									(c.id === selectedId && plantumlSource.trim() !== ''),
 								);
 
 								return (
@@ -440,7 +445,9 @@ const ModelingPage = () => {
 									Sin requisitos EARS generados
 								</span>
 								<p className='text-base-800 text-lg text-center'>
-									Esta característica aún no tiene requisitos EARS generados. Primero debes generar los requisitos en la sección correspondiente para poder construir el diagrama UML.
+									Esta característica aún no tiene requisitos EARS generados. Primero
+									debes generar los requisitos en la sección correspondiente para poder
+									construir el diagrama UML.
 								</p>
 								<Link
 									href='/proyecto/requisitos'

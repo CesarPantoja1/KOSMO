@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { ChatbotPopup, MarkdownEditor } from '@/feature';
+import { Chatbot, MarkdownEditor } from '@/feature';
 import {
 	Ai,
 	ArrowRight,
@@ -291,8 +291,8 @@ const RequirementsPage = () => {
 
 	if (isLoading) {
 		return (
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex flex-col gap-3'>
+			<div className='page-container'>
+				<div className='page-header'>
 					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
 					<p className='text-base-600 text-lg'>
 						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
@@ -339,7 +339,7 @@ const RequirementsPage = () => {
 			)}
 
 			{isChatbotOpen && (
-				<ChatbotPopup
+				<Chatbot
 					placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
 					onClose={() => setIsChatbotOpen(false)}
 					onSubmitInstructions={handleRefine}
@@ -394,7 +394,7 @@ const RequirementsPage = () => {
 					)}
 				</div>
 
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
+				<div className='flex gap-4 flex-1 min-h-0'>
 					<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
 						<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
 							Lista de Características

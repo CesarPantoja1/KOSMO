@@ -18,7 +18,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const [projects, setProjects] = useState<Project[]>([]);
 
 	const [avatarOpen, setAvatarOpen] = useState(false);
-	const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
 
@@ -137,16 +137,17 @@ export function MainNavbar({ children }: MainNavbarProps) {
 				className={`flex flex-1 min-h-0 flex-col overflow-hidden transition-all duration-300 ${isEditorMaximized ? '' : 'mx-8'}`}
 			>
 				{!isEditorMaximized && (
-					<div className='z-50 shrink-0'>
-						<div className='flex items-center gap-1 py-2'>
-							<Home size={20} color='text-base-600' />
-							<Right size={16} color='text-base-600' />
+					<div className='z-50 shrink-0 borders-b border-base-600 '>
+						{/* <div className='flex items-center gap-1 py-2'>
+							<Home size={40} color='text-base-600' />
+							<Right size={36} color='text-base-600' />
 							<span className='text-base-600 text-sm font-medium capitalize'>
 								{pathname?.split('/').pop() || ''}
-							</span>
-						</div>
+							</span> 
+						</div> */}
 
 						<WizardNavegacion />
+						{/* <UserCircle size={40} color='text-base-600' /> */}
 					</div>
 				)}
 				<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
