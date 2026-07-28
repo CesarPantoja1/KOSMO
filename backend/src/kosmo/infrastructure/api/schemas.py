@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from kosmo.contracts.auth import TokenPair
+from kosmo.contracts.chat import HistorialChat, MensajeChat
 
 # Enumeraciones de negocio
 
@@ -543,3 +544,78 @@ class CreateCharacteristicRequest(BaseModel):
         description="Descripción de la característica (máximo 500 caracteres).",
         examples=["Permite a los usuarios administrar el catálogo de productos del sistema."],
     )
+
+
+class ChangeSuggestion(BaseModel):
+    """Sugerencia de cambio generada por la IA."""
+
+    section: str = Field(description="Sección del documento afectada")
+    diff_before: str = Field(description="Contenido actual de la sección")
+    diff_after: str = Field(description="Contenido sugerido por la IA")
+    rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
+
+
+class SendChatRequest(BaseModel):
+    """Payload para enviar un mensaje al chat."""
+
+    model_config = ConfigDict(extra="forbid")
+    content: str = Field(min_length=1, max_length=4000, description="Mensaje del usuario")
+
+
+class ChatMessage(BaseModel):
+    """Respuesta con un mensaje individual del chat."""
+
+    id: str = Field(description="ID del mensaje.")
+    role: str = Field(description="Rol del emisor (user, assistant, system).")
+    content: str = Field(description="Contenido del mensaje.")
+    created_at: datetime = Field(description="Fecha y hora del mensaje.")
+    change_suggestion: ChangeSuggestion | None = Field(default=None, description="Sugerencia asociada")
+
+    @classmethod
+    def from_domain(cls, msg: MensajeChat) -> "ChatMessage":
+        suggestion = None
+        if msg.suggested_change:
+            suggestion = ChangeSuggestion(
+                section=msg.suggested_change.section,
+                diff_before=msg.suggested_change.diff.before,
+                diff_after=msg.suggested_change.diff.after,
+                rationale=msg.suggested_change.rationale,
+            )
+        return cls(
+            id=str(msg.id),
+            role=str(msg.role),
+            content=msg.content,
+            created_at=msg.timestamp,
+            change_suggestion=suggestion,
+        )
+
+
+class ChatResponse(BaseModel):
+    """Respuesta de un nuevo mensaje en el chat."""
+
+    message: ChatMessage
+    change_suggestion: ChangeSuggestion | None = None
+
+    @classmethod
+    def from_domain(cls, msg: MensajeChat) -> "ChatResponse":
+        chat_msg = ChatMessage.from_domain(msg)
+        return cls(
+            message=chat_msg,
+            change_suggestion=chat_msg.change_suggestion,
+        )
+
+
+class ChatHistoryResponse(BaseModel):
+    """Respuesta con el historial completo de un chat."""
+
+    phase: str = Field(description="Fase a la que pertenece el historial")
+    context: str = Field(description="Contexto específico (ej. project_id)")
+    messages: list[ChatMessage] = Field(description="Lista de mensajes.")
+
+    @classmethod
+    def from_domain(cls, history: HistorialChat) -> "ChatHistoryResponse":
+        return cls(
+            phase=str(history.phase.value if hasattr(history.phase, "value") else history.phase),
+            context=str(history.project_id),
+            messages=[ChatMessage.from_domain(msg) for msg in history.messages],
+        )

@@ -226,6 +226,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.get_discovery = discovery_components.get_discovery
     app.state.save_discovery = discovery_components.save_discovery
     app.state.refine_discovery = discovery_components.refine_discovery
+    app.state.process_discovery_chat_message = discovery_components.process_discovery_chat_message
+    app.state.get_discovery_chat_history = discovery_components.get_discovery_chat_history
     app.state.generate_features = features_components.generate_features
     app.state.suggest_features = features_components.suggest_features
     app.state.save_selected_features = features_components.save_selected_features

@@ -20,7 +20,9 @@ from kosmo.application.auth import (
 )
 from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
+    GetDiscoveryChatHistoryUseCase,
     GetDiscoveryUseCase,
+    ProcessDiscoveryChatMessageUseCase,
     RefineDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
@@ -475,6 +477,8 @@ class DiscoveryComponents:
     get_discovery: GetDiscoveryUseCase
     save_discovery: SaveDiscoveryUseCase
     refine_discovery: RefineDiscoveryUseCase
+    process_discovery_chat_message: ProcessDiscoveryChatMessageUseCase
+    get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
 
 
 def build_discovery_components(
@@ -483,6 +487,12 @@ def build_discovery_components(
 ) -> DiscoveryComponents:
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
+    from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
+    from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
+    from kosmo.infrastructure.persistence.memory.in_memory_store import InMemoryChatRepository
+
+    chat_repo = InMemoryChatRepository()
+
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
@@ -496,6 +506,17 @@ def build_discovery_components(
             document_repo=document_repo,
             context_builder=pipeline.context_builder,
             agent=pipeline.agent,
+        ),
+        process_discovery_chat_message=ProcessDiscoveryChatMessageUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            chat_repo=chat_repo,
+            context_builder=pipeline.context_builder,
+            agent=pipeline.agent,
+        ),
+        get_discovery_chat_history=GetDiscoveryChatHistoryUseCase(
+            project_repo=project_repo,
+            chat_repo=chat_repo,
         ),
     )
 
