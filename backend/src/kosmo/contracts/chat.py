@@ -19,8 +19,9 @@ class ChatRole(StrEnum):
 
 class EstadoPlanCambio(StrEnum):
     PENDING = "pending"
-    ACCEPTED = "accepted"
+    ADDED = "added"
     CONFLICT = "conflict"
+    APPLIED = "applied"
     DISCARDED = "discarded"
 
 

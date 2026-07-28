@@ -113,7 +113,7 @@ def test_plan_cambio_full_attributes_and_immutability():
     assert cambio.user_version == "v1_manual"
 
     with pytest.raises(AttributeError):
-        cambio.status = EstadoPlanCambio.ACCEPTED  # type: ignore[misc]
+        cambio.status = EstadoPlanCambio.APPLIED  # type: ignore[misc]
 
 
 def test_historial_chat_empty_and_add_message():
@@ -273,10 +273,10 @@ async def test_chat_repository_protocol_implementation():
     updated = await repo.update_plan_change_status(
         project_id,
         PlanChangeId("chg_1"),
-        EstadoPlanCambio.ACCEPTED,
+        EstadoPlanCambio.APPLIED,
     )
     assert updated is not None
-    assert updated.status == EstadoPlanCambio.ACCEPTED
+    assert updated.status == EstadoPlanCambio.APPLIED
 
     removed = await repo.remove_plan_change(project_id, PlanChangeId("chg_1"))
     assert removed is True
