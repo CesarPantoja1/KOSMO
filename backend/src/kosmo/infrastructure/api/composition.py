@@ -269,6 +269,7 @@ class PipelineComponents:
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
     pattern_store: KnowledgePatternStore
+    validate_phase_context: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -470,6 +471,10 @@ def build_pipeline_components(
         pattern_store=pattern_store,  # type: ignore[reportArgumentType]
     )
 
+    from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
+
+    validate_phase_context = ValidatePhaseContextUseCase(llm_client=llm_client)
+
     return PipelineComponents(
         llm_client=llm_client,
         context_builder=context_builder,
@@ -478,6 +483,7 @@ def build_pipeline_components(
         skill_registry=skill_registry,
         agent_memory=agent_memory,
         pattern_store=pattern_store,
+        validate_phase_context=validate_phase_context,
     )
 
 
