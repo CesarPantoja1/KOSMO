@@ -3,11 +3,11 @@
 <!-- Explica brevemente los cambios realizados. -->
 
 
-## 🔗 Issue o historia de usuario relacionada
+## 🔗 Elemento de trabajo obligatorio
 
-<!-- Usa "Closes #número" para cerrar automáticamente el Issue al fusionar el PR. -->
+<!-- Escribe el identificador existente de Azure Boards. Ejemplo: AB#123 -->
 
-Closes #
+AB#
 
 
 ## 🧩 Tipo de cambio
@@ -56,6 +56,8 @@ Closes #
 ## ✅ Lista de verificación
 
 - [ ] Mi rama parte de la versión actualizada de `develop`.
+- [ ] El título del Pull Request incluye el elemento de trabajo `AB#ID`.
+- [ ] Todos los commits cumplen `tipo(alcance): descripción AB#ID` (el alcance es opcional).
 - [ ] El código sigue las convenciones del proyecto.
 - [ ] Realicé una revisión propia del código.
 - [ ] Eliminé código temporal, comentarios de depuración y registros innecesarios.
