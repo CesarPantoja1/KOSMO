@@ -1,17 +1,14 @@
-import { apiClient } from '@/shared/api';
+import { create } from 'zustand';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { DiscoveryResponse } from '../types/discovery';
+import { apiClient } from '@/shared/api';
+import type { DiscoveryResponse } from './types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const isUsingMocks = () => USE_MOCKS;
+// --- Mock implementations ---
 
 let mockContent =
 	'## Visión del producto\n\nEste es un descubrimiento de prueba en modo mock.';
-
-//
-// MOCK implementations
-//
 
 const mockGetDiscovery = async (projectId: string): Promise<DiscoveryResponse> => {
 	await delay(800);
@@ -60,9 +57,7 @@ const mockRefineDiscovery = async (
 	};
 };
 
-//
-// REAL API implementations
-//
+// --- Real API implementations ---
 
 const realGetDiscovery = (projectId: string) => {
 	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery`, {
@@ -96,30 +91,52 @@ const realRefineDiscovery = (projectId: string, instructions: string) => {
 	});
 };
 
-//
-// Exported functions (switch based on config)
-//
+// --- Store ---
 
-export const getDiscovery = (projectId: string) => {
-	return isUsingMocks()
-		? mockGetDiscovery(projectId)
-		: realGetDiscovery(projectId);
-};
+interface DiscoveryStore {
+	currentDiscovery: DiscoveryResponse | null;
+	setCurrentDiscovery: (discovery: DiscoveryResponse) => void;
+	clearDiscovery: () => void;
+	getDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
+	saveDiscovery: (projectId: string, content: string) => Promise<DiscoveryResponse>;
+	generateDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
+	refineDiscovery: (projectId: string, instructions: string) => Promise<DiscoveryResponse>;
+}
 
-export const saveDiscovery = (projectId: string, content: string) => {
-	return isUsingMocks()
-		? mockSaveDiscovery(projectId, content)
-		: realSaveDiscovery(projectId, content);
-};
+export const useDiscoveryStore = create<DiscoveryStore>()((set) => ({
+	currentDiscovery: null,
+	setCurrentDiscovery: (discovery) => set({ currentDiscovery: discovery }),
+	clearDiscovery: () => set({ currentDiscovery: null }),
 
-export const generateDiscovery = (projectId: string) => {
-	return isUsingMocks()
-		? mockGenerateDiscovery(projectId)
-		: realGenerateDiscovery(projectId);
-};
+	getDiscovery: async (projectId) => {
+		const data = USE_MOCKS
+			? await mockGetDiscovery(projectId)
+			: await realGetDiscovery(projectId);
+		set({ currentDiscovery: data });
+		return data;
+	},
 
-export const refineDiscovery = (projectId: string, instructions: string) => {
-	return isUsingMocks()
-		? mockRefineDiscovery(projectId, instructions)
-		: realRefineDiscovery(projectId, instructions);
-};
+	saveDiscovery: async (projectId, content) => {
+		const data = USE_MOCKS
+			? await mockSaveDiscovery(projectId, content)
+			: await realSaveDiscovery(projectId, content);
+		set({ currentDiscovery: data });
+		return data;
+	},
+
+	generateDiscovery: async (projectId) => {
+		const data = USE_MOCKS
+			? await mockGenerateDiscovery(projectId)
+			: await realGenerateDiscovery(projectId);
+		set({ currentDiscovery: data });
+		return data;
+	},
+
+	refineDiscovery: async (projectId, instructions) => {
+		const data = USE_MOCKS
+			? await mockRefineDiscovery(projectId, instructions)
+			: await realRefineDiscovery(projectId, instructions);
+		set({ currentDiscovery: data });
+		return data;
+	},
+}));

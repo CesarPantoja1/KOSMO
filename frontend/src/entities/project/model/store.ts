@@ -1,13 +1,26 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { USE_MOCKS } from '@/shared/api/config';
+import type { Project } from './types';
 
-interface ProjectState {
-	projectId: string | null;
-	setProjectId: (id: string) => void;
-	clearProjectId: () => void;
+interface ProjectStore {
+	currentProject: Project | null;
+	setCurrentProject: (project: Project) => void;
+	clearCurrentProject: () => void;
 }
 
-export const useProjectStore = create<ProjectState>((set) => ({
-	projectId: null,
-	setProjectId: (id) => set({ projectId: id }),
-	clearProjectId: () => set({ projectId: null }),
-}));
+export const isUsingMocks = () => USE_MOCKS;
+
+export const useProjectStore = create<ProjectStore>()(
+	persist(
+		(set) => ({
+			currentProject: null,
+			setCurrentProject: (project) => set({ currentProject: project }),
+			clearCurrentProject: () => set({ currentProject: null }),
+		}),
+		{
+			name: 'kosmo-project-store',
+			partialize: (state) => ({ currentProject: state.currentProject }),
+		},
+	),
+);

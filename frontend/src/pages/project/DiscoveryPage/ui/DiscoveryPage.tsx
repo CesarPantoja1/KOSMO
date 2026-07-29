@@ -1,12 +1,13 @@
 'use client';
 
+import { generateCharacteristics } from '@/entities/characteristic';
 import { Chatbot, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
-import { useAppStore } from 'app/store/app.store';
 import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
+import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery, refineDiscovery } from '../api/api';
-import { generateCharacteristics } from '@/entities/characteristic';
+import { getDiscovery, refineDiscovery, saveDiscovery } from '@/entities/discovery';
+import { FloatingDiscoveryPlan } from './FloatingPlan';
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -241,15 +242,19 @@ const DiscoveryPage = () => {
 					)}
 
 					{!isLoading && (
-						<MarkdownEditor
-							key={editorKey}
-							ref={editorRef}
-							markdown={markdown}
-							onChange={setMarkdown}
-							isMaximized={isEditorMaximized}
-							onMaximize={() => setEditorMaximized(true)}
-							onMinimize={() => setEditorMaximized(false)}
-						/>
+						<div className='w-full h-full relative'>
+							<MarkdownEditor
+								key={editorKey}
+								ref={editorRef}
+								markdown={markdown}
+								onChange={setMarkdown}
+								isMaximized={isEditorMaximized}
+								onMaximize={() => setEditorMaximized(true)}
+								onMinimize={() => setEditorMaximized(false)}
+							/>
+
+							<FloatingDiscoveryPlan />
+						</div>
 					)}
 				</div>
 

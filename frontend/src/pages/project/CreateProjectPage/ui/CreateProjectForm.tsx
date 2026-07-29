@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { createProject } from '../api/create-project';
-import { generateDiscovery } from '@/pages/project/DiscoveryPage/api/api';
+import { generateDiscovery } from '@/entities/discovery/api/api';
 
 import { projectSchema, type ProjectFormData } from '../lib/schema';
 import { CharacterCounter } from './CharacterCounter';

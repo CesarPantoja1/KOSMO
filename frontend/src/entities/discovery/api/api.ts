@@ -1,0 +1,34 @@
+import { apiClient } from '@/shared/api';
+import type { DiscoveryResponse } from '../model/types';
+
+export const getDiscovery = (projectId: string) => {
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery`, {
+		method: 'GET',
+	});
+};
+
+export const saveDiscovery = (projectId: string, content: string) => {
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ content }),
+	});
+};
+
+export const generateDiscovery = (projectId: string) => {
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery`, {
+		method: 'POST',
+	});
+};
+
+export const refineDiscovery = (projectId: string, instructions: string) => {
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery/refine`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({ instructions }),
+	});
+};
