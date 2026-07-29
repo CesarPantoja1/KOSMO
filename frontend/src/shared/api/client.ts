@@ -30,6 +30,10 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 		headers.set('Authorization', `Bearer ${accessToken}`);
 	}
 
+	if (!headers.has('Content-Type')) {
+		headers.set('Content-Type', 'application/json; charset=utf-8');
+	}
+
 	const config: RequestInit = {
 		...options,
 		headers,

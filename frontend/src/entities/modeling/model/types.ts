@@ -1,4 +1,4 @@
-export interface ModelingUmlResponse {
+export interface ModelingResponse {
 	id: string;
 	feature_id: string;
 	diagram_syntax: string;

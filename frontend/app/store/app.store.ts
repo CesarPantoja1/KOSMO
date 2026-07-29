@@ -1,6 +1,7 @@
+import { usePlanStore } from '@/entities/plan';
+import type { Project } from '@/entities/project/model/types';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Project } from '@/entities/project/model/types';
 
 interface AppState {
 	initialized: boolean;
@@ -16,10 +17,6 @@ interface AppState {
 	setHasUnsavedChanges: (v: boolean) => void;
 	pendingNavigationPath: string | null;
 	setPendingNavigationPath: (v: string | null) => void;
-	hasRequirements: Record<string, boolean>;
-	setHasRequirements: (id: string, has: boolean) => void;
-	hasDiagram: Record<string, boolean>;
-	setHasDiagram: (id: string, has: boolean) => void;
 	isEditorMaximized: boolean;
 	setEditorMaximized: (v: boolean) => void;
 }
@@ -34,23 +31,21 @@ export const useAppStore = create<AppState>()(
 			clearCurrentProject: () => set({ currentProject: null, isProyectosOpen: false }),
 			setProjectState: (project) =>
 				set({ currentProject: project, isProyectosOpen: true }),
-			resetProjectState: () =>
+			resetProjectState: () => {
 				set({
 					currentProject: null,
 					isProyectosOpen: false,
 					hasUnsavedChanges: false,
 					pendingNavigationPath: null,
-				}),
+				});
+				usePlanStore.getState().resetPlan();
+			},
 			isProyectosOpen: false,
 			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),
 			hasUnsavedChanges: false,
 			setHasUnsavedChanges: (v) => set({ hasUnsavedChanges: v }),
 			pendingNavigationPath: null,
 			setPendingNavigationPath: (v) => set({ pendingNavigationPath: v }),
-			hasRequirements: {},
-			setHasRequirements: (id, has) => set((state) => ({ hasRequirements: { ...state.hasRequirements, [id]: has } })),
-			hasDiagram: {},
-			setHasDiagram: (id, has) => set((state) => ({ hasDiagram: { ...state.hasDiagram, [id]: has } })),
 			isEditorMaximized: false,
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
 		}),
@@ -59,8 +54,6 @@ export const useAppStore = create<AppState>()(
 			partialize: (state) => ({
 				currentProject: state.currentProject,
 				isProyectosOpen: state.isProyectosOpen,
-				hasRequirements: state.hasRequirements,
-				hasDiagram: state.hasDiagram,
 			}),
 		},
 	),

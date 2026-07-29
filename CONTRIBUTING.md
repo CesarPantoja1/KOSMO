@@ -38,26 +38,27 @@ El desarrollo en KOSMO se organiza mediante ramas basadas en características o 
 
 ---
 
-## Convención Estricta de Commits
+## Convención Estricta de Commits y Azure Boards
 
-En KOSMO seguimos una convención estricta de mensajes de commit para mantener un historial limpio y legible:
+En KOSMO seguimos la convención **Conventional Commits** vinculada a Azure Boards para mantener la trazabilidad de tareas:
 
 ### Reglas de formato:
 1. **Idioma:** Todos los mensajes de commit deben escribirse en **español**.
-2. **Formato:** Usar el prefijo del tipo de cambio seguido de dos puntos y espacio `: `. **No incluyas paréntesis ni textos adicionales antes de la descripción.**
-3. **Estructura:** `<tipo>: <descripción en minúsculas y modo imperativo/descriptivo>`
+2. **Estructura:** `tipo(alcance): descripción breve en imperativo AB#ID` (o `tipo: descripción breve AB#ID`).
+3. **ID Obligatorio de Azure Boards:** Todo commit en una rama de trabajo debe terminar con `AB#ID` (ej. `AB#191`).
 
 ### Tipos de commit permitidos:
 
 | Tipo | Descripción | Ejemplo |
 |---|---|---|
-| `feat` | Nueva funcionalidad o característica | `feat: agregar generador de diagramas de secuencia` |
-| `fix` | Corrección de errores en código o configuración | `fix: corregir proxy_pass en nginx para endpoints v1` |
-| `docs` | Cambios en documentación | `docs: actualizar guia de despliegue en docker` |
-| `style` | Cambios de formato, espacios o linting (sin afectar lógica) | `style: formatear controladores de proyectos con ruff` |
-| `refactor` | Refactorización de código existente sin cambiar comportamiento | `refactor: desacoplar servicios de agentes en capa de aplicacion` |
-| `test` | Adición o modificación de pruebas unitarias/integración | `test: agregar pruebas para endpoint de salud` |
-| `chore` | Tareas de mantenimiento, dependencias o tooling | `chore: actualizar dependencias en pyproject.toml` |
+| `feat` | Nueva funcionalidad o característica | `feat(chat): definir entidades de dominio AB#191` |
+| `fix` | Corrección de errores en código o configuración | `fix(auth): corregir refresco de token expirado AB#145` |
+| `docs` | Cambios en documentación | `docs: actualizar arquitectura de CI CD en wiki AB#191` |
+| `style` | Cambios de formato, espacios o linting | `style(backend): formatear archivos con ruff AB#191` |
+| `refactor` | Refactorización sin modificar comportamiento | `refactor(api): desacoplar repositorios de SQLAlchemy AB#191` |
+| `test` | Adición o modificación de pruebas | `test(frontend): agregar pruebas para Zustand store AB#191` |
+| `chore` | Tareas de mantenimiento o dependencias | `chore(deps): actualizar uv.lock AB#191` |
+| `ci` | Cambios en workflows de CI/CD | `ci: añadir job branch-policy para validar PR AB#191` |
 
 ---
 

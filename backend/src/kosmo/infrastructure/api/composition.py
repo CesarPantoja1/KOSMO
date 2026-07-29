@@ -20,7 +20,9 @@ from kosmo.application.auth import (
 )
 from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
+    GetDiscoveryChatHistoryUseCase,
     GetDiscoveryUseCase,
+    ProcessDiscoveryChatMessageUseCase,
     RefineDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
@@ -59,6 +61,7 @@ from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
+from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
@@ -404,6 +407,14 @@ def build_pipeline_components(
             mode=ModeloMode(),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="discovery_chat",
+            description="Chat conversacional de descubrimiento a nivel de negocio",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DiscoveryChatMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -466,6 +477,9 @@ class DiscoveryComponents:
     get_discovery: GetDiscoveryUseCase
     save_discovery: SaveDiscoveryUseCase
     refine_discovery: RefineDiscoveryUseCase
+    process_discovery_chat_message: ProcessDiscoveryChatMessageUseCase
+    get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
+    manage_plan_changes: Any
 
 
 def build_discovery_components(
@@ -474,6 +488,13 @@ def build_discovery_components(
 ) -> DiscoveryComponents:
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
+    from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
+    from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
+    from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
+
+    chat_repo = SqlAlchemyChatRepository(session_factory)
+
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
@@ -487,6 +508,21 @@ def build_discovery_components(
             document_repo=document_repo,
             context_builder=pipeline.context_builder,
             agent=pipeline.agent,
+        ),
+        process_discovery_chat_message=ProcessDiscoveryChatMessageUseCase(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            chat_repo=chat_repo,
+            context_builder=pipeline.context_builder,
+            agent=pipeline.agent,
+        ),
+        get_discovery_chat_history=GetDiscoveryChatHistoryUseCase(
+            project_repo=project_repo,
+            chat_repo=chat_repo,
+        ),
+        manage_plan_changes=ManagePlanChangesUseCase(
+            project_repo=project_repo,
+            chat_repo=chat_repo,
         ),
     )
 

@@ -72,10 +72,13 @@ async def test_consolidate_creates_patterns() -> None:
     uc = ConsolidateKnowledgePatterns(memory=memory, pattern_store=pattern_store, llm_client=llm)  # type: ignore[reportArgumentType]
 
     for _ in range(10):
-        await memory.save_session(a_session(
-            is_completed=True, phase=SpecPhase.DESCUBRIMIENTO,
-            reflection="el negocio necesita reglas de validacion de moneda y limites de transaccion",
-        ))
+        await memory.save_session(
+            a_session(
+                is_completed=True,
+                phase=SpecPhase.DESCUBRIMIENTO,
+                reflection="el negocio necesita reglas de validacion de moneda y limites de transaccion",
+            )
+        )
 
     # Act
     result = await uc.execute(ConsolidateInput(sessions_limit=20))
@@ -97,10 +100,13 @@ async def test_consolidate_skips_phase_with_insufficient_sessions() -> None:
     llm = StubPatternLLMClient()
     uc = ConsolidateKnowledgePatterns(memory=memory, pattern_store=pattern_store, llm_client=llm)  # type: ignore[reportArgumentType]
 
-    await memory.save_session(a_session(
-        is_completed=True, phase=SpecPhase.MODELO,
-        reflection="simplifica el diagrama de actividad",
-    ))
+    await memory.save_session(
+        a_session(
+            is_completed=True,
+            phase=SpecPhase.MODELO,
+            reflection="simplifica el diagrama de actividad",
+        )
+    )
 
     # Act
     result = await uc.execute(ConsolidateInput(sessions_limit=20))
@@ -119,10 +125,13 @@ async def test_consolidate_purges_old_patterns_on_replace() -> None:
     uc = ConsolidateKnowledgePatterns(memory=memory, pattern_store=pattern_store, llm_client=llm)  # type: ignore[reportArgumentType]
 
     for _ in range(5):
-        await memory.save_session(a_session(
-            is_completed=True, phase=SpecPhase.DESCUBRIMIENTO,
-            reflection="mejora el alcance del documento",
-        ))
+        await memory.save_session(
+            a_session(
+                is_completed=True,
+                phase=SpecPhase.DESCUBRIMIENTO,
+                reflection="mejora el alcance del documento",
+            )
+        )
 
     # Act — first consolidation
     await uc.execute(ConsolidateInput())

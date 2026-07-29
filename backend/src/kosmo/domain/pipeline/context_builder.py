@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from kosmo.contracts.pipeline.phase_contexts import DiscoveryRefinePhaseContext
+from kosmo.contracts.pipeline.phase_contexts import DiscoveryChatContext, DiscoveryRefinePhaseContext
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
@@ -31,3 +31,16 @@ class ContextBuilder:
             current_document=current_document,
             user_instructions=user_instructions,
         )
+
+    async def build_discovery_chat_context(
+        self,
+        project_id: ProjectId,
+    ) -> DiscoveryChatContext:
+        current_document = await self._document_repo.get_discovery(project_id)
+        if current_document is None:
+            raise PhaseTransitionError(
+                detail="No existe un documento de descubrimiento para el chat.",
+                instance="/pipeline/discovery/chat",
+            )
+
+        return DiscoveryChatContext(current_document=current_document)

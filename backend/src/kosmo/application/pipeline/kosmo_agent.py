@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
+from kosmo.contracts.chat import ChatRole, DiffCambio, MensajeChat, RespuestaChatLLM, SugerenciaCambio
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -15,10 +16,11 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ChatMessageId, ProjectId
 from kosmo.domain.agent_memory.session_factory import create_session
 from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
+from kosmo.domain.sdd.id_generator import IdGenerator
 from kosmo.domain.sdd.output_guardrails import sanitize_user_instructions
 
 if TYPE_CHECKING:
@@ -74,6 +76,45 @@ class KOSMOAgent:
             user_instructions=sanitized_instructions,
         )
 
+    async def execute_conversation(
+        self,
+        skill_name: str,
+        messages: list[MensajeChat],
+        context: Any,
+    ) -> MensajeChat:
+        """Ejecuta una conversación con el LLM usando un skill de chat.
+
+        Recibe el historial completo de mensajes y el contexto del documento,
+        invoca al LLM en modo conversacional (una sola llamada, sin retry loop
+        ni validación) y retorna un MensajeChat del asistente con sugerencia de
+        cambio opcional.
+
+        Las excepciones del LLM propagan hacia arriba para que el caso de uso
+        las maneje con reintentos (tenacity) o las convierta en ErrorChat.
+        """
+        if self._skill_registry is None:
+            raise ValueError("SkillRegistry no configurado")
+
+        sanitized_ctx = _sanitize_context(context)
+        mode = self._skill_registry.resolve(skill_name)
+
+        system_prompt = mode.system_prompt
+        base_user_prompt = mode.build_user_prompt(sanitized_ctx)
+        history_block = _format_chat_history(messages)
+        user_prompt = f"{base_user_prompt}\n\n{history_block}\n\nResponde al ultimo mensaje del usuario."
+
+        output = await self._llm_client.complete_typed(
+            prompt=PromptTemplate(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            ),
+            output_type=mode.output_type,
+            temperature=mode.temperature,
+            max_tokens=mode.max_tokens,
+        )
+
+        return _to_assistant_message(output)
+
     async def _execute_loop(
         self,
         mode: PhaseMode,
@@ -106,9 +147,7 @@ class KOSMOAgent:
                     system_prompt = self._inject_cross_project_context(system_prompt, similar)
 
         if self._pattern_store is not None:
-            patterns = await self._pattern_store.list_patterns(
-                phase=mode.phase_name, limit=5
-            )
+            patterns = await self._pattern_store.list_patterns(phase=mode.phase_name, limit=5)
             if patterns:
                 system_prompt = self._inject_patterns(system_prompt, patterns)
 
@@ -123,9 +162,11 @@ class KOSMOAgent:
                     tool_system_prompt, base_user_prompt, project_id
                 )
                 if knowledge_context:
-                    reason_entries.append("pre_consulta_tools: herramientas consultadas: " + ", ".join(
-                        t["tool"] for t in tool_invocations if t.get("found")
-                    ) or "ninguna encontrada")
+                    reason_entries.append(
+                        "pre_consulta_tools: herramientas consultadas: "
+                        + ", ".join(t["tool"] for t in tool_invocations if t.get("found"))
+                        or "ninguna encontrada"
+                    )
                 else:
                     reason_entries.append("pre_consulta_tools: sin consulta de herramientas")
             else:
@@ -200,11 +241,7 @@ class KOSMOAgent:
             await asyncio.sleep(delay_s)
 
             retry_context = ""
-            if (
-                self._knowledge_tools is not None
-                and last_validation.errors
-                and iteration < self._max_iterations
-            ):
+            if self._knowledge_tools is not None and last_validation.errors and iteration < self._max_iterations:
                 error_list = "; ".join(last_validation.errors[:5])
                 retry_system_prompt = (
                     system_prompt + "\n\nLa validacion del contenido generado fallo "
@@ -307,14 +344,16 @@ class KOSMOAgent:
 
         await self._memory.save_session(session)
 
-        asyncio.create_task(self._reflect_and_consolidate(
-            session_id=session.session_id,
-            phase=phase,
-            session_type=session_type,
-            is_completed=is_completed,
-            current_iteration=current_iteration,
-            validation=validation,
-        ))
+        asyncio.create_task(
+            self._reflect_and_consolidate(
+                session_id=session.session_id,
+                phase=phase,
+                session_type=session_type,
+                is_completed=is_completed,
+                current_iteration=current_iteration,
+                validation=validation,
+            )
+        )
 
     async def _reflect_and_consolidate(
         self,
@@ -366,7 +405,8 @@ class KOSMOAgent:
             try:
                 text, records = await self._llm_client.complete_with_tools(
                     PromptTemplate(
-                        system_prompt=system_prompt + (
+                        system_prompt=system_prompt
+                        + (
                             "\n\nPuedes consultar las herramientas disponibles para obtener "
                             "informacion adicional antes de responder. Si tienes suficiente contexto, "
                             "responde listo sin consultar herramientas."
@@ -432,12 +472,14 @@ class KOSMOAgent:
             else:
                 collected.append(f"[TOOL: {tool_name}]\n{result}")
 
-            invocations.append({
-                "tool": tool_name,
-                "args": {k: str(v)[:200] for k, v in tool_args.items()},
-                "result_snippet": (result or "herramienta no encontrada")[:500],
-                "found": not not_found,
-            })
+            invocations.append(
+                {
+                    "tool": tool_name,
+                    "args": {k: str(v)[:200] for k, v in tool_args.items()},
+                    "result_snippet": (result or "herramienta no encontrada")[:500],
+                    "found": not not_found,
+                }
+            )
             tool_prompt = PromptTemplate(
                 system_prompt=tool_prompt.system_prompt,
                 user_prompt=user_prompt + "\n\n" + collected[-1] + "\n\nResponde [CONTINUE] o [TOOL: ...]",
@@ -610,3 +652,53 @@ def _sanitize_context(context: Any) -> Any:
         if isinstance(value, str) and value:
             replacements[field_name] = sanitize_user_instructions(value)
     return dataclasses.replace(context, **replacements) if replacements else context
+
+
+_ROLE_LABELS: dict[ChatRole, str] = {
+    ChatRole.USER: "Usuario",
+    ChatRole.ASSISTANT: "Asistente",
+    ChatRole.SYSTEM: "Sistema",
+}
+
+
+def _format_chat_history(messages: list[MensajeChat]) -> str:
+    """Formatea el historial de conversación para el prompt del LLM.
+
+    Todos los mensajes del usuario se sanitizan contra inyección de prompt.
+
+    # ponytail: historial sin límite, agregar ventana deslizante cuando
+    # el contexto del LLM se sature.
+    """
+    lines: list[str] = ["## Historial de conversacion", ""]
+    for msg in messages:
+        role_label = _ROLE_LABELS.get(msg.role, msg.role.value)
+        content = msg.content
+        if msg.role == ChatRole.USER:
+            content = sanitize_user_instructions(content)
+        lines.append(f"**{role_label}:** {content}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _to_assistant_message(output: Any) -> MensajeChat:
+    """Convierte la salida estructurada del LLM en un MensajeChat del asistente."""
+    if not isinstance(output, RespuestaChatLLM):
+        raise ValueError(f"El LLM devolvio un tipo inesperado: {type(output).__name__}. Se esperaba RespuestaChatLLM.")
+
+    suggested_change: SugerenciaCambio | None = None
+    if output.change_suggestion is not None:
+        cs = output.change_suggestion
+        suggested_change = SugerenciaCambio(
+            id=IdGenerator.generate("plan_change"),
+            section=cs.section,
+            description=cs.description,
+            diff=DiffCambio(before=cs.diff_before, after=cs.diff_after),
+            rationale=cs.rationale,
+        )
+
+    return MensajeChat(
+        id=ChatMessageId(IdGenerator.generate("chat_message")),
+        role=ChatRole.ASSISTANT,
+        content=output.content,
+        suggested_change=suggested_change,
+    )

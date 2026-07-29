@@ -1,0 +1,264 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - 'release/**'
+      - 'hotfix/**'
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  wait-for-ci:
+    name: Wait for CI summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Require a successful CI summary for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for ((waited = 0; waited < 600; waited += 10)); do
+            check_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${COMMIT_SHA}/check-runs?per_page=100")"
+            status="$(jq -r '.check_runs[] | select(.name == "CI summary") | .status' <<<"$check_json" | head -n 1)"
+            conclusion="$(jq -r '.check_runs[] | select(.name == "CI summary") | .conclusion' <<<"$check_json" | head -n 1)"
+
+            if [[ "$status" == "completed" && "$conclusion" == "success" ]]; then
+              echo "CI summary passed for ${COMMIT_SHA}."
+              exit 0
+            fi
+
+            if [[ "$status" == "completed" ]]; then
+              echo "::error::CI summary finished with conclusion: ${conclusion:-unknown}."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::Timed out while waiting for CI summary on ${COMMIT_SHA}."
+          exit 1
+
+  build-and-deploy:
+    name: Build and deploy Staging
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: staging
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Define immutable image references
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          tag="sha-${GITHUB_SHA}"
+          echo "web=${REGISTRY}/${owner}/kosmo-web:${tag}" >> "$GITHUB_OUTPUT"
+          echo "api=${REGISTRY}/${owner}/kosmo-api:${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.api }}
+
+      - name: Build and publish frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.web }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_PUBLIC_APP_NAME=KOSMO
+            NEXT_PUBLIC_APP_ENV=deployment
+            NEXT_PUBLIC_AUTH_DISABLED=true
+            NEXT_PUBLIC_USE_MOCKS=false
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Start Staging instance and obtain its current address
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(aws ec2 describe-instances \
+            --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}" \
+            --query 'Reservations[0].Instances[0].State.Name' \
+            --output text)"
+
+          case "$state" in
+            running)
+              ;;
+            stopped)
+              aws ec2 start-instances --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}" >/dev/null
+              aws ec2 wait instance-running --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}"
+              ;;
+            *)
+              echo "::error::Staging instance is in unsupported state: $state"
+              exit 1
+              ;;
+          esac
+
+          aws ec2 wait instance-status-ok --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}"
+          host="$(aws ec2 describe-instances \
+            --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)"
+          test -n "$host" && test "$host" != "None"
+          echo "STAGING_HOST=$host" >> "$GITHUB_ENV"
+
+      - name: Temporarily allow this runner to use SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+          test -n "$runner_ip"
+
+          if ! aws ec2 authorize-security-group-ingress \
+            --group-id "${{ vars.AWS_SECURITY_GROUP_ID }}" \
+            --protocol tcp \
+            --port "${{ vars.STAGING_SSH_PORT }}" \
+            --cidr "${runner_ip}/32" 2>authorize-error.log; then
+            if ! grep -q 'InvalidPermission.Duplicate' authorize-error.log; then
+              cat authorize-error.log >&2
+              exit 1
+            fi
+          fi
+
+          echo "RUNNER_IP=$runner_ip" >> "$GITHUB_ENV"
+
+      - name: Prepare verified SSH connection
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          EXPECTED_HOST_FINGERPRINT: ${{ vars.STAGING_SSH_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          ssh_dir="${RUNNER_TEMP}/kosmo-staging-ssh"
+          install -d -m 700 "$ssh_dir"
+          printf '%s' "$SSH_PRIVATE_KEY" > "$ssh_dir/id_ed25519"
+          chmod 600 "$ssh_dir/id_ed25519"
+          ssh-keyscan -t ed25519 "$STAGING_HOST" > "$ssh_dir/known_hosts"
+          actual_fingerprint="$(ssh-keygen -lf "$ssh_dir/known_hosts" -E sha256 | awk '{print $2}')"
+          test "$actual_fingerprint" = "$EXPECTED_HOST_FINGERPRINT"
+          echo "SSH_DIR=$ssh_dir" >> "$GITHUB_ENV"
+
+      - name: Transfer the stack and protected configuration
+        shell: bash
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+          CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_TUNNEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          work_dir="${RUNNER_TEMP}/kosmo-staging-deploy"
+          install -d -m 700 "$work_dir"
+          printf '%s' "$STAGING_ENV_FILE" > "$work_dir/application.env"
+          printf '%s\n' \
+            "KOSMO_WEB_IMAGE=${{ steps.images.outputs.web }}" \
+            "KOSMO_API_IMAGE=${{ steps.images.outputs.api }}" \
+            "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" > "$work_dir/runtime.env"
+          chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
+
+          ssh -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -p "${{ vars.STAGING_SSH_PORT }}" \
+            "${{ vars.STAGING_USER }}@${STAGING_HOST}" \
+            'mkdir -p /opt/kosmo/staging'
+
+          scp -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -P "${{ vars.STAGING_SSH_PORT }}" \
+            deploy/staging/compose.yaml nginx/nginx.conf \
+            "$work_dir/application.env" "$work_dir/runtime.env" \
+            "${{ vars.STAGING_USER }}@${STAGING_HOST}:/opt/kosmo/staging/"
+
+      - name: Deploy on Staging
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.STAGING_GHCR_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | ssh -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -p "${{ vars.STAGING_SSH_PORT }}" \
+            "${{ vars.STAGING_USER }}@${STAGING_HOST}" \
+            'set -euo pipefail
+             cd /opt/kosmo/staging
+             cat application.env runtime.env > .env
+             chmod 600 .env
+             rm -f application.env runtime.env
+             docker login ghcr.io --username "${{ vars.STAGING_GHCR_USERNAME }}" --password-stdin
+             docker compose -f compose.yaml pull
+             docker compose -f compose.yaml up -d --remove-orphans
+             for attempt in $(seq 1 24); do
+               backend_id="$(docker compose -f compose.yaml ps -q backend)"
+               status="$(docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" "$backend_id")"
+               if [ "$status" = healthy ]; then
+                 docker compose -f compose.yaml ps
+                 exit 0
+               fi
+               if [ "$status" = unhealthy ] || [ "$status" = exited ]; then
+                 docker compose -f compose.yaml logs --tail=100 backend
+                 exit 1
+               fi
+               sleep 5
+             done
+             docker compose -f compose.yaml logs --tail=100 backend
+             exit 1'
+
+      - name: Remove this runner SSH access
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${RUNNER_IP:-}" ]; then
+            aws ec2 revoke-security-group-ingress \
+              --group-id "${{ vars.AWS_SECURITY_GROUP_ID }}" \
+              --protocol tcp \
+              --port "${{ vars.STAGING_SSH_PORT }}" \
+              --cidr "${RUNNER_IP}/32" || true
+          fi

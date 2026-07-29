@@ -3,9 +3,10 @@ export {
 	type MarkdownEditorHandle,
 } from './markdown-editor/ui/markdown-editor';
 
-export * from './chatbot';
-
-export { ChatbotPopup, ChatbotMessage, useChatbot } from './chatbot';
-export type { Message } from './chatbot';
+export { Chatbot, ChatbotMessage } from './chatbot';
+export type { ChatMessage, ChangeSuggestion } from './chatbot';
 
 export { PlantUmlViewer } from './plantuml-viewer';
+export * from './plan';
+
+export { MarkdownDiff } from './markdown-diff';

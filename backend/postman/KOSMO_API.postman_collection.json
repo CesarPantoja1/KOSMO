@@ -1,0 +1,495 @@
+{
+	"info": {
+		"name": "KOSMO API",
+		"description": "Coleccion completa de endpoints KOSMO. Flujo: Auth → Project → Discovery → Features → Requirements → Modelo.\n\nNuevo: Chat de Descubrimiento, Plan de Cambios, Consolidacion de Conocimiento.\n\nVariables globales:\n- `base_url`: http://localhost:8000\n- `token`: access token JWT (se popula automaticamente tras /token)\n- `project_id`: ID del proyecto creado\n- `feature_id`: ID de la primera caracteristica generada\n- `change_id`: ID de un cambio en el plan (se popula al agregar un cambio)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "base_url", "value": "http://localhost:8000" },
+		{ "key": "token", "value": "" },
+		{ "key": "project_id", "value": "" },
+		{ "key": "feature_id", "value": "" },
+		{ "key": "change_id", "value": "" }
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "GET /health",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "POST /api/v1/auth/register",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/auth/register", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "register"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"dev@kosmo.local\",\n  \"password\": \"dev-password-12345\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST /api/v1/auth/authorize",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/auth/authorize", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "authorize"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"dev@kosmo.local\",\n  \"password\": \"dev-password-12345\",\n  \"code_challenge\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n  \"code_challenge_method\": \"S256\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST /api/v1/auth/token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('token', jsonData.access.token);",
+									"    console.log('Token guardado: ' + jsonData.access.token.substring(0, 30) + '...');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/auth/token", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "token"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"grant_type\": \"authorization_code\",\n  \"code\": \"REPLACE_WITH_CODE_FROM_AUTHORIZE\",\n  \"code_verifier\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST /api/v1/auth/refresh",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/auth/refresh", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "refresh"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"grant_type\": \"refresh_token\",\n  \"refresh_token\": \"{{token}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET /api/v1/auth/me",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/auth/me", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "me"] }
+					}
+				},
+				{
+					"name": "POST /api/v1/auth/logout",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/auth/logout", "host": ["{{base_url}}"], "path": ["api", "v1", "auth", "logout"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": null\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Projects",
+			"item": [
+				{
+					"name": "POST /api/v1/projects - Crear proyecto",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('project_id', jsonData.id);",
+									"    console.log('Project ID guardado: ' + jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "projects"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"LimpiaMas\",\n  \"description\": \"Servicio de lavado, secado y planchado de ropa por kilo, ademas de cuidado especializado para prendas delicadas.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET /api/v1/projects - Listar proyectos",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects", "host": ["{{base_url}}"], "path": ["api", "v1", "projects"] }
+					}
+				},
+				{
+					"name": "GET /api/v1/projects/:id - Obtener proyecto",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}"] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Discovery",
+			"item": [
+				{
+					"name": "POST Generate - Generar descubrimiento con IA",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
+					}
+				},
+				{
+					"name": "GET - Obtener descubrimiento",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] }
+					}
+				},
+				{
+					"name": "PUT - Guardar descubrimiento (manual)",
+					"event": [],
+					"request": {
+						"method": "PUT",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"## Vision del producto\\n\\nMi producto ayuda a...\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Refine - Refinar descubrimiento con IA",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/refine", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "refine"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"instructions\": \"Agrega una seccion de Stakeholders y amplia el alcance a toda Latinoamerica\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Chat - Enviar mensaje al chat de Descubrimiento",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Quiero refinar la seccion de Propuesta de Valor para que contemple el mercado latinoamericano.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET Chat - Obtener historial del chat de Descubrimiento",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat"] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Features",
+			"item": [
+				{
+					"name": "POST Generate - Generar caracteristicas con IA",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.length > 0) {",
+									"        pm.collectionVariables.set('feature_id', jsonData[0].id);",
+									"        console.log('Feature ID guardado: ' + jsonData[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+					}
+				},
+				{
+					"name": "GET - Listar caracteristicas",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+					}
+				},
+				{
+					"name": "POST Suggest - Sugerir 3 nuevas caracteristicas",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/suggest", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "suggest"] }
+					}
+				},
+				{
+					"name": "POST Manual - Crear caracteristica manualmente",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/manual", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "manual"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Gestion de inventario de insumos\",\n  \"description\": \"El usuario administra el stock de jabones, suavizantes y otros insumos del negocio de lavanderia.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Save - Guardar caracteristicas seleccionadas",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features/save", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features", "save"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"features\": [\n    {\n      \"title\": \"Registro de clientes frecuentes\",\n      \"description\": \"El usuario registra clientes habituales con sus preferencias de lavado para agilizar futuros pedidos.\",\n      \"origin\": \"Se deriva de Actores y Propuesta de valor del Descubrimiento\"\n    }\n  ]\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Requirements",
+			"item": [
+				{
+					"name": "POST Generate - Generar requisitos EARS con IA",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements", "generate"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": \"{{project_id}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET - Obtener requisitos",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements?project_id={{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements"], "query": [{ "key": "project_id", "value": "{{project_id}}" }] }
+					}
+				},
+				{
+					"name": "PUT - Guardar requisitos (manual)",
+					"event": [],
+					"request": {
+						"method": "PUT",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"markdown\": \"### REQ-1.1 Titulo del requisito\\n\\n**Ubicuo**\\n\\nEl sistema debe presentar todos los montos con exactamente dos decimales.\\n\\n**Criterios de Aceptacion**\\n\\n**Escenario: Montos en pantalla de balance**\\n\\n- **Dado** que el usuario se encuentra en la pantalla principal\\n- **Cuando** hace clic en la pestana Balance\\n- **Entonces** todos los montos aparecen formateados con dos decimales\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Refine - Refinar requisitos EARS con IA",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/refine", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements", "refine"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"instructions\": \"Agrega criterios de aceptacion para timeout de red y caso de error en cada requisito\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Modelo",
+			"item": [
+				{
+					"name": "POST Generate - Generar diagrama de actividad con IA",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/diagram/generate", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "diagram", "generate"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": \"{{project_id}}\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET - Obtener diagrama existente",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/diagram?project_id={{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "diagram"], "query": [{ "key": "project_id", "value": "{{project_id}}" }] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Plan",
+			"item": [
+				{
+					"name": "GET State - Obtener estado del plan de cambios",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				},
+				{
+					"name": "POST Changes - Agregar cambio al plan",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.changes && jsonData.changes.length > 0) {",
+									"        pm.collectionVariables.set('change_id', jsonData.changes[0].id);",
+									"        console.log('Change ID guardado: ' + jsonData.changes[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/changes?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "changes"], "query": [{ "key": "phase", "value": "descubrimiento" }] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"change_id\": \"chg_01HXYAZABCDEFGHIJKLMNOP\",\n  \"section\": \"Propuesta de Valor\",\n  \"description\": \"Ampliar alcance a mercado latinoamericano\",\n  \"diff_before\": \"## Propuesta de Valor\\n\\nAyudamos a dueños de lavanderias en Argentina...\",\n  \"diff_after\": \"## Propuesta de Valor\\n\\nAyudamos a dueños de lavanderias en toda Latinoamerica...\",\n  \"rationale\": \"El mercado latinoamericano comparte problemas similares de gestion de lavanderias\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "DELETE Changes/:id - Quitar cambio del plan",
+					"event": [],
+					"request": {
+						"method": "DELETE",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/changes/{{change_id}}?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "changes", "{{change_id}}"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				},
+				{
+					"name": "POST Apply - Aplicar lote de cambios",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/apply", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "apply"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phase\": \"descubrimiento\",\n  \"changes\": [\"{{change_id}}\"]\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "DELETE Plan - Descartar plan de cambios completo",
+					"event": [],
+					"request": {
+						"method": "DELETE",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Knowledge",
+			"item": [
+				{
+					"name": "POST Consolidate - Consolidar patrones cross-project",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/knowledge/consolidate", "host": ["{{base_url}}"], "path": ["api", "v1", "knowledge", "consolidate"] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Schemas (DTO Reference)",
+			"item": [
+				{
+					"name": "GET /api/v1/schemas - Listar schemas",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/schemas", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas"] }
+					}
+				},
+				{
+					"name": "GET /api/v1/schemas/:name - Obtener schema",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/schemas/CreateProjectRequest", "host": ["{{base_url}}"], "path": ["api", "v1", "schemas", "CreateProjectRequest"] }
+					}
+				}
+			]
+		}
+	]
+}

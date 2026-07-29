@@ -6,10 +6,17 @@ from typing import Any
 
 from kosmo.contracts.audit.events import AuditEvent
 from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
+from kosmo.contracts.chat import (
+    ChatHistoryId,
+    EstadoPlanCambio,
+    HistorialChat,
+    MensajeChat,
+    PlanCambio,
+)
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
-from kosmo.contracts.sdd.document import RichTextDocument
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.contracts.sdd.project import Project
 
 _MAX_FAILURES = 10
@@ -242,3 +249,92 @@ class InMemoryStore:
         for jti in list(self.refresh):
             if self.refresh[jti][1] == family_id:
                 del self.refresh[jti]
+
+
+class InMemoryChatRepository:
+    def __init__(self) -> None:
+        self.messages: list[MensajeChat] = []
+        self.plans: list[PlanCambio] = []
+
+    async def save_message(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,  # noqa: ARG002
+        message: MensajeChat,
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> MensajeChat:
+        self.messages.append(message)
+        return message
+
+    async def get_history(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,  # noqa: ARG002
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> HistorialChat | None:
+        return HistorialChat(
+            id=ChatHistoryId("hist_test"),
+            project_id=project_id,
+            phase=phase,
+            context_id=context_id,
+            messages=tuple(self.messages),
+        )
+
+    async def save_history(self, history: HistorialChat) -> HistorialChat:
+        self.messages = list(history.messages)
+        return history
+
+    async def add_plan_change(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,  # noqa: ARG002
+        change: PlanCambio,
+    ) -> PlanCambio:
+        self.plans.append(change)
+        return change
+
+    async def list_plan_changes(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase | None = None,  # noqa: ARG002
+    ) -> list[PlanCambio]:
+        return self.plans
+
+    async def update_plan_change_status(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        change_id: PlanChangeId,
+        status: EstadoPlanCambio,
+        user_version: str | None = None,
+    ) -> PlanCambio | None:
+        for idx, item in enumerate(self.plans):
+            if item.id == change_id:
+                updated = PlanCambio(
+                    id=item.id,
+                    section=item.section,
+                    description=item.description,
+                    diff=item.diff,
+                    status=status,
+                    origin=item.origin,
+                    rationale=item.rationale,
+                    user_version=user_version or item.user_version,
+                )
+                self.plans[idx] = updated
+                return updated
+        return None
+
+    async def remove_plan_change(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        change_id: PlanChangeId,
+    ) -> bool:
+        initial_len = len(self.plans)
+        self.plans = [p for p in self.plans if p.id != change_id]
+        return len(self.plans) < initial_len
+
+    async def clear_plan(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase | None = None,  # noqa: ARG002
+    ) -> None:
+        self.plans.clear()

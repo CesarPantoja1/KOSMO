@@ -1,226 +1,168 @@
-# 🏗️ Arquitectura Frontend — FSD Progresivo
+# Arquitectura Frontend — Feature-Sliced Design (FSD)
 
-## 📌 Plan de Implementación
-
-Este documento define el marco arquitectónico del proyecto TIC, basado en la metodología **Feature-Sliced Design (FSD)** aplicada de forma progresiva.
-
-El objetivo es garantizar que el sistema sea **escalable, mantenible y modular** desde sus primeras etapas de desarrollo.
+Este documento define las reglas arquitectónicas del proyecto, basadas en **Feature-Sliced Design (FSD)**.
 
 ---
 
-## 🎯 Justificación de FSD en Proyectos TIC
-
-Los proyectos de Tecnología de la Información y Comunicación (TIC) suelen enfrentarse a requisitos cambiantes y a un incremento constante en la complejidad. En este contexto, FSD aporta:
-
-* **Estandarización**
-  Proporciona una estructura clara de carpetas y reglas de importación, reduciendo ambigüedad en la organización del código.
-
-* **Escalabilidad controlada**
-  Permite que el proyecto crezca de forma orgánica sin derivar en un monolito difícil de mantener.
-
-* **Separación de responsabilidades**
-  Aísla la lógica de negocio, la interfaz y las acciones del usuario, facilitando pruebas y mantenimiento.
-
----
-
-## 🚀 Enfoque Progresivo
-
-La implementación se divide en dos fases principales:
-
----
-
-## 🧱 Fase 1: Fundamentos (Base del Sistema)
-
-Se prioriza la definición del dominio, la infraestructura y los datos.
-
-### 1. **Shared**
-
-Capa más desacoplada y transversal. No contiene lógica de negocio.
-
-* `ui/` → Componentes atómicos (botones, inputs)
-* `lib/` → Utilidades, hooks genéricos
-* `api/` → Configuración de clientes HTTP
-* `assets/` → Recursos globales
-
----
-
-### 2. **Entities**
-
-Representa los conceptos clave del dominio.
-
-* **Slices**: Usuario, Proyecto, Modelo, etc.
-* **Segments**:
-
-  * `ui/` → Componentes visuales de la entidad
-  * `model/` → Tipos, estado, validaciones
-  * `lib/` → Transformaciones de datos
-  * `api/` → Endpoints específicos
-
----
-
-### 3. **App**
-
-Configuración global de la aplicación.
-
-* `providers/` → Contextos globales (Auth, Theme, Store)
-* `styles/` → Estilos globales
-* `setup/` → Configuración de frameworks/plugins
-
----
-
-### 4. **Pages**
-
-Responsable del enrutamiento y composición de vistas.
-
-* **Slices**: Cada ruta
-* **Segments**:
-
-  * `ui/` → Layout de la página
-  * `model/` → Lógica específica de la página
-
----
-
-## ⚙️ Fase 2: Interactividad y Composición
-
-Se incorporan funcionalidades y componentes complejos.
-
-### 5. **Features**
-
-Acciones que el usuario puede realizar.
-
-* **Slices**: Casos de uso (ej. `edit-requirements`, `search-project`)
-* **Segments**:
-
-  * `ui/` → Formularios y acciones
-  * `model/` → Estado y validaciones
-  * `api/` → Requests al backend
-  * `lib/` → Procesamiento de datos
-
----
-
-### 6. **Widgets**
-
-Componentes complejos que integran múltiples elementos.
-
-* **Slices**: Bloques UI (navbar, dashboard, panel)
-* **Segments**:
-
-  * `ui/` → Composición visual
-  * `model/` → Coordinación de estados
-
----
-
-## 🧩 Estructura Jerárquica FSD
-
-FSD se organiza en tres niveles:
+## Estructura jerárquica
 
 ```
 Layer → Slice → Segment
 ```
 
-* **Layer (Capa)** → Nivel arquitectónico (Shared, Entities, etc.)
-* **Slice (Rebanada)** → Unidad funcional o de dominio
-* **Segment (Segmento)** → Tipo de responsabilidad técnica
+- **Layer** — Nivel arquitectónico (`app`, `pages`, `widgets`, `features`, `entities`, `shared`)
+- **Slice** — Unidad de dominio o funcionalidad dentro de la capa
+- **Segment** — Tipo de responsabilidad técnica (`ui/`, `model/`, `api/`, `lib/`)
 
 ---
 
-## 📦 Estándar de Segmentos
+## Capas y sus reglas
 
-La mayoría de los slices siguen esta estructura:
+### `app/`
 
-* `ui/` → Componentes visuales
-* `model/` → Estado, tipos, lógica
-* `lib/` → Helpers y utilidades internas
-* `api/` → Comunicación con servicios externos
+Configuración global de la aplicación. No se crean slices aquí.
 
----
+- `providers/` — Contextos globales (Auth, Theme, MSW)
+- `store/` — Store global de la app
+- `globals.css` — Estilos globales y **paleta de colores del proyecto**
 
-## 📏 Reglas de Código
-
-### 1. Naming
-
-* **Componentes** → `PascalCase` (`UserCard.tsx`)
-* **Archivos utilitarios** → `kebab-case` (`use-local-storage.ts`)
-* **Variables/Funciones** → `camelCase`
-* **Constantes** → `UPPER_SNAKE_CASE`
+> La paleta de colores está definida en `app/globals.css` mediante tokens CSS de Tailwind v4 (`@theme`). Siempre usar estos tokens en lugar de valores hardcodeados.
+>
+> Tokens disponibles: `--color-base-{50|100|200|300|600|800|950}`, `--color-primary-{50|100|800}`, `--color-ai`, `--color-status-{success|warning|error|info}`, `--color-light-yellow`.
 
 ---
 
-### 2. TypeScript
+### `src/entities/`
 
-* Tipado estricto habilitado
-* Evitar `any` (usar `unknown` o genéricos)
-* `interface` → Objetos y props
-* `type` → Uniones y tipos complejos
+Representa los tipos de datos principales del dominio. Contiene los datos, su forma y cómo se obtienen.
 
----
+**Segmentos permitidos:**
 
-### 3. Componentes
+- `model/` — Tipos TypeScript y store Zustand de la entidad
+- `api/` — Endpoints y llamadas HTTP específicas de la entidad
 
-* Funciones flecha:
+**Prohibido:**
 
-  ```ts
-  const Component = () => {}
-  ```
-* Exportaciones nombradas (excepto en `page.tsx`)
-* Desestructuración de props
-* Uso de **early returns**
+- `ui/` — Las entidades no exponen componentes visuales
 
 ---
 
-### 4. Next.js (App Router)
+### `src/pages/`
 
-* Usar `'use client'` solo cuando sea necesario
-* Fetching en Server Components
-* Colocation de archivos relacionados
+Cada slice corresponde a una página de la aplicación. Compone widgets y features para construir la vista final.
 
----
+**Segmentos permitidos (solo si son necesarios):**
 
-### 5. Estilos
+- `ui/` — Componentes y layout propios de la página
+- `model/` — Lógica, hooks y estado específico de la página
 
-* Uso de **Tailwind CSS**
-* Evitar inline styles
-* Mantener orden lógico de clases
+> No crear `model/` ni `ui/` si la página no los necesita.
 
 ---
 
-### 6. Imports
+### `src/feature/`
 
-Orden recomendado:
+Acciones que el usuario puede realizar. Los componentes de esta capa son **agnósticos a la API** — no saben de dónde vienen los datos, solo los reciben via props o store.
 
-1. React / Next
-2. Librerías externas
-3. Módulos internos (`@/`)
-4. Hooks / utils
-5. Tipos
-6. Estilos
+**Segmentos permitidos:**
 
----
+- `ui/` — Componentes de acción (formularios, botones de acción, editores)
+- `model/` — Estado y lógica local de la feature
+- `lib/` — Utilidades internas de la feature
 
-### 7. Manejo de Estado
+**Prohibido:**
 
-* **URL** → Estados compartibles
-* **Local** → `useState`
-* **Global** → Zustand (solo cuando sea necesario)
+- `api/` — Las features no hacen llamadas HTTP directamente
 
 ---
 
-### 8. Documentación
+### `src/widgets/`
 
-* Uso de **JSDoc** en funciones complejas
-* Comentarios enfocados en el **por qué**, no en el qué
+Bloques UI complejos que componen múltiples entidades y features en una unidad visual cohesiva (navbars, paneles, wizards).
+
+- `ui/` — Composición visual del widget
+- `model/` — Coordinación de estados entre slices
+- `lib/` — Utilidades internas del widget
+- `types/` — Tipos propios del widget
 
 ---
 
-## ✅ Conclusión
+### `src/shared/`
 
-El enfoque progresivo de FSD permite:
+Código transversal sin lógica de negocio. Puede ser importado por cualquier capa.
 
-* Construir una base sólida desde el inicio
-* Escalar sin comprometer la arquitectura
-* Mantener bajo acoplamiento y alta cohesión
+- `ui/` — Componentes atómicos reutilizables (Button, Loading, Toast, iconos)
+- `lib/` — Utilidades genéricas (PKCE, Zod helpers)
+- `api/` — Configuración del cliente HTTP y helpers de autenticación
+- `store/` — Store global de autenticación
+- `mocks/` — Configuración de MSW para tests y desarrollo
 
-Esto asegura que el proyecto evolucione de forma sostenible a medida que crece en complejidad.
+---
+
+## Reglas de importación
+
+Las capas solo pueden importar de capas inferiores:
+
+```
+pages → widgets → features → entities → shared
+```
+
+- `pages` puede importar de `widgets`, `features`, `entities`, `shared`
+- `widgets` puede importar de `features`, `entities`, `shared`
+- `features` puede importar de `entities`, `shared`
+- `entities` puede importar de `shared`
+- `shared` no importa de ninguna capa del proyecto
+
+---
+
+## Convenciones de código
+
+### Naming
+
+- **Componentes** → `PascalCase` (`UserCard.tsx`)
+- **Archivos utilitarios / hooks** → `kebab-case` (`use-local-storage.ts`)
+- **Variables y funciones** → `camelCase`
+- **Constantes** → `UPPER_SNAKE_CASE`
+
+### TypeScript
+
+- Tipado estricto habilitado; evitar `any` (usar `unknown` o genéricos)
+- `interface` para objetos y props
+- `type` para uniones y tipos complejos
+
+### Componentes
+
+- Arrow functions con exportación nombrada (excepto `page.tsx`)
+- Desestructuración de props y uso de early returns
+
+```ts
+export const MyComponent = ({ title }: Props) => {
+  if (!title) return null
+  return <h1>{title}</h1>
+}
+```
+
+### Next.js (App Router)
+
+- `'use client'` solo cuando sea estrictamente necesario
+- Preferir Server Components para fetching de datos
+- Los archivos de ruta (`page.tsx`, `layout.tsx`) van en `app/`; la lógica va en `src/pages/`
+
+### Estilos
+
+- Tailwind CSS para todos los estilos; sin inline styles
+- Usar los tokens de `globals.css` para colores, espaciado y radios
+
+### Manejo de estado
+
+- **URL** → Estado compartible entre vistas
+- **`useState`** → Estado local del componente
+- **Zustand** → Estado global (último recurso; preferir estado local o de URL)
+
+### Documentación
+
+- JSDoc en funciones complejas
+- Comentarios explican el **por qué**, no el qué
 
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).

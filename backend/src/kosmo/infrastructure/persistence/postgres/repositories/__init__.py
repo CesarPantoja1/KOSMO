@@ -2,6 +2,7 @@ from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_rep
     SqlAlchemyActivityDiagramRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.audit import SqlAlchemyAuditEventSink
+from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
 )
@@ -19,6 +20,7 @@ from kosmo.infrastructure.persistence.postgres.repositories.users import SqlAlch
 __all__ = [
     "SqlAlchemyActivityDiagramRepository",
     "SqlAlchemyAuditEventSink",
+    "SqlAlchemyChatRepository",
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyFeatureRepository",
     "SqlAlchemyProjectRepository",

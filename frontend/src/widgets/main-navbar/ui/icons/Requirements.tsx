@@ -1,4 +1,4 @@
-import { IconWizardProps } from '../../types/icon';
+import { IconWizardProps } from '../../models/types';
 
 const Requirements = ({ size = 32, color }: IconWizardProps) => {
 	return (

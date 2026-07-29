@@ -66,11 +66,13 @@ async def test_get_diagram_returns_plantuml() -> None:
     from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
     from kosmo.contracts.sdd.ids import ActivityDiagramId
 
-    await repo.save(DiagramaActividad(
-        id=ActivityDiagramId("dia_01"),
-        feature_id=FeatureId("feat_01"),
-        diagram_syntax=diagram_syntax,
-    ))
+    await repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("dia_01"),
+            feature_id=FeatureId("feat_01"),
+            diagram_syntax=diagram_syntax,
+        )
+    )
     _def, handler = build_get_diagram_for_feature(repo)
 
     # Act

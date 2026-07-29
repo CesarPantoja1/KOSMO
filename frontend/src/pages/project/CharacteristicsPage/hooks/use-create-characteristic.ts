@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addCharacteristics } from '@/entities/characteristic';
+import { addCharacteristic } from '@/entities/characteristic';
 import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
@@ -64,7 +64,11 @@ export function useCreateCharacteristic(
 ): UseCreateCharacteristicReturn {
 	const projectId = useAppStore((s) => s.currentProject?.id);
 	const router = useRouter();
-	const { control, handleSubmit: formSubmit, setValue } = useForm<CharacteristicFormData>({
+	const {
+		control,
+		handleSubmit: formSubmit,
+		setValue,
+	} = useForm<CharacteristicFormData>({
 		mode: 'onChange',
 		resolver: zodResolver(characteristicSchema),
 		defaultValues: { title: '', description: '' },
@@ -126,13 +130,10 @@ export function useCreateCharacteristic(
 		}
 		if (!projectId) return;
 		try {
-			await addCharacteristics(projectId, [
-				{
-					title: data.title,
-					description: data.description,
-					rationale: '',
-				},
-			]);
+			await addCharacteristic(projectId, {
+				title: data.title,
+				description: data.description,
+			});
 			onCreated?.();
 		} catch (err) {
 			const message =

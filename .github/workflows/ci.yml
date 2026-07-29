@@ -5,10 +5,15 @@ on:
     branches:
       - main
       - develop
+      - 'release/**'
+      - 'hotfix/**'
+
   pull_request:
     branches:
       - main
       - develop
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,20 +22,132 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.13"
+  BUN_VERSION: "1.2.10"
+
 jobs:
-  detect-changes:
-    name: Detect changed areas
+  branch-policy:
+    name: Branch policy
     runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.changes.outputs.backend }}
-      frontend: ${{ steps.changes.outputs.frontend }}
-      changed_files: ${{ steps.changes.outputs.changed_files }}
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate pull request policy
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          case "$BASE_BRANCH" in
+            main)
+              if [[ ! "$HEAD_BRANCH" =~ ^(release|hotfix)/ ]]; then
+                echo "::error::Only release/* and hotfix/* branches may target main; received $HEAD_BRANCH."
+                exit 1
+              fi
+              ;;
+            develop)
+              if [[ ! "$HEAD_BRANCH" =~ ^(feature|release|hotfix)/ ]]; then
+                echo "::error::Only feature/*, release/* and hotfix/* branches may target develop; received $HEAD_BRANCH."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported pull-request target branch: $BASE_BRANCH."
+              exit 1
+              ;;
+          esac
+
+          conventional_pr_title='^(feat|fix|docs|refactor|test|style|chore|ci|build|perf|revert)(\([^)]+\))?: .+ AB#[0-9]+$'
+          release_pr_title='^release: .+$'
+
+          if [[ ! "$PR_TITLE" =~ $conventional_pr_title && ! "$PR_TITLE" =~ $release_pr_title ]]; then
+            echo "::error::PR title must follow 'type: description AB#ID' (or 'release: description' for release PRs)."
+            exit 1
+          fi
+
+          branch_name_is_conventional=true
+          case "$HEAD_BRANCH" in
+            feature/*)
+              [[ "$HEAD_BRANCH" =~ ^feature/.+-AB#[0-9]+$ ]] || branch_name_is_conventional=false
+              ;;
+            hotfix/*)
+              [[ "$HEAD_BRANCH" =~ ^hotfix/[0-9]+\.[0-9]+\.[0-9]+-.+-AB#[0-9]+$ ]] || branch_name_is_conventional=false
+              ;;
+            release/*)
+              [[ "$HEAD_BRANCH" =~ ^release/[0-9]+\.[0-9]+\.[0-9]+$ ]] || branch_name_is_conventional=false
+              ;;
+          esac
+
+          {
+            echo "## Branch policy"
+            echo
+            echo "- Source: \`$HEAD_BRANCH\`"
+            echo "- Target: \`$BASE_BRANCH\`"
+            echo "- PR title: \`$PR_TITLE\`"
+            echo "- Allowed source/target flow: passed"
+            echo "- PR title convention: passed"
+            echo "- Branch-name convention: \`$branch_name_is_conventional\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$branch_name_is_conventional" != true ]]; then
+            echo "::warning::Branch name does not yet follow the documented Azure Boards convention. This is reported during the migration but is not blocking existing work."
+          fi
+
+      - name: Report non-PR policy status
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          {
+            echo "## Branch policy"
+            echo
+            echo "No pull request to validate for event \`$EVENT_NAME\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  actionlint:
+    name: Lint workflow files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run actionlint
+        uses: raven-actions/actionlint@v2
+
+  detect-changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Detect affected workspaces
         id: changes
@@ -38,33 +155,78 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
-          else
-            base_sha="${{ github.event.before }}"
-            head_sha="${{ github.sha }}"
-          fi
+          event_name="${{ github.event_name }}"
+          head_sha="${{ github.sha }}"
 
-          if [ -z "$base_sha" ] || [[ "$base_sha" =~ ^0+$ ]] || ! git cat-file -e "$base_sha" 2>/dev/null; then
-            base_sha="$(git rev-list --max-parents=0 "$head_sha")"
-          fi
+          case "$event_name" in
+            pull_request)
+              base_sha="${{ github.event.pull_request.base.sha }}"
+              head_sha="${{ github.event.pull_request.head.sha }}"
 
-          git diff --name-only "$base_sha" "$head_sha" | sort > changed-files.txt
+              git cat-file -e "${base_sha}^{commit}"
+              git cat-file -e "${head_sha}^{commit}"
+
+              diff_base="$(git merge-base "$base_sha" "$head_sha")"
+
+              git diff \
+                --name-only \
+                --no-renames \
+                "$diff_base" \
+                "$head_sha" \
+                | sort -u > changed-files.txt
+              ;;
+
+            push)
+              base_sha="${{ github.event.before }}"
+
+              if [ -z "$base_sha" ] || \
+                 [[ "$base_sha" =~ ^0+$ ]] || \
+                 ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+                git ls-files | sort -u > changed-files.txt
+              else
+                git diff \
+                  --name-only \
+                  --no-renames \
+                  "$base_sha" \
+                  "$head_sha" \
+                  | sort -u > changed-files.txt
+              fi
+              ;;
+
+            workflow_dispatch)
+              git ls-files | sort -u > changed-files.txt
+              ;;
+
+            *)
+              echo "Unsupported event: $event_name"
+              exit 1
+              ;;
+          esac
 
           backend=false
           frontend=false
 
           while IFS= read -r file; do
             case "$file" in
-              .github/workflows/*|docker-compose.yml|.env.example)
+              .github/workflows/ci.yml|\
+              .github/actions/*|\
+              docker-compose.yml|\
+              docker-compose.yaml|\
+              docker-compose.*.yml|\
+              docker-compose.*.yaml|\
+              .env.example|\
+              Makefile)
                 backend=true
                 frontend=true
                 ;;
-              backend/*|render.yaml|ENV_VARIABLES_GUIDE.md|INFORME_DEVOPS_DOCKER.md)
+
+              backend/*|\
+              render.yaml)
                 backend=true
                 ;;
-              frontend/*|vercel.json|VERCEL_DEPLOYMENT_GUIDE.md)
+
+              frontend/*|\
+              vercel.json)
                 frontend=true
                 ;;
             esac
@@ -73,22 +235,33 @@ jobs:
           {
             echo "backend=$backend"
             echo "frontend=$frontend"
-            echo "changed_files<<EOF"
-            cat changed-files.txt
-            echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Changed files:"
-          cat changed-files.txt
-          echo "backend=$backend"
-          echo "frontend=$frontend"
+          {
+            echo "## Changed files"
+            echo
 
-  backend:
-    name: Backend
+            if [ -s changed-files.txt ]; then
+              sed 's/^/- `/' changed-files.txt | sed 's/$/`/'
+            else
+              echo "No changed files detected."
+            fi
+
+            echo
+            echo "- Backend required: \`$backend\`"
+            echo "- Frontend required: \`$frontend\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend-lint:
+    name: Backend / Lint & types
     needs: detect-changes
     if: needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
     defaults:
       run:
         working-directory: backend
@@ -100,78 +273,197 @@ jobs:
       JWT_PUBLIC_KEY_PATH: ./tmp/jwt_public.pem
       FERNET_MASTER_KEY: gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
       DATABASE_URL: postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_dev
-      MONGO_URL: mongodb://localhost:27017/kosmo_agent_memory
-      REDIS_URL: redis://localhost:6379/0
       LLM_PROVIDER: noop
       LLM_MODEL: noop
 
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
         with:
           enable-cache: true
+          working-directory: backend
           cache-dependency-glob: backend/uv.lock
 
       - name: Install dependencies
-        run: uv sync --all-groups
+        run: uv sync --locked --all-groups
+
+      - name: Check formatting with Ruff
+        run: uv run --no-sync ruff format --check .
 
       - name: Run Ruff
-        run: uv run ruff check src tests
+        run: uv run --no-sync ruff check .
 
       - name: Run Pyright
-        run: uv run pyright
+        run: uv run --no-sync pyright
 
-      - name: Run unit tests
-        run: uv run pytest tests/unit --cov=kosmo --cov-fail-under=0
+  backend-test:
+    name: Backend / Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+
+        env:
+          POSTGRES_USER: kosmo
+          POSTGRES_PASSWORD: kosmo
+          POSTGRES_DB: kosmo_test
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U kosmo -d kosmo_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongodb:
+        image: mongo:7
+
+        ports:
+          - 27017:27017
+
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+
+        ports:
+          - 6379:6379
+
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ENV: development
+      LOG_LEVEL: INFO
+      JWT_PRIVATE_KEY_PATH: ./tmp/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: ./tmp/jwt_public.pem
+      FERNET_MASTER_KEY: gA9S7Jv4nWq3kL8fDm2QpZx1Yh5Tn6CbRrUuIi0o4jM=
+
+      DATABASE_URL: postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_test
+      MONGO_URL: mongodb://localhost:27017/kosmo_agent_memory_test
+      REDIS_URL: redis://localhost:6379/0
+
+      LLM_PROVIDER: noop
+      LLM_MODEL: noop
+
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+          working-directory: backend
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Run backend tests
+        run: >-
+          uv run --no-sync pytest tests
+          --cov=kosmo
+          --cov-report=term-missing
+          --cov-report=xml
+
+      - name: Upload backend coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 14
+          if-no-files-found: ignore
 
   frontend:
     name: Frontend
     needs: detect-changes
     if: needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
     defaults:
       run:
         working-directory: frontend
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.2.10'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache Bun dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('frontend/bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Cache Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/frontend/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/bun.lock') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx', 'frontend/**/*.css') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-nextjs-${{ hashFiles('frontend/bun.lock') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx', 'frontend/**/*.css', 'frontend/**/*.scss') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/bun.lock') }}-
+            ${{ runner.os }}-${{ runner.arch }}-nextjs-${{ hashFiles('frontend/bun.lock') }}-
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Run ESLint
         run: bun run lint
+
+      - name: Run TypeScript check
+        run: bun run tsc --noEmit
 
       - name: Run tests
         run: bun run test -- --run --passWithNoTests
@@ -182,10 +474,19 @@ jobs:
   ci-summary:
     name: CI summary
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
     needs:
+      - branch-policy
+      - actionlint
       - detect-changes
-      - backend
+      - backend-lint
+      - backend-test
       - frontend
+
     if: always()
 
     steps:
@@ -194,22 +495,84 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Backend required: ${{ needs.detect-changes.outputs.backend }}"
-          echo "Backend result:   ${{ needs.backend.result }}"
-          echo "Frontend required: ${{ needs.detect-changes.outputs.frontend }}"
-          echo "Frontend result:   ${{ needs.frontend.result }}"
+          actionlint_result="${{ needs.actionlint.result }}"
+          branch_policy_result="${{ needs.branch-policy.result }}"
+          detect_result="${{ needs.detect-changes.result }}"
 
-          if [ "${{ needs.backend.result }}" = "failure" ] || \
-             [ "${{ needs.backend.result }}" = "cancelled" ] || \
-             [ "${{ needs.frontend.result }}" = "failure" ] || \
-             [ "${{ needs.frontend.result }}" = "cancelled" ]; then
-            echo "One or more required CI jobs failed."
+          backend_required="${{ needs.detect-changes.outputs.backend }}"
+          backend_lint_result="${{ needs.backend-lint.result }}"
+          backend_test_result="${{ needs.backend-test.result }}"
+
+          frontend_required="${{ needs.detect-changes.outputs.frontend }}"
+          frontend_result="${{ needs.frontend.result }}"
+
+          {
+            echo "## Continuous Integration"
+            echo
+            echo "| Area | Required | Result |"
+            echo "|---|---:|---|"
+            echo "| Branch policy | Yes | \`$branch_policy_result\` |"
+            echo "| Workflow lint | Yes | \`$actionlint_result\` |"
+            echo "| Change detection | Yes | \`$detect_result\` |"
+            echo "| Backend lint & types | \`${backend_required:-unknown}\` | \`$backend_lint_result\` |"
+            echo "| Backend tests | \`${backend_required:-unknown}\` | \`$backend_test_result\` |"
+            echo "| Frontend | \`${frontend_required:-unknown}\` | \`$frontend_result\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$actionlint_result" != "success" ]; then
+            echo "Workflow lint did not complete successfully."
             exit 1
           fi
 
-          if [ "${{ needs.detect-changes.outputs.backend }}" != "true" ] && \
-             [ "${{ needs.detect-changes.outputs.frontend }}" != "true" ]; then
+          if [ "$branch_policy_result" != "success" ]; then
+            echo "Branch policy did not complete successfully."
+            exit 1
+          fi
+
+          if [ "$detect_result" != "success" ]; then
+            echo "Change detection did not complete successfully."
+            exit 1
+          fi
+
+          case "$backend_required" in
+            true|false)
+              ;;
+            *)
+              echo "Invalid or missing backend change-detection output."
+              exit 1
+              ;;
+          esac
+
+          case "$frontend_required" in
+            true|false)
+              ;;
+            *)
+              echo "Invalid or missing frontend change-detection output."
+              exit 1
+              ;;
+          esac
+
+          if [ "$backend_required" = "true" ]; then
+            if [ "$backend_lint_result" != "success" ]; then
+              echo "Backend lint/type-check was required but did not succeed."
+              exit 1
+            fi
+
+            if [ "$backend_test_result" != "success" ]; then
+              echo "Backend tests were required but did not succeed."
+              exit 1
+            fi
+          fi
+
+          if [ "$frontend_required" = "true" ] && \
+             [ "$frontend_result" != "success" ]; then
+            echo "Frontend CI was required but did not succeed."
+            exit 1
+          fi
+
+          if [ "$backend_required" = "false" ] && \
+             [ "$frontend_required" = "false" ]; then
             echo "No backend or frontend changes detected. Heavy CI jobs were skipped."
           else
-            echo "Required CI jobs completed successfully."
+            echo "All required CI jobs completed successfully."
           fi
