@@ -99,10 +99,12 @@ jobs:
       - name: Report non-PR policy status
         if: github.event_name != 'pull_request'
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           echo "## Branch policy" >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
-          echo "No pull request to validate for event \`${{ github.event_name }}\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "No pull request to validate for event \`$EVENT_NAME\`." >> "$GITHUB_STEP_SUMMARY"
 
   actionlint:
     name: Lint workflow files
