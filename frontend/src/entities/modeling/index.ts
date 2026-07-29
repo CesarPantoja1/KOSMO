@@ -1,3 +1,8 @@
-export { generatePlantUmlDiagram, getDiagram } from './api';
+// MODELS
+export type { ModelingResponse } from './model/types';
+
+// STORE
 export { useModelingStore } from './model/store';
-export type { ModelingUmlResponse } from './model/types';
+
+// API
+export { generatePlantUmlDiagram, getDiagram } from './api/api';

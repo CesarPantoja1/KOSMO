@@ -1,7 +1,7 @@
 'use client';
 
 import { Ai, Send } from '@/shared/ui';
-import type { AlternativeCharacteristic } from '@/entities/characteristic';
+import type { SuggestCharacteristic } from '@/entities/characteristic';
 import { useCreateCharacteristic } from '../hooks/use-create-characteristic';
 import CharacteristicModal from './CharacteristicModal';
 
@@ -142,7 +142,7 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 			{showSuggestionsModal && (
 				<CharacteristicModal
 					onClose={closeSuggestionsModal}
-					onApply={(selected: AlternativeCharacteristic) => {
+					onApply={(selected: SuggestCharacteristic) => {
 						applySuggestion(selected.title, selected.description);
 					}}
 				/>

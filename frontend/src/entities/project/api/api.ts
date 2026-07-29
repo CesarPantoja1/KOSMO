@@ -1,0 +1,96 @@
+import { apiClient } from '@/shared/api';
+import { USE_MOCKS } from '@/shared/api/config';
+import type { Project } from '../model/types';
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// --- Mock data ---
+
+const mockProjects: Project[] = [
+	{
+		id: 'mock-project-1',
+		name: 'Sistema de Punto de Venta',
+		slug: 'sistema-de-punto-de-venta',
+		description:
+			'Sistema integral para gestión de ventas, inventario y reportes para pequeñas y medianas empresas.',
+		owner_id: 'mock-user-1',
+		created_at: '2024-01-15T10:00:00Z',
+		updated_at: '2024-01-15T10:00:00Z',
+		current_phase: 'discovery',
+		status: 'active',
+	},
+	{
+		id: 'mock-project-2',
+		name: 'App de Gestión de Tareas',
+		slug: 'app-de-gestion-de-tareas',
+		description:
+			'Plataforma colaborativa para la gestión de proyectos y seguimiento de tareas en equipos de trabajo.',
+		owner_id: 'mock-user-1',
+		created_at: '2024-02-10T09:00:00Z',
+		updated_at: '2024-02-10T09:00:00Z',
+		current_phase: 'requirements',
+		status: 'active',
+	},
+];
+
+// --- Mock implementations ---
+
+const mockGetProjects = async (): Promise<Project[]> => {
+	await delay(600);
+	return [...mockProjects];
+};
+
+const mockGetProject = async (id: string): Promise<Project> => {
+	await delay(400);
+	const found = mockProjects.find((p) => p.id === id);
+	if (!found) throw new Error(`Mock project not found: ${id}`);
+	return { ...found };
+};
+
+const mockCreateProject = async (body: {
+	name: string;
+	description: string;
+}): Promise<Project> => {
+	await delay(500);
+	const newProject: Project = {
+		id: `mock-project-${mockProjects.length + 1}`,
+		name: body.name,
+		slug: body.name.toLowerCase().replace(/\s+/g, '-'),
+		description: body.description,
+		owner_id: 'mock-user-1',
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
+		current_phase: 'discovery',
+		status: 'active',
+	};
+	mockProjects.push(newProject);
+	return { ...newProject };
+};
+
+// --- Real implementations ---
+
+const realGetProjects = (): Promise<Project[]> =>
+	apiClient<Project[]>('/api/v1/projects', { method: 'GET' });
+
+const realGetProject = (id: string): Promise<Project> =>
+	apiClient<Project>(`/api/v1/projects/${id}`, { method: 'GET' });
+
+export const realCreateProject = (body: { name: string; description: string }) => {
+	return apiClient<Project>('/api/v1/projects', {
+		method: 'POST',
+		body: JSON.stringify(body),
+	});
+};
+
+// --- Exports (switch based on USE_MOCKS) ---
+
+export const getProjects = (): Promise<Project[]> =>
+	USE_MOCKS ? mockGetProjects() : realGetProjects();
+
+export const getProject = (id: string): Promise<Project> =>
+	USE_MOCKS ? mockGetProject(id) : realGetProject(id);
+
+export const createProject = (body: {
+	name: string;
+	description: string;
+}): Promise<Project> => (USE_MOCKS ? mockCreateProject(body) : realCreateProject(body));

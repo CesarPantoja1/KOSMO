@@ -1,15 +1,14 @@
 'use client';
 
-import { useProjectStore } from '@/entities/project/model/store';
-import { useAppStore } from 'app/store/app.store';
+import { generateDiscovery } from '@/entities/discovery/api/api';
 import { Ai, Loading, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
-import { createProject } from '../api/create-project';
-import { generateDiscovery } from '@/entities/discovery/api/api';
 
+import { createProject } from '@/entities/project';
 import { projectSchema, type ProjectFormData } from '../lib/schema';
 import { CharacterCounter } from './CharacterCounter';
 
@@ -17,7 +16,6 @@ const alphaRegex = /[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
-	const setProjectId = useProjectStore((s) => s.setProjectId);
 	const setProjectState = useAppStore((s) => s.setProjectState);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -64,7 +62,6 @@ const CreateProjectForm = () => {
 			setIsSubmitting(true);
 			try {
 				const project = await createProject(data);
-				setProjectId(project.id);
 				setProjectState(project);
 
 				// Generar el descubrimiento automáticamente con IA
@@ -82,7 +79,7 @@ const CreateProjectForm = () => {
 				setIsSubmitting(false);
 			}
 		},
-		[router, setProjectId, setProjectState],
+		[router, setProjectState],
 	);
 
 	return (

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { USE_MOCKS } from '@/shared/api/config';
 
 interface ModelingStore {
 	hasDiagram: Record<string, boolean>;
@@ -8,8 +7,6 @@ interface ModelingStore {
 	isEditorMaximized: boolean;
 	setEditorMaximized: (v: boolean) => void;
 }
-
-export const isUsingMocks = () => USE_MOCKS;
 
 export const useModelingStore = create<ModelingStore>()(
 	persist(

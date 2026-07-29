@@ -1,2 +1,7 @@
+// MODELS
+export type { RequirementsResponse } from './model/types';
+// STORE
 export { useRequirementsStore } from './model/store';
-export { type RequirementsResponse } from './model/types';
+
+// API
+export { getRequirements, saveRequirements, generateRequirements } from './api/api';

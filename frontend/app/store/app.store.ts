@@ -18,10 +18,6 @@ interface AppState {
 	setHasUnsavedChanges: (v: boolean) => void;
 	pendingNavigationPath: string | null;
 	setPendingNavigationPath: (v: string | null) => void;
-	hasRequirements: Record<string, boolean>;
-	setHasRequirements: (id: string, has: boolean) => void;
-	hasDiagram: Record<string, boolean>;
-	setHasDiagram: (id: string, has: boolean) => void;
 	isEditorMaximized: boolean;
 	setEditorMaximized: (v: boolean) => void;
 
@@ -68,16 +64,6 @@ export const useAppStore = create<AppState>()(
 			setHasUnsavedChanges: (v) => set({ hasUnsavedChanges: v }),
 			pendingNavigationPath: null,
 			setPendingNavigationPath: (v) => set({ pendingNavigationPath: v }),
-			hasRequirements: {},
-			setHasRequirements: (id, has) =>
-				set((state) => ({
-					hasRequirements: { ...state.hasRequirements, [id]: has },
-				})),
-			hasDiagram: {},
-			setHasDiagram: (id, has) =>
-				set((state) => ({
-					hasDiagram: { ...state.hasDiagram, [id]: has },
-				})),
 			isEditorMaximized: false,
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
 
@@ -162,8 +148,6 @@ export const useAppStore = create<AppState>()(
 			partialize: (state) => ({
 				currentProject: state.currentProject,
 				isProyectosOpen: state.isProyectosOpen,
-				hasRequirements: state.hasRequirements,
-				hasDiagram: state.hasDiagram,
 				planByPhase: state.planByPhase,
 			}),
 		},

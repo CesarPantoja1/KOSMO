@@ -5,9 +5,9 @@ import { useEffect, useState } from 'react';
 
 import { useAppStore } from 'app/store/app.store';
 
-import { Project, projectsApi } from '@/entities/project';
+import { Project, getProjects } from '@/entities/project';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion';
-import { ComputerDesktop, Folder, Home, Right, Sidebar, UserCircle } from './icons';
+import { ComputerDesktop, Folder, Sidebar, UserCircle } from './icons';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -25,7 +25,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	useEffect(() => {
 		const fetchProjects = async () => {
 			try {
-				const data = await projectsApi.getProjects();
+				const data = await getProjects();
 				setProjects(data);
 			} catch (error) {
 				console.error('Failed to load projects', error);

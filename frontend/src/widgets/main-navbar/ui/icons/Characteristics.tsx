@@ -1,4 +1,4 @@
-import { IconWizardProps } from '../../types/icon';
+import { IconWizardProps } from '../../models/types';
 
 const Characteristics = ({ size = 32, color }: IconWizardProps) => {
 	return (
