@@ -314,6 +314,7 @@ def build_pipeline_components(
     context_builder = ContextBuilder(
         document_repo=document_repo,
         project_repo=project_repo,
+        feature_repo=feature_repo,
     )
 
     # 4. Configurar el registro de guardrails con los validadores existentes
@@ -543,6 +544,7 @@ class FeaturesComponents:
     save_selected_features: SaveSelectedFeaturesUseCase
     create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
+    process_feature_chat_message: Any
 
 
 def build_features_components(
@@ -557,6 +559,22 @@ def build_features_components(
         feature_repo=feature_repo,
         llm_client=pipeline.llm_client,
     )
+
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
+
+    chat_repo = SqlAlchemyChatRepository(session_factory)
+
+    from kosmo.application.features.process_feature_chat_message import ProcessFeatureChatMessageUseCase
+
+    process_feature_chat = ProcessFeatureChatMessageUseCase(
+        project_repo=project_repo,
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        chat_repo=chat_repo,
+        context_builder=pipeline.context_builder,
+        agent=pipeline.agent,
+    )
+
     return FeaturesComponents(
         generate_features=GenerateFeaturesUseCase(
             project_repo=project_repo,
@@ -573,6 +591,7 @@ def build_features_components(
             suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
+        process_feature_chat_message=process_feature_chat,
     )
 
 

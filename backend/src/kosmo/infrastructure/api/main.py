@@ -235,6 +235,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.save_selected_features = features_components.save_selected_features
     app.state.create_characteristic = features_components.create_characteristic
     app.state.feature_repo = features_components.feature_repo
+    app.state.process_feature_chat_message = features_components.process_feature_chat_message
 
     requirements_components = build_requirements_components(session_factory, pipeline_components)
     app.state.generate_ears = requirements_components.generate_ears
