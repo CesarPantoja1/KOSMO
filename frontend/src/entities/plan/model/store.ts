@@ -1,7 +1,7 @@
+import { USE_MOCKS } from '@/shared/api/config';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { USE_MOCKS } from '@/shared/api/config';
-import { planApi } from '@/shared/api/plan.api';
+import { getPlan } from '../api/api';
 import type { PlanChange, PlanChangeStatus } from './types';
 
 interface PlanStore {
@@ -21,6 +21,7 @@ interface PlanStore {
 		phase: string,
 		contextId?: string,
 	) => Promise<void>;
+	resetPlan: () => void;
 }
 
 export const isUsingMocks = () => USE_MOCKS;
@@ -87,13 +88,9 @@ export const usePlanStore = create<PlanStore>()(
 				})),
 			fetchAndHydratePlan: async (projectId, phase, contextId) => {
 				try {
-					const backendChanges = await planApi.getPlanState(
-						projectId,
-						phase,
-						contextId,
-					);
-					if (backendChanges) {
-						get().setPhasePlan(phase, backendChanges);
+					const response = await getPlan(projectId, phase, contextId);
+					if (response?.changes) {
+						get().setPhasePlan(phase, response.changes);
 					}
 				} catch (err) {
 					console.warn(
@@ -102,6 +99,7 @@ export const usePlanStore = create<PlanStore>()(
 					);
 				}
 			},
+			resetPlan: () => set({ planByPhase: {} }),
 		}),
 		{
 			name: 'kosmo-plan-store',

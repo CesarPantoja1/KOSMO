@@ -1,12 +1,12 @@
 import { create } from 'zustand';
-import type { DiscoveryChatResponse, DiscoveryResponse } from './types';
 import {
-	getDiscovery,
-	saveDiscovery,
 	generateDiscovery,
+	getDiscovery,
 	refineDiscovery,
+	saveDiscovery,
 	sendChatMessage as sendChatMessageApi,
 } from '../api/api';
+import type { DiscoveryChatResponse, DiscoveryResponse } from './types';
 
 interface DiscoveryStore {
 	currentDiscovery: DiscoveryResponse | null;
@@ -17,7 +17,10 @@ interface DiscoveryStore {
 	getDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
 	saveDiscovery: (projectId: string, content: string) => Promise<DiscoveryResponse>;
 	generateDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
-	refineDiscovery: (projectId: string, instructions: string) => Promise<DiscoveryResponse>;
+	refineDiscovery: (
+		projectId: string,
+		instructions: string,
+	) => Promise<DiscoveryResponse>;
 	sendChatMessage: (projectId: string, content: string) => Promise<DiscoveryChatResponse>;
 }
 
@@ -58,7 +61,7 @@ export const useDiscoveryStore = create<DiscoveryStore>()((set, get) => ({
 			id: crypto.randomUUID(),
 			role: 'user',
 			content,
-			create_at: new Date().toISOString(),
+			created_at: new Date().toISOString(),
 		};
 		set({ chatHistory: [...get().chatHistory, userMessage] });
 

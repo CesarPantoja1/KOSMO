@@ -1,22 +1,39 @@
 'use client';
 
 import { generateCharacteristics } from '@/entities/characteristic';
+import {
+	getDiscovery,
+	saveDiscovery,
+	useDiscoveryStore,
+	type DiscoveryChatResponse,
+} from '@/entities/discovery';
+import type { PlanChange } from '@/entities/plan';
+import { addPlanChange, deletePlanChange, usePlanStore } from '@/entities/plan';
 import { Chatbot, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
-import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
+import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
+import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, saveDiscovery, useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
 import { FloatingDiscoveryPlan } from './FloatingPlan';
-import type { Message } from '@/feature/chatbot';
 
-function toChatMessage(r: DiscoveryChatResponse): Message {
+/** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
+function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
 	return {
 		id: r.id,
-		role: r.role as 'user' | 'assistant',
+		role: r.role,
 		content: r.content,
-		timestamp: new Date(r.create_at).getTime(),
-		change_suggestion: r.change_suggestion ?? undefined,
+		created_at: r.created_at,
+		change_suggestion: r.change_suggestion
+			? {
+					id: r.change_suggestion.id,
+					section: r.change_suggestion.section,
+					description: r.change_suggestion.description,
+					diff_before: r.change_suggestion.diff_before,
+					diff_after: r.change_suggestion.diff_after,
+					rationale: r.change_suggestion.rationale,
+				}
+			: undefined,
 	};
 }
 
@@ -43,6 +60,9 @@ const DiscoveryPage = () => {
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
 	const storeSendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
 
+	const addToPlan = usePlanStore((s) => s.addToPlan);
+	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
 	}, [markdown]);
@@ -51,7 +71,7 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
-	const fetchAndHydratePlan = useAppStore((s) => s.fetchAndHydratePlan);
+	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -188,6 +208,43 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
+	const handlePlanAction = (
+		action: 'add' | 'remove' | 'discard',
+		suggestion: ChangeSuggestion,
+		messageId: string,
+	) => {
+		if (!currentProject) return;
+
+		if (action === 'add') {
+			const change: PlanChange = {
+				id: messageId,
+				section: suggestion.section,
+				description: suggestion.description ?? suggestion.section,
+				diff: {
+					before: suggestion.diff_before,
+					after: suggestion.diff_after,
+				},
+				status: 'pending',
+				origin: 'chat',
+				phase: 'discovery',
+				context: currentProject.id,
+				rationale: suggestion.rationale ?? undefined,
+				created_at: new Date().toISOString(),
+			};
+			addToPlan('discovery', change);
+			addPlanChange(currentProject.id, change.id).catch((err) => {
+				console.warn('[DiscoveryPage] Error al persistir cambio en backend:', err);
+			});
+		}
+
+		if (action === 'remove') {
+			removeFromPlan('discovery', messageId);
+			deletePlanChange(currentProject.id, 'discovery', messageId).catch((err) => {
+				console.warn('[DiscoveryPage] Error al eliminar cambio en backend:', err);
+			});
+		}
+	};
+
 	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
 		setIsChatLoading(true);
@@ -202,7 +259,7 @@ const DiscoveryPage = () => {
 		}
 	};
 
-	const chatMessages: Message[] = chatHistory.map(toChatMessage);
+	const chatMessages: ChatMessage[] = chatHistory.map(toChatMessage);
 
 	return (
 		<>
@@ -242,6 +299,31 @@ const DiscoveryPage = () => {
 						</div>
 					)}
 
+					{/* TODO: Mejorar el skeleton */}
+					{isLoading && (
+						<div className='w-full min-h-105 relative'>
+							<div className='w-full h-full rounded-xl border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
+								<div className='flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3'>
+									<div className='flex items-center gap-2'>
+										<div className='h-4 w-20 animate-pulse rounded bg-base-200' />
+										<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
+										<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
+									</div>
+									<div className='h-8 w-8 animate-pulse rounded bg-base-200' />
+								</div>
+
+								<div className='space-y-4 p-6'>
+									<div className='h-5 w-3/4 animate-pulse rounded bg-base-200' />
+									<div className='h-5 w-full animate-pulse rounded bg-base-200' />
+									<div className='h-5 w-5/6 animate-pulse rounded bg-base-200' />
+									<div className='h-5 w-full animate-pulse rounded bg-base-200' />
+									<div className='h-5 w-2/3 animate-pulse rounded bg-base-200' />
+									<div className='h-28 w-full animate-pulse rounded-lg bg-base-200' />
+								</div>
+							</div>
+						</div>
+					)}
+
 					{!isLoading && (
 						<div className='w-full h-full relative'>
 							<MarkdownEditor
@@ -274,6 +356,7 @@ const DiscoveryPage = () => {
 						messages={chatMessages}
 						onSendMessage={handleSendChat}
 						isLoading={isChatLoading}
+						onPlanAction={handlePlanAction}
 					/>
 				</div>
 			</div>

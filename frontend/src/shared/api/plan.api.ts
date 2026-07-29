@@ -21,7 +21,11 @@ export interface PlanStateViewResponse {
 	}>;
 }
 
-const mapBackendToPlanChange = (item: PlanStateViewResponse['changes'][number]): PlanChange => ({
+const mapBackendToPlanChange = (
+	item: PlanStateViewResponse['changes'][number],
+	phase: string,
+	context: string,
+): PlanChange => ({
 	id: item.id,
 	section: item.section,
 	description: item.description,
@@ -30,9 +34,12 @@ const mapBackendToPlanChange = (item: PlanStateViewResponse['changes'][number]):
 		after: item.diff.after,
 	},
 	status: item.status,
-	origin: item.origin,
+	origin: item.origin ?? '',
+	phase,
+	context,
 	rationale: item.rationale ?? undefined,
 	userVersion: item.user_version ?? undefined,
+	created_at: new Date().toISOString(),
 });
 
 export const planApi = {
@@ -51,7 +58,7 @@ export const planApi = {
 		const data = await apiClient<PlanStateViewResponse>(
 			`/api/v1/projects/${projectId}/plan?${params.toString()}`,
 		);
-		return data.changes ? data.changes.map(mapBackendToPlanChange) : [];
+		return data.changes ? data.changes.map((item) => mapBackendToPlanChange(item, phase, contextId ?? '')) : [];
 	},
 
 	addPlanChange: async (
@@ -83,7 +90,7 @@ export const planApi = {
 				}),
 			},
 		);
-		return data.changes ? data.changes.map(mapBackendToPlanChange) : [];
+		return data.changes ? data.changes.map((item) => mapBackendToPlanChange(item, phase, contextId ?? '')) : [];
 	},
 
 	deletePlanChange: async (

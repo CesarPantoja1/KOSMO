@@ -1,80 +1,161 @@
 'use client';
+
+import { deletePlanChange, usePlanStore } from '@/entities/plan';
+import { toast } from '@/shared/ui';
+import Trash from '@/shared/ui/icons/Trash';
+import { useAppStore } from 'app/store/app.store';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-interface PendingItem {
-	id: number;
-	title: string;
+function ChevronIcon({ open }: { open: boolean }) {
+	return (
+		<svg
+			xmlns='http://www.w3.org/2000/svg'
+			viewBox='0 0 24 24'
+			width={14}
+			height={14}
+			className={`fill-current transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+		>
+			<path
+				fillRule='evenodd'
+				clipRule='evenodd'
+				d='M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z'
+			/>
+		</svg>
+	);
 }
 
-const initialItems: PendingItem[] = [
-	{ id: 1, title: 'Actualizar Descubrimiento' },
-	{ id: 2, title: 'Modificar Características' },
-	{ id: 3, title: 'Regenerar Requisitos' },
-];
+function ArrowRightIcon() {
+	return (
+		<svg
+			xmlns='http://www.w3.org/2000/svg'
+			viewBox='0 0 24 24'
+			width={14}
+			height={14}
+			className='fill-current'
+		>
+			<path
+				fillRule='evenodd'
+				clipRule='evenodd'
+				d='M12.97 3.97a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06l6.22-6.22H3a.75.75 0 0 1 0-1.5h16.19l-6.22-6.22a.75.75 0 0 1 0-1.06Z'
+			/>
+		</svg>
+	);
+}
 
 export function FloatingDiscoveryPlan() {
 	const [open, setOpen] = useState(false);
-	const [items, setItems] = useState(initialItems);
+	const router = useRouter();
 
-	const removeItem = (id: number) => {
-		setItems((prev) => prev.filter((e) => e.id !== id));
+	const currentProject = useAppStore((s) => s.currentProject);
+	const planByPhase = usePlanStore((s) => s.planByPhase);
+	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+
+	const items = planByPhase['discovery'] ?? [];
+
+	if (items.length === 0) return null;
+
+	const handleRemove = async (changeId: string) => {
+		if (!currentProject) return;
+		removeFromPlan('discovery', changeId);
+		try {
+			await deletePlanChange(currentProject.id, 'discovery', changeId);
+		} catch (err) {
+			console.warn('[FloatingDiscoveryPlan] Error al eliminar cambio:', err);
+			toast.error('No se pudo eliminar el cambio del plan');
+		}
+	};
+
+	const handleNavigateToPlan = () => {
+		router.push('/proyecto/descubrimiento/plan');
 	};
 
 	return (
-		<div className='fixed bottom-6 left-1/2 z-50 -translate-x-1/2'>
-			{/* Lista */}
+		<div className='absolute bottom-6 right-2 z-50 flex flex-col items-end gap-2'>
+			{/* Panel de items — se muestra al expandir */}
 			{open && (
-				<div className='absolute bottom-16 left-0 w-80 overflow-hidden rounded-xl border border-base-800 bg-base-950 shadow-2xl'>
-					<div className='border-b border-status-warning/20 bg-status-warning/10 px-4 py-3 text-sm font-semibold text-status-warning'>
-						Cambios pendientes
+				<div className='w-80 overflow-hidden rounded-xl border border-base-300 bg-base-50 shadow-[0_8px_24px_rgba(0,0,0,0.12)]'>
+					{/* Header del panel */}
+					<div className='flex items-center justify-between border-b border-base-300 bg-base-100 px-4 py-3'>
+						<span className='text-xs font-semibold uppercase tracking-wide text-base-600'>
+							Cambios pendientes
+						</span>
+						<span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-bold text-base-50'>
+							{items.length}
+						</span>
 					</div>
 
-					<div className='max-h-72 overflow-y-auto'>
-						{items.length === 0 ? (
-							<div className='px-4 py-6 text-center text-sm text-base-600'>
-								No existen cambios pendientes.
-							</div>
-						) : (
-							items.map((item) => (
-								<div
-									key={item.id}
-									className='flex items-center justify-between border-b border-base-800 px-4 py-3 hover:bg-base-800/20 transition-colors'
-								>
-									<span className='text-sm text-base-50'>{item.title}</span>
+					{/* Lista de cambios */}
+					<ul className='max-h-60 overflow-y-auto divide-y divide-base-200'>
+						{items.map((item) => (
+							<li
+								key={item.id}
+								className='group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-base-100'
+							>
+								{/* Indicador de estado */}
+								<span className='mt-1 h-2 w-2 shrink-0 rounded-full bg-status-warning' />
 
-									<button
-										onClick={() => removeItem(item.id)}
-										className='flex h-6 w-6 items-center justify-center rounded text-base-600 hover:bg-status-error/20 hover:text-status-error'
-									>
-										✕
-									</button>
+								<div className='min-w-0 flex-1'>
+									<p className='truncate text-sm font-medium text-base-950'>
+										{item.section}
+									</p>
+									{item.description && item.description !== item.section && (
+										<p className='mt-0.5 truncate text-xs text-base-600'>
+											{item.description}
+										</p>
+									)}
 								</div>
-							))
-						)}
+
+								{/* Botón eliminar */}
+								<button
+									type='button'
+									onClick={() => handleRemove(item.id)}
+									title='Descartar cambio'
+									className='mt-0.5 shrink-0 rounded p-1 text-base-600 opacity-0 transition-all group-hover:opacity-100 hover:bg-status-error/10 hover:text-status-error'
+								>
+									<Trash size={14} />
+								</button>
+							</li>
+						))}
+					</ul>
+
+					{/* Footer — acceso rápido a la página del plan */}
+					<div className='border-t border-base-300 px-4 py-3'>
+						<button
+							type='button'
+							onClick={handleNavigateToPlan}
+							className='btn w-full justify-center bg-primary-100 text-sm text-base-50 hover:bg-primary-800'
+						>
+							<span>Revisar y aplicar</span>
+							<ArrowRightIcon />
+						</button>
 					</div>
 				</div>
 			)}
-			{/* Botón flotante */}
-			<div className='flex overflow-hidden rounded-full border border-status-warning bg-status-warning shadow-xl'>
-				{/* Expandir */}
-				<button
-					onClick={() => setOpen((v) => !v)}
-					className='flex h-14 w-14 items-center justify-center border-r border-white/20 text-lg text-base-50 transition hover:bg-white/10'
-				>
-					<span
-						className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-					>
-						▲
-					</span>
-				</button>
 
-				{/* Contenido */}
-				<div className='flex items-center gap-3 px-5'>
-					<div className='text-xs text-base-50/70'>Plan</div>
+			{/* Pill flotante */}
+			<button
+				type='button'
+				onClick={() => setOpen((v) => !v)}
+				className='flex items-center gap-3 rounded-full border border-base-300 bg-base-50 py-2 pl-4 pr-3 shadow-[0_4px_12px_rgba(0,0,0,0.10)] transition-all hover:border-primary-100 hover:shadow-[0_4px_16px_rgba(83,168,62,0.20)]'
+			>
+				{/* Badge contador */}
+				<span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-bold text-base-50'>
+					{items.length}
+				</span>
 
-					<div className='font-medium text-base-50'>{items.length} cambios pendientes</div>
-				</div>
-			</div>
+				{/* Texto */}
+				<span className='text-sm font-medium text-base-950'>
+					{items.length === 1
+						? '1 cambio en el plan'
+						: `${items.length} cambios en el plan`}
+				</span>
+
+				{/* Chevron */}
+				<span className='text-base-600'>
+					<ChevronIcon open={open} />
+				</span>
+			</button>
 		</div>
 	);
 }
