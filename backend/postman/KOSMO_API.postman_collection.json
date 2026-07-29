@@ -1,14 +1,15 @@
 {
 	"info": {
 		"name": "KOSMO API",
-		"description": "Coleccion completa de endpoints KOSMO. Flujo: Auth → Project → Discovery → Features → Requirements → Modelo.\n\nVariables globales:\n- `base_url`: http://localhost:8000\n- `token`: access token JWT (se popula automaticamente tras /token)\n- `project_id`: ID del proyecto creado\n- `feature_id`: ID de la primera caracteristica generada",
+		"description": "Coleccion completa de endpoints KOSMO. Flujo: Auth → Project → Discovery → Features → Requirements → Modelo.\n\nNuevo: Chat de Descubrimiento, Plan de Cambios, Consolidacion de Conocimiento.\n\nVariables globales:\n- `base_url`: http://localhost:8000\n- `token`: access token JWT (se popula automaticamente tras /token)\n- `project_id`: ID del proyecto creado\n- `feature_id`: ID de la primera caracteristica generada\n- `change_id`: ID de un cambio en el plan (se popula al agregar un cambio)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
 		{ "key": "base_url", "value": "http://localhost:8000" },
 		{ "key": "token", "value": "" },
 		{ "key": "project_id", "value": "" },
-		{ "key": "feature_id", "value": "" }
+		{ "key": "feature_id", "value": "" },
+		{ "key": "change_id", "value": "" }
 	],
 	"auth": {
 		"type": "bearer",
@@ -212,6 +213,27 @@
 							"options": { "raw": { "language": "json" } }
 						}
 					}
+				},
+				{
+					"name": "POST Chat - Enviar mensaje al chat de Descubrimiento",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Quiero refinar la seccion de Propuesta de Valor para que contemple el mercado latinoamericano.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET Chat - Obtener historial del chat de Descubrimiento",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat"] }
+					}
 				}
 			]
 		},
@@ -360,6 +382,90 @@
 					"request": {
 						"method": "GET",
 						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/diagram?project_id={{project_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "diagram"], "query": [{ "key": "project_id", "value": "{{project_id}}" }] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Plan",
+			"item": [
+				{
+					"name": "GET State - Obtener estado del plan de cambios",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				},
+				{
+					"name": "POST Changes - Agregar cambio al plan",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.changes && jsonData.changes.length > 0) {",
+									"        pm.collectionVariables.set('change_id', jsonData.changes[0].id);",
+									"        console.log('Change ID guardado: ' + jsonData.changes[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/changes?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "changes"], "query": [{ "key": "phase", "value": "descubrimiento" }] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"change_id\": \"chg_01HXYAZABCDEFGHIJKLMNOP\",\n  \"section\": \"Propuesta de Valor\",\n  \"description\": \"Ampliar alcance a mercado latinoamericano\",\n  \"diff_before\": \"## Propuesta de Valor\\n\\nAyudamos a dueños de lavanderias en Argentina...\",\n  \"diff_after\": \"## Propuesta de Valor\\n\\nAyudamos a dueños de lavanderias en toda Latinoamerica...\",\n  \"rationale\": \"El mercado latinoamericano comparte problemas similares de gestion de lavanderias\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "DELETE Changes/:id - Quitar cambio del plan",
+					"event": [],
+					"request": {
+						"method": "DELETE",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/changes/{{change_id}}?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "changes", "{{change_id}}"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				},
+				{
+					"name": "POST Apply - Aplicar lote de cambios",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/apply", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "apply"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phase\": \"descubrimiento\",\n  \"changes\": [\"{{change_id}}\"]\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "DELETE Plan - Descartar plan de cambios completo",
+					"event": [],
+					"request": {
+						"method": "DELETE",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Knowledge",
+			"item": [
+				{
+					"name": "POST Consolidate - Consolidar patrones cross-project",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/knowledge/consolidate", "host": ["{{base_url}}"], "path": ["api", "v1", "knowledge", "consolidate"] }
 					}
 				}
 			]
