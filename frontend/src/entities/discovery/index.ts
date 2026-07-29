@@ -1,5 +1,5 @@
 // MODELS
-export { type DiscoveryResponse } from './model/types';
+export { type DiscoveryResponse, type DiscoveryChatResponse } from './model/types';
 
 // STORE
 export { useDiscoveryStore } from './model/store';
@@ -10,4 +10,5 @@ export {
 	saveDiscovery,
 	generateDiscovery,
 	refineDiscovery,
+	sendChatMessage,
 } from './api/api';

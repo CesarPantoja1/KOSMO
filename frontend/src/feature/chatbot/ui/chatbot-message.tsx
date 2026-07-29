@@ -1,6 +1,7 @@
 'use client';
 
 import type { Message } from '../types/chatbot';
+import { Ai } from '@/shared/ui';
 import { TarjetaRecepcionPlan } from './TarjetaRecepcionPlan';
 
 interface ChatbotMessageProps {
@@ -8,13 +9,36 @@ interface ChatbotMessageProps {
 }
 
 export const ChatbotMessage = ({ message }: ChatbotMessageProps) => {
-	// TODO: implementar burbuja de mensaje y estilos según role
+	const isUser = message.role === 'user';
+
 	return (
-		<div className="flex flex-col mb-4">
-			<div>{message.content}</div>
-			{message.change_suggestion && (
-				<TarjetaRecepcionPlan suggestion={message.change_suggestion} />
-			)}
+		<div className={`flex flex-col gap-2 ${isUser ? 'items-end' : 'items-start'}`}>
+			<div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+				{!isUser && (
+					<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
+						<Ai size={16} color='text-base-50' />
+					</div>
+				)}
+
+				<div
+					className={`
+						max-w-[85%] px-4 py-3 text-sm leading-6
+						${isUser
+							? 'rounded-2xl rounded-br-sm bg-ai text-base-50'
+							: 'rounded-2xl rounded-tl-sm bg-stone-100 text-stone-700'
+						}
+					`}
+				>
+					{message.content}
+				</div>
+			</div>
+
+			{message.change_suggestion &&
+				(message.change_suggestion.diff_before || message.change_suggestion.diff_after) && (
+					<div className='w-full'>
+						<TarjetaRecepcionPlan suggestion={message.change_suggestion} />
+					</div>
+				)}
 		</div>
 	);
 };

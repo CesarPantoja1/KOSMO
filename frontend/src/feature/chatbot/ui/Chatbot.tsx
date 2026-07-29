@@ -1,70 +1,54 @@
 'use client';
 
-import { useState } from 'react';
-import { useController, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useEffect, useRef, useState } from 'react';
 import { Ai, Close } from '@/shared/ui';
-
-const refinementSchema = z.object({
-	instructions: z.string().max(500, 'Máximo 500 caracteres'),
-});
-
-type RefinementFormData = z.infer<typeof refinementSchema>;
+import type { Message } from '../types/chatbot';
+import { ChatbotMessage } from './chatbot-message';
 
 interface Props {
-	placeholder: string;
+	placeholder?: string;
 	onClose?: () => void;
-	onSubmitInstructions?: (instructions: string) => Promise<void>;
+	messages?: Message[];
+	onSendMessage?: (content: string) => Promise<void>;
+	isLoading?: boolean;
 }
 
-export const Chatbot = ({ onClose, onSubmitInstructions, placeholder }: Props) => {
-	const { control, handleSubmit } = useForm<RefinementFormData>({
-		mode: 'onChange',
-		resolver: zodResolver(refinementSchema),
-		defaultValues: { instructions: '' },
-	});
+export const Chatbot = ({
+	onClose,
+	placeholder = 'Escribe un mensaje...',
+	messages = [],
+	onSendMessage,
+	isLoading = false,
+}: Props) => {
+	const [input, setInput] = useState('');
+	const [isSending, setIsSending] = useState(false);
+	const messagesEndRef = useRef<HTMLDivElement>(null);
 
-	const {
-		field: { value, onChange, onBlur, ref },
-	} = useController({ name: 'instructions', control });
+	const canSend = input.trim().length > 0 && !isSending && !isLoading;
 
-	const [hasSubmitError, setHasSubmitError] = useState(false);
-	const [errorMessage, setErrorMessage] = useState('');
-	const [isSubmitting, setIsSubmitting] = useState(false);
+	useEffect(() => {
+		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+	}, [messages, isLoading]);
 
-	const charCount = value.length;
-	const isOverLimit = charCount > 500;
+	const handleSend = async () => {
+		const trimmed = input.trim();
+		if (!trimmed || !onSendMessage) return;
 
-	const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-		onChange(e);
-		if (hasSubmitError) {
-			setHasSubmitError(false);
-			setErrorMessage('');
-		}
-	};
-
-	const onSubmit = async () => {
-		const trimmed = value.trim();
-		if (trimmed.length === 0 || charCount > 500) {
-			setHasSubmitError(true);
-			setErrorMessage(
-				trimmed.length === 0
-					? 'La instrucción no puede estar vacía'
-					: 'Máximo 500 caracteres',
-			);
-			return;
-		}
-
-		if (!onSubmitInstructions) return;
-
-		setIsSubmitting(true);
+		setInput('');
+		setIsSending(true);
 		try {
-			await onSubmitInstructions(value);
+			await onSendMessage(trimmed);
 		} catch (error) {
 			console.error(error);
 		} finally {
-			setIsSubmitting(false);
+			setIsSending(false);
+		}
+	};
+
+	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			handleSend();
 		}
 	};
 
@@ -75,8 +59,7 @@ export const Chatbot = ({ onClose, onSubmitInstructions, placeholder }: Props) =
 				<div className='flex items-center gap-2'>
 					<Ai size={20} color='text-base-50' />
 					<div>
-						<h3 className='font-semibold text-base-50'>Agente de refinamiento</h3>
-
+						<h3 className='font-semibold text-base-50'>Agente de descubrimiento</h3>
 						<p className='text-xs text-base-100'>Asistente IA</p>
 					</div>
 				</div>
@@ -87,118 +70,75 @@ export const Chatbot = ({ onClose, onSubmitInstructions, placeholder }: Props) =
 			</header>
 
 			{/* Mensajes */}
-			<div className='flex-1 overflow-y-auto px-5 py-5 space-y-5'>
-				{/* IA */}
-				<div className='flex items-start gap-3'>
-					<div className='flex h-8 w-8 items-center justify-center rounded-full bg-ai'>
-						<Ai size={16} color='text-base-50' />
+			<div className='flex-1 overflow-y-auto px-5 py-5 space-y-4'>
+				{messages.length === 0 && !isLoading && (
+					<div className='flex items-start gap-3'>
+						<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
+							<Ai size={16} color='text-base-50' />
+						</div>
+						<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-stone-100 px-4 py-3'>
+							<p className='text-sm leading-6 text-stone-700'>
+								Hola 👋. ¿En qué puedo ayudarte con el descubrimiento del proyecto?
+							</p>
+						</div>
 					</div>
+				)}
 
-					<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-stone-100 px-4 py-3'>
-						<p className='text-sm leading-6 text-stone-700'>
-							Hola 👋. Indícame qué parte del documento deseas modificar y te ayudaré a
-							refinarla.
-						</p>
-					</div>
-				</div>
+				{messages.map((message) => (
+					<ChatbotMessage key={message.id} message={message} />
+				))}
 
-				{/* Usuario */}
-				<div className='flex justify-end'>
-					<div className='max-w-[85%] rounded-2xl rounded-br-sm bg-ai px-4 py-3'>
-						<p className='text-sm leading-6 text-base-50'>
-							Quiero que los requisitos sean más específicos.
-						</p>
+				{(isSending || isLoading) && (
+					<div className='flex items-start gap-3'>
+						<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
+							<Ai size={16} color='text-base-50' />
+						</div>
+						<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-stone-100 px-4 py-3'>
+							<span className='flex gap-1 items-center text-sm text-stone-500'>
+								<span className='animate-bounce [animation-delay:0ms]'>·</span>
+								<span className='animate-bounce [animation-delay:150ms]'>·</span>
+								<span className='animate-bounce [animation-delay:300ms]'>·</span>
+							</span>
+						</div>
 					</div>
-				</div>
+				)}
 
-				{/* IA */}
-				<div className='flex items-start gap-3'>
-					<div className='flex h-8 w-8 items-center justify-center rounded-full bg-ai'>
-						<Ai size={16} color='text-base-50' />
-					</div>
-
-					<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-stone-100 px-4 py-3'>
-						<p className='text-sm leading-6 text-stone-700'>
-							Puedo ayudarte con eso. ¿Deseas que utilice lenguaje EARS o requisitos
-							tradicionales?
-						</p>
-					</div>
-				</div>
+				<div ref={messagesEndRef} />
 			</div>
 
 			{/* Input */}
-			<form
-				onSubmit={handleSubmit(onSubmit)}
-				className='border-t border-stone-300 bg-white p-4'
-			>
-				<div
-					className={`
-				rounded-xl border bg-base-50 p-3 transition-all
-				${hasSubmitError ? 'border-status-error' : 'border-stone-300 focus-within:border-ai'}
-			`}
-				>
+			<div className='border-t border-stone-300 bg-white p-4'>
+				<div className='rounded-xl border border-stone-300 bg-base-50 p-3 transition-all focus-within:border-ai'>
 					<textarea
-						ref={ref}
-						value={value}
-						onChange={handleChange}
-						onBlur={onBlur}
+						value={input}
+						onChange={(e) => setInput(e.target.value)}
+						onKeyDown={handleKeyDown}
 						placeholder={placeholder}
-						maxLength={500}
-						disabled={isSubmitting}
-						className='
-					min-h-24
-					max-h-52
-					w-full
-					resize-none
-					bg-transparent
-					outline-none
-				'
+						rows={3}
+						disabled={isSending || isLoading}
+						className='w-full resize-none bg-transparent outline-none text-sm leading-6 max-h-40'
 					/>
 
-					<div className='mt-3 flex items-center justify-between'>
-						{hasSubmitError ? (
-							<p className='text-xs text-status-error'>{errorMessage}</p>
-						) : (
-							<span />
-						)}
-
-						<span
-							className={`text-xs ${
-								isOverLimit ? 'text-status-error' : 'text-stone-500'
-							}`}
+					<div className='mt-2 flex justify-end'>
+						<button
+							type='button'
+							onClick={handleSend}
+							disabled={!canSend}
+							className='
+								flex items-center gap-2
+								rounded-lg bg-ai px-4 py-2
+								text-sm font-medium text-base-50
+								transition-colors hover:opacity-90
+								disabled:cursor-not-allowed disabled:opacity-50
+							'
 						>
-							{charCount}/500
-						</span>
+							<Ai size={16} color='text-base-50' />
+							{isSending || isLoading ? 'Pensando...' : 'Enviar'}
+						</button>
 					</div>
 				</div>
-
-				<button
-					type='submit'
-					disabled={isSubmitting || value.trim().length === 0 || isOverLimit}
-					className='
-				mt-4
-				flex
-				w-full
-				items-center
-				justify-center
-				gap-2
-				rounded-lg
-				bg-ai
-				px-4
-				py-3
-				font-medium
-				text-base-50
-				transition-colors
-				hover:opacity-90
-				disabled:cursor-not-allowed
-				disabled:opacity-50
-			'
-				>
-					<Ai size={18} color='text-base-50' />
-
-					{isSubmitting ? 'Pensando...' : 'Enviar'}
-				</button>
-			</form>
+				<p className='mt-2 text-xs text-stone-400'>Intro para enviar · Shift+Intro para nueva línea</p>
+			</div>
 		</div>
 	);
 };

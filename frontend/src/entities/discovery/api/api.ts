@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { DiscoveryResponse } from '../model/types';
+import type { DiscoveryChatResponse, DiscoveryResponse } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -8,6 +8,30 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let mockContent =
 	'## Visión del producto\n\nEste es un descubrimiento de prueba en modo mock.';
+
+const mockChatResponses: DiscoveryChatResponse[] = [
+	{
+		id: 'mock-chat-1',
+		role: 'assistant',
+		content: 'Hola, ¿en qué puedo ayudarte con el descubrimiento?',
+		create_at: new Date().toISOString(),
+		change_suggestion: null,
+	},
+	{
+		id: 'mock-chat-2',
+		role: 'assistant',
+		content:
+			'Aquí tienes una sugerencia de cambio para mejorar la sección de visión del producto.',
+		create_at: new Date().toISOString(),
+		change_suggestion: {
+			section: 'Visión del producto',
+			diff_before: 'Este es un descubrimiento de prueba en modo mock.',
+			diff_after:
+				'Este es un descubrimiento refinado con mejoras en la visión del producto.',
+			rationale: 'Se mejoró la claridad y el enfoque de la visión del producto.',
+		},
+	},
+];
 
 // --- Mock implementations ---
 
@@ -58,6 +82,14 @@ const mockRefineDiscovery = async (
 	};
 };
 
+const mockSendChatMessage = async (
+	_projectId: string,
+	_content: string,
+): Promise<DiscoveryChatResponse> => {
+	await delay(500);
+	return mockChatResponses[Math.floor(Math.random() * mockChatResponses.length)];
+};
+
 // --- Real implementations ---
 
 const realGetDiscovery = (projectId: string) => {
@@ -81,12 +113,20 @@ const realGenerateDiscovery = (projectId: string) => {
 };
 
 const realRefineDiscovery = (projectId: string, instructions: string) => {
-	return apiClient<DiscoveryResponse>(
-		`/api/v1/projects/${projectId}/discovery/refine`,
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery/refine`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ instructions }),
+	});
+};
+
+const realSendChatMessage = (projectId: string, content: string) => {
+	return apiClient<DiscoveryChatResponse>(
+		`/api/v1/projects/${projectId}/discovery/chat`,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ instructions }),
+			body: JSON.stringify({ content }),
 		},
 	);
 };
@@ -114,3 +154,11 @@ export const refineDiscovery = (
 	USE_MOCKS
 		? mockRefineDiscovery(projectId, instructions)
 		: realRefineDiscovery(projectId, instructions);
+
+export const sendChatMessage = (
+	projectId: string,
+	content: string,
+): Promise<DiscoveryChatResponse> =>
+	USE_MOCKS
+		? mockSendChatMessage(projectId, content)
+		: realSendChatMessage(projectId, content);

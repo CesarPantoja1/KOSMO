@@ -6,8 +6,19 @@ import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { getDiscovery, refineDiscovery, saveDiscovery } from '@/entities/discovery';
+import { getDiscovery, saveDiscovery, useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
 import { FloatingDiscoveryPlan } from './FloatingPlan';
+import type { Message } from '@/feature/chatbot';
+
+function toChatMessage(r: DiscoveryChatResponse): Message {
+	return {
+		id: r.id,
+		role: r.role as 'user' | 'assistant',
+		content: r.content,
+		timestamp: new Date(r.create_at).getTime(),
+		change_suggestion: r.change_suggestion ?? undefined,
+	};
+}
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -25,9 +36,12 @@ const DiscoveryPage = () => {
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-	const [isRefining, setIsRefining] = useState(false);
+	const [isChatLoading, setIsChatLoading] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
 	const [editorKey, setEditorKey] = useState(0);
+
+	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
+	const storeSendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
 
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
@@ -174,37 +188,24 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handleRefine = async (instructions: string) => {
+	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
-		setIsChatbotOpen(false);
-		setIsRefining(true);
+		setIsChatLoading(true);
 		try {
-			const data = await refineDiscovery(currentProject.id, instructions);
-			setMarkdown(data.content);
-			savedContentRef.current = data.content;
-			setHasUnsavedChangesLocal(false);
-			setEditorKey((prev) => prev + 1);
-			toast.success('Documento refinado correctamente');
+			await storeSendChatMessage(currentProject.id, content);
 		} catch (err) {
 			const errorMessage =
-				err instanceof Error
-					? err.message
-					: 'No se pudo refinar el documento. Intenta nuevamente.';
+				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
 			toast.error(errorMessage);
 		} finally {
-			setIsRefining(false);
+			setIsChatLoading(false);
 		}
 	};
 
+	const chatMessages: Message[] = chatHistory.map(toChatMessage);
+
 	return (
 		<>
-			{isRefining && (
-				<Loading
-					title='Refinando descubriemiento del proyecto'
-					description='Optimizando la estructura del descubrimiento del proyecto. Porfavor, espere un momento.'
-				/>
-			)}
-
 			{pendingNavigationPath && (
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
@@ -268,9 +269,11 @@ const DiscoveryPage = () => {
 				`}
 				>
 					<Chatbot
-						placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
+						placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
 						onClose={() => setIsChatbotOpen(false)}
-						onSubmitInstructions={handleRefine}
+						messages={chatMessages}
+						onSendMessage={handleSendChat}
+						isLoading={isChatLoading}
 					/>
 				</div>
 			</div>

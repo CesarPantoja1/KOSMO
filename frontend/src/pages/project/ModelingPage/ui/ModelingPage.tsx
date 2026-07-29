@@ -525,7 +525,7 @@ const ModelingPage = () => {
 					<Chatbot
 						placeholder='ej., "Haz que el diagrama de actividad sea más conciso y claro"'
 						onClose={() => setIsChatbotOpen(false)}
-						onSubmitInstructions={handleRefine}
+						onSendMessage={handleRefine}
 					/>
 				</div>
 			</div>
