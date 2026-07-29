@@ -73,8 +73,11 @@ jobs:
 
           branch_name_is_conventional=true
           case "$HEAD_BRANCH" in
-            feature/*|hotfix/*)
-              [[ "$HEAD_BRANCH" =~ ^(feature|hotfix)/.+-AB#[0-9]+$ ]] || branch_name_is_conventional=false
+            feature/*)
+              [[ "$HEAD_BRANCH" =~ ^feature/.+-AB#[0-9]+$ ]] || branch_name_is_conventional=false
+              ;;
+            hotfix/*)
+              [[ "$HEAD_BRANCH" =~ ^hotfix/[0-9]+\.[0-9]+\.[0-9]+-.+-AB#[0-9]+$ ]] || branch_name_is_conventional=false
               ;;
             release/*)
               [[ "$HEAD_BRANCH" =~ ^release/[0-9]+\.[0-9]+\.[0-9]+$ ]] || branch_name_is_conventional=false
