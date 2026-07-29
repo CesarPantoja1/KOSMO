@@ -5,13 +5,9 @@ from kosmo.application.chat.manage_plan_changes import (
     PlanStateOutput,
 )
 from kosmo.contracts import (
-    ChatMessageId,
-    ChatRole,
     DiffCambio,
     EstadoPlanCambio,
-    MensajeChat,
     PlanChangeId,
-    SugerenciaCambio,
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
@@ -40,24 +36,6 @@ def _make_uc(project_repo, chat_repo):
     return ManagePlanChangesUseCase(
         project_repo=project_repo,
         chat_repo=chat_repo,
-    )
-
-
-def _suggestion(change_id: str = "chg_01") -> SugerenciaCambio:
-    return SugerenciaCambio(
-        id=change_id,
-        section="Alcance",
-        description="Ampliar",
-        diff=DiffCambio(before="antes", after="despues"),
-    )
-
-
-def _assistant_with_suggestion(change_id: str = "chg_01") -> MensajeChat:
-    return MensajeChat(
-        id=ChatMessageId("msg_asst"),
-        role=ChatRole.ASSISTANT,
-        content="Respuesta",
-        suggested_change=_suggestion(change_id),
     )
 
 
@@ -92,7 +70,6 @@ async def test_get_plan_state_counts_mixed_statuses() -> None:
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
     chat_repo = InMemoryChatRepository()
-    chat_repo.messages = [_assistant_with_suggestion("chg_a"), _assistant_with_suggestion("chg_b")]
     uc = _make_uc(project_repo, chat_repo)
 
     # seed: one ADDED, one PENDING, one CONFLICT, one DISCARDED
@@ -132,7 +109,6 @@ async def test_add_change_success() -> None:
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
     chat_repo = InMemoryChatRepository()
-    chat_repo.messages = [_assistant_with_suggestion("chg_01")]
     uc = _make_uc(project_repo, chat_repo)
 
     # Act
@@ -140,6 +116,10 @@ async def test_add_change_success() -> None:
         project_id=project.id,
         phase=SpecPhase.DESCUBRIMIENTO,
         change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
     )
 
     # Assert
@@ -159,31 +139,25 @@ async def test_add_change_idempotent() -> None:
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
     chat_repo = InMemoryChatRepository()
-    chat_repo.messages = [_assistant_with_suggestion("chg_01")]
     uc = _make_uc(project_repo, chat_repo)
 
+    args = {
+        "project_id": project.id,
+        "phase": SpecPhase.DESCUBRIMIENTO,
+        "change_id": "chg_01",
+        "section": "Alcance",
+        "description": "Ampliar alcance",
+        "diff_before": "antes",
+        "diff_after": "después",
+    }
+
     # Act
-    await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_01")
-    result = await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_01")
+    await uc.add_change(**args)
+    result = await uc.add_change(**args)
 
     # Assert
     assert result.pending_count == 1
     assert len(result.changes) == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_add_change_raises_when_suggestion_not_found() -> None:
-    # Arrange
-    project = _make_project()
-    project_repo = InMemoryProjectRepository()
-    await project_repo.save(project)
-    chat_repo = InMemoryChatRepository()
-    uc = _make_uc(project_repo, chat_repo)
-
-    # Act & Assert
-    with pytest.raises(PlanChangeNotFoundError):
-        await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_missing")
 
 
 @pytest.mark.asyncio
@@ -196,7 +170,15 @@ async def test_add_change_raises_when_project_not_found() -> None:
 
     # Act & Assert
     with pytest.raises(ProjectNotFoundError):
-        await uc.add_change(ProjectId("prj_missing"), SpecPhase.DESCUBRIMIENTO, "chg_01")
+        await uc.add_change(
+            project_id=ProjectId("prj_missing"),
+            phase=SpecPhase.DESCUBRIMIENTO,
+            change_id="chg_01",
+            section="Alcance",
+            description="Ampliar alcance",
+            diff_before="antes",
+            diff_after="después",
+        )
 
 
 # ── remove_change ──
@@ -210,9 +192,16 @@ async def test_remove_change_success() -> None:
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
     chat_repo = InMemoryChatRepository()
-    chat_repo.messages = [_assistant_with_suggestion("chg_01")]
     uc = _make_uc(project_repo, chat_repo)
-    await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_01")
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
 
     # Act
     result = await uc.remove_change(
@@ -259,9 +248,16 @@ async def test_accept_and_discard_change(operation: str, expected_status: Estado
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
     chat_repo = InMemoryChatRepository()
-    chat_repo.messages = [_assistant_with_suggestion("chg_01")]
     uc = _make_uc(project_repo, chat_repo)
-    await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_01")
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
 
     # Act
     if operation == "accept":
@@ -285,10 +281,25 @@ async def test_discard_plan_clears_all() -> None:
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
     chat_repo = InMemoryChatRepository()
-    chat_repo.messages = [_assistant_with_suggestion("chg_01"), _assistant_with_suggestion("chg_02")]
     uc = _make_uc(project_repo, chat_repo)
-    await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_01")
-    await uc.add_change(project.id, SpecPhase.DESCUBRIMIENTO, "chg_02")
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_02",
+        section="Visión",
+        description="Refinar visión",
+        diff_before="antes",
+        diff_after="después",
+    )
 
     # Act
     await uc.discard_plan(project.id, SpecPhase.DESCUBRIMIENTO)

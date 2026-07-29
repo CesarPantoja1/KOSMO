@@ -549,7 +549,9 @@ class CreateCharacteristicRequest(BaseModel):
 class ChangeSuggestion(BaseModel):
     """Sugerencia de cambio generada por la IA."""
 
+    id: str = Field(description="ID de la sugerencia (chg_ + ULID)")
     section: str = Field(description="Sección del documento afectada")
+    description: str = Field(description="Descripción corta del cambio propuesto")
     diff_before: str = Field(description="Contenido actual de la sección")
     diff_after: str = Field(description="Contenido sugerido por la IA")
     rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
@@ -576,7 +578,9 @@ class ChatMessage(BaseModel):
         suggestion = None
         if msg.suggested_change:
             suggestion = ChangeSuggestion(
+                id=msg.suggested_change.id,
                 section=msg.suggested_change.section,
+                description=msg.suggested_change.description,
                 diff_before=msg.suggested_change.diff.before,
                 diff_after=msg.suggested_change.diff.after,
                 rationale=msg.suggested_change.rationale,
@@ -627,7 +631,9 @@ class PlanChangeView(BaseModel):
             section=change.section,
             description=change.description,
             diff=ChangeSuggestion(
+                id=str(change.id),
                 section=change.section,
+                description=change.description,
                 diff_before=change.diff.before,
                 diff_after=change.diff.after,
                 rationale=change.rationale,
@@ -664,8 +670,13 @@ class PlanStateView(BaseModel):
 class AddPlanChangeRequest(BaseModel):
     """Payload para agregar un cambio al plan."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
     change_id: str = Field(description="ID de la sugerencia (chg_ + ULID)")
+    section: str = Field(description="Sección del documento afectada")
+    description: str = Field(description="Descripción corta del cambio propuesto")
+    diff_before: str = Field(description="Contenido actual de la sección")
+    diff_after: str = Field(description="Contenido sugerido por la IA")
+    rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
 
 
 class PhaseNotificationView(BaseModel):

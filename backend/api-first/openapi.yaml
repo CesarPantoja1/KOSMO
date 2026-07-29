@@ -604,10 +604,18 @@ components:
       type: object
       description: Sugerencia de cambio generada por la IA en una respuesta del chat
       properties:
+        id:
+          type: string
+          description: ID de la sugerencia (chg_ + ULID)
+          example: "chg_01HXYAZABCDEFGHIJKLMNOP"
         section:
           type: string
           description: Sección del documento afectada
           example: "2 Alcance del producto"
+        description:
+          type: string
+          description: Descripción corta del cambio propuesto
+          example: "Ampliar alcance a LATAM"
         diff_before:
           type: string
           description: Contenido actual de la sección
@@ -746,13 +754,31 @@ components:
 
     AddPlanChangeRequest:
       type: object
-      required: [change_id]
+      required: [change_id, section, description, diff_before, diff_after]
       additionalProperties: false
       properties:
         change_id:
           type: string
-          description: ID del PlanChange a agregar al plan
+          description: ID de la sugerencia (chg_ + ULID)
           example: "chg_01HXYAZABCDEFGHIJKLMNOP"
+        section:
+          type: string
+          description: Sección del documento afectada
+          example: "2 Alcance del producto"
+        description:
+          type: string
+          description: Descripción corta del cambio propuesto
+          example: "Ampliar alcance a LATAM"
+        diff_before:
+          type: string
+          description: Contenido actual de la sección
+        diff_after:
+          type: string
+          description: Contenido sugerido por la IA
+        rationale:
+          type: string
+          description: Justificación del cambio propuesto
+          nullable: true
 
     CollisionCheckRequest:
       type: object

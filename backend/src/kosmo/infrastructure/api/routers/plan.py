@@ -97,12 +97,15 @@ async def add_plan_change(
             project_id=ProjectId(project_id),
             phase=phase,
             change_id=request.change_id,
+            section=request.section,
+            description=request.description,
+            diff_before=request.diff_before,
+            diff_after=request.diff_after,
             context_id=context,
+            rationale=request.rationale,
         )
         return PlanStateView.from_domain(plan_state_output)
     except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except PlanChangeNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
 
