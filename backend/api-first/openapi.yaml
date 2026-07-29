@@ -619,17 +619,6 @@ components:
           description: Justificación del cambio propuesto
           nullable: true
 
-    ChatResponse:
-      type: object
-      description: Respuesta del endpoint de chat (respuesta completa, no streaming)
-      properties:
-        message:
-          $ref: "#/components/schemas/ChatMessage"
-        change_suggestion:
-          $ref: "#/components/schemas/ChangeSuggestion"
-          description: Sugerencia de cambio, si la IA propone una modificación
-          nullable: true
-
     ChatHistoryResponse:
       type: object
       properties:
@@ -1553,7 +1542,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChatResponse"
+                $ref: "#/components/schemas/ChatMessage"
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/ChatStreamEvent"
@@ -1867,7 +1856,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/ChatResponse"
+                  - $ref: "#/components/schemas/ChatMessage"
                   - $ref: "#/components/schemas/ContextRedirectResponse"
             text/event-stream:
               schema:
@@ -2259,7 +2248,7 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: "#/components/schemas/ChatResponse"
+                  - $ref: "#/components/schemas/ChatMessage"
                   - $ref: "#/components/schemas/ContextRedirectResponse"
             text/event-stream:
               schema:

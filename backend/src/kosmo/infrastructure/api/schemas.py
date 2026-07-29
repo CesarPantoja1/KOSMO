@@ -590,21 +590,6 @@ class ChatMessage(BaseModel):
         )
 
 
-class ChatResponse(BaseModel):
-    """Respuesta de un nuevo mensaje en el chat."""
-
-    message: ChatMessage
-    change_suggestion: ChangeSuggestion | None = None
-
-    @classmethod
-    def from_domain(cls, msg: MensajeChat) -> "ChatResponse":
-        chat_msg = ChatMessage.from_domain(msg)
-        return cls(
-            message=chat_msg,
-            change_suggestion=chat_msg.change_suggestion,
-        )
-
-
 class ChatHistoryResponse(BaseModel):
     """Respuesta con el historial completo de un chat."""
 

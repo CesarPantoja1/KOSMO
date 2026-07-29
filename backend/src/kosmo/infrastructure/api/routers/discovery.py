@@ -30,7 +30,7 @@ from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
-    ChatResponse,
+    ChatMessage,
     DiscoveryResponse,
     RefineDiscoveryRequest,
     SendChatRequest,
@@ -280,7 +280,7 @@ def _markdown_to_document(content: str) -> RichTextDocument:
     description=(
         "Procesa un mensaje del usuario en el contexto de Descubrimiento, invoca al agente IA y devuelve la respuesta."
     ),
-    response_model=ChatResponse,
+    response_model=ChatMessage,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_200_OK: {"description": "Mensaje procesado exitosamente."},
@@ -295,7 +295,7 @@ async def process_chat_message(
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[ProcessDiscoveryChatMessageUseCase, Depends(_process_discovery_chat)],
-) -> ChatResponse:
+) -> ChatMessage:
     try:
         output = await use_case.execute(
             ProcessDiscoveryChatMessageInput(
@@ -319,7 +319,7 @@ async def process_chat_message(
             detail=exc.problem.detail,
         ) from exc
 
-    return ChatResponse.from_domain(output.message)
+    return ChatMessage.from_domain(output.message)
 
 
 @router.get(
