@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+from kosmo.contracts import (
+    RespuestaChatLLM,
+    SugerenciaCambioLLM,
+)
+from kosmo.contracts.pipeline.phase_contexts import FeatureChatContext
+from kosmo.contracts.sdd.document import DocumentNode, RichTextDocument, SectionHeading, SpecPhase
+from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.domain.pipeline.phase_modes.features_chat_mode import FeaturesChatMode
+
+
+def test_features_chat_mode_properties() -> None:
+    mode = FeaturesChatMode()
+
+    assert mode.phase_name == SpecPhase.CARACTERISTICAS
+    assert mode.temperature == 0.4
+    assert mode.max_tokens == 4096
+    assert mode.output_type == RespuestaChatLLM
+    assert "NIVEL DE USUARIO" in mode.system_prompt
+    assert mode.available_tools == []
+
+
+def test_features_chat_mode_build_user_prompt() -> None:
+    mode = FeaturesChatMode()
+
+    doc = RichTextDocument(
+        nodes=[
+            DocumentNode(
+                type="heading",
+                content="Alcance",
+                heading=SectionHeading(text="Alcance", level=2, slug="alcance"),
+            )
+        ]
+    )
+    feature = Feature(
+        id=FeatureId("feat_100"),
+        number=1,
+        title="Registrar gastos compartidos",
+        slug="registrar-gastos-compartidos",
+        description="El usuario ingresa un gasto para dividirlo entre los integrantes del viaje.",
+        project_id=ProjectId("prj_001"),
+        origin="Deriva de la meta Gestión financiera.",
+    )
+    context = FeatureChatContext(
+        feature=feature,
+        discovery_document=doc,
+    )
+
+    prompt = mode.build_user_prompt(context)
+
+    assert "Registrar gastos compartidos" in prompt
+    assert "C01" in prompt
+    assert "El usuario ingresa un gasto" in prompt
+    assert "Deriva de la meta Gestión financiera." in prompt
+    assert "Documento de descubrimiento de referencia" in prompt
+
+
+def test_features_chat_mode_validate_output_valid() -> None:
+    mode = FeaturesChatMode()
+
+    sugg = SugerenciaCambioLLM(
+        section="Descripción",
+        description="Amplía el alcance a la región LATAM",
+        diff_before="gastos nacionales",
+        diff_after="gastos y vuelos en LATAM",
+        rationale="Se ajusta de acuerdo a la sección Alcance del Descubrimiento.",
+    )
+    response = RespuestaChatLLM(
+        content="He sugerido actualizar la descripción.",
+        change_suggestion=sugg,
+    )
+
+    val_res = mode.validate_output(response)
+    assert val_res.is_valid is True
+    assert len(val_res.errors) == 0
+
+
+def test_features_chat_mode_validate_output_empty_diff() -> None:
+    mode = FeaturesChatMode()
+
+    sugg = SugerenciaCambioLLM(
+        section="Descripción",
+        description="Sin cambios reales",
+        diff_before="mismo texto",
+        diff_after="mismo texto",
+    )
+    response = RespuestaChatLLM(
+        content="No hay cambios.",
+        change_suggestion=sugg,
+    )
+
+    val_res = mode.validate_output(response)
+    assert val_res.is_valid is False
+    assert any("idénticos" in e for e in val_res.errors)
