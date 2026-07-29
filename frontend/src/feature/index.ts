@@ -9,3 +9,4 @@ export { Chatbot, ChatbotMessage, useChatbot } from './chatbot';
 export type { Message } from './chatbot';
 
 export { PlantUmlViewer } from './plantuml-viewer';
+export * from './plan';
