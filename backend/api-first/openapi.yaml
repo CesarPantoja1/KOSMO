@@ -477,7 +477,7 @@ components:
         feature_number:
           type: integer
           example: 1
-        requirements_markdown:
+        document_markdown:
           type: string
           description: Contenido de requisitos en formato Markdown/EARS
         total:
