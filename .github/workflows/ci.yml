@@ -25,6 +25,85 @@ env:
   BUN_VERSION: "1.2.10"
 
 jobs:
+  branch-policy:
+    name: Branch policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate pull request policy
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          case "$BASE_BRANCH" in
+            main)
+              if [[ ! "$HEAD_BRANCH" =~ ^(release|hotfix)/ ]]; then
+                echo "::error::Only release/* and hotfix/* branches may target main; received $HEAD_BRANCH."
+                exit 1
+              fi
+              ;;
+            develop)
+              if [[ ! "$HEAD_BRANCH" =~ ^(feature|release|hotfix)/ ]]; then
+                echo "::error::Only feature/*, release/* and hotfix/* branches may target develop; received $HEAD_BRANCH."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported pull-request target branch: $BASE_BRANCH."
+              exit 1
+              ;;
+          esac
+
+          conventional_pr_title='^(feat|fix|docs|refactor|test|style|chore|ci|build|perf|revert)(\([^)]+\))?: .+ AB#[0-9]+$'
+          release_pr_title='^release: .+$'
+
+          if [[ ! "$PR_TITLE" =~ $conventional_pr_title && ! "$PR_TITLE" =~ $release_pr_title ]]; then
+            echo "::error::PR title must follow 'type: description AB#ID' (or 'release: description' for release PRs)."
+            exit 1
+          fi
+
+          branch_name_is_conventional=true
+          case "$HEAD_BRANCH" in
+            feature/*|hotfix/*)
+              [[ "$HEAD_BRANCH" =~ ^(feature|hotfix)/.+-AB#[0-9]+$ ]] || branch_name_is_conventional=false
+              ;;
+            release/*)
+              [[ "$HEAD_BRANCH" =~ ^release/[0-9]+\.[0-9]+\.[0-9]+$ ]] || branch_name_is_conventional=false
+              ;;
+          esac
+
+          {
+            echo "## Branch policy"
+            echo
+            echo "- Source: \`$HEAD_BRANCH\`"
+            echo "- Target: \`$BASE_BRANCH\`"
+            echo "- PR title: \`$PR_TITLE\`"
+            echo "- Allowed source/target flow: passed"
+            echo "- PR title convention: passed"
+            echo "- Branch-name convention: \`$branch_name_is_conventional\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$branch_name_is_conventional" != true ]]; then
+            echo "::warning::Branch name does not yet follow the documented Azure Boards convention. This is reported during the migration but is not blocking existing work."
+          fi
+
+      - name: Report non-PR policy status
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          echo "## Branch policy" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "No pull request to validate for event \`${{ github.event_name }}\`." >> "$GITHUB_STEP_SUMMARY"
+
   actionlint:
     name: Lint workflow files
     runs-on: ubuntu-latest
@@ -392,6 +471,7 @@ jobs:
       contents: read
 
     needs:
+      - branch-policy
       - actionlint
       - detect-changes
       - backend-lint
@@ -407,6 +487,7 @@ jobs:
           set -euo pipefail
 
           actionlint_result="${{ needs.actionlint.result }}"
+          branch_policy_result="${{ needs.branch-policy.result }}"
           detect_result="${{ needs.detect-changes.result }}"
 
           backend_required="${{ needs.detect-changes.outputs.backend }}"
@@ -421,6 +502,7 @@ jobs:
             echo
             echo "| Area | Required | Result |"
             echo "|---|---:|---|"
+            echo "| Branch policy | Yes | \`$branch_policy_result\` |"
             echo "| Workflow lint | Yes | \`$actionlint_result\` |"
             echo "| Change detection | Yes | \`$detect_result\` |"
             echo "| Backend lint & types | \`${backend_required:-unknown}\` | \`$backend_lint_result\` |"
@@ -430,6 +512,11 @@ jobs:
 
           if [ "$actionlint_result" != "success" ]; then
             echo "Workflow lint did not complete successfully."
+            exit 1
+          fi
+
+          if [ "$branch_policy_result" != "success" ]; then
+            echo "Branch policy did not complete successfully."
             exit 1
           fi
 
