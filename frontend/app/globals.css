@@ -102,13 +102,21 @@ body {
 }
 
 .page-container {
-	@apply flex h-full min-h-0 overflow-hidden pt-2;
+	@apply flex h-full min-h-0 flex-col overflow-hidden gap-4 pt-8 pb-4;
 }
 
 .page-header {
 	@apply flex flex-col gap-3;
 }
 
-.chatbot {
-	@apply overflow-hidden transition-all duration-300 ease-in-out;
+.page-row {
+	@apply flex flex-1 min-h-0 flex-row gap-4 overflow-hidden;
+}
+
+.chatbot-panel {
+	@apply w-96 shrink-0 overflow-hidden transition-all duration-300 ease-in-out;
+}
+
+.chatbot-panel.closed {
+	@apply w-0 opacity-0 pointer-events-none;
 }

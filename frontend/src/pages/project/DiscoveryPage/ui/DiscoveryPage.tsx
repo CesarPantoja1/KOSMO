@@ -268,7 +268,7 @@ const DiscoveryPage = () => {
 			)}
 
 			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
-				<div className='page-header flex-8/12'>
+				<div className='page-header'>
 					<h2 className='text-base-800 text-3xl font-bold'>
 						Descubrimiento del proyecto
 					</h2>
@@ -298,66 +298,64 @@ const DiscoveryPage = () => {
 							</button>
 						</div>
 					)}
-
-					{/* TODO: Mejorar el skeleton */}
-					{isLoading && (
-						<div className='w-full min-h-105 relative'>
-							<div className='w-full h-full rounded-xl border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
-								<div className='flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3'>
-									<div className='flex items-center gap-2'>
-										<div className='h-4 w-20 animate-pulse rounded bg-base-200' />
-										<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
-										<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
-									</div>
-									<div className='h-8 w-8 animate-pulse rounded bg-base-200' />
-								</div>
-
-								<div className='space-y-4 p-6'>
-									<div className='h-5 w-3/4 animate-pulse rounded bg-base-200' />
-									<div className='h-5 w-full animate-pulse rounded bg-base-200' />
-									<div className='h-5 w-5/6 animate-pulse rounded bg-base-200' />
-									<div className='h-5 w-full animate-pulse rounded bg-base-200' />
-									<div className='h-5 w-2/3 animate-pulse rounded bg-base-200' />
-									<div className='h-28 w-full animate-pulse rounded-lg bg-base-200' />
-								</div>
-							</div>
-						</div>
-					)}
-
-					{!isLoading && (
-						<div className='w-full h-full relative'>
-							<MarkdownEditor
-								key={editorKey}
-								ref={editorRef}
-								markdown={markdown}
-								onChange={setMarkdown}
-								isMaximized={isEditorMaximized}
-								onMaximize={() => setEditorMaximized(true)}
-								onMinimize={() => setEditorMaximized(false)}
-							/>
-
-							<FloatingDiscoveryPlan />
-						</div>
-					)}
 				</div>
 
-				<div
-					className={`chatbot
-						${
-							isChatbotOpen
-								? 'opacity-100 translate-x-0 flex-4/12'
-								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-						}
-				`}
-				>
-					<Chatbot
-						placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
-						onClose={() => setIsChatbotOpen(false)}
-						messages={chatMessages}
-						onSendMessage={handleSendChat}
-						isLoading={isChatLoading}
-						onPlanAction={handlePlanAction}
-					/>
+				<div className='page-row'>
+					<div className='flex-1 flex flex-col min-h-0'>
+						{/* TODO: Mejorar el skeleton */}
+						{isLoading && (
+							<div className='w-full min-h-105 relative'>
+								<div className='w-full h-full rounded-xl border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
+									<div className='flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3'>
+										<div className='flex items-center gap-2'>
+											<div className='h-4 w-20 animate-pulse rounded bg-base-200' />
+											<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
+											<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
+										</div>
+										<div className='h-8 w-8 animate-pulse rounded bg-base-200' />
+									</div>
+
+									<div className='space-y-4 p-6'>
+										<div className='h-5 w-3/4 animate-pulse rounded bg-base-200' />
+										<div className='h-5 w-full animate-pulse rounded bg-base-200' />
+										<div className='h-5 w-5/6 animate-pulse rounded bg-base-200' />
+										<div className='h-5 w-full animate-pulse rounded bg-base-200' />
+										<div className='h-5 w-2/3 animate-pulse rounded bg-base-200' />
+										<div className='h-28 w-full animate-pulse rounded-lg bg-base-200' />
+									</div>
+								</div>
+							</div>
+						)}
+
+						{!isLoading && (
+							<div className='w-full h-full relative'>
+								<MarkdownEditor
+									key={editorKey}
+									ref={editorRef}
+									markdown={markdown}
+									onChange={setMarkdown}
+									isMaximized={isEditorMaximized}
+									onMaximize={() => setEditorMaximized(true)}
+									onMinimize={() => setEditorMaximized(false)}
+								/>
+
+								<FloatingDiscoveryPlan />
+							</div>
+						)}
+					</div>
+
+					<div
+						className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}
+					>
+						<Chatbot
+							placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
+							onClose={() => setIsChatbotOpen(false)}
+							messages={chatMessages}
+							onSendMessage={handleSendChat}
+							isLoading={isChatLoading}
+							onPlanAction={handlePlanAction}
+						/>
+					</div>
 				</div>
 			</div>
 		</>

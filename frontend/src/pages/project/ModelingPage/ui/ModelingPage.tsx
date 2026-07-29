@@ -332,7 +332,9 @@ const ModelingPage = () => {
 							</Link>
 						</div>
 					)}
+				</div>
 
+				<div className='page-row'>
 					<div className='flex gap-4 flex-1 min-h-0'>
 						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
 							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
@@ -511,22 +513,14 @@ const ModelingPage = () => {
 								)}
 						</div>
 					</div>
-				</div>
 
-				<div
-					className={`chatbot
-													${
-														isChatbotOpen
-															? 'opacity-100 translate-x-0 flex-4/12'
-															: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-													}
-											`}
-				>
-					<Chatbot
-						placeholder='ej., "Haz que el diagrama de actividad sea más conciso y claro"'
-						onClose={() => setIsChatbotOpen(false)}
-						onSendMessage={handleRefine}
-					/>
+					<div className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}>
+						<Chatbot
+							placeholder='ej., "Haz que el diagrama de actividad sea más conciso y claro"'
+							onClose={() => setIsChatbotOpen(false)}
+							onSendMessage={handleRefine}
+						/>
+					</div>
 				</div>
 			</div>
 		</>

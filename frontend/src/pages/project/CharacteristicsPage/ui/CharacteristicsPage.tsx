@@ -43,60 +43,56 @@ const CharacteristicsPage = () => {
 						</Link>
 					</div>
 				</div>
-
-				{isLoading && (
-					<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
-						{[1, 2, 3, 4, 5].map((i) => (
-							<div
-								key={i}
-								className='outline outline-base-300 m-0.5 p-8 inline-flex justify-start items-center gap-7 animate-pulse'
-							>
-								<div className='w-14 h-10 bg-base-200 rounded' />
-								<div className='flex-1 flex flex-col gap-3'>
-									<div className='h-6 bg-base-200 rounded w-3/4' />
-									<div className='h-4 bg-base-200 rounded w-full' />
-								</div>
-							</div>
-						))}
-					</div>
-				)}
-
-				{!isLoading && (
-					<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
-						{filtered.length === 0 && searchQuery.trim() ? (
-							<div className='outline outline-base-300 m-0.5 px-8 py-16 flex flex-col justify-center items-center gap-4'>
-								<p className='text-base-600 text-lg font-medium text-center'>
-									No se encontraron características que coincidan con su búsqueda
-								</p>
-							</div>
-						) : (
-							filtered.map((c) => (
-								<CardCharacterist
-									key={c.id}
-									displayId={c.display_id}
-									title={c.title}
-									description={c.description}
-									searchQuery={searchQuery}
-								/>
-							))
-						)}
-					</div>
-				)}
 			</div>
 
-			<div
-				className={`chatbot
-									${
-										isChatbotOpen
-											? 'opacity-100 translate-x-0 flex-4/12'
-											: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-									}
-							`}
-			>
-				<Chatbot
-					placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
-					onClose={() => setIsChatbotOpen(false)}
-				/>
+			<div className='page-row'>
+				<div className='flex-1 flex flex-col min-h-0 overflow-y-auto'>
+					{isLoading && (
+						<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
+							{[1, 2, 3, 4, 5].map((i) => (
+								<div
+									key={i}
+									className='outline outline-base-300 m-0.5 p-8 inline-flex justify-start items-center gap-7 animate-pulse'
+								>
+									<div className='w-14 h-10 bg-base-200 rounded' />
+									<div className='flex-1 flex flex-col gap-3'>
+										<div className='h-6 bg-base-200 rounded w-3/4' />
+										<div className='h-4 bg-base-200 rounded w-full' />
+									</div>
+								</div>
+							))}
+						</div>
+					)}
+
+					{!isLoading && (
+						<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
+							{filtered.length === 0 && searchQuery.trim() ? (
+								<div className='outline outline-base-300 m-0.5 px-8 py-16 flex flex-col justify-center items-center gap-4'>
+									<p className='text-base-600 text-lg font-medium text-center'>
+										No se encontraron características que coincidan con su búsqueda
+									</p>
+								</div>
+							) : (
+								filtered.map((c) => (
+									<CardCharacterist
+										key={c.id}
+										displayId={c.display_id}
+										title={c.title}
+										description={c.description}
+										searchQuery={searchQuery}
+									/>
+								))
+							)}
+						</div>
+					)}
+				</div>
+
+				<div className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}>
+					<Chatbot
+						placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
+						onClose={() => setIsChatbotOpen(false)}
+					/>
+				</div>
 			</div>
 		</div>
 	);

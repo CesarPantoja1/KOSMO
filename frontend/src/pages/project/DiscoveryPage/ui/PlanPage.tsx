@@ -118,24 +118,24 @@ export const PlanPage = () => {
 
 	return (
 		<div className='page-container'>
-			<div className='page-header flex-8/12'>
+			<div className='page-header'>
 				<h2 className='text-base-800 text-3xl font-bold'>Descubrimiento del proyecto</h2>
 				<p className='text-base-600 text-lg'>
 					Revisa los cambios propuestos antes de aplicarlos al documento de
 					descubrimiento.
 				</p>
+			</div>
 
-				<div className='w-full flex-1 min-h-0'>
-					<MarkdownDiff
-						original={originalMarkdown}
-						proposal={proposalMarkdown}
-						originalLabel='Original'
-						proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
-						onBack={handleBack}
-						onDiscard={isDiscarding ? () => {} : handleDiscard}
-						onApply={isApplying ? () => {} : handleApply}
-					/>
-				</div>
+			<div className='flex-1 min-h-0'>
+				<MarkdownDiff
+					original={originalMarkdown}
+					proposal={proposalMarkdown}
+					originalLabel='Original'
+					proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
+					onBack={handleBack}
+					onDiscard={isDiscarding ? () => {} : handleDiscard}
+					onApply={isApplying ? () => {} : handleApply}
+				/>
 			</div>
 		</div>
 	);
