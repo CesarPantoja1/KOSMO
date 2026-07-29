@@ -124,18 +124,18 @@ export const PlanPage = () => {
 					Revisa los cambios propuestos antes de aplicarlos al documento de
 					descubrimiento.
 				</p>
-			</div>
 
-			<div className='flex-1 min-h-0'>
-				<MarkdownDiff
-					original={originalMarkdown}
-					proposal={proposalMarkdown}
-					originalLabel='Original'
-					proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
-					onBack={handleBack}
-					onDiscard={isDiscarding ? () => {} : handleDiscard}
-					onApply={isApplying ? () => {} : handleApply}
-				/>
+				<div className='flex-1 min-h-0 mb-2'>
+					<MarkdownDiff
+						original={originalMarkdown}
+						proposal={proposalMarkdown}
+						originalLabel='Original'
+						proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
+						onBack={handleBack}
+						onDiscard={isDiscarding ? () => {} : handleDiscard}
+						onApply={isApplying ? () => {} : handleApply}
+					/>
+				</div>
 			</div>
 		</div>
 	);

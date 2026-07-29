@@ -12,7 +12,7 @@ import { useState } from 'react';
 const CharacteristicsPage = () => {
 	const { isLoading, searchQuery, setSearchQuery, filtered } = useCharacteristicsPage();
 
-	const [isChatbotOpen, setIsChatbotOpen] = useState(true);
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
 	return (
 		<div className='page-container'>
@@ -43,9 +43,7 @@ const CharacteristicsPage = () => {
 						</Link>
 					</div>
 				</div>
-			</div>
 
-			<div className='page-row'>
 				<div className='flex-1 flex flex-col min-h-0 overflow-y-auto'>
 					{isLoading && (
 						<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
@@ -86,13 +84,21 @@ const CharacteristicsPage = () => {
 						</div>
 					)}
 				</div>
+			</div>
 
-				<div className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}>
-					<Chatbot
-						placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
-						onClose={() => setIsChatbotOpen(false)}
-					/>
-				</div>
+			<div
+				className={`chatbot
+						${
+							isChatbotOpen
+								? 'opacity-100 translate-x-0 flex-4/12'
+								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+						}
+				`}
+			>
+				<Chatbot
+					placeholder='ej. mejorar característica de búsqueda'
+					onClose={() => setIsChatbotOpen(false)}
+				/>
 			</div>
 		</div>
 	);
