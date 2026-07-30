@@ -244,9 +244,13 @@ jobs:
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_TUNNEL_TOKEN }}
         run: |
           set -euo pipefail
+          test -n "$STAGING_ENV_FILE"
           work_dir="${RUNNER_TEMP}/kosmo-staging-deploy"
           install -d -m 700 "$work_dir"
-          printf '%s' "$STAGING_ENV_FILE" > "$work_dir/application.env"
+          # GitHub Environment secrets may not end in a newline. Preserve the
+          # secret value and terminate it so runtime.env always starts on a
+          # separate line when both files are assembled on the server.
+          printf '%s\n' "$STAGING_ENV_FILE" > "$work_dir/application.env"
           printf '%s\n' \
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
@@ -284,6 +288,12 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing generated deployment variable: ${key}" >&2
+                 exit 1
+               fi
+             done
              docker login ghcr.io --username "${{ vars.STAGING_GHCR_USERNAME }}" --password-stdin
              docker compose -f compose.yaml pull
              docker compose -f compose.yaml up -d --remove-orphans

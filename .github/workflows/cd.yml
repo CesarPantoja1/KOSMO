@@ -219,7 +219,10 @@ jobs:
 
           work_dir="${RUNNER_TEMP}/kosmo-production-deploy"
           install -d -m 700 "$work_dir"
-          printf '%s' "$PRODUCTION_ENV_FILE" > "$work_dir/application.env"
+          # GitHub Environment secrets may not end in a newline. Preserve the
+          # secret value and terminate it so runtime.env always starts on a
+          # separate line when both files are assembled on the server.
+          printf '%s\n' "$PRODUCTION_ENV_FILE" > "$work_dir/application.env"
           printf '%s\n' \
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" > "$work_dir/runtime.env"
@@ -260,6 +263,12 @@ jobs:
              rm -f application.env runtime.env
              grep -q '^DATABASE_URL=.' .env
              grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing generated deployment variable: ${key}" >&2
+                 exit 1
+               fi
+             done
              docker network inspect kosmo-network >/dev/null
              docker login ghcr.io --username "${{ vars.PRODUCTION_GHCR_USERNAME }}" --password-stdin
              docker compose -p kosmo -f compose.yaml pull
