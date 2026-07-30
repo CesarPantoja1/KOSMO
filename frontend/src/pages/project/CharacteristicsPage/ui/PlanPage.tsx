@@ -14,16 +14,35 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 function buildProposal(
 	original: CharacteristicResponse[],
 	changes: PlanChange[],
+	allOriginals: CharacteristicResponse[] = original,
 ): CharacteristicResponse[] {
-	return original.map((c) => {
+	const modified = original.map((c) => {
 		let description = c.description;
 		for (const change of changes) {
 			if (change.diff.before && description.includes(change.diff.before)) {
 				description = description.replace(change.diff.before, change.diff.after);
+			} else if (!change.diff.before && change.diff.after && change.section === c.title) {
+				description += '\n\n' + change.diff.after;
 			}
 		}
 		return { ...c, description };
 	});
+
+	const existingTitles = new Set(allOriginals.map((c) => c.title));
+	const additions = changes
+		.filter((c) => !c.diff.before && c.diff.after && !existingTitles.has(c.section))
+		.map((c) => ({
+			id: c.id,
+			project_id: '',
+			number: modified.length + 1,
+			title: c.section,
+			slug: c.section.toLowerCase().replace(/\s+/g, '-'),
+			description: c.diff.after,
+			origin: c.origin,
+			display_id: `F${String(modified.length + 1).padStart(2, '0')}`,
+		}));
+
+	return [...modified, ...additions];
 }
 
 function CharacteristicDiffCard({
@@ -65,7 +84,10 @@ export const PlanPage = () => {
 	const [isApplying, setIsApplying] = useState(false);
 	const [isDiscarding, setIsDiscarding] = useState(false);
 
-	const changes = planByPhase['features'] ?? [];
+	const allChanges = planByPhase['features'] ?? [];
+	const changes = allChanges.filter(
+		(c) => c.status === 'pending' || c.status === 'added' || c.status === 'conflict',
+	);
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -80,11 +102,13 @@ export const PlanPage = () => {
 
 	const changedCharacteristics = originalCharacteristics.filter((c) =>
 		changes.some(
-			(change) => change.diff.before && c.description.includes(change.diff.before),
+			(change) =>
+				(change.diff.before && c.description.includes(change.diff.before)) ||
+				(!change.diff.before && change.section === c.title),
 		),
 	);
 
-	const proposalCharacteristics = buildProposal(changedCharacteristics, changes);
+	const proposalCharacteristics = buildProposal(changedCharacteristics, changes, originalCharacteristics);
 
 	const leftRef = useRef<HTMLDivElement>(null);
 	const rightRef = useRef<HTMLDivElement>(null);

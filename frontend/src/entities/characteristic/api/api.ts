@@ -107,6 +107,24 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 				'Se mejoró la claridad y precisión de la descripción de la característica.',
 		},
 	},
+	{
+		id: 'mock-chat-3',
+		role: 'assistant',
+		content:
+			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
+		created_at: new Date().toISOString(),
+		change_suggestion: {
+			id: 'mock-change-1',
+			section: 'Descripción de la característica',
+			description: 'Refinar la descripción para mayor claridad.',
+			diff_before:
+				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+			diff_after:
+				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
+			rationale:
+				'Se mejoró la claridad y precisión de la descripción de la característica.',
+		},
+	},
 ];
 
 let mockStore = [...mockCharacteristics];

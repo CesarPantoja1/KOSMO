@@ -56,7 +56,7 @@ export function FloatingPlan({ phase, navigateTo }: Props) {
 	const planByPhase = usePlanStore((s) => s.planByPhase);
 	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
 
-	const allItems = planByPhase['discovery'] ?? [];
+	const allItems = planByPhase[phase] ?? [];
 	const items = allItems.filter(
 		(c) => c.status === 'pending' || c.status === 'added' || c.status === 'conflict',
 	);

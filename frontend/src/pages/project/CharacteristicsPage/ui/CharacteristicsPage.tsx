@@ -16,7 +16,7 @@ import { Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import { useAppStore } from 'app/store/app.store';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
@@ -53,6 +53,13 @@ const CharacteristicsPage = () => {
 
 	const addToPlan = usePlanStore((s) => s.addToPlan);
 	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
+
+	useEffect(() => {
+		if (currentProject) {
+			fetchAndHydratePlan(currentProject.id, 'features');
+		}
+	}, [currentProject, fetchAndHydratePlan]);
 
 	const handleRefine = (featureId: string) => {
 		setActiveFeatureId(featureId);
