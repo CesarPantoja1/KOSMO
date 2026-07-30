@@ -9,13 +9,17 @@ import {
 } from '@/entities/discovery';
 import type { PlanChange } from '@/entities/plan';
 import { addPlanChange, deletePlanChange, usePlanStore } from '@/entities/plan';
-import { Chatbot, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
+import {
+	Chatbot,
+	FloatingPlan,
+	MarkdownEditor,
+	type MarkdownEditorHandle,
+} from '@/feature';
 import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
 import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { FloatingDiscoveryPlan } from './FloatingPlan';
 
 /** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
 function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
@@ -267,7 +271,7 @@ const DiscoveryPage = () => {
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+			<div className={`page-container gap-2 ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
 				<div className='page-header flex-8/12'>
 					<h2 className='text-base-800 text-3xl font-bold'>
 						Descubrimiento del proyecto
@@ -335,7 +339,10 @@ const DiscoveryPage = () => {
 									onMinimize={() => setEditorMaximized(false)}
 								/>
 
-								<FloatingDiscoveryPlan />
+								<FloatingPlan
+									phase='discovery'
+									navigateTo='/proyecto/descubrimiento/plan'
+								/>
 							</div>
 						)}
 					</div>

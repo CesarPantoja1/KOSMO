@@ -1,6 +1,10 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { SuggestCharacteristic, CharacteristicResponse } from '../model/types';
+import type {
+	SuggestCharacteristic,
+	CharacteristicResponse,
+	CharacteristicChatResponse,
+} from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -77,6 +81,34 @@ const mockSuggestions: SuggestCharacteristic[] = [
 	},
 ];
 
+const mockChatResponses: CharacteristicChatResponse[] = [
+	{
+		id: 'mock-chat-1',
+		role: 'assistant',
+		content: 'Hola, ¿en qué puedo ayudarte con la característica?',
+		created_at: new Date().toISOString(),
+		change_suggestion: null,
+	},
+	{
+		id: 'mock-chat-2',
+		role: 'assistant',
+		content:
+			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
+		created_at: new Date().toISOString(),
+		change_suggestion: {
+			id: 'mock-change-1',
+			section: 'Descripción de la característica',
+			description: 'Refinar la descripción para mayor claridad.',
+			diff_before:
+				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+			diff_after:
+				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
+			rationale:
+				'Se mejoró la claridad y precisión de la descripción de la característica.',
+		},
+	},
+];
+
 let mockStore = [...mockCharacteristics];
 
 // --- Mock implementations ---
@@ -122,6 +154,14 @@ const mockAddCharacteristic = async (
 	return newChar;
 };
 
+const mockSendChatMessage = async (
+	_featureId: string,
+	_content: string,
+): Promise<CharacteristicChatResponse> => {
+	await delay(500);
+	return mockChatResponses[Math.floor(Math.random() * mockChatResponses.length)];
+};
+
 // --- Real implementations ---
 
 const realGetCharacteristics = async (
@@ -163,6 +203,17 @@ const realAddCharacteristic = async (
 	);
 };
 
+const realSendChatMessage = async (
+	featureId: string,
+	content: string,
+): Promise<CharacteristicChatResponse> => {
+	return apiClient<CharacteristicChatResponse>(`/api/v1/features/${featureId}/chat`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ content }),
+	});
+};
+
 // --- Exports (switch based on USE_MOCKS) ---
 
 export const getCharacteristics = (
@@ -191,3 +242,11 @@ export const addCharacteristic = (
 	USE_MOCKS
 		? mockAddCharacteristic(projectId, item)
 		: realAddCharacteristic(projectId, item);
+
+export const sendChatMessage = (
+	featureId: string,
+	content: string,
+): Promise<CharacteristicChatResponse> =>
+	USE_MOCKS
+		? mockSendChatMessage(featureId, content)
+		: realSendChatMessage(featureId, content);
