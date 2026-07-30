@@ -46,6 +46,7 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 					message.change_suggestion.diff_after) && (
 					<div className='w-full'>
 						<TarjetaRecepcionPlan
+							messageId={message.id}
 							suggestion={message.change_suggestion}
 							onAction={(action) =>
 								onPlanAction?.(action, message.change_suggestion!, message.id)

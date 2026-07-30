@@ -6,29 +6,36 @@ import Close from '@/shared/ui/icons/Close';
 import Plus from '@/shared/ui/icons/Plus';
 import Trash from '@/shared/ui/icons/Trash';
 import { MarkdownText } from '@/shared/ui/markdown-text';
+import { usePlanStore } from '@/entities/plan';
 import { useState } from 'react';
 import type { ChangeSuggestion } from '../types/chatbot';
 
 interface Props {
 	suggestion: ChangeSuggestion;
+	messageId: string;
 	onAction?: (action: 'add' | 'remove' | 'discard') => void;
 }
 
 type CardStatus = 'pending' | 'added' | 'discarded';
 
-export const TarjetaRecepcionPlan = ({ suggestion, onAction }: Props) => {
-	const [status, setStatus] = useState<CardStatus>('pending');
+export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props) => {
+	const [discarded, setDiscarded] = useState(false);
+
+	const planByPhase = usePlanStore((s) => s.planByPhase);
+	const isInPlan = Object.values(planByPhase).some((changes) =>
+		changes.some((c) => c.id === messageId),
+	);
+
+	const status: CardStatus = discarded ? 'discarded' : isInPlan ? 'added' : 'pending';
 
 	const handleAdd = () => {
-		setStatus('added');
 		onAction?.('add');
 	};
 	const handleRemove = () => {
-		setStatus('pending');
 		onAction?.('remove');
 	};
 	const handleDiscard = () => {
-		setStatus('discarded');
+		setDiscarded(true);
 		onAction?.('discard');
 	};
 
