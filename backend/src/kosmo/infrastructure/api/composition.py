@@ -70,6 +70,7 @@ from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_chat_mode import FeaturesChatMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_modes.modelo_mode import ModeloMode
+from kosmo.domain.pipeline.phase_modes.requirements_chat_mode import RequirementsChatMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
 )
@@ -424,6 +425,14 @@ def build_pipeline_components(
             description="Chat conversacional de característica a nivel de usuario",
             phase=SpecPhase.CARACTERISTICAS,
             mode=FeaturesChatMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="requirements_chat",
+            description="Chat conversacional de requisito EARS a nivel de software",
+            phase=SpecPhase.REQUISITOS,
+            mode=RequirementsChatMode(),  # type: ignore[reportArgumentType]
         )
     )
 
