@@ -551,6 +551,7 @@ class FeaturesComponents:
     create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
     process_feature_chat_message: Any
+    get_feature_chat_history: Any
 
 
 def build_features_components(
@@ -581,6 +582,13 @@ def build_features_components(
         agent=pipeline.agent,
     )
 
+    from kosmo.application.features.get_feature_chat_history import GetFeatureChatHistoryUseCase
+
+    get_feature_chat_history = GetFeatureChatHistoryUseCase(
+        feature_repo=feature_repo,
+        chat_repo=chat_repo,
+    )
+
     return FeaturesComponents(
         generate_features=GenerateFeaturesUseCase(
             project_repo=project_repo,
@@ -598,6 +606,7 @@ def build_features_components(
         ),
         feature_repo=feature_repo,
         process_feature_chat_message=process_feature_chat,
+        get_feature_chat_history=get_feature_chat_history,
     )
 
 

@@ -20,6 +20,7 @@ from kosmo.infrastructure.api.composition import (
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
+from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
@@ -237,6 +238,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.create_characteristic = features_components.create_characteristic
     app.state.feature_repo = features_components.feature_repo
     app.state.process_feature_chat_message = features_components.process_feature_chat_message
+    app.state.get_feature_chat_history = features_components.get_feature_chat_history
 
     requirements_components = build_requirements_components(session_factory, pipeline_components)
     app.state.generate_ears = requirements_components.generate_ears
@@ -297,6 +299,7 @@ app.include_router(projects_router)
 app.include_router(plan_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
+app.include_router(feature_chat_router)
 app.include_router(requirements_router)
 app.include_router(modelo_router)
 app.include_router(schemas_router)

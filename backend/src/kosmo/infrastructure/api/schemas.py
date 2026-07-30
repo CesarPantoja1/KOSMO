@@ -610,6 +610,13 @@ class ChatHistoryResponse(BaseModel):
         )
 
 
+class ContextRedirectResponse(BaseModel):
+    """Redirección cuando el mensaje no corresponde al ámbito de la fase actual."""
+
+    message: str = Field(description="Mensaje indicando la fase correcta")
+    target_phase: str = Field(description="Fase destino: discovery, features, requirements")
+
+
 class PlanChangeView(BaseModel):
     """Representa un cambio propuesto en el plan de cambios."""
 

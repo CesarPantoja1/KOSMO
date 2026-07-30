@@ -8,6 +8,11 @@ from kosmo.application.features.generate_features import (
     GenerateFeaturesOutput,
     GenerateFeaturesUseCase,
 )
+from kosmo.application.features.get_feature_chat_history import (
+    GetFeatureChatHistoryInput,
+    GetFeatureChatHistoryOutput,
+    GetFeatureChatHistoryUseCase,
+)
 from kosmo.application.features.process_feature_chat_message import (
     ProcessFeatureChatMessageInput,
     ProcessFeatureChatMessageOutput,
@@ -29,6 +34,9 @@ __all__ = [
     "GenerateFeaturesInput",
     "GenerateFeaturesOutput",
     "GenerateFeaturesUseCase",
+    "GetFeatureChatHistoryInput",
+    "GetFeatureChatHistoryOutput",
+    "GetFeatureChatHistoryUseCase",
     "ProcessFeatureChatMessageInput",
     "ProcessFeatureChatMessageOutput",
     "ProcessFeatureChatMessageUseCase",

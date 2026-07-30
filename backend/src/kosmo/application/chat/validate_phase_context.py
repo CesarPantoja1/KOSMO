@@ -9,53 +9,53 @@ from kosmo.contracts.sdd.document import SpecPhase
 
 
 class PhaseClassification(BaseModel):
-    belongs_to_current_phase: bool = Field(description="True si el mensaje corresponde al ambito de la fase actual")
+    belongs_to_current_phase: bool = Field(description="True si el mensaje corresponde al ámbito de la fase actual")
     target_phase: str = Field(
         default="",
         description="Fase a la que pertenece el mensaje: discovery, features, requirements",
     )
     message: str = Field(
         default="",
-        description="Mensaje de redireccion en espanol indicando la fase correcta",
+        description="Mensaje de redirección en español indicando la fase correcta",
     )
 
 
 _PHASE_CLASSIFICATION_PROMPT = (
-    "Eres un clasificador de intencion para la plataforma KOSMO.\n"
-    "Tu unica tarea es determinar a que fase del proceso de especificacion pertenece "
+    "Eres un clasificador de intención para la plataforma KOSMO.\n"
+    "Tu única tarea es determinar a qué fase del proceso de especificación pertenece "
     "el mensaje del usuario.\n\n"
     "FASES DISPONIBLES:\n\n"
     "1. Descubrimiento (discovery):\n"
-    "   - Vision del negocio, problema, actores, propuesta de valor, metas del producto.\n"
+    "   - Visión del negocio, problema, actores, propuesta de valor, metas del producto.\n"
     "   - Reglas de negocio, alcance del producto (incluido/excluido).\n"
     "   - Estrategia comercial, modelo de negocio, diferenciadores.\n"
-    "   - Palabras clave: vision, negocio, mercado, propuesta de valor, alcance, actores, "
+    "   - Palabras clave: visión, negocio, mercado, propuesta de valor, alcance, actores, "
     "reglas de negocio, metas, problema.\n\n"
-    "2. Caracteristicas (features):\n"
+    "2. Características (features):\n"
     "   - Lo que el usuario desea lograr con el producto (funcionalidades a nivel de usuario).\n"
-    "   - Titulo, descripcion de caracteristicas, acciones que el usuario quiere realizar.\n"
-    "   - NO incluye detalles tecnicos, APIs, bases de datos ni requisitos de software.\n"
-    "   - Palabras clave: caracteristica, funcionalidad, titulo, descripcion, origen, "
-    "accion de usuario, C01, C02.\n\n"
+    "   - Título, descripción de características, acciones que el usuario quiere realizar.\n"
+    "   - NO incluye detalles técnicos, APIs, bases de datos ni requisitos de software.\n"
+    "   - Palabras clave: característica, funcionalidad, título, descripción, origen, "
+    "acción de usuario, C01, C02.\n\n"
     "3. Requisitos (requirements):\n"
-    "   - Requisitos de software, criterios de aceptacion, casos de prueba.\n"
+    "   - Requisitos de software, criterios de aceptación, casos de prueba.\n"
     "   - Formato EARS (Dado-Cuando-Entonces / Given-When-Then).\n"
-    "   - Comportamiento del sistema, validaciones, restricciones tecnicas.\n"
-    "   - Palabras clave: requisito, criterio de aceptacion, Dado-Cuando-Entonces, "
-    "EARS, validacion, REQ, especificacion tecnica.\n\n"
+    "   - Comportamiento del sistema, validaciones, restricciones técnicas.\n"
+    "   - Palabras clave: requisito, criterio de aceptación, Dado-Cuando-Entonces, "
+    "EARS, validación, REQ, especificación técnica.\n\n"
     "FORMATO DE SALIDA (JSON):\n"
     "{\n"
     '  "belongs_to_current_phase": true | false,\n'
     '  "target_phase": "discovery" | "features" | "requirements" | "",\n'
-    '  "message": "Mensaje de redireccion en espanol o cadena vacia si es valido"\n'
+    '  "message": "Mensaje de redirección en español o cadena vacía si es válido"\n'
     "}\n\n"
     "REGLAS:\n"
     "- Si el mensaje NO corresponde a la fase actual, target_phase debe contener "
     "la fase correcta y message un texto como: 'Este cambio pertenece a la fase de "
     "Descubrimiento. Ve a esa fase para realizarlo.'\n"
-    "- Si el mensaje ES ambiguo o consultivo (ej. 'que es una caracteristica?', "
-    "'ayudame a entender'), consideralo como valido para la fase actual.\n"
-    "- Si el mensaje ES claramente de la fase actual, target_phase y message van vacios."
+    "- Si el mensaje ES ambiguo o consultivo (ej. '¿qué es una característica?', "
+    "'ayúdame a entender'), considéralo como válido para la fase actual.\n"
+    "- Si el mensaje ES claramente de la fase actual, target_phase y message van vacíos."
 )
 
 
