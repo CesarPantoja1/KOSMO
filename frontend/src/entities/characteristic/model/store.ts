@@ -20,6 +20,7 @@ interface CharacteristicStore {
 	setCurrentSuggestions: (suggestions: SuggestCharacteristic[]) => void;
 	clearCharacteristics: () => void;
 	clearChatHistory: (featureId: string) => void;
+	clearAllChatHistories: () => void;
 	getCharacteristics: (projectId: string) => Promise<CharacteristicResponse[]>;
 	generateCharacteristics: (projectId: string) => Promise<CharacteristicResponse[]>;
 	getSuggestCharacteristics: (projectId: string) => Promise<SuggestCharacteristic[]>;
@@ -47,6 +48,7 @@ export const useCharacteristicStore = create<CharacteristicStore>()((set, get) =
 		const { chatHistories } = get();
 		set({ chatHistories: { ...chatHistories, [featureId]: [] } });
 	},
+	clearAllChatHistories: () => set({ chatHistories: {} }),
 
 	getCharacteristics: async (projectId) => {
 		const data = await getCharacteristics(projectId);

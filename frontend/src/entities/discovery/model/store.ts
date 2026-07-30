@@ -14,6 +14,7 @@ interface DiscoveryStore {
 	setCurrentDiscovery: (discovery: DiscoveryResponse) => void;
 	clearDiscovery: () => void;
 	clearChatHistory: () => void;
+	resetDiscovery: () => void;
 	getDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
 	saveDiscovery: (projectId: string, content: string) => Promise<DiscoveryResponse>;
 	generateDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
@@ -31,6 +32,7 @@ export const useDiscoveryStore = create<DiscoveryStore>()((set, get) => ({
 	setCurrentDiscovery: (discovery) => set({ currentDiscovery: discovery }),
 	clearDiscovery: () => set({ currentDiscovery: null }),
 	clearChatHistory: () => set({ chatHistory: [] }),
+	resetDiscovery: () => set({ currentDiscovery: null, chatHistory: [] }),
 
 	getDiscovery: async (projectId) => {
 		const data = await getDiscovery(projectId);
