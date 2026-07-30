@@ -50,6 +50,7 @@ def test_replace_with_multiline() -> None:
     markdown = "## Título\n\nContenido original aquí.\n\n## Otra sección"
     result = apply_change_diff(markdown, before="Contenido original aquí.", after="Contenido modificado.")
 
+    assert result is not None
     assert "Contenido modificado." in result
     assert "Contenido original aquí." not in result
     assert "## Título" in result

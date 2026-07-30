@@ -2,11 +2,10 @@ import pytest
 
 from kosmo.application.chat.apply_plan_changes import (
     ApplyPlanChangesInput,
-    ApplyPlanChangesOutput,
     ApplyPlanChangesUseCase,
 )
 from kosmo.contracts import ChatRepository, DiffCambio, EstadoPlanCambio, PlanCambio
-from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
