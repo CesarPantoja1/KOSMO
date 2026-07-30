@@ -53,7 +53,7 @@ class ProcessDiscoveryChatMessageUseCase:
         content = input_data.content.strip()
 
         if not content:
-            raise ValueError("El mensaje no puede estar vacio.")
+            raise ValueError("El mensaje no puede estar vacío.")
         if len(content) > _MAX_CONTENT_LENGTH:
             raise ValueError(f"El mensaje no puede exceder {_MAX_CONTENT_LENGTH} caracteres.")
 
