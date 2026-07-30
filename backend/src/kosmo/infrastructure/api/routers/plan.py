@@ -1,15 +1,26 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 
+from kosmo.application.chat.apply_plan_changes import (
+    ApplyPlanChangesInput,
+    ApplyPlanChangesUseCase,
+)
 from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
+from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.errors import PlanChangeNotFoundError, ProjectNotFoundError
+from kosmo.contracts.sdd.errors import (
+    DocumentNotFoundError,
+    PlanChangeNotFoundError,
+    ProjectNotFoundError,
+)
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     AddPlanChangeRequest,
     ApplyBatchRequest,
     BatchResultView,
+    FailedChangeView,
     HttpErrorResponse,
     PlanStateView,
 )
@@ -28,15 +39,20 @@ def _manage_plan_changes(request: Request) -> ManagePlanChangesUseCase:
     return request.app.state.manage_plan_changes
 
 
+def _apply_plan_changes(request: Request) -> ApplyPlanChangesUseCase:
+    return request.app.state.apply_plan_changes
+
+
 @router.get(
     "",
     summary="Obtener estado del plan de cambios",
-    description="Devuelve todos los cambios acumulados en el plan para una fase y contexto específicos.",
+    description="Devuelve los cambios activos del plan (pending, added, conflict) para una fase y contexto.",
     response_model=PlanStateView,
     operation_id="get_plan_state",
 )
 async def get_plan_state(
     project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
     phase: Annotated[SpecPhase, Query(..., description="Fase cuyos cambios se consultan")],
     uc: Annotated[ManagePlanChangesUseCase, Depends(_manage_plan_changes)],
     context: Annotated[str | None, Query(description="Contexto específico (opcional para Descubrimiento)")] = None,
@@ -49,7 +65,7 @@ async def get_plan_state(
         )
         return PlanStateView.from_domain(plan_state_output)
     except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
 
 
 @router.delete(
@@ -64,6 +80,7 @@ async def get_plan_state(
 )
 async def discard_plan(
     project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
     phase: Annotated[SpecPhase, Query(..., description="Fase cuyo plan se descarta")],
     uc: Annotated[ManagePlanChangesUseCase, Depends(_manage_plan_changes)],
     context: Annotated[str | None, Query(description="Contexto específico (opcional para Descubrimiento)")] = None,
@@ -75,7 +92,7 @@ async def discard_plan(
             context_id=context,
         )
     except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
 
 
 @router.post(
@@ -87,6 +104,7 @@ async def discard_plan(
 )
 async def add_plan_change(
     project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
     request: AddPlanChangeRequest,
     phase: Annotated[SpecPhase, Query(..., description="Fase a la que pertenece el cambio")],
     uc: Annotated[ManagePlanChangesUseCase, Depends(_manage_plan_changes)],
@@ -106,7 +124,7 @@ async def add_plan_change(
         )
         return PlanStateView.from_domain(plan_state_output)
     except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
 
 
 @router.delete(
@@ -118,6 +136,7 @@ async def add_plan_change(
 )
 async def remove_plan_change(
     project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
     change_id: str,
     phase: Annotated[SpecPhase, Query(..., description="Fase a la que pertenece el cambio")],
     uc: Annotated[ManagePlanChangesUseCase, Depends(_manage_plan_changes)],
@@ -132,24 +151,42 @@ async def remove_plan_change(
         )
         return PlanStateView.from_domain(plan_state_output)
     except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     except PlanChangeNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
 
 
 @router.post(
     "/apply",
     summary="Aplicar lote de cambios",
-    description="Aplica atómicamente un batch de cambios aceptados sobre los documentos. (Not Implemented Yet)",
+    description="Aplica un batch de cambios al documento de Descubrimiento",
     response_model=BatchResultView,
     operation_id="apply_batch",
 )
 async def apply_batch(
-    _project_id: str,
-    _request: ApplyBatchRequest,
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Annotated[ApplyBatchRequest, Body(...)],
+    uc: Annotated[ApplyPlanChangesUseCase, Depends(_apply_plan_changes)],
 ) -> BatchResultView:
-    # Endpoint stub para la tarea T17, se implementará completamente en HU-15.
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="ApplyBatchUseCase no está implementado aún en esta tarea.",
+    try:
+        output = await uc.execute(
+            ApplyPlanChangesInput(
+                project_id=ProjectId(project_id),
+                phase=request.phase,
+                change_ids=[PlanChangeId(cid) for cid in request.changes],
+            )
+        )
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except DocumentNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    return BatchResultView(
+        applied_count=output.applied_count,
+        failed_count=output.failed_count,
+        failed_changes=[FailedChangeView(id=str(fc.id), reason=fc.reason) for fc in output.failed_changes],
+        propagation=None,
     )

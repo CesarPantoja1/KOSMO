@@ -50,7 +50,6 @@ const CreateProjectForm = () => {
 
 	const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		let value = e.target.value;
-		value = value.replace(alphaRegex, '');
 		if (value.length > 1000) {
 			value = value.slice(0, 1000);
 		}

@@ -162,7 +162,7 @@ class SqlAlchemyChatRepository(ChatRepository):
             id=str(change.id),
             project_id=str(project_id),
             phase=phase.value,
-            context_id=None,
+            context_id=change.context_id,
             section=change.section,
             description=change.description,
             diff_before=change.diff.before,
@@ -200,6 +200,7 @@ class SqlAlchemyChatRepository(ChatRepository):
                     origin=m.origin,
                     rationale=m.rationale,
                     user_version=m.user_version,
+                    context_id=m.context_id,
                 )
                 for m in models
             ]
@@ -234,6 +235,7 @@ class SqlAlchemyChatRepository(ChatRepository):
                 origin=model.origin,
                 rationale=model.rationale,
                 user_version=model.user_version,
+                context_id=model.context_id,
             )
 
     async def remove_plan_change(

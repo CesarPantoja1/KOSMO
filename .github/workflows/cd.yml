@@ -166,7 +166,7 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.web }}
           build-args: |
-            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_PUBLIC_API_URL=https://kosmo.cespan.dev
             NEXT_PUBLIC_APP_NAME=KOSMO
             NEXT_PUBLIC_APP_ENV=production
             NEXT_PUBLIC_AUTH_DISABLED=true
@@ -266,11 +266,14 @@ jobs:
              docker run --rm --env-file .env --network kosmo-network \
                --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
              docker compose -p kosmo -f compose.yaml up -d
+             # Reload the transferred Nginx configuration after app containers
+             # have been recreated. --no-deps prevents an unnecessary restart
+             # of frontend or backend.
+             docker compose -p kosmo -f compose.yaml up -d --no-deps --force-recreate nginx
              for attempt in $(seq 1 24); do
                status="$(docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" kosmo-backend)"
                if [ "$status" = healthy ]; then
-                 docker compose -p kosmo -f compose.yaml ps
-                 exit 0
+                 break
                fi
                if [ "$status" = unhealthy ] || [ "$status" = exited ]; then
                  docker compose -p kosmo -f compose.yaml logs --tail=100 backend
@@ -278,7 +281,19 @@ jobs:
                fi
                sleep 5
              done
-             docker compose -p kosmo -f compose.yaml logs --tail=100 backend
+             if [ "${status:-unknown}" != healthy ]; then
+               docker compose -p kosmo -f compose.yaml logs --tail=100 backend
+               exit 1
+             fi
+             for attempt in $(seq 1 15); do
+               if docker exec kosmo-nginx wget -q -O /dev/null http://127.0.0.1/ && \
+                  docker exec kosmo-nginx wget -q -O /dev/null http://127.0.0.1/api/v1/openapi.json; then
+                 docker compose -p kosmo -f compose.yaml ps
+                 exit 0
+               fi
+               sleep 2
+             done
+             docker compose -p kosmo -f compose.yaml logs --tail=100 nginx backend
              exit 1'
 
   smoke-test-production:

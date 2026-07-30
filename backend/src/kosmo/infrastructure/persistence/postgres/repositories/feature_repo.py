@@ -24,7 +24,11 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
 
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
         async with self._session_factory() as session:
-            stmt = select(FeatureModel).where(FeatureModel.project_id == str(project_id))
+            stmt = (
+                select(FeatureModel)
+                .where(FeatureModel.project_id == str(project_id))
+                .order_by(FeatureModel.number.asc())
+            )
             result = await session.execute(stmt)
             models = result.scalars().all()
             return [self._to_entity(m) for m in models]

@@ -6,6 +6,7 @@ interface ModelingStore {
 	setHasDiagram: (id: string, has: boolean) => void;
 	isEditorMaximized: boolean;
 	setEditorMaximized: (v: boolean) => void;
+	resetModeling: () => void;
 }
 
 export const useModelingStore = create<ModelingStore>()(
@@ -18,6 +19,7 @@ export const useModelingStore = create<ModelingStore>()(
 				})),
 			isEditorMaximized: false,
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
+			resetModeling: () => set({ hasDiagram: {}, isEditorMaximized: false }),
 		}),
 		{
 			name: 'kosmo-modeling-store',

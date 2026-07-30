@@ -1,11 +1,8 @@
 // MODELS
 export type {
 	AffectedPhase,
-	AppliedItem,
 	ApplyResponse,
-	CollisionItem,
-	CollisionResponse,
-	FailedItem,
+	FailedChange,
 	PlanChange,
 	PlanChangeDiff,
 	PlanChangeStatus,
@@ -19,7 +16,6 @@ export { isUsingMocks, usePlanStore } from './model/store';
 export {
 	addPlanChange,
 	applyPlanChanges,
-	checkPlanCollision,
 	deletePlanChange,
 	discardPlan,
 	getPlan,

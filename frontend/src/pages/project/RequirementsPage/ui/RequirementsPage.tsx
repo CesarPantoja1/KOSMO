@@ -339,9 +339,7 @@ const RequirementsPage = () => {
 							</Link>
 						</div>
 					)}
-				</div>
 
-				<div className='page-row'>
 					<div className='flex gap-4 flex-1 min-h-0'>
 						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
 							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
@@ -499,13 +497,21 @@ const RequirementsPage = () => {
 								)}
 						</div>
 					</div>
+				</div>
 
-					<div className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}>
-						<Chatbot
-							placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
-							onClose={() => setIsChatbotOpen(false)}
-						/>
-					</div>
+				<div
+					className={`chatbot
+						${
+							isChatbotOpen
+								? 'opacity-100 translate-x-0 flex-4/12'
+								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+						}
+				`}
+				>
+					<Chatbot
+						placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
+						onClose={() => setIsChatbotOpen(false)}
+					/>
 				</div>
 			</div>
 		</>

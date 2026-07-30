@@ -1,21 +1,127 @@
 'use client';
 
-import { Plus } from '@/shared/ui';
+import {
+	useCharacteristicStore,
+	type CharacteristicChatResponse,
+} from '@/entities/characteristic';
+import {
+	addPlanChange,
+	deletePlanChange,
+	usePlanStore,
+	type PlanChange,
+} from '@/entities/plan';
+import { Chatbot, FloatingPlan } from '@/feature';
+import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
+import { Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
+import { useAppStore } from 'app/store/app.store';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
-import { Chatbot } from '@/feature';
-import { useState } from 'react';
+
+function toChatMessage(r: CharacteristicChatResponse): ChatMessage {
+	return {
+		id: r.id,
+		role: r.role,
+		content: r.content,
+		created_at: r.created_at,
+		change_suggestion: r.change_suggestion
+			? {
+					id: r.change_suggestion.id,
+					section: r.change_suggestion.section,
+					description: r.change_suggestion.description,
+					diff_before: r.change_suggestion.diff_before,
+					diff_after: r.change_suggestion.diff_after,
+					rationale: r.change_suggestion.rationale,
+				}
+			: undefined,
+	};
+}
 
 const CharacteristicsPage = () => {
 	const { isLoading, searchQuery, setSearchQuery, filtered } = useCharacteristicsPage();
 
-	const [isChatbotOpen, setIsChatbotOpen] = useState(true);
+	const [activeFeatureId, setActiveFeatureId] = useState<string | null>(null);
+	const [isChatLoading, setIsChatLoading] = useState(false);
+
+	const currentProject = useAppStore((s) => s.currentProject);
+
+	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
+	const storeSendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
+
+	const addToPlan = usePlanStore((s) => s.addToPlan);
+	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
+
+	useEffect(() => {
+		if (currentProject) {
+			fetchAndHydratePlan(currentProject.id, 'features');
+		}
+	}, [currentProject, fetchAndHydratePlan]);
+
+	const handleRefine = (featureId: string) => {
+		setActiveFeatureId(featureId);
+	};
+
+	const handleSendChat = async (content: string) => {
+		if (!activeFeatureId) return;
+		setIsChatLoading(true);
+		try {
+			await storeSendChatMessage(activeFeatureId, content);
+		} catch (err) {
+			const errorMessage =
+				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
+			toast.error(errorMessage);
+		} finally {
+			setIsChatLoading(false);
+		}
+	};
+
+	const handlePlanAction = (
+		action: 'add' | 'remove' | 'discard',
+		suggestion: ChangeSuggestion,
+		_messageId: string,
+	) => {
+		if (!currentProject || !activeFeatureId) return;
+
+		if (action === 'add') {
+			const change: PlanChange = {
+				id: suggestion.id,
+				section: suggestion.section,
+				description: suggestion.description ?? suggestion.section,
+				diff: {
+					before: suggestion.diff_before,
+					after: suggestion.diff_after,
+				},
+				status: 'pending',
+				origin: 'chat',
+				phase: 'features',
+				context: activeFeatureId,
+				rationale: suggestion.rationale ?? undefined,
+				created_at: new Date().toISOString(),
+			};
+			addToPlan('features', change);
+			addPlanChange(currentProject.id, 'features', change).catch((err) => {
+				console.warn('[CharacteristicsPage] Error al persistir cambio en backend:', err);
+			});
+		}
+
+		if (action === 'remove') {
+			removeFromPlan('features', suggestion.id);
+			deletePlanChange(currentProject.id, 'features', suggestion.id).catch((err) => {
+				console.warn('[CharacteristicsPage] Error al eliminar cambio en backend:', err);
+			});
+		}
+	};
+
+	const chatMessages: ChatMessage[] = (chatHistories[activeFeatureId!] ?? []).map(
+		toChatMessage,
+	);
 
 	return (
-		<div className='page-container'>
+		<div className='page-container gap-2'>
 			<div className='page-header'>
 				<h2 className='text-base-800 text-3xl font-bold'>Características</h2>
 				<p className='text-base-600 text-lg'>
@@ -43,10 +149,8 @@ const CharacteristicsPage = () => {
 						</Link>
 					</div>
 				</div>
-			</div>
 
-			<div className='page-row'>
-				<div className='flex-1 flex flex-col min-h-0 overflow-y-auto'>
+				<div className='relative flex-1 flex flex-col min-h-0 overflow-y-auto'>
 					{isLoading && (
 						<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
 							{[1, 2, 3, 4, 5].map((i) => (
@@ -65,34 +169,56 @@ const CharacteristicsPage = () => {
 					)}
 
 					{!isLoading && (
-						<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
-							{filtered.length === 0 && searchQuery.trim() ? (
-								<div className='outline outline-base-300 m-0.5 px-8 py-16 flex flex-col justify-center items-center gap-4'>
-									<p className='text-base-600 text-lg font-medium text-center'>
-										No se encontraron características que coincidan con su búsqueda
-									</p>
-								</div>
-							) : (
-								filtered.map((c) => (
-									<CardCharacterist
-										key={c.id}
-										displayId={c.display_id}
-										title={c.title}
-										description={c.description}
-										searchQuery={searchQuery}
-									/>
-								))
-							)}
-						</div>
+						<>
+							<div className='overflow-y-auto flex flex-col gap-4 pb-4'>
+								{filtered.length === 0 && searchQuery.trim() ? (
+									<div className='outline outline-base-300 m-0.5 px-8 py-16 flex flex-col justify-center items-center gap-4'>
+										<p className='text-base-600 text-lg font-medium text-center'>
+											No se encontraron características que coincidan con su búsqueda
+										</p>
+									</div>
+								) : (
+									filtered.map((c) => (
+										<CardCharacterist
+											key={c.id}
+											id={c.id}
+											displayId={c.display_id}
+											title={c.title}
+											description={c.description}
+											searchQuery={searchQuery}
+											isActive={c.id === activeFeatureId}
+											onRefine={handleRefine}
+										/>
+									))
+								)}
+							</div>
+
+							<FloatingPlan
+								phase='features'
+								navigateTo='/proyecto/caracteristicas/plan'
+							/>
+						</>
 					)}
 				</div>
+			</div>
 
-				<div className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}>
-					<Chatbot
-						placeholder='ej., Haz que la visión del producto sea más concisa y enfócate en los resultados estratégicos'
-						onClose={() => setIsChatbotOpen(false)}
-					/>
-				</div>
+			<div
+				className={`chatbot relative
+						${
+							activeFeatureId
+								? 'opacity-100 translate-x-0 flex-4/12'
+								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+						}
+				`}
+			>
+				<Chatbot
+					placeholder='ej. mejorar característica de búsqueda'
+					onClose={() => setActiveFeatureId(null)}
+					messages={chatMessages}
+					onSendMessage={handleSendChat}
+					isLoading={isChatLoading}
+					onPlanAction={handlePlanAction}
+				/>
 			</div>
 		</div>
 	);

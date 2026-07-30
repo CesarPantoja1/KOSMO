@@ -152,6 +152,22 @@ def test_historial_chat_empty_and_add_message():
     assert historial3.message_count == 2
     assert historial3.last_message == msg2
     assert historial3.messages == (msg1, msg2)
+    assert historial3.composite_key == "prj_001:descubrimiento:"
+
+
+def test_historial_chat_with_feature_context():
+    historial = HistorialChat(
+        id=ChatHistoryId("feature:feat_001"),
+        project_id=ProjectId("prj_001"),
+        phase=SpecPhase.CARACTERISTICAS,
+        context_id="feat_001",
+    )
+
+    assert historial.id == "feature:feat_001"
+    assert historial.project_id == "prj_001"
+    assert historial.phase == SpecPhase.CARACTERISTICAS
+    assert historial.context_id == "feat_001"
+    assert historial.composite_key == "prj_001:caracteristicas:feat_001"
 
 
 class FakeChatRepository:

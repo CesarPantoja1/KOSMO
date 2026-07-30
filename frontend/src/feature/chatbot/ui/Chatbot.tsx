@@ -1,6 +1,6 @@
 'use client';
 
-import { Ai, Close } from '@/shared/ui';
+import { Ai, Close, Send } from '@/shared/ui';
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
 import { ChatbotMessage } from './chatbot-message';
@@ -68,6 +68,16 @@ export const Chatbot = ({
 		}
 	};
 
+	// Ajusta la altura del textarea automáticamente según el contenido
+	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	useEffect(() => {
+		const textarea = textareaRef.current;
+		if (!textarea) return;
+
+		textarea.style.height = '0px';
+		textarea.style.height = `${textarea.scrollHeight}px`;
+	}, [input]);
+
 	return (
 		<div className='flex h-full w-full flex-col overflow-hidden bg-base-50'>
 			{/* Header */}
@@ -124,31 +134,46 @@ export const Chatbot = ({
 			</div>
 
 			{/* Input */}
-			<div className='border-t border-stone-300 bg-white p-4'>
-				<div className='rounded-xl border border-stone-300 bg-base-50 p-3 transition-all focus-within:border-ai'>
+			<div className='border-t border-stone-200 bg-white p-3'>
+				<div className='flex items-end gap-2 rounded-2xl border border-stone-300 bg-base-50 px-3 py-2 transition-colors focus-within:border-ai'>
 					<textarea
 						value={input}
-						onChange={(e) => setInput(e.target.value)}
+						onChange={(e) => {
+							setInput(e.target.value);
+
+							e.target.style.height = '0px';
+							e.target.style.height = `${e.target.scrollHeight}px`;
+						}}
+						ref={textareaRef}
 						onKeyDown={handleKeyDown}
 						placeholder={placeholder}
-						rows={3}
+						rows={1}
 						disabled={isSending || isLoading}
-						className='max-h-40 w-full resize-none bg-transparent text-sm leading-6 outline-none'
+						className='
+				max-h-36
+				min-h-[24px]
+				flex-1
+				resize-none
+				bg-transparent
+				py-1
+				text-sm
+				leading-6
+				outline-none
+			'
 					/>
-					<div className='mt-2 flex justify-end'>
-						<button
-							type='button'
-							onClick={handleSend}
-							disabled={!canSend}
-							className='flex items-center gap-2 rounded-lg bg-ai px-4 py-2 text-sm font-medium text-base-50 transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
-						>
-							<Ai size={16} color='text-base-50' />
-							{isSending || isLoading ? 'Pensando...' : 'Enviar'}
-						</button>
-					</div>
+
+					<button
+						type='button'
+						onClick={handleSend}
+						disabled={!canSend}
+						className='flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ai text-base-50 transition-all hover:scale-105 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
+					>
+						<Send size={16} color='text-base-50' />
+					</button>
 				</div>
-				<p className='mt-2 text-xs text-stone-400'>
-					Intro para enviar · Shift+Intro para nueva línea
+
+				<p className='mt-2 px-1 text-[11px] text-stone-400'>
+					Enter para enviar • Shift + Enter para nueva línea
 				</p>
 			</div>
 		</div>

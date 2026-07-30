@@ -2,10 +2,15 @@ import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type {
 	ApplyResponse,
-	CollisionResponse,
 	PlanChange,
 	PlanResponse,
 } from '../model/types';
+
+const BACKEND_PHASE: Record<string, string> = {
+	discovery: 'descubrimiento',
+	features: 'caracteristicas',
+	requirements: 'requisitos',
+};
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,6 +62,7 @@ const mockGetPlan = async (
 	await delay(400);
 	const changes = mockPlanByPhase[phase] ?? [];
 	return {
+		project_id: _projectId,
 		phase,
 		context: _contextId ?? '',
 		changes,
@@ -76,44 +82,23 @@ const mockDiscardPlan = async (
 
 const mockAddPlanChange = async (
 	_projectId: string,
-	changeId: string,
+	phase: string,
+	change: PlanChange,
 ): Promise<PlanResponse> => {
 	await delay(600);
-	// Buscar el cambio en todos los phases del mock
-	for (const phase of Object.keys(mockPlanByPhase)) {
-		const change = mockPlanByPhase[phase].find((c) => c.id === changeId);
-		if (change) {
-			return {
-				phase,
-				context: '',
-				changes: mockPlanByPhase[phase],
-				pending_count: mockPlanByPhase[phase].filter((c) => c.status === 'pending')
-					.length,
-				conflict_count: mockPlanByPhase[phase].filter((c) => c.status === 'conflict')
-					.length,
-			};
-		}
-	}
-	// Si no existe, crear uno nuevo en discovery
-	const newChange: PlanChange = {
-		id: changeId,
-		section: 'Nueva sección',
-		description: 'Cambio agregado via mock',
-		diff: { before: '', after: 'Contenido nuevo' },
-		status: 'pending',
-		origin: 'manual',
-		phase: 'discovery',
-		context: '',
-		created_at: new Date().toISOString(),
-	};
-	mockPlanByPhase['discovery'] = [...(mockPlanByPhase['discovery'] ?? []), newChange];
-	const list = mockPlanByPhase['discovery'];
+	const existing = mockPlanByPhase[phase] ?? [];
+	const idx = existing.findIndex((c) => c.id === change.id);
+	const updated = idx >= 0
+		? existing.map((c, i) => (i === idx ? change : c))
+		: [...existing, change];
+	mockPlanByPhase[phase] = updated;
 	return {
-		phase: 'discovery',
+		project_id: _projectId,
+		phase,
 		context: '',
-		changes: list,
-		pending_count: list.filter((c) => c.status === 'pending').length,
-		conflict_count: list.filter((c) => c.status === 'conflict').length,
+		changes: updated,
+		pending_count: updated.filter((c) => c.status === 'pending').length,
+		conflict_count: updated.filter((c) => c.status === 'conflict').length,
 	};
 };
 
@@ -126,6 +111,7 @@ const mockDeletePlanChange = async (
 	const list = (mockPlanByPhase[phase] ?? []).filter((c) => c.id !== changeId);
 	mockPlanByPhase[phase] = list;
 	return {
+		project_id: _projectId,
 		phase,
 		context: '',
 		changes: list,
@@ -134,45 +120,95 @@ const mockDeletePlanChange = async (
 	};
 };
 
-const mockCheckCollision = async (_projectId: string): Promise<CollisionResponse> => {
-	await delay(800);
-	return {
-		has_collision: false,
-		collisions: [],
-	};
-};
-
 const mockApplyChanges = async (
 	_projectId: string,
 	changeIds: string[],
 ): Promise<ApplyResponse> => {
 	await delay(1200);
-	// Marcar como accepted en el mock state
+	const failed_changes: { id: string; reason: string }[] = [];
 	for (const phase of Object.keys(mockPlanByPhase)) {
-		mockPlanByPhase[phase] = mockPlanByPhase[phase].map((c) =>
-			changeIds.includes(c.id) ? { ...c, status: 'accepted' } : c,
-		);
+		const list = mockPlanByPhase[phase];
+		if (!list) continue;
+		const applied = list.filter((c) => changeIds.includes(c.id) && c.status !== 'conflict');
+		const failed = list.filter((c) => changeIds.includes(c.id) && c.status === 'conflict');
+		for (const f of failed) {
+			failed_changes.push({ id: f.id, reason: 'El fragmento original ya no se encuentra en el documento' });
+		}
+		mockPlanByPhase[phase] = list
+			.filter((c) => !changeIds.includes(c.id))
+			.concat(applied.map((c) => ({ ...c, status: 'applied' as const })));
 	}
 	return {
-		applied: changeIds.map((id) => ({ change_id: id, section: 'Mock section' })),
-		failed: [],
-		propagation: { affected_phases: [] },
+		applied_count: changeIds.length - failed_changes.length,
+		failed_count: failed_changes.length,
+		failed_changes,
+		propagation: null,
 	};
 };
 
 // --- Real implementations ---
+
+function mapBackendPhase(frontendPhase: string): string {
+	return BACKEND_PHASE[frontendPhase] ?? frontendPhase;
+}
+
+interface BackendPlanResponse {
+	project_id: string;
+	phase: string;
+	context: string;
+	changes: Array<{
+		id: string;
+		section: string;
+		description: string;
+		diff: { before: string; after: string };
+		status: string;
+		origin: string;
+		rationale?: string | null;
+		user_version?: string | null;
+		context_id?: string | null;
+	}>;
+	pending_count: number;
+	conflict_count: number;
+}
+
+function mapBackendChange(item: BackendPlanResponse['changes'][number], frontendPhase: string, context: string): PlanChange {
+	return {
+		id: item.id,
+		section: item.section,
+		description: item.description,
+		diff: { before: item.diff.before, after: item.diff.after },
+		status: item.status as PlanChange['status'],
+		origin: item.origin ?? '',
+		phase: frontendPhase,
+		context: item.context_id ?? context ?? '',
+		rationale: item.rationale ?? undefined,
+		userVersion: item.user_version ?? undefined,
+		created_at: new Date().toISOString(),
+	};
+}
 
 const realGetPlan = async (
 	projectId: string,
 	phase: string,
 	contextId?: string,
 ): Promise<PlanResponse> => {
-	const params = new URLSearchParams({ phase });
+	const params = new URLSearchParams({ phase: mapBackendPhase(phase) });
 	if (contextId) params.append('context', contextId);
-	return apiClient<PlanResponse>(
+	const data = await apiClient<BackendPlanResponse>(
 		`/api/v1/projects/${encodeURIComponent(projectId)}/plan?${params.toString()}`,
 		{ method: 'GET' },
 	);
+	const mappedChanges = (data.changes ?? []).map((item) =>
+		mapBackendChange(item, phase, data.context ?? ''),
+	);
+	return {
+		project_id: data.project_id,
+		phase,
+		context: data.context ?? '',
+		changes: mappedChanges,
+		pending_count: data.pending_count,
+		conflict_count: data.conflict_count,
+	};
 };
 
 const realDiscardPlan = async (
@@ -180,7 +216,7 @@ const realDiscardPlan = async (
 	phase: string,
 	contextId?: string,
 ): Promise<void> => {
-	const params = new URLSearchParams({ phase });
+	const params = new URLSearchParams({ phase: mapBackendPhase(phase) });
 	if (contextId) params.append('context', contextId);
 	await apiClient<void>(
 		`/api/v1/projects/${encodeURIComponent(projectId)}/plan?${params.toString()}`,
@@ -190,47 +226,92 @@ const realDiscardPlan = async (
 
 const realAddPlanChange = async (
 	projectId: string,
-	changeId: string,
-): Promise<PlanResponse> =>
-	apiClient<PlanResponse>(
-		`/api/v1/projects/${encodeURIComponent(projectId)}/plan/changes`,
+	phase: string,
+	change: PlanChange,
+): Promise<PlanResponse> => {
+	const params = new URLSearchParams({ phase: mapBackendPhase(phase) });
+	if (change.context) params.append('context', change.context);
+	const data = await apiClient<BackendPlanResponse>(
+		`/api/v1/projects/${encodeURIComponent(projectId)}/plan/changes?${params.toString()}`,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ change_id: changeId }),
+			body: JSON.stringify({
+				change_id: change.id,
+				section: change.section,
+				description: change.description,
+				diff_before: change.diff.before,
+				diff_after: change.diff.after,
+				rationale: change.rationale,
+			}),
 		},
 	);
+	const mappedChanges = (data.changes ?? []).map((item) =>
+		mapBackendChange(item, phase, data.context ?? ''),
+	);
+	return {
+		project_id: data.project_id,
+		phase,
+		context: data.context ?? '',
+		changes: mappedChanges,
+		pending_count: data.pending_count,
+		conflict_count: data.conflict_count,
+	};
+};
 
 const realDeletePlanChange = async (
 	projectId: string,
 	phase: string,
 	changeId: string,
 ): Promise<PlanResponse> => {
-	const params = new URLSearchParams({ phase });
-	return apiClient<PlanResponse>(
+	const params = new URLSearchParams({ phase: mapBackendPhase(phase) });
+	const data = await apiClient<BackendPlanResponse>(
 		`/api/v1/projects/${encodeURIComponent(projectId)}/plan/changes/${encodeURIComponent(changeId)}?${params.toString()}`,
 		{ method: 'DELETE' },
 	);
+	const mappedChanges = (data.changes ?? []).map((item) =>
+		mapBackendChange(item, phase, data.context ?? ''),
+	);
+	return {
+		project_id: data.project_id,
+		phase,
+		context: data.context ?? '',
+		changes: mappedChanges,
+		pending_count: data.pending_count,
+		conflict_count: data.conflict_count,
+	};
 };
 
-const realCheckCollision = async (projectId: string): Promise<CollisionResponse> =>
-	apiClient<CollisionResponse>(
-		`/api/v1/projects/${encodeURIComponent(projectId)}/plan/collision-check`,
-		{ method: 'POST' },
-	);
+interface BackendApplyResponse {
+	applied_count: number;
+	failed_count: number;
+	failed_changes: Array<{ id: string; reason: string }>;
+	propagation: { affected_phases: Array<{ phase: string; affected_count: number; affected_ids: string[] }> } | null;
+}
 
 const realApplyChanges = async (
 	projectId: string,
+	phase: string,
 	changeIds: string[],
-): Promise<ApplyResponse> =>
-	apiClient<ApplyResponse>(
+): Promise<ApplyResponse> => {
+	const data = await apiClient<BackendApplyResponse>(
 		`/api/v1/projects/${encodeURIComponent(projectId)}/plan/apply`,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ change_ids: changeIds }),
+			body: JSON.stringify({
+				phase: mapBackendPhase(phase),
+				changes: changeIds,
+			}),
 		},
 	);
+	return {
+		applied_count: data.applied_count,
+		failed_count: data.failed_count,
+		failed_changes: data.failed_changes ?? [],
+		propagation: data.propagation ?? null,
+	};
+};
 
 // --- Exports (switch based on USE_MOCKS) ---
 
@@ -254,11 +335,12 @@ export const discardPlan = (
 
 export const addPlanChange = (
 	projectId: string,
-	changeId: string,
+	phase: string,
+	change: PlanChange,
 ): Promise<PlanResponse> =>
 	USE_MOCKS
-		? mockAddPlanChange(projectId, changeId)
-		: realAddPlanChange(projectId, changeId);
+		? mockAddPlanChange(projectId, phase, change)
+		: realAddPlanChange(projectId, phase, change);
 
 export const deletePlanChange = (
 	projectId: string,
@@ -269,13 +351,11 @@ export const deletePlanChange = (
 		? mockDeletePlanChange(projectId, phase, changeId)
 		: realDeletePlanChange(projectId, phase, changeId);
 
-export const checkPlanCollision = (projectId: string): Promise<CollisionResponse> =>
-	USE_MOCKS ? mockCheckCollision(projectId) : realCheckCollision(projectId);
-
 export const applyPlanChanges = (
 	projectId: string,
+	phase: string,
 	changeIds: string[],
 ): Promise<ApplyResponse> =>
 	USE_MOCKS
 		? mockApplyChanges(projectId, changeIds)
-		: realApplyChanges(projectId, changeIds);
+		: realApplyChanges(projectId, phase, changeIds);
