@@ -1,4 +1,4 @@
-export type PlanChangeStatus = 'pending' | 'accepted' | 'conflict' | 'discarded';
+export type PlanChangeStatus = 'pending' | 'added' | 'accepted' | 'applied' | 'conflict' | 'discarded';
 
 export interface PlanChangeDiff {
 	before: string;
@@ -20,6 +20,7 @@ export interface PlanChange {
 }
 
 export interface PlanResponse {
+	project_id: string;
 	phase: string;
 	context: string;
 	changes: PlanChange[];
@@ -27,33 +28,9 @@ export interface PlanResponse {
 	conflict_count: number;
 }
 
-export interface CollisionItem {
+export interface FailedChange {
 	id: string;
-	section: string;
-	diff_before: string;
-	diff_after: string;
-	status: PlanChangeStatus;
-	origin: string;
-	phase: string;
-	context: string;
-	rationale: string;
-	created_at: string;
-}
-
-export interface CollisionResponse {
-	has_collision: boolean;
-	collisions: CollisionItem[];
-}
-
-export interface AppliedItem {
-	change_id: string;
-	section: string;
-}
-
-export interface FailedItem {
-	change_id: string;
-	section: string;
-	error: string;
+	reason: string;
 }
 
 export interface AffectedPhase {
@@ -63,9 +40,10 @@ export interface AffectedPhase {
 }
 
 export interface ApplyResponse {
-	applied: AppliedItem[];
-	failed: FailedItem[];
+	applied_count: number;
+	failed_count: number;
+	failed_changes: FailedChange[];
 	propagation: {
 		affected_phases: AffectedPhase[];
-	};
+	} | null;
 }

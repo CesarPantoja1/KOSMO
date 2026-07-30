@@ -66,3 +66,10 @@ class ModeloPhaseContext:
 class DiscoveryChatContext:
     current_document: RichTextDocument
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+
+@dataclass(frozen=True)
+class FeatureChatContext:
+    feature: Feature
+    discovery_document: RichTextDocument
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]

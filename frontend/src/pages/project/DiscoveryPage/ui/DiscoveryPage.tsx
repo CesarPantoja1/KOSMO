@@ -9,13 +9,17 @@ import {
 } from '@/entities/discovery';
 import type { PlanChange } from '@/entities/plan';
 import { addPlanChange, deletePlanChange, usePlanStore } from '@/entities/plan';
-import { Chatbot, MarkdownEditor, type MarkdownEditorHandle } from '@/feature';
+import {
+	Chatbot,
+	FloatingPlan,
+	MarkdownEditor,
+	type MarkdownEditorHandle,
+} from '@/feature';
 import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
 import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { FloatingDiscoveryPlan } from './FloatingPlan';
 
 /** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
 function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
@@ -232,7 +236,7 @@ const DiscoveryPage = () => {
 				created_at: new Date().toISOString(),
 			};
 			addToPlan('discovery', change);
-			addPlanChange(currentProject.id, change.id).catch((err) => {
+			addPlanChange(currentProject.id, 'discovery', change).catch((err) => {
 				console.warn('[DiscoveryPage] Error al persistir cambio en backend:', err);
 			});
 		}
@@ -267,8 +271,8 @@ const DiscoveryPage = () => {
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
-				<div className='page-header'>
+			<div className={`page-container gap-2 ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+				<div className='page-header flex-8/12'>
 					<h2 className='text-base-800 text-3xl font-bold'>
 						Descubrimiento del proyecto
 					</h2>
@@ -276,7 +280,6 @@ const DiscoveryPage = () => {
 						Identificar y documentar la información estratégica del proyecto para
 						comprender el problema, el contexto y el alcance del negocio.
 					</p>
-
 					{!isEditorMaximized && (
 						<div className='flex justify-end gap-3'>
 							<button
@@ -298,9 +301,6 @@ const DiscoveryPage = () => {
 							</button>
 						</div>
 					)}
-				</div>
-
-				<div className='page-row'>
 					<div className='flex-1 flex flex-col min-h-0'>
 						{/* TODO: Mejorar el skeleton */}
 						{isLoading && (
@@ -339,23 +339,32 @@ const DiscoveryPage = () => {
 									onMinimize={() => setEditorMaximized(false)}
 								/>
 
-								<FloatingDiscoveryPlan />
+								<FloatingPlan
+									phase='discovery'
+									navigateTo='/proyecto/descubrimiento/plan'
+								/>
 							</div>
 						)}
 					</div>
+				</div>
 
-					<div
-						className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}
-					>
-						<Chatbot
-							placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
-							onClose={() => setIsChatbotOpen(false)}
-							messages={chatMessages}
-							onSendMessage={handleSendChat}
-							isLoading={isChatLoading}
-							onPlanAction={handlePlanAction}
-						/>
-					</div>
+				<div
+					className={`chatbot
+						${
+							isChatbotOpen
+								? 'opacity-100 translate-x-0 flex-4/12'
+								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+						}
+				`}
+				>
+					<Chatbot
+						placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
+						onClose={() => setIsChatbotOpen(false)}
+						messages={chatMessages}
+						onSendMessage={handleSendChat}
+						isLoading={isChatLoading}
+						onPlanAction={handlePlanAction}
+					/>
 				</div>
 			</div>
 		</>

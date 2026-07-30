@@ -67,6 +67,7 @@ from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
     DiscoveryRefineMode,
 )
 from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
+from kosmo.domain.pipeline.phase_modes.features_chat_mode import FeaturesChatMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_modes.modelo_mode import ModeloMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
@@ -268,6 +269,7 @@ class PipelineComponents:
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
     pattern_store: KnowledgePatternStore
+    validate_phase_context: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -313,6 +315,7 @@ def build_pipeline_components(
     context_builder = ContextBuilder(
         document_repo=document_repo,
         project_repo=project_repo,
+        feature_repo=feature_repo,
     )
 
     # 4. Configurar el registro de guardrails con los validadores existentes
@@ -415,6 +418,14 @@ def build_pipeline_components(
             mode=DiscoveryChatMode(),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="features_chat",
+            description="Chat conversacional de característica a nivel de usuario",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=FeaturesChatMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -460,6 +471,10 @@ def build_pipeline_components(
         pattern_store=pattern_store,  # type: ignore[reportArgumentType]
     )
 
+    from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
+
+    validate_phase_context = ValidatePhaseContextUseCase(llm_client=llm_client)
+
     return PipelineComponents(
         llm_client=llm_client,
         context_builder=context_builder,
@@ -468,6 +483,7 @@ def build_pipeline_components(
         skill_registry=skill_registry,
         agent_memory=agent_memory,
         pattern_store=pattern_store,
+        validate_phase_context=validate_phase_context,
     )
 
 
@@ -480,6 +496,7 @@ class DiscoveryComponents:
     process_discovery_chat_message: ProcessDiscoveryChatMessageUseCase
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
     manage_plan_changes: Any
+    apply_plan_changes: Any
 
 
 def build_discovery_components(
@@ -488,6 +505,7 @@ def build_discovery_components(
 ) -> DiscoveryComponents:
     project_repo = SqlAlchemyProjectRepository(session_factory)
     document_repo = SqlAlchemyDocumentRepository(session_factory)
+    from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
@@ -524,6 +542,12 @@ def build_discovery_components(
             project_repo=project_repo,
             chat_repo=chat_repo,
         ),
+        apply_plan_changes=ApplyPlanChangesUseCase(
+            project_repo=project_repo,
+            chat_repo=chat_repo,
+            document_repo=document_repo,
+            feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        ),
     )
 
 
@@ -534,6 +558,8 @@ class FeaturesComponents:
     save_selected_features: SaveSelectedFeaturesUseCase
     create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
+    process_feature_chat_message: Any
+    get_feature_chat_history: Any
 
 
 def build_features_components(
@@ -548,6 +574,29 @@ def build_features_components(
         feature_repo=feature_repo,
         llm_client=pipeline.llm_client,
     )
+
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
+
+    chat_repo = SqlAlchemyChatRepository(session_factory)
+
+    from kosmo.application.features.process_feature_chat_message import ProcessFeatureChatMessageUseCase
+
+    process_feature_chat = ProcessFeatureChatMessageUseCase(
+        project_repo=project_repo,
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        chat_repo=chat_repo,
+        context_builder=pipeline.context_builder,
+        agent=pipeline.agent,
+    )
+
+    from kosmo.application.features.get_feature_chat_history import GetFeatureChatHistoryUseCase
+
+    get_feature_chat_history = GetFeatureChatHistoryUseCase(
+        feature_repo=feature_repo,
+        chat_repo=chat_repo,
+    )
+
     return FeaturesComponents(
         generate_features=GenerateFeaturesUseCase(
             project_repo=project_repo,
@@ -564,6 +613,8 @@ def build_features_components(
             suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
+        process_feature_chat_message=process_feature_chat,
+        get_feature_chat_history=get_feature_chat_history,
     )
 
 

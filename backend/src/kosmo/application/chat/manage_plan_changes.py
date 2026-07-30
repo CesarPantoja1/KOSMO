@@ -17,6 +17,8 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import ProjectRepository
 
+_ACTIVE_STATUSES = frozenset({EstadoPlanCambio.PENDING, EstadoPlanCambio.ADDED, EstadoPlanCambio.CONFLICT})
+
 
 @dataclass(frozen=True)
 class PlanStateOutput:
@@ -87,8 +89,17 @@ class ManagePlanChangesUseCase:
         await self._verify_project(project_id)
 
         existing_changes = await self._chat_repo.list_plan_changes(project_id, phase)
-        if any(str(c.id) == change_id for c in existing_changes):
+        if any(
+            c.section == section and c.diff.after == diff_after and c.status in _ACTIVE_STATUSES
+            for c in existing_changes
+        ):
             return self._build_state(project_id, phase, context_id, existing_changes)
+
+        existing_by_id = next((c for c in existing_changes if str(c.id) == change_id), None)
+        if existing_by_id is not None:
+            await self._chat_repo.update_plan_change_status(project_id, PlanChangeId(change_id), EstadoPlanCambio.ADDED)
+            changes = await self._chat_repo.list_plan_changes(project_id, phase)
+            return self._build_state(project_id, phase, context_id, changes)
 
         plan_change = PlanCambio(
             id=PlanChangeId(change_id),
@@ -98,6 +109,7 @@ class ManagePlanChangesUseCase:
             status=EstadoPlanCambio.ADDED,
             origin="chat",
             rationale=rationale,
+            context_id=context_id,
         )
         await self._chat_repo.add_plan_change(project_id, phase, plan_change)
 

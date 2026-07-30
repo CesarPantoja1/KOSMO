@@ -92,7 +92,7 @@ async def test_get_plan_state_counts_mixed_statuses() -> None:
     # Act
     result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
 
-    # Assert
+    # Assert — todos los estados se incluyen, conteos solo de activos
     assert result.pending_count == 2
     assert result.conflict_count == 1
     assert len(result.changes) == 4
@@ -308,3 +308,157 @@ async def test_discard_plan_clears_all() -> None:
     result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
     assert result.pending_count == 0
     assert len(result.changes) == 0
+
+
+# ── get_plan_state includes all statuses, counts only active ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_plan_state_includes_all_statuses_with_correct_counts() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    from kosmo.contracts import PlanCambio
+
+    def _pc(cid: str, status: EstadoPlanCambio) -> PlanCambio:
+        return PlanCambio(
+            id=PlanChangeId(cid),
+            section="S1",
+            description="d",
+            diff=DiffCambio(before="x", after="y"),
+            status=status,
+        )
+
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, _pc("chg_a", EstadoPlanCambio.ADDED))
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, _pc("chg_b", EstadoPlanCambio.APPLIED))
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, _pc("chg_c", EstadoPlanCambio.DISCARDED))
+
+    # Act
+    result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
+
+    # Assert — APPLIED y DISCARDED se incluyen, pero no cuentan como pendientes
+    assert len(result.changes) == 3
+    assert result.pending_count == 1
+    assert result.conflict_count == 0
+    statuses = {str(c.id): c.status for c in result.changes}
+    assert statuses["chg_a"] == EstadoPlanCambio.ADDED
+    assert statuses["chg_b"] == EstadoPlanCambio.APPLIED
+    assert statuses["chg_c"] == EstadoPlanCambio.DISCARDED
+
+
+# ── add_change dedup by content ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_add_change_dedup_by_section_and_after_content() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    # Act — agregar el mismo contenido con IDs distintos
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
+    result = await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_02",
+        section="Alcance",
+        description="Otra descripción",
+        diff_before="antes",
+        diff_after="después",
+    )
+
+    # Assert — solo un cambio, mismo section+diff_after detectado como duplicado
+    assert result.pending_count == 1
+    assert len(result.changes) == 1
+    assert result.changes[0].id == PlanChangeId("chg_01")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_add_change_allows_same_section_different_after() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    # Act — mismo section pero distinto diff_after
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
+    result = await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_02",
+        section="Alcance",
+        description="Otra ampliación",
+        diff_before="antes",
+        diff_after="algo distinto",
+    )
+
+    # Assert — ambos agregados, contenido distinto
+    assert result.pending_count == 2
+    assert len(result.changes) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_add_change_reactivates_discarded_with_same_id() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
+    await uc.discard_change(project.id, PlanChangeId("chg_01"), SpecPhase.DESCUBRIMIENTO)
+
+    # Act — re-agregar el mismo ID despues de descartar
+    result = await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="después",
+    )
+
+    # Assert — cambio reactivado como ADDED
+    assert result.pending_count == 1
+    assert len(result.changes) == 1
+    assert result.changes[0].id == PlanChangeId("chg_01")
+    assert result.changes[0].status == EstadoPlanCambio.ADDED

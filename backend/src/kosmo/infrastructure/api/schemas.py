@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from kosmo.contracts.auth import TokenPair
 from kosmo.contracts.chat import HistorialChat, MensajeChat, PlanCambio
+from kosmo.contracts.sdd.document import SpecPhase
 
 # Enumeraciones de negocio
 
@@ -610,17 +611,32 @@ class ChatHistoryResponse(BaseModel):
         )
 
 
+class ContextRedirectResponse(BaseModel):
+    """Redirección cuando el mensaje no corresponde al ámbito de la fase actual."""
+
+    message: str = Field(description="Mensaje indicando la fase correcta")
+    target_phase: str = Field(description="Fase destino: discovery, features, requirements")
+
+
+class DiffView(BaseModel):
+    """Diff antes/después simple usado en la vista del plan de cambios."""
+
+    before: str = Field(description="Contenido actual de la sección")
+    after: str = Field(description="Contenido sugerido")
+
+
 class PlanChangeView(BaseModel):
     """Representa un cambio propuesto en el plan de cambios."""
 
     id: str = Field(description="ID del cambio (chg_ + ULID)")
     section: str = Field(description="Sección del documento afectada")
     description: str = Field(description="Descripción corta del cambio (máx 150 chars)")
-    diff: ChangeSuggestion = Field(description="Diff antes/después generado por la IA")
+    diff: DiffView = Field(description="Diff antes/después generado por la IA")
     status: str = Field(description="Estado del cambio: pending, added, discarded, applied, conflict")
     origin: str = Field(description="Origen del cambio: chat, consistency, manual")
     created_at: datetime = Field(description="Timestamp de creación")
     rationale: str | None = Field(default=None, description="Justificación del cambio")
+    context_id: str | None = Field(default=None, description="Recurso específico afectado por el cambio")
 
     @classmethod
     def from_domain(cls, change: PlanCambio) -> "PlanChangeView":
@@ -630,18 +646,15 @@ class PlanChangeView(BaseModel):
             id=str(change.id),
             section=change.section,
             description=change.description,
-            diff=ChangeSuggestion(
-                id=str(change.id),
-                section=change.section,
-                description=change.description,
-                diff_before=change.diff.before,
-                diff_after=change.diff.after,
-                rationale=change.rationale,
+            diff=DiffView(
+                before=change.diff.before,
+                after=change.diff.after,
             ),
             status=change.status.value if hasattr(change.status, "value") else str(change.status),
             origin=change.origin,
             created_at=datetime.now(UTC),
             rationale=change.rationale,
+            context_id=change.context_id,
         )
 
 
@@ -660,7 +673,7 @@ class PlanStateView(BaseModel):
         return cls(
             project_id=str(state.project_id),
             phase=str(state.phase.value if hasattr(state.phase, "value") else state.phase),
-            context=state.context_id or "",
+            context=getattr(state, "context", getattr(state, "context_id", "")),
             changes=[PlanChangeView.from_domain(c) for c in state.changes],
             pending_count=state.pending_count,
             conflict_count=state.conflict_count,
@@ -715,6 +728,6 @@ class ApplyBatchRequest(BaseModel):
     """Payload para aplicar un lote de cambios."""
 
     model_config = ConfigDict(extra="forbid")
-    phase: str = Field(description="Fase a la cual aplicar los cambios")
+    phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
     context: str | None = Field(default=None, description="Contexto específico de los cambios")
     changes: list[str] = Field(description="IDs de los cambios a aplicar")

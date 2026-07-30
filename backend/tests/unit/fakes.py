@@ -77,7 +77,10 @@ class InMemoryFeatureRepository:
         return self.features.get(str(feature_id))
 
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        return [f for f in self.features.values() if str(f.project_id) == str(project_id)]
+        return sorted(
+            (f for f in self.features.values() if str(f.project_id) == str(project_id)),
+            key=lambda feature: feature.number,
+        )
 
     async def save(self, feature: Feature) -> Feature:  # type: ignore[override]
         self.features[str(feature.id)] = feature
@@ -318,6 +321,7 @@ class InMemoryChatRepository:
                     origin=item.origin,
                     rationale=item.rationale,
                     user_version=user_version or item.user_version,
+                    context_id=item.context_id,
                 )
                 self.plans[idx] = updated
                 return updated

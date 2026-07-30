@@ -1,4 +1,8 @@
 import { usePlanStore } from '@/entities/plan';
+import { useDiscoveryStore } from '@/entities/discovery';
+import { useCharacteristicStore } from '@/entities/characteristic';
+import { useModelingStore } from '@/entities/modeling';
+import { useRequirementsStore } from '@/entities/requirements';
 import type { Project } from '@/entities/project/model/types';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -39,6 +43,11 @@ export const useAppStore = create<AppState>()(
 					pendingNavigationPath: null,
 				});
 				usePlanStore.getState().resetPlan();
+				useDiscoveryStore.getState().resetDiscovery();
+				useCharacteristicStore.getState().clearCharacteristics();
+				useCharacteristicStore.getState().clearAllChatHistories();
+				useModelingStore.getState().resetModeling();
+				useRequirementsStore.getState().resetRequirements();
 			},
 			isProyectosOpen: false,
 			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),

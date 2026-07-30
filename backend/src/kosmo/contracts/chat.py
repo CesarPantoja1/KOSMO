@@ -50,6 +50,7 @@ class PlanCambio:
     origin: str = "Chat Descubrimiento"
     rationale: str | None = None
     user_version: str | None = None
+    context_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,10 @@ class HistorialChat:
     @property
     def last_message(self) -> MensajeChat | None:
         return self.messages[-1] if self.messages else None
+
+    @property
+    def composite_key(self) -> str:
+        return f"{self.project_id}:{self.phase.value}:{self.context_id or ''}"
 
 
 class ChatRepository(Protocol):

@@ -295,6 +295,7 @@ class InMemoryChatRepository(ChatRepository):
                         origin=c.origin,
                         rationale=c.rationale,
                         user_version=user_version or c.user_version,
+                        context_id=c.context_id,
                     )
                     changes[i] = updated
                     return updated

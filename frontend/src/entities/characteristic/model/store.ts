@@ -1,18 +1,26 @@
 import { create } from 'zustand';
-import type { SuggestCharacteristic, CharacteristicResponse } from './types';
 import {
-	getCharacteristics,
-	generateCharacteristics,
-	getSuggestCharacteristics,
 	addCharacteristic,
+	generateCharacteristics,
+	getCharacteristics,
+	getSuggestCharacteristics,
+	sendChatMessage,
 } from '../api/api';
+import type {
+	CharacteristicChatResponse,
+	CharacteristicResponse,
+	SuggestCharacteristic,
+} from './types';
 
 interface CharacteristicStore {
 	currentCharacteristics: CharacteristicResponse[];
+	chatHistories: Record<string, CharacteristicChatResponse[]>;
 	setCurrentCharacteristics: (characteristics: CharacteristicResponse[]) => void;
 	currentSuggestions: SuggestCharacteristic[];
 	setCurrentSuggestions: (suggestions: SuggestCharacteristic[]) => void;
 	clearCharacteristics: () => void;
+	clearChatHistory: (featureId: string) => void;
+	clearAllChatHistories: () => void;
 	getCharacteristics: (projectId: string) => Promise<CharacteristicResponse[]>;
 	generateCharacteristics: (projectId: string) => Promise<CharacteristicResponse[]>;
 	getSuggestCharacteristics: (projectId: string) => Promise<SuggestCharacteristic[]>;
@@ -20,16 +28,27 @@ interface CharacteristicStore {
 		projectId: string,
 		item: { title: string; description: string },
 	) => Promise<CharacteristicResponse>;
+
+	sendChatMessage: (
+		featureId: string,
+		content: string,
+	) => Promise<CharacteristicChatResponse>;
 }
 
-export const useCharacteristicStore = create<CharacteristicStore>()((set) => ({
+export const useCharacteristicStore = create<CharacteristicStore>()((set, get) => ({
 	currentCharacteristics: [],
 	setCurrentCharacteristics: (characteristics) =>
 		set({ currentCharacteristics: characteristics }),
 	currentSuggestions: [],
 	setCurrentSuggestions: (suggestions) => set({ currentSuggestions: suggestions }),
-	clearCharacteristics: () =>
-		set({ currentCharacteristics: [], currentSuggestions: [] }),
+	clearCharacteristics: () => set({ currentCharacteristics: [], currentSuggestions: [] }),
+
+	chatHistories: {},
+	clearChatHistory: (featureId) => {
+		const { chatHistories } = get();
+		set({ chatHistories: { ...chatHistories, [featureId]: [] } });
+	},
+	clearAllChatHistories: () => set({ chatHistories: {} }),
 
 	getCharacteristics: async (projectId) => {
 		const data = await getCharacteristics(projectId);
@@ -55,5 +74,24 @@ export const useCharacteristicStore = create<CharacteristicStore>()((set) => ({
 			currentCharacteristics: [...state.currentCharacteristics, data],
 		}));
 		return data;
+	},
+
+	sendChatMessage: async (featureId, content) => {
+		const userMessage: CharacteristicChatResponse = {
+			id: crypto.randomUUID(),
+			role: 'user',
+			content,
+			created_at: new Date().toISOString(),
+		};
+
+		const current = get().chatHistories[featureId] ?? [];
+		set({ chatHistories: { ...get().chatHistories, [featureId]: [...current, userMessage] } });
+
+		const response = await sendChatMessage(featureId, content);
+
+		const afterUser = get().chatHistories[featureId] ?? [];
+		set({ chatHistories: { ...get().chatHistories, [featureId]: [...afterUser, response] } });
+
+		return response;
 	},
 }));

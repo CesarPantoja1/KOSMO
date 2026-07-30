@@ -2,49 +2,69 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 import structlog
 from opentelemetry import trace
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 from ulid import ULID
 
 _logger = structlog.get_logger("kosmo.http")
 _tracer = trace.get_tracer("kosmo.http")
 
+Scope = dict[str, Any]
+Message = dict[str, Any]
+ASGIApp = Callable[[Scope, Callable[[], Awaitable[Message]], Callable[[Message], Awaitable[None]]], Awaitable[None]]
 
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(
+
+class RequestLoggingMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(
         self,
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]],
-    ) -> Response:
+        scope: Scope,
+        receive: Callable[[], Awaitable[Message]],
+        send: Callable[[Message], Awaitable[None]],
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         request_id = ULID().hex
-        client = request.client
-        ip_address = client.host if client is not None else None
-        user_agent = request.headers.get("user-agent")
+        client: tuple[str, int] | None = scope.get("client")  # type: ignore[reportUnknownVariableType]
+        ip_address: str | None = client[0] if client else None
+        raw_headers: list[tuple[bytes, bytes]] = scope.get("headers", [])
+        headers: dict[bytes, bytes] = dict(raw_headers)
+        user_agent = headers.get(b"user-agent", b"").decode("utf-8", errors="replace")
+
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
             ip_address=ip_address,
             user_agent=user_agent,
         )
 
-        method = request.method
-        path = request.url.path
+        method: str = scope["method"]
+        path: str = scope["path"]
+
+        start = time.perf_counter()
+        status_code: list[int | None] = [None]
+
+        async def send_wrapper(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                status_code[0] = message["status"]
+            await send(message)
 
         try:
             with _tracer.start_as_current_span(
                 "http.request",
                 attributes={
                     "http.method": method,
-                    "http.url": str(request.url),
+                    "http.url": str(scope.get("root_path", "")) + path,
                     "http.route": path,
                 },
             ) as span:
-                start = time.perf_counter()
                 try:
-                    response = await call_next(request)
+                    await self.app(scope, receive, send_wrapper)
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000
                     span.record_exception(exc)
@@ -60,19 +80,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     raise
 
                 duration_ms = (time.perf_counter() - start) * 1000
-                span.set_attribute("http.status_code", response.status_code)
-                route = request.scope.get("route")
-                if route is not None:
-                    span.set_attribute("http.route", getattr(route, "path", path))
+                code = status_code[0]
+                if code is not None:
+                    span.set_attribute("http.status_code", code)
 
                 _logger.info(
                     "http.request.completed",
                     method=method,
                     path=path,
-                    status_code=response.status_code,
+                    status_code=code,
                     duration_ms=round(duration_ms, 3),
                     request_id=request_id,
                 )
-            return response
         finally:
             structlog.contextvars.clear_contextvars()

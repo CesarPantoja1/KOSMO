@@ -103,15 +103,24 @@ class KOSMOAgent:
         history_block = _format_chat_history(messages)
         user_prompt = f"{base_user_prompt}\n\n{history_block}\n\nResponde al ultimo mensaje del usuario."
 
-        output = await self._llm_client.complete_typed(
-            prompt=PromptTemplate(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-            ),
-            output_type=mode.output_type,
-            temperature=mode.temperature,
-            max_tokens=mode.max_tokens,
+        prompt = PromptTemplate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
         )
+        try:
+            output = await self._llm_client.complete_typed(
+                prompt=prompt,
+                output_type=mode.output_type,
+                temperature=mode.temperature,
+                max_tokens=mode.max_tokens,
+            )
+        except ValueError:
+            raw = await self._llm_client.complete(
+                prompt=prompt,
+                temperature=mode.temperature,
+                max_tokens=mode.max_tokens,
+            )
+            output = RespuestaChatLLM(content=raw.text.strip(), change_suggestion=None)
 
         return _to_assistant_message(output)
 
