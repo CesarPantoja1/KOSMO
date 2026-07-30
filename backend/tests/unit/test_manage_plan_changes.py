@@ -462,3 +462,170 @@ async def test_add_change_reactivates_discarded_with_same_id() -> None:
     assert len(result.changes) == 1
     assert result.changes[0].id == PlanChangeId("chg_01")
     assert result.changes[0].status == EstadoPlanCambio.ADDED
+
+
+# ── aislamiento por contexto de requisito ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_plan_state_filters_by_context_id() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    # Act — agregar cambios con dos contextos distintos
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.REQUISITOS,
+        change_id="chg_01",
+        section="statement",
+        description="Cambio en req A",
+        diff_before="antes",
+        diff_after="despues",
+        context_id="req_a",
+    )
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.REQUISITOS,
+        change_id="chg_02",
+        section="acceptance_criteria",
+        description="Cambio en req B",
+        diff_before="antes",
+        diff_after="despues",
+        context_id="req_b",
+    )
+
+    result_a = await uc.get_plan_state(project.id, SpecPhase.REQUISITOS, context_id="req_a")
+    result_b = await uc.get_plan_state(project.id, SpecPhase.REQUISITOS, context_id="req_b")
+
+    # Assert — cada contexto ve solo sus cambios
+    assert result_a.pending_count == 1
+    assert len(result_a.changes) == 1
+    assert result_a.changes[0].id == PlanChangeId("chg_01")
+
+    assert result_b.pending_count == 1
+    assert len(result_b.changes) == 1
+    assert result_b.changes[0].id == PlanChangeId("chg_02")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_plan_state_without_context_returns_all_changes() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.REQUISITOS,
+        change_id="chg_01",
+        section="statement",
+        description="Cambio en req A",
+        diff_before="antes",
+        diff_after="despues",
+        context_id="req_a",
+    )
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.REQUISITOS,
+        change_id="chg_02",
+        section="acceptance_criteria",
+        description="Cambio en req B",
+        diff_before="antes",
+        diff_after="despues",
+        context_id="req_b",
+    )
+
+    # Act — sin context_id = vista consolidada
+    result = await uc.get_plan_state(project.id, SpecPhase.REQUISITOS)
+
+    # Assert — todos los cambios visibles
+    assert result.pending_count == 2
+    assert len(result.changes) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_discovery_plan_unchanged_by_context_filter() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.DESCUBRIMIENTO,
+        change_id="chg_01",
+        section="Alcance",
+        description="Ampliar alcance",
+        diff_before="antes",
+        diff_after="despues",
+    )
+
+    # Act
+    result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
+
+    # Assert
+    assert result.pending_count == 1
+    assert len(result.changes) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_remove_change_respects_context() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.REQUISITOS,
+        change_id="chg_01",
+        section="statement",
+        description="Cambio en req A",
+        diff_before="antes",
+        diff_after="despues",
+        context_id="req_a",
+    )
+    await uc.add_change(
+        project_id=project.id,
+        phase=SpecPhase.REQUISITOS,
+        change_id="chg_02",
+        section="acceptance_criteria",
+        description="Cambio en req B",
+        diff_before="antes",
+        diff_after="despues",
+        context_id="req_b",
+    )
+
+    # Act — eliminar cambio de req_a, filtrando por su contexto
+    result_a = await uc.remove_change(
+        project.id, PlanChangeId("chg_01"), SpecPhase.REQUISITOS, context_id="req_a"
+    )
+
+    # Assert — req_a queda sin cambios tras eliminar el único
+    assert result_a.pending_count == 0
+    assert len(result_a.changes) == 0
+
+    # req_b sigue viendo su cambio intacto
+    result_b = await uc.get_plan_state(project.id, SpecPhase.REQUISITOS, context_id="req_b")
+    assert result_b.pending_count == 1
+    assert len(result_b.changes) == 1
+    assert result_b.changes[0].id == PlanChangeId("chg_02")
+
+    # vista consolidada muestra el cambio restante
+    result_all = await uc.get_plan_state(project.id, SpecPhase.REQUISITOS)
+    assert result_all.pending_count == 1
+    assert len(result_all.changes) == 1
