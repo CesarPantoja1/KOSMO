@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable
+from typing import Any, Callable
 
 import structlog
 from opentelemetry import trace
@@ -9,20 +11,30 @@ from ulid import ULID
 _logger = structlog.get_logger("kosmo.http")
 _tracer = trace.get_tracer("kosmo.http")
 
+Scope = dict[str, Any]
+Message = dict[str, Any]
+ASGIApp = Callable[[Scope, Callable[[], Awaitable[Message]], Callable[[Message], Awaitable[None]]], Awaitable[None]]
+
 
 class RequestLoggingMiddleware:
-    def __init__(self, app):
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Callable[[], Awaitable[Message]],
+        send: Callable[[Message], Awaitable[None]],
+    ) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
         request_id = ULID().hex
-        client = scope.get("client")
-        ip_address = client[0] if client is not None else None
-        headers = dict(scope.get("headers", []))
+        client: tuple[str, int] | None = scope.get("client")  # type: ignore[reportUnknownVariableType]
+        ip_address: str | None = client[0] if client else None
+        raw_headers: list[tuple[bytes, bytes]] = scope.get("headers", [])
+        headers: dict[bytes, bytes] = dict(raw_headers)
         user_agent = headers.get(b"user-agent", b"").decode("utf-8", errors="replace")
 
         structlog.contextvars.bind_contextvars(
@@ -31,13 +43,13 @@ class RequestLoggingMiddleware:
             user_agent=user_agent,
         )
 
-        method = scope["method"]
-        path = scope["path"]
+        method: str = scope["method"]
+        path: str = scope["path"]
 
         start = time.perf_counter()
-        status_code = [None]
+        status_code: list[int | None] = [None]
 
-        async def send_wrapper(message):
+        async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
                 status_code[0] = message["status"]
             await send(message)
@@ -47,7 +59,7 @@ class RequestLoggingMiddleware:
                 "http.request",
                 attributes={
                     "http.method": method,
-                    "http.url": scope.get("root_path", "") + path,
+                    "http.url": str(scope.get("root_path", "")) + path,
                     "http.route": path,
                 },
             ) as span:
