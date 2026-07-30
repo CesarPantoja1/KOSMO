@@ -55,9 +55,7 @@ class ApplyPlanChangesUseCase:
             )
 
         if input_data.phase != SpecPhase.DESCUBRIMIENTO:
-            raise ValueError(
-                f"Aplicación de cambios no soportada para la fase '{input_data.phase.value}'"
-            )
+            raise ValueError(f"Aplicación de cambios no soportada para la fase '{input_data.phase.value}'")
 
         all_changes = await self._chat_repo.list_plan_changes(input_data.project_id, input_data.phase)
         by_id = {c.id: c for c in all_changes}
