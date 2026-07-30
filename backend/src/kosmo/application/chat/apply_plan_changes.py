@@ -135,7 +135,8 @@ class ApplyPlanChangesUseCase:
             feature = await self._feature_repo.by_id(FeatureId(change.context_id)) if change.context_id else None
             if feature is None and not change.context_id:
                 candidates = [
-                    item for item in await self._feature_repo.list_by_project(project_id)
+                    item
+                    for item in await self._feature_repo.list_by_project(project_id)
                     if change.diff.before in getattr(item, attribute)
                 ]
                 feature = candidates[0] if len(candidates) == 1 else None

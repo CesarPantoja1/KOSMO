@@ -385,13 +385,20 @@ async def test_apply_feature_change_updates_its_target_attribute() -> None:
     document_repo = InMemoryDocumentRepository()
     feature_repo = InMemoryFeatureRepository()
     feature = Feature(
-        id=FeatureId("feat_01"), project_id=project.id, number=1,
-        title="Obtener turno", slug="obtener-turno", description="El usuario toma un turno.",
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Obtener turno",
+        slug="obtener-turno",
+        description="El usuario toma un turno.",
     )
     await feature_repo.save(feature)
     change = _plan_change(
-        "chg_feature_01", "El usuario toma un turno.", "El usuario registra su identificación y toma un turno.",
-        section="Descripción", context_id="feat_01",
+        "chg_feature_01",
+        "El usuario toma un turno.",
+        "El usuario registra su identificación y toma un turno.",
+        section="Descripción",
+        context_id="feat_01",
     )
     await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
 
@@ -417,12 +424,20 @@ async def test_apply_feature_change_rejects_stale_text_without_modifying_feature
     document_repo = InMemoryDocumentRepository()
     feature_repo = InMemoryFeatureRepository()
     feature = Feature(
-        id=FeatureId("feat_01"), project_id=project.id, number=1,
-        title="Obtener turno", slug="obtener-turno", description="Texto editado manualmente.",
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Obtener turno",
+        slug="obtener-turno",
+        description="Texto editado manualmente.",
     )
     await feature_repo.save(feature)
     change = _plan_change(
-        "chg_feature_01", "Texto anterior.", "Texto propuesto.", section="Descripción", context_id="feat_01",
+        "chg_feature_01",
+        "Texto anterior.",
+        "Texto propuesto.",
+        section="Descripción",
+        context_id="feat_01",
     )
     await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
 
@@ -446,8 +461,12 @@ async def test_apply_feature_change_without_context_resolves_a_unique_legacy_cha
     document_repo = InMemoryDocumentRepository()
     feature_repo = InMemoryFeatureRepository()
     feature = Feature(
-        id=FeatureId("feat_01"), project_id=project.id, number=1,
-        title="Obtener turno", slug="obtener-turno", description="Texto original único.",
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Obtener turno",
+        slug="obtener-turno",
+        description="Texto original único.",
     )
     await feature_repo.save(feature)
     change = _plan_change("chg_feature_legacy", "Texto original único.", "Texto actualizado.", section="Descripción")
@@ -468,14 +487,22 @@ async def test_feature_listing_is_ordered_by_feature_number() -> None:
     feature_repo = InMemoryFeatureRepository()
     await feature_repo.save(
         Feature(
-            id=FeatureId("feat_03"), project_id=project.id, number=3,
-            title="Tercera", slug="tercera", description="",
+            id=FeatureId("feat_03"),
+            project_id=project.id,
+            number=3,
+            title="Tercera",
+            slug="tercera",
+            description="",
         )
     )
     await feature_repo.save(
         Feature(
-            id=FeatureId("feat_01"), project_id=project.id, number=1,
-            title="Primera", slug="primera", description="",
+            id=FeatureId("feat_01"),
+            project_id=project.id,
+            number=1,
+            title="Primera",
+            slug="primera",
+            description="",
         )
     )
 
