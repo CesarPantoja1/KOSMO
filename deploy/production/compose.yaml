@@ -1,0 +1,66 @@
+# KOSMO Production application stack (Oracle Cloud)
+#
+# This compose file updates only the public application path. It intentionally
+# shares the existing `kosmo` Compose project and `kosmo-network` with the
+# Oracle observability stack, so Grafana, Prometheus, Loki, Tempo, Promtail,
+# cAdvisor and node-exporter remain untouched by application deployments.
+
+services:
+  frontend:
+    image: ${KOSMO_WEB_IMAGE:?KOSMO_WEB_IMAGE must be set}
+    container_name: kosmo-frontend
+    init: true
+    env_file:
+      - .env
+    environment:
+      PORT: "3000"
+    restart: unless-stopped
+
+  backend:
+    image: ${KOSMO_API_IMAGE:?KOSMO_API_IMAGE must be set}
+    container_name: kosmo-backend
+    init: true
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      PORT: "8000"
+      # Migrations are executed explicitly by GitHub Actions before this
+      # service is recreated, avoiding an implicit migration during startup.
+      RUN_MIGRATIONS: "0"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3); sys.exit(0 if response.status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: kosmo-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: kosmo-cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN must be set}
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+networks:
+  default:
+    name: kosmo-network
+    external: true

@@ -1,11 +1,14 @@
-export type { Characteristic, AlternativeCharacteristic } from './model/types'
+// MODELS
+export type { CharacteristicResponse, SuggestCharacteristic } from './model/types';
+export type { CharacteristicResponse as Characteristic } from './model/types';
+
+// STORE
+export { useCharacteristicStore } from './model/store';
+
+// API
 export {
-  getCharacteristics,
-  generateCharacteristics,
-  getAlternativeCharacteristics,
-  addCharacteristics,
-  saveCharacteristicRequirements,
-  generateCharacteristicRequirements,
-  getCharacteristicRequirements,
-  refineCharacteristicRequirements,
-} from './api'
+	getCharacteristics,
+	generateCharacteristics,
+	getSuggestCharacteristics,
+	addCharacteristic,
+} from './api/api';

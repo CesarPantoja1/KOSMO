@@ -166,3 +166,20 @@ class DiagramNotFoundError(SpecError):
             instance=instance,
         )
         super().__init__(problem)
+
+
+class PlanChangeNotFoundError(SpecError):
+    def __init__(
+        self,
+        *,
+        change_id: str,
+        instance: str = "/api/v1/plan",
+    ) -> None:
+        problem = ProblemDetail(
+            type="urn:kosmo:plan:change-not-found",
+            title="Cambio no encontrado en el plan",
+            status=404,
+            detail=f"El cambio {change_id} no existe en el plan de cambios",
+            instance=instance,
+        )
+        super().__init__(problem)

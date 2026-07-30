@@ -16,12 +16,12 @@ const WizardItem = ({
 			className='relative h-20 flex-none flex flex-col items-center justify-start text-center'
 		>
 			<span
-				className={`flex h-14 w-14 items-center justify-center rounded-full ${iconContainerStyles}`}
+				className={`flex h-12 w-12 items-center justify-center rounded-full ${iconContainerStyles}`}
 			>
 				{icon}
 			</span>
 			<span
-				className={`absolute left-1/2 top-16 w-max -translate-x-1/2 whitespace-nowrap text-center text-sm font-medium leading-none ${labelStyles}`}
+				className={`absolute left-1/2 top-14 w-max -translate-x-1/2 whitespace-nowrap text-center text-sm font-medium leading-none ${labelStyles}`}
 			>
 				{label}
 			</span>

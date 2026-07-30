@@ -1,10 +1,16 @@
 'use client';
 
+import { Chatbot, MarkdownEditor } from '@/feature';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { ChatbotPopup, MarkdownEditor } from '@/feature';
+import {
+	generateRequirements,
+	getRequirements,
+	saveRequirements,
+	useRequirementsStore,
+} from '@/entities/requirements';
 import {
 	Ai,
 	ArrowRight,
@@ -15,45 +21,40 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
-import type { Characteristic } from '@/entities/characteristic';
-import {
-	generateCharacteristicRequirements,
-	getCharacteristicRequirements,
-	getCharacteristics,
-	refineCharacteristicRequirements,
-	saveCharacteristicRequirements,
-} from '@/entities/characteristic';
+import { getCharacteristics, type Characteristic } from '@/entities/characteristic';
 
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
 const RequirementsPage = () => {
-	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
 
+	// Características estado
 	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
-	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-	const [isRefining, setIsRefining] = useState(false);
 
+	// Requisitos estado
+	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
+	const hasRequirements = useRequirementsStore((s) => s.hasRequirements);
+	const setHasRequirements = useRequirementsStore((s) => s.setHasRequirements);
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
-	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
 
-	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
-	const [editorKey, setEditorKey] = useState(0);
-
+	// App estado
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
-	const hasRequirements = useAppStore((s) => s.hasRequirements);
-	const setHasRequirements = useAppStore((s) => s.setHasRequirements);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
+	const currentProject = useAppStore((s) => s.currentProject);
 
+	// Otros estados
+	const [isChatbotOpen, setIsChatbotOpen] = useState(true);
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
+	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
+	const [editorKey, setEditorKey] = useState(0);
 
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
@@ -94,7 +95,8 @@ const RequirementsPage = () => {
 			setMarkdown('');
 			setSavedContent('');
 			try {
-				const content = await getCharacteristicRequirements(projectId, characteristicId);
+				const content = (await getRequirements(projectId, characteristicId))
+					.requirements_markdown;
 				if (cancelled) return;
 				if (content) {
 					setHasRequirements(characteristicId, true);
@@ -146,25 +148,27 @@ const RequirementsPage = () => {
 		if (!selectedCharacteristic || !currentProject) return;
 		setIsGenerating(true);
 		try {
-			const content = await generateCharacteristicRequirements(
+			const content = await generateRequirements(
 				currentProject.id,
 				selectedCharacteristic.id,
 			);
-			await saveCharacteristicRequirements(
+			await saveRequirements(
 				currentProject.id,
 				selectedCharacteristic.id,
-				content,
+				content.requirements_markdown,
 			);
 			if (content) {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}
 			setCharacteristics((prev) =>
 				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: content } : c,
+					c.id === selectedCharacteristic.id
+						? { ...c, requirements: content.requirements_markdown }
+						: c,
 				),
 			);
-			setMarkdown(content);
-			setSavedContent(content);
+			setMarkdown(content.requirements_markdown);
+			setSavedContent(content.requirements_markdown);
 			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
@@ -174,49 +178,13 @@ const RequirementsPage = () => {
 		}
 	};
 
-	const handleRefine = async (instructions: string) => {
-		if (!selectedCharacteristic || !currentProject) return;
-		setIsChatbotOpen(false);
-		setIsRefining(true);
-		try {
-			const res = await refineCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				instructions,
-			);
-			const refinedContent = res.requirements_markdown;
-
-			setMarkdown(refinedContent);
-			setSavedContent(refinedContent);
-			setEditorKey((prev) => prev + 1);
-			setCharacteristics((prev) =>
-				prev.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: refinedContent } : c,
-				),
-			);
-			toast.success('Requisitos refinados correctamente');
-		} catch (err) {
-			const errorMessage =
-				err instanceof Error
-					? err.message
-					: 'No se pudo refinar el documento. Intenta nuevamente.';
-			toast.error(errorMessage);
-		} finally {
-			setIsRefining(false);
-		}
-	};
-
 	const handleSave = async (): Promise<boolean> => {
 		if (!selectedCharacteristic || !currentProject) return false;
 
 		const savingToast = toast.info('Guardando...');
 
 		try {
-			await saveCharacteristicRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				markdown,
-			);
+			await saveRequirements(currentProject.id, selectedCharacteristic.id, markdown);
 			if (markdown) {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}
@@ -291,8 +259,8 @@ const RequirementsPage = () => {
 
 	if (isLoading) {
 		return (
-			<div className='flex h-full min-h-0 flex-col overflow-hidden gap-6 pt-8 pb-1'>
-				<div className='flex flex-col gap-3'>
+			<div className='page-container'>
+				<div className='page-header'>
 					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
 					<p className='text-base-600 text-lg'>
 						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
@@ -316,14 +284,16 @@ const RequirementsPage = () => {
 					</div>
 				</div>
 
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
-						<div className='h-7 bg-base-200 rounded w-48' />
-						{[1, 2, 3, 4].map((i) => (
-							<div key={i} className='h-14 bg-base-200 rounded' />
-						))}
+				<div className='page-row'>
+					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
+						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
+							<div className='h-7 bg-base-200 rounded w-48' />
+							{[1, 2, 3, 4].map((i) => (
+								<div key={i} className='h-14 bg-base-200 rounded' />
+							))}
+						</div>
+						<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
 					</div>
-					<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
 				</div>
 			</div>
 		);
@@ -331,20 +301,6 @@ const RequirementsPage = () => {
 
 	return (
 		<>
-			{isRefining && (
-				<Loading
-					title='Refinando requisitos'
-					description='Mejorando la calidad y consistencia de los requisitos. Esto tomará unos segundos.'
-				/>
-			)}
-
-			{isChatbotOpen && (
-				<ChatbotPopup
-					placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
-					onClose={() => setIsChatbotOpen(false)}
-					onSubmitInstructions={handleRefine}
-				/>
-			)}
 			{pendingCharSwitch && (
 				<ModalConfirmLeave
 					onCancel={handleCancelSwitch}
@@ -373,15 +329,6 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button
-								onClick={() => setIsChatbotOpen(true)}
-								disabled={!selectedCharacteristic?.requirements}
-								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm'
-							>
-								<Ai color='' size={20} />
-								Refinar
-							</button>
-
 							<Link
 								href='modelo'
 								onClick={handleNextLink('modelo')}
@@ -394,143 +341,170 @@ const RequirementsPage = () => {
 					)}
 				</div>
 
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
-						<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
-							Lista de Características
-						</h3>
+				<div className='page-row'>
+					<div className='flex gap-4 flex-1 min-h-0'>
+						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
+							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
+								Lista de Características
+							</h3>
 
-						<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
-							{characteristics.length === 0 && (
-								<p className='text-base-600 text-sm px-3 py-2'>
-									No hay características disponibles.
-								</p>
-							)}
-							{characteristics.map((c) => {
-								const isSelected = c.id === selectedId;
-								return (
-									<button
-										key={c.id}
-										onClick={() => handleSelectCharacteristic(c.id)}
-										className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors ${
-											isSelected
-												? 'bg-primary-100/10 border-l-4 border-primary-100'
-												: 'border-l-4 border-transparent hover:bg-base-200/30'
-										}`}
-									>
-										<span
-											className={`text-base font-bold mt-0.5 shrink-0 ${
-												isSelected ? 'text-base-800' : 'text-base-800'
-											}`}
-										>
-											{c.display_id}
-										</span>
-										<p
-											className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
-												isSelected ? 'text-primary-100' : 'text-base-600'
-											}`}
-										>
-											{c.title}
-										</p>
-										{(c.requirements || hasRequirements[c.id]) && (
-											<div className='shrink-0 mt-0.5'>
-												<Requirements
-													size={20}
-													color={isSelected ? 'text-primary-100' : 'text-base-600'}
-												/>
-											</div>
-										)}
-									</button>
-								);
-							})}
-						</div>
-					</aside>
-
-					<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
-						{!selectedCharacteristic && (
-							<div className='flex flex-col items-center justify-center h-full gap-3'>
-								<CursorClickFill color='text-base-800' size={70} />
-								<div className='self-stretch px-24 flex flex-col justify-start items-start'>
-									<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-										<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
-											Selecciona una Característica
-										</div>
-									</div>
-									<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-										<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
-											Selecciona una característica del listado lateral para ver su
-											detalle
-											<br />o comenzar a generar sus requisitos EARS.
-										</div>
-									</div>
-								</div>
-							</div>
-						)}
-
-						{selectedCharacteristic && isLoadingRequirements && (
-							<div className='flex flex-1 items-center justify-center'>
-								<span className='text-base-600 text-lg'>Cargando requisitos...</span>
-							</div>
-						)}
-
-						{selectedCharacteristic &&
-							!isLoadingRequirements &&
-							selectedCharacteristic.requirements && (
-								<div className='flex flex-col flex-1 min-h-0 gap-4'>
-									<div className='flex flex-col gap-2 px-2'>
-										<div className='inline-flex justify-between items-center w-full'>
-											<div className='inline-flex justify-start gap-3 items-center'>
-												<span className='text-2xl font-bold text-base-800'>
-													{selectedCharacteristic.display_id}
-												</span>
-												<span className='text-2xl font-bold text-primary-100'>
-													{selectedCharacteristic.title}
-												</span>
-											</div>
-										</div>
-										<p className='text-base-600 text-base'>
-											{selectedCharacteristic.description}
-										</p>
-									</div>
-									<div className='flex-1 min-h-0 mt-2'>
-										<MarkdownEditor
-											key={editorKey}
-											markdown={markdown}
-											onChange={setMarkdown}
-											isMaximized={isEditorMaximized}
-											onMaximize={() => setEditorMaximized(true)}
-											onMinimize={() => setEditorMaximized(false)}
-										/>
-									</div>
-								</div>
-							)}
-
-						{selectedCharacteristic &&
-							!isLoadingRequirements &&
-							!selectedCharacteristic.requirements && (
-								<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-									<Ai color='text-ai' size={70} />
-
-									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Sin requisitos EARS
-									</span>
-
-									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos generados. Haz clic en el
-										botón <span className='text-xl font-bold'>Generar </span>
-										para estructurarlos y completarlos automáticamente bajo el formato
-										EARS.
+							<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
+								{characteristics.length === 0 && (
+									<p className='text-base-600 text-sm px-3 py-2'>
+										No hay características disponibles.
 									</p>
+								)}
+								{characteristics.map((c) => {
+									const isSelected = c.id === selectedId;
+									return (
+										<button
+											key={c.id}
+											onClick={() => handleSelectCharacteristic(c.id)}
+											className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors ${
+												isSelected
+													? 'bg-primary-100/10 border-l-4 border-primary-100'
+													: 'border-l-4 border-transparent hover:bg-base-200/30'
+											}`}
+										>
+											<span
+												className={`text-base font-bold mt-0.5 shrink-0 ${
+													isSelected ? 'text-base-800' : 'text-base-800'
+												}`}
+											>
+												{c.display_id}
+											</span>
+											<p
+												className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
+													isSelected ? 'text-primary-100' : 'text-base-600'
+												}`}
+											>
+												{c.title}
+											</p>
+											{hasRequirements[c.id] && (
+												<div className='shrink-0 mt-0.5'>
+													<Requirements
+														size={20}
+														color={isSelected ? 'text-primary-100' : 'text-base-600'}
+													/>
+												</div>
+											)}
+										</button>
+									);
+								})}
+							</div>
+						</aside>
 
-									<button
-										onClick={handleGenerate}
-										className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-									>
-										<Ai color='' size={20} />
-										Generar
-									</button>
-								</section>
+						<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
+							{!selectedCharacteristic && (
+								<div className='flex flex-col items-center justify-center h-full gap-3'>
+									<CursorClickFill color='text-base-800' size={70} />
+									<div className='self-stretch px-24 flex flex-col justify-start items-start'>
+										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
+											<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
+												Selecciona una Característica
+											</div>
+										</div>
+										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
+											<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
+												Selecciona una característica del listado lateral para ver su
+												detalle
+												<br />o comenzar a generar sus requisitos EARS.
+											</div>
+										</div>
+									</div>
+								</div>
 							)}
+
+							{selectedCharacteristic && isLoadingRequirements && (
+								<div className='flex flex-1 items-center justify-center'>
+									<span className='text-base-600 text-lg'>Cargando requisitos...</span>
+								</div>
+							)}
+
+							{selectedCharacteristic &&
+								!isLoadingRequirements &&
+								hasRequirements[selectedCharacteristic.id] && (
+									<div className='flex flex-col flex-1 min-h-0 gap-4'>
+										<div className='flex flex-col gap-2 px-2'>
+											<div className='inline-flex justify-between items-center w-full'>
+												<div className='inline-flex justify-start gap-3 items-center'>
+													<span className='text-2xl font-bold text-base-800'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-2xl font-bold text-primary-100'>
+														{selectedCharacteristic.title}
+													</span>
+												</div>
+											</div>
+											<p className='text-base-600 text-base'>
+												{selectedCharacteristic.description}
+											</p>
+										</div>
+										<div className='flex-1 min-h-0 mt-2'>
+											<MarkdownEditor
+												key={editorKey}
+												markdown={markdown}
+												onChange={setMarkdown}
+												isMaximized={isEditorMaximized}
+												onMaximize={() => setEditorMaximized(true)}
+												onMinimize={() => setEditorMaximized(false)}
+											/>
+										</div>
+									</div>
+								)}
+
+							{selectedCharacteristic &&
+								!isLoadingRequirements &&
+								!hasRequirements[selectedCharacteristic.id] && (
+									<div className='flex flex-col flex-1 min-h-0 gap-4'>
+										<div className='flex flex-col gap-2 px-2'>
+											<div className='inline-flex justify-between items-center w-full'>
+												<div className='inline-flex justify-start gap-3 items-center'>
+													<span className='text-2xl font-bold text-base-800'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-2xl font-bold text-primary-100'>
+														{selectedCharacteristic.title}
+													</span>
+												</div>
+											</div>
+											<p className='text-base-600 text-base'>
+												{selectedCharacteristic.description}
+											</p>
+										</div>
+
+										<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
+											<Ai color='text-ai' size={70} />
+
+											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+												Sin requisitos EARS
+											</span>
+
+											<p className='text-base-800 text-lg text-center'>
+												Esta característica aún no tiene requisitos generados. Haz clic en
+												el botón <span className='text-xl font-bold'>Generar </span>
+												para estructurarlos y completarlos automáticamente bajo el formato
+												EARS.
+											</p>
+
+											<button
+												onClick={handleGenerate}
+												className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
+											>
+												<Ai color='' size={20} />
+												Generar
+											</button>
+										</section>
+									</div>
+								)}
+						</div>
+					</div>
+
+					<div className={`chatbot-panel ${isChatbotOpen ? '' : 'closed'}`}>
+						<Chatbot
+							placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
+							onClose={() => setIsChatbotOpen(false)}
+						/>
 					</div>
 				</div>
 			</div>

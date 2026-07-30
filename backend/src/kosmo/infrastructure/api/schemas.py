@@ -6,11 +6,12 @@ y pueden referenciar entidades de dominio para conversión I/O sin invertir capa
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from kosmo.contracts.auth import TokenPair
+from kosmo.contracts.chat import HistorialChat, MensajeChat, PlanCambio
 
 # Enumeraciones de negocio
 
@@ -543,3 +544,177 @@ class CreateCharacteristicRequest(BaseModel):
         description="Descripción de la característica (máximo 500 caracteres).",
         examples=["Permite a los usuarios administrar el catálogo de productos del sistema."],
     )
+
+
+class ChangeSuggestion(BaseModel):
+    """Sugerencia de cambio generada por la IA."""
+
+    id: str = Field(description="ID de la sugerencia (chg_ + ULID)")
+    section: str = Field(description="Sección del documento afectada")
+    description: str = Field(description="Descripción corta del cambio propuesto")
+    diff_before: str = Field(description="Contenido actual de la sección")
+    diff_after: str = Field(description="Contenido sugerido por la IA")
+    rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
+
+
+class SendChatRequest(BaseModel):
+    """Payload para enviar un mensaje al chat."""
+
+    model_config = ConfigDict(extra="forbid")
+    content: str = Field(min_length=1, max_length=4000, description="Mensaje del usuario")
+
+
+class ChatMessage(BaseModel):
+    """Respuesta con un mensaje individual del chat."""
+
+    id: str = Field(description="ID del mensaje.")
+    role: str = Field(description="Rol del emisor (user, assistant, system).")
+    content: str = Field(description="Contenido del mensaje.")
+    created_at: datetime = Field(description="Fecha y hora del mensaje.")
+    change_suggestion: ChangeSuggestion | None = Field(default=None, description="Sugerencia asociada")
+
+    @classmethod
+    def from_domain(cls, msg: MensajeChat) -> "ChatMessage":
+        suggestion = None
+        if msg.suggested_change:
+            suggestion = ChangeSuggestion(
+                id=msg.suggested_change.id,
+                section=msg.suggested_change.section,
+                description=msg.suggested_change.description,
+                diff_before=msg.suggested_change.diff.before,
+                diff_after=msg.suggested_change.diff.after,
+                rationale=msg.suggested_change.rationale,
+            )
+        return cls(
+            id=str(msg.id),
+            role=str(msg.role),
+            content=msg.content,
+            created_at=msg.timestamp,
+            change_suggestion=suggestion,
+        )
+
+
+class ChatHistoryResponse(BaseModel):
+    """Respuesta con el historial completo de un chat."""
+
+    phase: str = Field(description="Fase a la que pertenece el historial")
+    context: str = Field(description="Contexto específico (ej. project_id)")
+    messages: list[ChatMessage] = Field(description="Lista de mensajes.")
+
+    @classmethod
+    def from_domain(cls, history: HistorialChat) -> "ChatHistoryResponse":
+        return cls(
+            phase=str(history.phase.value if hasattr(history.phase, "value") else history.phase),
+            context=str(history.project_id),
+            messages=[ChatMessage.from_domain(msg) for msg in history.messages],
+        )
+
+
+class PlanChangeView(BaseModel):
+    """Representa un cambio propuesto en el plan de cambios."""
+
+    id: str = Field(description="ID del cambio (chg_ + ULID)")
+    section: str = Field(description="Sección del documento afectada")
+    description: str = Field(description="Descripción corta del cambio (máx 150 chars)")
+    diff: ChangeSuggestion = Field(description="Diff antes/después generado por la IA")
+    status: str = Field(description="Estado del cambio: pending, added, discarded, applied, conflict")
+    origin: str = Field(description="Origen del cambio: chat, consistency, manual")
+    created_at: datetime = Field(description="Timestamp de creación")
+    rationale: str | None = Field(default=None, description="Justificación del cambio")
+
+    @classmethod
+    def from_domain(cls, change: PlanCambio) -> "PlanChangeView":
+        from datetime import UTC, datetime
+
+        return cls(
+            id=str(change.id),
+            section=change.section,
+            description=change.description,
+            diff=ChangeSuggestion(
+                id=str(change.id),
+                section=change.section,
+                description=change.description,
+                diff_before=change.diff.before,
+                diff_after=change.diff.after,
+                rationale=change.rationale,
+            ),
+            status=change.status.value if hasattr(change.status, "value") else str(change.status),
+            origin=change.origin,
+            created_at=datetime.now(UTC),
+            rationale=change.rationale,
+        )
+
+
+class PlanStateView(BaseModel):
+    """Estado actual del plan de cambios de un proyecto."""
+
+    project_id: str = Field(description="ID del proyecto asociado al plan")
+    phase: str = Field(description="Fase del proyecto")
+    context: str = Field(description="Contexto del plan (ej. feature_id o project_id)")
+    changes: list[PlanChangeView] = Field(description="Cambios acumulados en el plan")
+    pending_count: int = Field(description="Número de cambios en estado pending o added")
+    conflict_count: int = Field(description="Número de cambios con conflicto")
+
+    @classmethod
+    def from_domain(cls, state: Any) -> "PlanStateView":
+        return cls(
+            project_id=str(state.project_id),
+            phase=str(state.phase.value if hasattr(state.phase, "value") else state.phase),
+            context=state.context_id or "",
+            changes=[PlanChangeView.from_domain(c) for c in state.changes],
+            pending_count=state.pending_count,
+            conflict_count=state.conflict_count,
+        )
+
+
+class AddPlanChangeRequest(BaseModel):
+    """Payload para agregar un cambio al plan."""
+
+    model_config = ConfigDict(extra="ignore")
+    change_id: str = Field(description="ID de la sugerencia (chg_ + ULID)")
+    section: str = Field(description="Sección del documento afectada")
+    description: str = Field(description="Descripción corta del cambio propuesto")
+    diff_before: str = Field(description="Contenido actual de la sección")
+    diff_after: str = Field(description="Contenido sugerido por la IA")
+    rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
+
+
+class PhaseNotificationView(BaseModel):
+    """Notificación de fases afectadas por propagación de cambios."""
+
+    phase: str = Field(description="Fase afectada")
+    affected_count: int = Field(description="Cantidad de artefactos afectados en esta fase")
+    affected_ids: list[str] = Field(description="IDs de los artefactos afectados")
+
+
+class PhaseNotificationList(BaseModel):
+    affected_phases: list[PhaseNotificationView] = Field(
+        description="Fases notificadas con sus artefactos desactualizados"
+    )
+
+
+class FailedChangeView(BaseModel):
+    """Representa un cambio que falló al aplicarse."""
+
+    id: str = Field(description="ID del cambio que falló")
+    reason: str = Field(description="Motivo del fallo")
+
+
+class BatchResultView(BaseModel):
+    """Resultado de aplicar un lote de cambios."""
+
+    applied_count: int = Field(description="Número de cambios aplicados con éxito")
+    failed_count: int = Field(description="Número de cambios que fallaron al aplicarse")
+    failed_changes: list[FailedChangeView] = Field(default=[], description="Cambios que fallaron, con el motivo")
+    propagation: PhaseNotificationList | None = Field(
+        default=None, description="Fases notificadas tras la aplicación (si corresponde)"
+    )
+
+
+class ApplyBatchRequest(BaseModel):
+    """Payload para aplicar un lote de cambios."""
+
+    model_config = ConfigDict(extra="forbid")
+    phase: str = Field(description="Fase a la cual aplicar los cambios")
+    context: str | None = Field(default=None, description="Contexto específico de los cambios")
+    changes: list[str] = Field(description="IDs de los cambios a aplicar")

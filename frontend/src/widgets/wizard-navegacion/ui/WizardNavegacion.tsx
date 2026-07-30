@@ -8,7 +8,12 @@ import { ProjectStatus } from '../types/status';
 import WizardItem from './WizardItem';
 
 import Discovery from '@/widgets/main-navbar/ui/icons/Discovery';
-import { Characteristics, Requirements, Modeling, Implementation } from '@/widgets/main-navbar/ui/icons';
+import {
+	Characteristics,
+	Requirements,
+	Modeling,
+	Implementation,
+} from '@/widgets/main-navbar/ui/icons';
 
 const phaseItems = [
 	{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'Descubrimiento' },
@@ -33,10 +38,12 @@ export function WizardNavegacion() {
 	if (!isProyectosOpen) return null;
 
 	return (
-		<nav className='flex justify-between px-16 py-4 mb-2 bg-base-50 border-b border-base-200'>
+		<nav className='flex justify-center gap-20 px-16 my-2 bg-base-50 border-b border-base-200'>
 			{phaseItems.map(({ href, Icon, label }, index) => {
-				const activeIndex = phaseItems.findIndex((item) => (pathname || '').startsWith(item.href));
-				
+				const activeIndex = phaseItems.findIndex((item) =>
+					(pathname || '').startsWith(item.href),
+				);
+
 				let status: ProjectStatus = 'disable';
 				if (activeIndex !== -1) {
 					if (index === activeIndex) {
@@ -51,7 +58,7 @@ export function WizardNavegacion() {
 					<WizardItem
 						key={href}
 						href={href}
-						icon={<Icon size={28} color={colors.iconStyles} />}
+						icon={<Icon size={20} color={colors.iconStyles} />}
 						iconContainerStyles={colors.iconContainer}
 						label={label}
 						labelStyles={colors.labelStyles}

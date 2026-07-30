@@ -5,21 +5,21 @@ import { useRouter } from 'next/navigation';
 import { useAppStore } from 'app/store/app.store';
 import { getCharacteristics } from '@/entities/characteristic';
 import { toast } from '@/shared/ui';
-import type { Characteristic } from '@/entities/characteristic';
+import type { CharacteristicResponse } from '@/entities/characteristic';
 
 interface UseCharacteristicsPageReturn {
-	characteristics: Characteristic[];
+	characteristics: CharacteristicResponse[];
 	isLoading: boolean;
 	searchQuery: string;
 	setSearchQuery: (v: string) => void;
-	filtered: Characteristic[];
+	filtered: CharacteristicResponse[];
 }
 
 export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
+	const [characteristics, setCharacteristics] = useState<CharacteristicResponse[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 

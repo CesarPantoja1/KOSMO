@@ -1,12 +1,12 @@
 'use client';
 
 import { Ai, Close, Loading } from '@/shared/ui';
-import type { AlternativeCharacteristic } from '@/entities/characteristic';
+import type { SuggestCharacteristic } from '@/entities/characteristic';
 import { useCharacteristicModal } from '../hooks/use-characteristic-modal';
 
 type Props = {
 	onClose: () => void;
-	onApply: (selected: AlternativeCharacteristic) => void;
+	onApply: (selected: SuggestCharacteristic) => void;
 };
 
 const CharacteristicModal = ({ onClose, onApply }: Props) => {
@@ -49,11 +49,11 @@ const CharacteristicModal = ({ onClose, onApply }: Props) => {
 
 							<div className='w-full flex-1 p-0.5 flex flex-col justify-start items-center gap-5'>
 								{alternatives.map((alt) => {
-									const isSelected = selectedId === alt.id;
+									const isSelected = selectedId === alt.number;
 									return (
 										<button
-											key={alt.id}
-											onClick={() => handleCardClick(alt.id)}
+											key={alt.number}
+											onClick={() => handleCardClick(alt.number)}
 											className={`w-full p-5 flex flex-col items-start gap-3 cursor-pointer rounded-sm text-left transition-shadow duration-200 ${
 												isSelected
 													? 'outline-2 outline-primary-100 shadow-md bg-primary-100/5'

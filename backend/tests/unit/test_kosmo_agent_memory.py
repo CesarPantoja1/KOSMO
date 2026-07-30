@@ -206,7 +206,10 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
 
     class StubToolCallLLMClient:
         async def complete(  # noqa: PLR6301
-            self, prompt: PromptTemplate, temperature: float = 0.3, max_tokens: int = 4096  # noqa: ARG002
+            self,
+            prompt: PromptTemplate,
+            temperature: float = 0.3,
+            max_tokens: int = 4096,  # noqa: ARG002
         ) -> LLMResponse:
             call_order.append("complete")
             if len(call_order) <= 1:
@@ -214,7 +217,10 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
             return LLMResponse(text="[CONTINUE]")
 
         async def complete_json(  # noqa: PLR6301
-            self, prompt: PromptTemplate, temperature: float = 0.1, max_tokens: int = 4096  # noqa: ARG002
+            self,
+            prompt: PromptTemplate,
+            temperature: float = 0.1,
+            max_tokens: int = 4096,  # noqa: ARG002
         ) -> LLMResponse:
             return await self.complete(prompt, temperature, max_tokens)
 
@@ -245,10 +251,14 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
     store = InMemoryAgentSessionStore()
     guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
-    skill_reg.register(Skill(
-        name="discovery_generate", description="Test", phase=SpecPhase.DESCUBRIMIENTO,
-        mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
-    ))
+    skill_reg.register(
+        Skill(
+            name="discovery_generate",
+            description="Test",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+        )
+    )
     knowledge_tools = KnowledgeToolRegistry()
 
     async def _test_kb_handler(input_data: dict[str, object]) -> str:  # noqa: ARG001

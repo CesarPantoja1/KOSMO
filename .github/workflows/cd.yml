@@ -1,4 +1,4 @@
-name: Continuous Deployment
+name: Deploy Production
 
 on:
   pull_request:
@@ -7,168 +7,298 @@ on:
     branches:
       - main
 
+# Production is shared and must process one approved release at a time.
 concurrency:
-  group: cd-production
+  group: deploy-production
   cancel-in-progress: false
 
-permissions:
-  contents: read
+env:
+  REGISTRY: ghcr.io
 
 jobs:
-  migrate-database:
+  wait-for-ci:
+    name: Wait for CI summary
     if: >-
-      ${{
-        github.event.pull_request.merged == true &&
-        github.event.pull_request.base.ref == 'main' &&
-        (
-          github.event.pull_request.head.ref == 'develop' ||
-          startsWith(github.event.pull_request.head.ref, 'hotfix/')
-        )
-      }}
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      (
+        startsWith(github.event.pull_request.head.ref, 'release/') ||
+        startsWith(github.event.pull_request.head.ref, 'hotfix/')
+      )
     runs-on: ubuntu-latest
-    environment: production
-    defaults:
-      run:
-        working-directory: backend
+    timeout-minutes: 15
+    permissions:
+      checks: read
+    outputs:
+      deploy_sha: ${{ steps.target.outputs.sha }}
 
     steps:
-      - name: Checkout merged commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
-
-      - name: Install backend dependencies
-        run: uv sync --frozen --no-dev
-
-      - name: Validate database secret
-        run: test -n "$DATABASE_URL" || (echo "::error::Missing SUPABASE_DATABASE_URL secret" && exit 1)
-        env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
-
-      - name: Apply Alembic migrations
-        run: uv run alembic upgrade head
-        env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
-
-  deploy-frontend:
-    needs:
-      - migrate-database
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - name: Checkout merged commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.2.10'
-
-      - name: Install Vercel CLI
-        run: bun install -g vercel
-
-      - name: Validate Vercel secrets
-        run: |
-          test -n "$VERCEL_TOKEN" || (echo "::error::Missing VERCEL_TOKEN secret" && exit 1)
-          test -n "$VERCEL_ORG_ID" || (echo "::error::Missing VERCEL_ORG_ID secret" && exit 1)
-          test -n "$VERCEL_PROJECT_ID" || (echo "::error::Missing VERCEL_PROJECT_ID secret" && exit 1)
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Deploy frontend to Vercel
-        run: |
-          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          test -f .vercel/.env.production.local || (echo "::error::Vercel production env was not pulled" && exit 1)
-          api_url="$(grep '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
-          if [ -z "$api_url" ]; then
-            echo "::error::Missing or empty NEXT_PUBLIC_API_URL in Vercel production environment variables"
-            exit 1
-          fi
-          case "$api_url" in
-            http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*)
-              echo "::error::NEXT_PUBLIC_API_URL in Vercel production points to a loopback address"
-              exit 1
-              ;;
-            https://*)
-              ;;
-            *)
-              echo "::error::NEXT_PUBLIC_API_URL must be an https:// URL"
-              exit 1
-              ;;
-          esac
-          if [ "$api_url" != "https://kosmo-backend.onrender.com" ]; then
-            echo "::warning::NEXT_PUBLIC_API_URL is $api_url; expected https://kosmo-backend.onrender.com"
-          fi
-          if grep -R "localhost:8000" .next/static >/dev/null 2>&1; then
-            echo "::error::Previous build artifacts contain localhost; cleaning .next"
-            rm -rf .next
-          fi
-          vercel build --prod --token="$VERCEL_TOKEN"
-          if grep -R "localhost:8000" .vercel/output/static .next/static >/dev/null 2>&1; then
-            echo "::error::Production frontend bundle still contains localhost:8000"
-            exit 1
-          fi
-          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
-        working-directory: ./frontend
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-  deploy-backend:
-    needs:
-      - migrate-database
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - name: Validate Render secrets
-        run: |
-          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
-            exit 0
-          fi
-
-          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "::notice::Using RENDER_DEPLOY_HOOK_URL fallback. Prefer RENDER_API_KEY and RENDER_SERVICE_ID to deploy the exact merge commit."
-            exit 0
-          fi
-
-          echo "::error::Missing Render deployment secrets. Set RENDER_API_KEY + RENDER_SERVICE_ID, or RENDER_DEPLOY_HOOK_URL."
-          exit 1
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-
-      - name: Trigger Render deploy
-        run: |
-          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
-            curl --fail --request POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
-              --header "Authorization: Bearer ${RENDER_API_KEY}" \
-              --header "Content-Type: application/json" \
-              --data "{\"commitId\":\"${DEPLOY_SHA}\",\"clearCache\":\"do_not_clear\"}"
-            exit 0
-          fi
-
-          curl --fail --request POST "$RENDER_DEPLOY_HOOK_URL"
+      - name: Resolve merged commit
+        id: target
         env:
           DEPLOY_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_SHA"
+          echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Require a successful CI summary for the merged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ steps.target.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for ((waited = 0; waited < 600; waited += 10)); do
+            check_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${COMMIT_SHA}/check-runs?per_page=100")"
+            status="$(jq -r '.check_runs[] | select(.name == "CI summary") | .status' <<<"$check_json" | head -n 1)"
+            conclusion="$(jq -r '.check_runs[] | select(.name == "CI summary") | .conclusion' <<<"$check_json" | head -n 1)"
+
+            if [[ "$status" == "completed" && "$conclusion" == "success" ]]; then
+              echo "CI summary passed for ${COMMIT_SHA}."
+              exit 0
+            fi
+
+            if [[ "$status" == "completed" ]]; then
+              echo "::error::CI summary finished with conclusion: ${conclusion:-unknown}."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::Timed out while waiting for CI summary on ${COMMIT_SHA}."
+          exit 1
+
+  build-backend:
+    name: Build API image
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_image: ${{ steps.images.outputs.api }}
+
+    steps:
+      - name: Checkout merged source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.wait-for-ci.outputs.deploy_sha }}
+
+      - name: Define immutable API image reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${{ needs.wait-for-ci.outputs.deploy_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.api }}
+
+  build-frontend:
+    name: Build Web image
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      web_image: ${{ steps.images.outputs.web }}
+
+    steps:
+      - name: Checkout merged source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.wait-for-ci.outputs.deploy_sha }}
+
+      - name: Define immutable Web image reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${{ needs.wait-for-ci.outputs.deploy_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.web }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_PUBLIC_APP_NAME=KOSMO
+            NEXT_PUBLIC_APP_ENV=production
+            NEXT_PUBLIC_AUTH_DISABLED=true
+            NEXT_PUBLIC_USE_MOCKS=false
+
+  deploy-production:
+    name: Deploy Production
+    needs:
+      - wait-for-ci
+      - build-backend
+      - build-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout deployment configuration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.wait-for-ci.outputs.deploy_sha }}
+
+      - name: Prepare verified SSH connection
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          EXPECTED_HOST_FINGERPRINT: ${{ vars.PRODUCTION_SSH_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$EXPECTED_HOST_FINGERPRINT"
+
+          ssh_dir="${RUNNER_TEMP}/kosmo-production-ssh"
+          install -d -m 700 "$ssh_dir"
+          printf '%s' "$SSH_PRIVATE_KEY" > "$ssh_dir/id_ed25519"
+          chmod 600 "$ssh_dir/id_ed25519"
+          ssh-keyscan -t ed25519 "${{ vars.PRODUCTION_HOST }}" > "$ssh_dir/known_hosts"
+          actual_fingerprint="$(ssh-keygen -lf "$ssh_dir/known_hosts" -E sha256 | awk '{print $2}')"
+          test "$actual_fingerprint" = "$EXPECTED_HOST_FINGERPRINT"
+          echo "SSH_DIR=$ssh_dir" >> "$GITHUB_ENV"
+
+      - name: Transfer the application stack and protected configuration
+        shell: bash
+        env:
+          PRODUCTION_ENV_FILE: ${{ secrets.PRODUCTION_ENV_FILE }}
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_ENV_FILE"
+
+          work_dir="${RUNNER_TEMP}/kosmo-production-deploy"
+          install -d -m 700 "$work_dir"
+          printf '%s' "$PRODUCTION_ENV_FILE" > "$work_dir/application.env"
+          printf '%s\n' \
+            "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
+            "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" > "$work_dir/runtime.env"
+          chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
+
+          ssh -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -p "${{ vars.PRODUCTION_SSH_PORT }}" \
+            "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
+            'mkdir -p /opt/kosmo/production'
+
+          scp -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -P "${{ vars.PRODUCTION_SSH_PORT }}" \
+            deploy/production/compose.yaml nginx/nginx.conf \
+            "$work_dir/application.env" "$work_dir/runtime.env" \
+            "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}:/opt/kosmo/production/"
+
+      - name: Migrate and deploy on Production
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.PRODUCTION_GHCR_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$GHCR_TOKEN"
+
+          printf '%s' "$GHCR_TOKEN" | ssh -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -p "${{ vars.PRODUCTION_SSH_PORT }}" \
+            "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
+            'set -euo pipefail
+             cd /opt/kosmo/production
+             cat application.env runtime.env > .env
+             chmod 600 .env
+             rm -f application.env runtime.env
+             grep -q '^DATABASE_URL=.' .env
+             grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env
+             docker network inspect kosmo-network >/dev/null
+             docker login ghcr.io --username "${{ vars.PRODUCTION_GHCR_USERNAME }}" --password-stdin
+             docker compose -p kosmo -f compose.yaml pull
+             docker run --rm --env-file .env --network kosmo-network \
+               --entrypoint alembic "$KOSMO_API_IMAGE" upgrade head
+             docker compose -p kosmo -f compose.yaml up -d
+             for attempt in $(seq 1 24); do
+               status="$(docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" kosmo-backend)"
+               if [ "$status" = healthy ]; then
+                 docker compose -p kosmo -f compose.yaml ps
+                 exit 0
+               fi
+               if [ "$status" = unhealthy ] || [ "$status" = exited ]; then
+                 docker compose -p kosmo -f compose.yaml logs --tail=100 backend
+                 exit 1
+               fi
+               sleep 5
+             done
+             docker compose -p kosmo -f compose.yaml logs --tail=100 backend
+             exit 1'
+
+  smoke-test-production:
+    name: Smoke test Production
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+
+    steps:
+      - name: Verify public frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for endpoint in \
+            'https://kosmo.cespan.dev/' \
+            'https://kosmo.cespan.dev/api/v1/openapi.json'; do
+            echo "Checking ${endpoint}"
+            curl --fail --show-error --silent --location \
+              --retry 12 --retry-all-errors --retry-delay 5 --max-time 20 \
+              "$endpoint" > /dev/null
+          done

@@ -194,15 +194,18 @@ class TestInMemoryStoreProjectContext:
         store = InMemoryAgentSessionStore()
         project_id = a_project_id()
         s1 = a_session(
-            project_id=project_id, is_completed=False,
+            project_id=project_id,
+            is_completed=False,
             validation_error_messages=["error A", "error B"],
         )
         s2 = a_session(
-            project_id=project_id, is_completed=False,
+            project_id=project_id,
+            is_completed=False,
             validation_error_messages=["error A", "error C"],
         )
         s3 = a_session(
-            project_id=project_id, is_completed=False,
+            project_id=project_id,
+            is_completed=False,
             validation_error_messages=["error A"],
         )
         await store.save_session(s1)
@@ -225,7 +228,8 @@ class TestInMemoryStoreProjectContext:
         store = InMemoryAgentSessionStore()
         project_id = a_project_id()
         s1 = a_session(
-            project_id=project_id, is_completed=True,
+            project_id=project_id,
+            is_completed=True,
             validation_error_messages=["error ignorado"],
         )
         await store.save_session(s1)
@@ -264,7 +268,9 @@ async def test_agent_session_stores_validation_error_messages() -> None:
     )
     agent._skill_registry.register(  # type: ignore[reportOptionalMemberAccess]
         Skill(
-            name="discovery_generate", description="Test", phase=SpecPhase.DESCUBRIMIENTO,
+            name="discovery_generate",
+            description="Test",
+            phase=SpecPhase.DESCUBRIMIENTO,
             mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
         )
     )

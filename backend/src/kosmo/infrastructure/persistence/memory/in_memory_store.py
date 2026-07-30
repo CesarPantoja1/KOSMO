@@ -9,8 +9,9 @@ from kosmo.contracts.agent_memory import (
     KnowledgePattern,
     ProjectMemoryContext,
 )
+from kosmo.contracts.chat import ChatRepository, EstadoPlanCambio, HistorialChat, MensajeChat, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, PlanChangeId, ProjectId
 
 
 class InMemoryAgentSessionStore(AgentMemoryPort):
@@ -92,8 +93,11 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
 
         reflections: list[str] = []
         error_counter: dict[str, int] = {}
-        failed_sessions = [s for s in self._store.values() if s.project_id == project_id
-            and not s.is_completed and s.validation_error_messages]
+        failed_sessions = [
+            s
+            for s in self._store.values()
+            if s.project_id == project_id and not s.is_completed and s.validation_error_messages
+        ]
         failed_sessions.sort(key=lambda s: s.created_at, reverse=True)
         for s in failed_sessions[:20]:
             for msg in s.validation_error_messages:
@@ -113,8 +117,7 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         )
         reflections = reflections[:5]
 
-        common_errors = [f"{msg} (x{count})" for msg, count in
-            sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
+        common_errors = [f"{msg} (x{count})" for msg, count in sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
 
         return ProjectMemoryContext(
             project_id=project_id,
@@ -223,3 +226,92 @@ class InMemoryKnowledgePatternStore:
             results.extend(pats)
         results.sort(key=lambda p: p.support_count, reverse=True)
         return results[:limit]
+
+
+class InMemoryChatRepository(ChatRepository):
+    def __init__(self) -> None:
+        self._histories: dict[str, HistorialChat] = {}
+        self._plan_changes: dict[str, list[PlanCambio]] = {}
+
+    async def save_message(
+        self, project_id: ProjectId, phase: SpecPhase, message: MensajeChat, context_id: str | None = None
+    ) -> MensajeChat:
+        history = await self.get_history(project_id, phase, context_id)
+        if not history:
+            from kosmo.contracts.sdd.ids import ChatHistoryId
+            from kosmo.domain.sdd.id_generator import IdGenerator
+
+            history = HistorialChat(
+                id=ChatHistoryId(IdGenerator.generate("chat_history")),
+                project_id=project_id,
+                phase=phase,
+                context_id=context_id,
+            )
+        history = history.add_message(message)
+        await self.save_history(history)
+        return message
+
+    async def get_history(
+        self, project_id: ProjectId, phase: SpecPhase, context_id: str | None = None
+    ) -> HistorialChat | None:
+        key = f"{project_id}_{phase.value}_{context_id or ''}"
+        return self._histories.get(key)
+
+    async def save_history(self, history: HistorialChat) -> HistorialChat:
+        key = f"{history.project_id}_{history.phase.value}_{history.context_id or ''}"
+        self._histories[key] = history
+        return history
+
+    async def add_plan_change(self, project_id: ProjectId, phase: SpecPhase, change: PlanCambio) -> PlanCambio:
+        key = f"{project_id}_{phase.value}"
+        changes = self._plan_changes.get(key, [])
+        changes.append(change)
+        self._plan_changes[key] = changes
+        return change
+
+    async def list_plan_changes(self, project_id: ProjectId, phase: SpecPhase | None = None) -> list[PlanCambio]:
+        results: list[PlanCambio] = []
+        for k, v in self._plan_changes.items():
+            if k.startswith(f"{project_id}_") and (phase is None or k == f"{project_id}_{phase.value}"):
+                results.extend(v)
+        return results
+
+    async def update_plan_change_status(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        change_id: PlanChangeId,
+        status: EstadoPlanCambio,
+        user_version: str | None = None,
+    ) -> PlanCambio | None:
+        for changes in self._plan_changes.values():
+            for i, c in enumerate(changes):
+                if c.id == change_id:
+                    updated = PlanCambio(
+                        id=c.id,
+                        section=c.section,
+                        description=c.description,
+                        diff=c.diff,
+                        status=status,
+                        origin=c.origin,
+                        rationale=c.rationale,
+                        user_version=user_version or c.user_version,
+                    )
+                    changes[i] = updated
+                    return updated
+        return None
+
+    async def remove_plan_change(self, project_id: ProjectId, change_id: PlanChangeId) -> bool:  # noqa: ARG002
+        for changes in self._plan_changes.values():
+            for i, c in enumerate(changes):
+                if c.id == change_id:
+                    changes.pop(i)
+                    return True
+        return False
+
+    async def clear_plan(self, project_id: ProjectId, phase: SpecPhase | None = None) -> None:
+        keys_to_clear: list[str] = []
+        for k in self._plan_changes:
+            if k.startswith(f"{project_id}_") and (phase is None or k == f"{project_id}_{phase.value}"):
+                keys_to_clear.append(k)
+        for k in keys_to_clear:
+            self._plan_changes[k] = []

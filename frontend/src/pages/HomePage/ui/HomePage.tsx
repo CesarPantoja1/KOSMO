@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Cards, Clock, List } from './icons';
-import { projectsApi } from '@/entities/project/api/projects-api';
+import { getProjects } from '@/entities/project/api/api';
 import { useAppStore } from 'app/store/app.store';
 import { Project } from '@/entities/project/model/types';
 
@@ -47,7 +47,7 @@ export function HomePage() {
 	useEffect(() => {
 		const fetchProjects = async () => {
 			try {
-				const data = await projectsApi.getProjects();
+				const data = await getProjects();
 				setProjects(data);
 			} catch (error) {
 				console.error('Failed to load projects', error);

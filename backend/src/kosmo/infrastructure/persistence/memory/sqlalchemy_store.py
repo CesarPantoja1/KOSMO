@@ -142,11 +142,10 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             )
             errors_result = await db.execute(errors_stmt)
             for (msgs,) in errors_result.fetchall():
-                for msg in (msgs or []):  # type: ignore[reportUnknownVariableType]
+                for msg in msgs or []:  # type: ignore[reportUnknownVariableType]
                     error_counter[str(msg)] = error_counter.get(str(msg), 0) + 1  # type: ignore[reportUnknownArgumentType]
 
-        common_errors = [f"{msg} (x{count})" for msg, count in
-            sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
+        common_errors = [f"{msg} (x{count})" for msg, count in sorted(error_counter.items(), key=lambda x: -x[1])[:5]]
 
         return ProjectMemoryContext(
             project_id=project_id,
@@ -172,10 +171,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             if model:
                 filters += " AND embedding_model = :model"
             stmt = text(
-                f"SELECT id FROM agent_sessions "
-                f"{filters} "
-                "ORDER BY embedding <-> :embedding::vector "
-                "LIMIT :limit"
+                f"SELECT id FROM agent_sessions {filters} ORDER BY embedding <-> :embedding::vector LIMIT :limit"
             )
             params: dict[str, object] = {
                 "embedding": embedding_str,
@@ -201,11 +197,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
         limit: int = 50,
     ) -> list[AgentSessionSummary]:
         async with self._session_factory() as db:
-            stmt = (
-                select(AgentSessionModel)
-                .order_by(AgentSessionModel.created_at.desc())
-                .limit(limit)
-            )
+            stmt = select(AgentSessionModel).order_by(AgentSessionModel.created_at.desc()).limit(limit)
             result = await db.execute(stmt)
             models = result.scalars().all()
             return [_model_to_summary(m) for m in models]
@@ -220,15 +212,13 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
         async with self._session_factory() as db:
             conditions = [AgentSessionModel.is_completed == True]  # noqa: E712
             if since_session_id is not None:
-                subq = select(AgentSessionModel.created_at).where(
-                    AgentSessionModel.id == since_session_id
-                ).scalar_subquery()
+                subq = (
+                    select(AgentSessionModel.created_at)
+                    .where(AgentSessionModel.id == since_session_id)
+                    .scalar_subquery()
+                )
                 conditions.append(AgentSessionModel.created_at > subq)
-            stmt = (
-                select(AgentSessionModel.phase, func.count())
-                .where(*conditions)
-                .group_by(AgentSessionModel.phase)
-            )
+            stmt = select(AgentSessionModel.phase, func.count()).where(*conditions).group_by(AgentSessionModel.phase)
             result = await db.execute(stmt)
             return {str(row[0]): int(row[1]) for row in result.fetchall()}
 
@@ -243,9 +233,7 @@ class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
         patterns: list[KnowledgePattern],
     ) -> None:
         async with self._session_factory() as db:
-            delete_stmt = select(KnowledgePatternModel).where(
-                KnowledgePatternModel.phase == phase.value
-            )
+            delete_stmt = select(KnowledgePatternModel).where(KnowledgePatternModel.phase == phase.value)
             result = await db.execute(delete_stmt)
             for existing in result.scalars().all():
                 await db.delete(existing)

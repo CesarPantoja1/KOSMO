@@ -149,7 +149,7 @@ async def test_refine_requirements_returns_refined_markdown_when_requirements_ex
     # Assert
     assert result["feature_id"] == "feat_refine01"
     assert result["feature_number"] == 1
-    assert result["requirements_markdown"] == refined_markdown
+    assert result["document_markdown"] == refined_markdown
     assert result["total"] == 1
     assert await requirement_repo.by_feature_id(FeatureId("feat_refine01")) == refined_markdown
 

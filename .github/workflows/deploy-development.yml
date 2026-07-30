@@ -1,0 +1,208 @@
+name: Deploy Development
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-development
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  wait-for-ci:
+    name: Wait for CI summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Require a successful CI summary for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for ((waited = 0; waited < 600; waited += 10)); do
+            check_json="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${COMMIT_SHA}/check-runs?per_page=100")"
+            status="$(jq -r '.check_runs[] | select(.name == "CI summary") | .status' <<<"$check_json" | head -n 1)"
+            conclusion="$(jq -r '.check_runs[] | select(.name == "CI summary") | .conclusion' <<<"$check_json" | head -n 1)"
+
+            if [[ "$status" == "completed" && "$conclusion" == "success" ]]; then
+              echo "CI summary passed for ${COMMIT_SHA}."
+              exit 0
+            fi
+
+            if [[ "$status" == "completed" ]]; then
+              echo "::error::CI summary finished with conclusion: ${conclusion:-unknown}."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::Timed out while waiting for CI summary on ${COMMIT_SHA}."
+          exit 1
+
+  migrate-database:
+    name: Migrate Development database
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: development
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Validate database secret
+        shell: bash
+        run: test -n "$DATABASE_URL" || (echo "::error::Missing SUPABASE_DATABASE_URL secret" && exit 1)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+      - name: Apply Alembic migrations
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+  deploy-frontend:
+    name: Deploy Development frontend
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: development
+
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.10'
+
+      - name: Install Vercel CLI
+        run: bun install -g vercel
+
+      - name: Validate Vercel secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || (echo "::error::Missing VERCEL_TOKEN secret" && exit 1)
+          test -n "$VERCEL_ORG_ID" || (echo "::error::Missing VERCEL_ORG_ID secret" && exit 1)
+          test -n "$VERCEL_PROJECT_ID" || (echo "::error::Missing VERCEL_PROJECT_ID secret" && exit 1)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build and deploy frontend through Vercel
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          test -f .vercel/.env.production.local || (echo "::error::Vercel environment variables were not pulled" && exit 1)
+          api_url="$(grep '^NEXT_PUBLIC_API_URL=' .vercel/.env.production.local | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
+          if [ -z "$api_url" ]; then
+            echo "::error::Missing or empty NEXT_PUBLIC_API_URL in Vercel environment variables"
+            exit 1
+          fi
+          case "$api_url" in
+            http://localhost*|https://localhost*|http://127.0.0.1*|https://127.0.0.1*)
+              echo "::error::NEXT_PUBLIC_API_URL points to a loopback address"
+              exit 1
+              ;;
+            https://*)
+              ;;
+            *)
+              echo "::error::NEXT_PUBLIC_API_URL must be an https:// URL"
+              exit 1
+              ;;
+          esac
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  deploy-backend:
+    name: Deploy Development backend
+    needs: migrate-database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: development
+
+    steps:
+      - name: Validate Render secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RENDER_API_KEY" || (echo "::error::Missing RENDER_API_KEY secret" && exit 1)
+          test -n "$RENDER_SERVICE_ID" || (echo "::error::Missing RENDER_SERVICE_ID secret" && exit 1)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+
+      - name: Deploy exact develop commit through Render
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_json="$(curl --fail --silent --show-error --request POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            --header "Authorization: Bearer ${RENDER_API_KEY}" \
+            --header "Content-Type: application/json" \
+            --data "{\"commitId\":\"${GITHUB_SHA}\",\"clearCache\":\"do_not_clear\"}")"
+          deploy_id="$(jq -r '.id // empty' <<<"$deploy_json")"
+          test -n "$deploy_id" || (echo "::error::Render did not return a deploy ID" && exit 1)
+
+          for ((waited = 0; waited < 900; waited += 15)); do
+            status="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer ${RENDER_API_KEY}" \
+              "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${deploy_id}" \
+              | jq -r '.status // empty')"
+
+            case "$status" in
+              live)
+                echo "Render deployed commit ${GITHUB_SHA}."
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|deactivated)
+                echo "::error::Render deploy ${deploy_id} ended with status: ${status}"
+                exit 1
+                ;;
+              *)
+                sleep 15
+                ;;
+            esac
+          done
+
+          echo "::error::Timed out waiting for Render deploy ${deploy_id}."
+          exit 1
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}

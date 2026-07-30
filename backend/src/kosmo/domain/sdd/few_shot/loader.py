@@ -17,10 +17,6 @@ def load_example(phase: SpecPhase) -> str | None:
     if name is None:
         return None
     try:
-        return (
-            resources.files("kosmo.domain.sdd.few_shot")
-            .joinpath(name)
-            .read_text(encoding="utf-8")
-        )
+        return resources.files("kosmo.domain.sdd.few_shot").joinpath(name).read_text(encoding="utf-8")
     except FileNotFoundError:
         return None

@@ -95,7 +95,7 @@ async def generate_requirements(
     return {
         "feature_id": str(output.feature_id),
         "feature_number": output.phase_output.feature_number,
-        "requirements_markdown": output.phase_output.requirements_markdown,
+        "document_markdown": output.phase_output.requirements_markdown,
         "total": len(output.requirements),
     }
 
@@ -200,6 +200,6 @@ async def refine_requirements(
     return {
         "feature_id": str(output.feature_id),
         "feature_number": output.phase_output.feature_number,
-        "requirements_markdown": output.phase_output.requirements_markdown,
+        "document_markdown": output.phase_output.requirements_markdown,
         "total": len(output.requirements),
     }

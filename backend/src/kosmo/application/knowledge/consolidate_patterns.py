@@ -49,12 +49,8 @@ class ConsolidateKnowledgePatterns:
 
         return result
 
-    async def _synthesize(
-        self, phase: SpecPhase, snippets: list[str]
-    ) -> list[KnowledgePattern]:
-        context = "\n".join(
-            f"- {s}" for s in snippets if s.strip()
-        )
+    async def _synthesize(self, phase: SpecPhase, snippets: list[str]) -> list[KnowledgePattern]:
+        context = "\n".join(f"- {s}" for s in snippets if s.strip())
         prompt = PromptTemplate(
             system_prompt=(
                 "Eres un analista de patrones. Tu tarea es extraer practicas recurrentes "

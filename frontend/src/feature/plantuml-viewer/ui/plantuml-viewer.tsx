@@ -32,7 +32,7 @@ export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(
 		return (
 			<div ref={ref} className='flex-1 min-h-0 overflow-y-auto'>
 				<div className='flex items-center justify-between py-1.5 bg-base-100 rounded-sm px-3'>
-					<h3 className='text-base font-bold text-base-700'>Diagrama UML</h3>
+					<h3 className='text-base font-bold text-base-700'>Diagrama</h3>
 					<div className='flex items-center gap-1'>
 						<button
 							type='button'

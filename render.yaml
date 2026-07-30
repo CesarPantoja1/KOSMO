@@ -4,20 +4,20 @@ services:
     runtime: docker
     plan: free
     region: oregon
-    branch: main
+    branch: develop
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health
     autoDeployTrigger: off
     envVars:
       - key: ENV
-        value: production
+        value: development
       - key: LOG_LEVEL
         value: INFO
       - key: OTEL_SERVICE_NAME
         value: kosmo-backend
       - key: OTEL_ENVIRONMENT
-        value: production
+        value: development
       - key: RUN_MIGRATIONS
         value: "0"
       - key: AUTH_DISABLED
