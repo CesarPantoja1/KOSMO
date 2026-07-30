@@ -5,6 +5,7 @@ import Check from '@/shared/ui/icons/Check';
 import Close from '@/shared/ui/icons/Close';
 import Plus from '@/shared/ui/icons/Plus';
 import Trash from '@/shared/ui/icons/Trash';
+import { MarkdownText } from '@/shared/ui/markdown-text';
 import { useState } from 'react';
 import type { ChangeSuggestion } from '../types/chatbot';
 
@@ -54,15 +55,15 @@ export const TarjetaRecepcionPlan = ({ suggestion, onAction }: Props) => {
 			)}
 
 			{/* Diff */}
-			<div className='flex flex-col gap-1 overflow-hidden rounded-md border border-base-300 font-mono text-xs'>
+			<div className='flex flex-col gap-1 overflow-hidden rounded-md border border-base-300 text-xs'>
 				{suggestion.diff_before && (
 					<div className='border-l-2 border-status-error bg-status-error/5 p-2 text-status-error line-through decoration-status-error/50'>
-						{suggestion.diff_before}
+						<MarkdownText content={suggestion.diff_before} />
 					</div>
 				)}
 				{suggestion.diff_after && (
 					<div className='border-l-2 border-primary-100 bg-primary-50 p-2 text-primary-800'>
-						{suggestion.diff_after}
+						<MarkdownText content={suggestion.diff_after} />
 					</div>
 				)}
 			</div>

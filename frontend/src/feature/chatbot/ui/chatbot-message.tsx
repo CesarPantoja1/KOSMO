@@ -1,6 +1,7 @@
 'use client';
 
 import { Ai } from '@/shared/ui';
+import { MarkdownText } from '@/shared/ui/markdown-text';
 import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
 import { TarjetaRecepcionPlan } from './TarjetaRecepcionPlan';
 
@@ -36,7 +37,7 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 						}
 					`}
 				>
-					{message.content}
+					{isUser ? message.content : <MarkdownText content={message.content} />}
 				</div>
 			</div>
 

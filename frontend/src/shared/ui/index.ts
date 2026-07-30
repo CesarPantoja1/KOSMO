@@ -3,6 +3,7 @@ export { ButtonSM, ButtonMD, ButtonLG } from './button';
 
 // components
 export { default as Loading } from './Loading';
+export { MarkdownText } from './markdown-text';
 export { default as ModalConfirmLeave } from './ModalConfirmLeave';
 
 // icons
