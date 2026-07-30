@@ -264,7 +264,7 @@ jobs:
              docker login ghcr.io --username "${{ vars.PRODUCTION_GHCR_USERNAME }}" --password-stdin
              docker compose -p kosmo -f compose.yaml pull
              docker run --rm --env-file .env --network kosmo-network \
-               --entrypoint alembic "$KOSMO_API_IMAGE" upgrade head
+               --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
              docker compose -p kosmo -f compose.yaml up -d
              for attempt in $(seq 1 24); do
                status="$(docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" kosmo-backend)"
