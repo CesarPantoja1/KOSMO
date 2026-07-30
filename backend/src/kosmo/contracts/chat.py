@@ -50,6 +50,7 @@ class PlanCambio:
     origin: str = "Chat Descubrimiento"
     rationale: str | None = None
     user_version: str | None = None
+    context_id: str | None = None
 
 
 @dataclass(frozen=True)

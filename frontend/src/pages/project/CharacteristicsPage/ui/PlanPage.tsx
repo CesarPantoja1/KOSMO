@@ -14,45 +14,45 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 function buildProposal(
 	original: CharacteristicResponse[],
 	changes: PlanChange[],
-	allOriginals: CharacteristicResponse[] = original,
 ): CharacteristicResponse[] {
-	const modified = original.map((c) => {
-		let description = c.description;
+	return original.map((c) => {
+		let feature = { ...c };
 		for (const change of changes) {
-			if (change.diff.before && description.includes(change.diff.before)) {
-				description = description.replace(change.diff.before, change.diff.after);
-			} else if (!change.diff.before && change.diff.after && change.section === c.title) {
-				description += '\n\n' + change.diff.after;
+			if (change.context && change.context !== c.id) continue;
+			const attribute = featureAttribute(change.section);
+			if (attribute && change.diff.before && feature[attribute].includes(change.diff.before)) {
+				feature = {
+					...feature,
+					[attribute]: feature[attribute].replace(change.diff.before, change.diff.after),
+				};
 			}
 		}
-		return { ...c, description };
+		return feature;
 	});
+}
 
-	const existingTitles = new Set(allOriginals.map((c) => c.title));
-	const additions = changes
-		.filter((c) => !c.diff.before && c.diff.after && !existingTitles.has(c.section))
-		.map((c) => ({
-			id: c.id,
-			project_id: '',
-			number: modified.length + 1,
-			title: c.section,
-			slug: c.section.toLowerCase().replace(/\s+/g, '-'),
-			description: c.diff.after,
-			origin: c.origin,
-			display_id: `F${String(modified.length + 1).padStart(2, '0')}`,
-		}));
-
-	return [...modified, ...additions];
+function featureAttribute(section: string): 'title' | 'description' | 'origin' | null {
+	const normalized = section
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.toLowerCase()
+		.replace(/[^a-z]/g, '');
+	if (normalized === 'titulo' || normalized === 'titulodelacaracteristica') return 'title';
+	if (normalized === 'descripcion' || normalized === 'descripciondelacaracteristica') return 'description';
+	if (normalized === 'origen' || normalized === 'origendelacaracteristica') return 'origin';
+	return null;
 }
 
 function CharacteristicDiffCard({
 	displayId,
 	title,
 	description,
+	origin,
 }: {
 	displayId: string;
 	title: string;
 	description: string;
+	origin: string;
 }) {
 	return (
 		<div
@@ -65,7 +65,8 @@ function CharacteristicDiffCard({
 			</div>
 			<div className='flex-1 inline-flex flex-col justify-center gap-2.5'>
 				<h3 className='text-primary-100 text-xl font-semibold'>{title}</h3>
-				<p className='text-base-800 text-ellipsis overflow-hidden'>{description}</p>
+				<p className='feature-description-scroll text-base-800'>{description}</p>
+				{origin && <p className='text-base-600 text-sm text-ellipsis overflow-hidden'>Origen: {origin}</p>}
 			</div>
 		</div>
 	);
@@ -103,12 +104,14 @@ export const PlanPage = () => {
 	const changedCharacteristics = originalCharacteristics.filter((c) =>
 		changes.some(
 			(change) =>
-				(change.diff.before && c.description.includes(change.diff.before)) ||
-				(!change.diff.before && change.section === c.title),
+				change.context === c.id ||
+				(!change.context &&
+					change.diff.before &&
+					[c.title, c.description, c.origin].some((value) => value.includes(change.diff.before))),
 		),
 	);
 
-	const proposalCharacteristics = buildProposal(changedCharacteristics, changes, originalCharacteristics);
+	const proposalCharacteristics = buildProposal(changedCharacteristics, changes);
 
 	const leftRef = useRef<HTMLDivElement>(null);
 	const rightRef = useRef<HTMLDivElement>(null);
@@ -232,6 +235,7 @@ export const PlanPage = () => {
 										displayId={c.display_id}
 										title={c.title}
 										description={c.description}
+										origin={c.origin}
 									/>
 								))}
 							</div>
@@ -251,6 +255,7 @@ export const PlanPage = () => {
 										displayId={c.display_id}
 										title={c.title}
 										description={c.description}
+										origin={c.origin}
 									/>
 								))}
 							</div>

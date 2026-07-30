@@ -546,6 +546,7 @@ def build_discovery_components(
             project_repo=project_repo,
             chat_repo=chat_repo,
             document_repo=document_repo,
+            feature_repo=SqlAlchemyFeatureRepository(session_factory),
         ),
     )
 

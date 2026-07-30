@@ -165,6 +165,7 @@ interface BackendPlanResponse {
 		origin: string;
 		rationale?: string | null;
 		user_version?: string | null;
+		context_id?: string | null;
 	}>;
 	pending_count: number;
 	conflict_count: number;
@@ -179,7 +180,7 @@ function mapBackendChange(item: BackendPlanResponse['changes'][number], frontend
 		status: item.status as PlanChange['status'],
 		origin: item.origin ?? '',
 		phase: frontendPhase,
-		context: context ?? '',
+		context: item.context_id ?? context ?? '',
 		rationale: item.rationale ?? undefined,
 		userVersion: item.user_version ?? undefined,
 		created_at: new Date().toISOString(),
@@ -229,6 +230,7 @@ const realAddPlanChange = async (
 	change: PlanChange,
 ): Promise<PlanResponse> => {
 	const params = new URLSearchParams({ phase: mapBackendPhase(phase) });
+	if (change.context) params.append('context', change.context);
 	const data = await apiClient<BackendPlanResponse>(
 		`/api/v1/projects/${encodeURIComponent(projectId)}/plan/changes?${params.toString()}`,
 		{

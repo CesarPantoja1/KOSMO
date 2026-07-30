@@ -82,13 +82,13 @@ const CharacteristicsPage = () => {
 	const handlePlanAction = (
 		action: 'add' | 'remove' | 'discard',
 		suggestion: ChangeSuggestion,
-		messageId: string,
+		_messageId: string,
 	) => {
-		if (!currentProject) return;
+		if (!currentProject || !activeFeatureId) return;
 
 		if (action === 'add') {
 			const change: PlanChange = {
-				id: messageId,
+				id: suggestion.id,
 				section: suggestion.section,
 				description: suggestion.description ?? suggestion.section,
 				diff: {
@@ -98,7 +98,7 @@ const CharacteristicsPage = () => {
 				status: 'pending',
 				origin: 'chat',
 				phase: 'features',
-				context: currentProject.id,
+				context: activeFeatureId,
 				rationale: suggestion.rationale ?? undefined,
 				created_at: new Date().toISOString(),
 			};
@@ -109,8 +109,8 @@ const CharacteristicsPage = () => {
 		}
 
 		if (action === 'remove') {
-			removeFromPlan('features', messageId);
-			deletePlanChange(currentProject.id, 'features', messageId).catch((err) => {
+			removeFromPlan('features', suggestion.id);
+			deletePlanChange(currentProject.id, 'features', suggestion.id).catch((err) => {
 				console.warn('[CharacteristicsPage] Error al eliminar cambio en backend:', err);
 			});
 		}

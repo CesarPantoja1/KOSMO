@@ -636,6 +636,7 @@ class PlanChangeView(BaseModel):
     origin: str = Field(description="Origen del cambio: chat, consistency, manual")
     created_at: datetime = Field(description="Timestamp de creación")
     rationale: str | None = Field(default=None, description="Justificación del cambio")
+    context_id: str | None = Field(default=None, description="Recurso específico afectado por el cambio")
 
     @classmethod
     def from_domain(cls, change: PlanCambio) -> "PlanChangeView":
@@ -653,6 +654,7 @@ class PlanChangeView(BaseModel):
             origin=change.origin,
             created_at=datetime.now(UTC),
             rationale=change.rationale,
+            context_id=change.context_id,
         )
 
 

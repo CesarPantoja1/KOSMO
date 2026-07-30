@@ -52,7 +52,7 @@ const CardCharacterist = ({
 				<h3 className='text-primary-100 text-xl font-semibold'>
 					{highlightTitle(title, searchQuery)}
 				</h3>
-				<p className='line-clamp-2 text-base-800 text-ellipsis overflow-hidden'>
+				<p className='feature-description-scroll text-base-800'>
 					{description}
 				</p>
 			</div>

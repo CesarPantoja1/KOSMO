@@ -109,6 +109,7 @@ class ManagePlanChangesUseCase:
             status=EstadoPlanCambio.ADDED,
             origin="chat",
             rationale=rationale,
+            context_id=context_id,
         )
         await self._chat_repo.add_plan_change(project_id, phase, plan_change)
 

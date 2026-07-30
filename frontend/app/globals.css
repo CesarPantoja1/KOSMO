@@ -112,3 +112,24 @@ body {
 .chatbot {
 	@apply overflow-hidden transition-all duration-300 ease-in-out;
 }
+
+.feature-description-scroll {
+	max-height: 3.5rem;
+	overflow-y: auto;
+	padding-right: 0.4rem;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-base-300) transparent;
+}
+
+.feature-description-scroll::-webkit-scrollbar {
+	width: 4px;
+}
+
+.feature-description-scroll::-webkit-scrollbar-thumb {
+	background: var(--color-base-300);
+	border-radius: 9999px;
+}
+
+.feature-description-scroll::-webkit-scrollbar-track {
+	background: transparent;
+}

@@ -7,12 +7,14 @@ from kosmo.application.chat.apply_plan_changes import (
 from kosmo.contracts import ChatRepository, DiffCambio, EstadoPlanCambio, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
-from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId, UserId
+from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
-from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
+from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository, ProjectRepository
 from tests.unit.fakes import (
     InMemoryChatRepository,
     InMemoryDocumentRepository,
+    InMemoryFeatureRepository,
     InMemoryProjectRepository,
 )
 
@@ -33,11 +35,13 @@ def _make_uc(
     project_repo: ProjectRepository,
     chat_repo: ChatRepository,
     document_repo: DocumentRepository,
+    feature_repo: FeatureRepository | None = None,
 ) -> ApplyPlanChangesUseCase:
     return ApplyPlanChangesUseCase(
         project_repo=project_repo,
         chat_repo=chat_repo,
         document_repo=document_repo,
+        feature_repo=feature_repo,
     )
 
 
@@ -47,13 +51,22 @@ async def _seed_document(document_repo: InMemoryDocumentRepository, project_id: 
     document_repo.discovery_docs[str(project_id)] = markdown_to_document(_DEFAULT_MARKDOWN)
 
 
-def _plan_change(cid: str, before: str, after: str, status: EstadoPlanCambio = EstadoPlanCambio.ADDED) -> PlanCambio:
+def _plan_change(
+    cid: str,
+    before: str,
+    after: str,
+    status: EstadoPlanCambio = EstadoPlanCambio.ADDED,
+    *,
+    section: str = "Test",
+    context_id: str | None = None,
+) -> PlanCambio:
     return PlanCambio(
         id=PlanChangeId(cid),
-        section="Test",
+        section=section,
         description="test",
         diff=DiffCambio(before=before, after=after),
         status=status,
+        context_id=context_id,
     )
 
 
@@ -316,11 +329,11 @@ async def test_apply_raises_value_error_for_unsupported_phase() -> None:
     uc = _make_uc(project_repo, chat_repo, document_repo)
 
     # Act & Assert
-    with pytest.raises(ValueError, match="caracteristicas"):
+    with pytest.raises(ValueError, match="modelo"):
         await uc.execute(
             ApplyPlanChangesInput(
                 project_id=project.id,
-                phase=SpecPhase.CARACTERISTICAS,
+                phase=SpecPhase.MODELO,
                 change_ids=[PlanChangeId("chg_01")],
             )
         )
@@ -360,3 +373,112 @@ async def test_apply_noops_when_no_requested_changes_are_applicable() -> None:
 
     assert doc is not None
     assert document_to_markdown(doc) == _DEFAULT_MARKDOWN
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_updates_its_target_attribute() -> None:
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"), project_id=project.id, number=1,
+        title="Obtener turno", slug="obtener-turno", description="El usuario toma un turno.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_feature_01", "El usuario toma un turno.", "El usuario registra su identificación y toma un turno.",
+        section="Descripción", context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
+    result = await _make_uc(project_repo, chat_repo, document_repo, feature_repo).execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_feature_01")])
+    )
+
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    saved = await feature_repo.by_id(FeatureId("feat_01"))
+    assert saved is not None
+    assert saved.description == "El usuario registra su identificación y toma un turno."
+    assert chat_repo.plans[0].status == EstadoPlanCambio.APPLIED
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_rejects_stale_text_without_modifying_feature() -> None:
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"), project_id=project.id, number=1,
+        title="Obtener turno", slug="obtener-turno", description="Texto editado manualmente.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_feature_01", "Texto anterior.", "Texto propuesto.", section="Descripción", context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
+    result = await _make_uc(project_repo, chat_repo, document_repo, feature_repo).execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_feature_01")])
+    )
+
+    assert result.applied_count == 0
+    assert result.failed_count == 1
+    assert "ya no se encuentra" in result.failed_changes[0].reason
+    assert (await feature_repo.by_id(FeatureId("feat_01"))).description == "Texto editado manualmente."  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_without_context_resolves_a_unique_legacy_change() -> None:
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"), project_id=project.id, number=1,
+        title="Obtener turno", slug="obtener-turno", description="Texto original único.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change("chg_feature_legacy", "Texto original único.", "Texto actualizado.", section="Descripción")
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
+    result = await _make_uc(project_repo, chat_repo, document_repo, feature_repo).execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_feature_legacy")])
+    )
+
+    assert result.applied_count == 1
+    assert (await feature_repo.by_id(FeatureId("feat_01"))).description == "Texto actualizado."  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_feature_listing_is_ordered_by_feature_number() -> None:
+    project = _make_project()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(
+        Feature(
+            id=FeatureId("feat_03"), project_id=project.id, number=3,
+            title="Tercera", slug="tercera", description="",
+        )
+    )
+    await feature_repo.save(
+        Feature(
+            id=FeatureId("feat_01"), project_id=project.id, number=1,
+            title="Primera", slug="primera", description="",
+        )
+    )
+
+    listed = await feature_repo.list_by_project(project.id)
+
+    assert [feature.number for feature in listed] == [1, 3]

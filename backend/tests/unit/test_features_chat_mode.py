@@ -19,6 +19,8 @@ def test_features_chat_mode_properties() -> None:
     assert mode.max_tokens == 4096
     assert mode.output_type == RespuestaChatLLM
     assert "NIVEL DE USUARIO" in mode.system_prompt
+    assert "no afirmes que un cambio fue aplicado" in mode.system_prompt
+    assert "NO generes una nueva sugerencia" not in mode.system_prompt
     assert mode.available_tools == []
 
 
