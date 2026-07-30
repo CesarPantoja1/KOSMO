@@ -36,7 +36,10 @@ export const PlanPage = () => {
 	const [isApplying, setIsApplying] = useState(false);
 	const [isDiscarding, setIsDiscarding] = useState(false);
 
-	const changes = planByPhase['discovery'] ?? [];
+	const allChanges = planByPhase['discovery'] ?? [];
+	const changes = allChanges.filter(
+		(c) => c.status === 'pending' || c.status === 'added' || c.status === 'conflict',
+	);
 
 	useEffect(() => {
 		if (!currentProject) {
