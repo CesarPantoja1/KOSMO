@@ -16,17 +16,31 @@ interface Props {
 	onAction?: (action: 'add' | 'remove' | 'discard') => void;
 }
 
-type CardStatus = 'pending' | 'added' | 'discarded';
+type CardStatus = 'pending' | 'added' | 'applied' | 'discarded';
+
+const ACTIVE_STATUSES = ['pending', 'added', 'conflict'] as const;
 
 export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props) => {
 	const [discarded, setDiscarded] = useState(false);
 
 	const planByPhase = usePlanStore((s) => s.planByPhase);
-	const isInPlan = Object.values(planByPhase).some((changes) =>
-		changes.some((c) => c.id === messageId),
-	);
+	const planChange = Object.values(planByPhase)
+		.flat()
+		.find((c) => c.id === messageId);
 
-	const status: CardStatus = discarded ? 'discarded' : isInPlan ? 'added' : 'pending';
+	let status: CardStatus;
+
+	if (discarded) {
+		status = 'discarded';
+	} else if (planChange == null) {
+		status = 'pending';
+	} else if (planChange.status === 'applied') {
+		status = 'applied';
+	} else if (ACTIVE_STATUSES.includes(planChange.status as (typeof ACTIVE_STATUSES)[number])) {
+		status = 'added';
+	} else {
+		status = 'discarded';
+	}
 
 	const handleAdd = () => {
 		onAction?.('add');
@@ -47,6 +61,11 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 				{status === 'added' && (
 					<span className='flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-100'>
 						<Check size={12} /> Agregado
+					</span>
+				)}
+				{status === 'applied' && (
+					<span className='flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-100'>
+						<Check size={12} /> Aplicado
 					</span>
 				)}
 				{status === 'discarded' && (
@@ -76,16 +95,36 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 			</div>
 
 			{/* Acciones */}
-			<div className='flex justify-end gap-2'>
-				{status === 'pending' && (
-					<>
+			{status !== 'applied' && (
+				<div className='flex justify-end gap-2'>
+					{status === 'pending' && (
+						<>
+							<ButtonSM
+								variant='secondary'
+								onClick={handleDiscard}
+								icon={<Trash size={13} />}
+							>
+								Descartar
+							</ButtonSM>
+							<ButtonSM
+								variant='primary'
+								onClick={handleAdd}
+								icon={<Plus size={13} color='text-white' />}
+							>
+								Agregar al plan
+							</ButtonSM>
+						</>
+					)}
+					{status === 'added' && (
 						<ButtonSM
-							variant='secondary'
-							onClick={handleDiscard}
-							icon={<Trash size={13} />}
+							variant='destructive'
+							onClick={handleRemove}
+							icon={<Trash size={13} color='text-white' />}
 						>
-							Descartar
+							Quitar del plan
 						</ButtonSM>
+					)}
+					{status === 'discarded' && (
 						<ButtonSM
 							variant='primary'
 							onClick={handleAdd}
@@ -93,18 +132,9 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 						>
 							Agregar al plan
 						</ButtonSM>
-					</>
-				)}
-				{status === 'added' && (
-					<ButtonSM
-						variant='destructive'
-						onClick={handleRemove}
-						icon={<Trash size={13} color='text-white' />}
-					>
-						Quitar del plan
-					</ButtonSM>
-				)}
-			</div>
+					)}
+				</div>
+			)}
 		</div>
 	);
 };

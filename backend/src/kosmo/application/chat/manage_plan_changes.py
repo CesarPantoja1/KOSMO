@@ -17,7 +17,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import ProjectRepository
 
-_NON_ACTIVE_STATUSES = frozenset({EstadoPlanCambio.APPLIED, EstadoPlanCambio.DISCARDED})
+_ACTIVE_STATUSES = frozenset({EstadoPlanCambio.PENDING, EstadoPlanCambio.ADDED, EstadoPlanCambio.CONFLICT})
 
 
 @dataclass(frozen=True)
@@ -72,8 +72,7 @@ class ManagePlanChangesUseCase:
     ) -> PlanStateOutput:
         await self._verify_project(project_id)
         changes = await self._chat_repo.list_plan_changes(project_id, phase)
-        active_changes = [c for c in changes if c.status not in _NON_ACTIVE_STATUSES]
-        return self._build_state(project_id, phase, context_id, active_changes)
+        return self._build_state(project_id, phase, context_id, changes)
 
     async def add_change(
         self,
@@ -90,8 +89,17 @@ class ManagePlanChangesUseCase:
         await self._verify_project(project_id)
 
         existing_changes = await self._chat_repo.list_plan_changes(project_id, phase)
-        if any(str(c.id) == change_id for c in existing_changes):
+        if any(
+            c.section == section and c.diff.after == diff_after and c.status in _ACTIVE_STATUSES
+            for c in existing_changes
+        ):
             return self._build_state(project_id, phase, context_id, existing_changes)
+
+        existing_by_id = next((c for c in existing_changes if str(c.id) == change_id), None)
+        if existing_by_id is not None:
+            await self._chat_repo.update_plan_change_status(project_id, PlanChangeId(change_id), EstadoPlanCambio.ADDED)
+            changes = await self._chat_repo.list_plan_changes(project_id, phase)
+            return self._build_state(project_id, phase, context_id, changes)
 
         plan_change = PlanCambio(
             id=PlanChangeId(change_id),
