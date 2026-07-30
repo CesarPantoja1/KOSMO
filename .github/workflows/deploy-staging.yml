@@ -143,7 +143,7 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.web }}
           build-args: |
-            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_PUBLIC_API_URL=https://staging-kosmo.cespan.dev
             NEXT_PUBLIC_APP_NAME=KOSMO
             NEXT_PUBLIC_APP_ENV=deployment
             NEXT_PUBLIC_AUTH_DISABLED=true
