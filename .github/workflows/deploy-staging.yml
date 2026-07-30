@@ -6,15 +6,11 @@ on:
       - 'release/**'
       - 'hotfix/**'
 
+# Staging is a shared environment: deployments must never overlap, even when
+# they originate from different release or hotfix branches.
 concurrency:
-  group: deploy-staging-${{ github.ref }}
+  group: deploy-staging
   cancel-in-progress: false
-
-permissions:
-  contents: read
-  checks: read
-  packages: write
-  id-token: write
 
 env:
   REGISTRY: ghcr.io
@@ -24,6 +20,8 @@ jobs:
     name: Wait for CI summary
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      checks: read
 
     steps:
       - name: Require a successful CI summary for this commit
@@ -55,26 +53,28 @@ jobs:
           echo "::error::Timed out while waiting for CI summary on ${COMMIT_SHA}."
           exit 1
 
-  build-and-deploy:
-    name: Build and deploy Staging
+  build-backend:
+    name: Build API image
     needs: wait-for-ci
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    environment: staging
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_image: ${{ steps.images.outputs.api }}
 
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4
 
-      - name: Define immutable image references
+      - name: Define immutable API image reference
         id: images
         shell: bash
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          tag="sha-${GITHUB_SHA}"
-          echo "web=${REGISTRY}/${owner}/kosmo-web:${tag}" >> "$GITHUB_OUTPUT"
-          echo "api=${REGISTRY}/${owner}/kosmo-api:${tag}" >> "$GITHUB_OUTPUT"
+          echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -98,6 +98,42 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.api }}
 
+  build-frontend:
+    name: Build Web image
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      web_image: ${{ steps.images.outputs.web }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Define immutable Web image reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and publish frontend image
         uses: docker/build-push-action@v6
         with:
@@ -112,6 +148,22 @@ jobs:
             NEXT_PUBLIC_APP_ENV=deployment
             NEXT_PUBLIC_AUTH_DISABLED=true
             NEXT_PUBLIC_USE_MOCKS=false
+
+  deploy-staging:
+    name: Deploy Staging
+    needs:
+      - build-backend
+      - build-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout deployment configuration
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials through OIDC
         uses: aws-actions/configure-aws-credentials@v5
@@ -196,8 +248,8 @@ jobs:
           install -d -m 700 "$work_dir"
           printf '%s' "$STAGING_ENV_FILE" > "$work_dir/application.env"
           printf '%s\n' \
-            "KOSMO_WEB_IMAGE=${{ steps.images.outputs.web }}" \
-            "KOSMO_API_IMAGE=${{ steps.images.outputs.api }}" \
+            "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
+            "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
             "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" > "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
@@ -262,3 +314,25 @@ jobs:
               --port "${{ vars.STAGING_SSH_PORT }}" \
               --cidr "${RUNNER_IP}/32" || true
           fi
+
+  smoke-test-staging:
+    name: Smoke test Staging
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+
+    steps:
+      - name: Verify public frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for endpoint in \
+            'https://staging-kosmo.cespan.dev/' \
+            'https://staging-kosmo.cespan.dev/api/v1/openapi.json'; do
+            echo "Checking ${endpoint}"
+            curl --fail --show-error --silent --location \
+              --retry 12 --retry-all-errors --retry-delay 5 --max-time 20 \
+              "$endpoint" > /dev/null
+          done
