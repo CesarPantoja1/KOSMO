@@ -143,7 +143,7 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.web }}
           build-args: |
-            NEXT_PUBLIC_API_URL=/api/v1
+            NEXT_PUBLIC_API_URL=https://staging-kosmo.cespan.dev
             NEXT_PUBLIC_APP_NAME=KOSMO
             NEXT_PUBLIC_APP_ENV=deployment
             NEXT_PUBLIC_AUTH_DISABLED=true
@@ -244,9 +244,13 @@ jobs:
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_TUNNEL_TOKEN }}
         run: |
           set -euo pipefail
+          test -n "$STAGING_ENV_FILE"
           work_dir="${RUNNER_TEMP}/kosmo-staging-deploy"
           install -d -m 700 "$work_dir"
-          printf '%s' "$STAGING_ENV_FILE" > "$work_dir/application.env"
+          # GitHub Environment secrets may not end in a newline. Preserve the
+          # secret value and terminate it so runtime.env always starts on a
+          # separate line when both files are assembled on the server.
+          printf '%s\n' "$STAGING_ENV_FILE" > "$work_dir/application.env"
           printf '%s\n' \
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
@@ -284,15 +288,24 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing generated deployment variable: ${key}" >&2
+                 exit 1
+               fi
+             done
              docker login ghcr.io --username "${{ vars.STAGING_GHCR_USERNAME }}" --password-stdin
              docker compose -f compose.yaml pull
              docker compose -f compose.yaml up -d --remove-orphans
+             # Reload the transferred Nginx configuration after app containers
+             # have been recreated. --no-deps prevents an unnecessary restart
+             # of frontend or backend.
+             docker compose -f compose.yaml up -d --no-deps --force-recreate nginx
              for attempt in $(seq 1 24); do
                backend_id="$(docker compose -f compose.yaml ps -q backend)"
                status="$(docker inspect --format "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}" "$backend_id")"
                if [ "$status" = healthy ]; then
-                 docker compose -f compose.yaml ps
-                 exit 0
+                 break
                fi
                if [ "$status" = unhealthy ] || [ "$status" = exited ]; then
                  docker compose -f compose.yaml logs --tail=100 backend
@@ -300,7 +313,19 @@ jobs:
                fi
                sleep 5
              done
-             docker compose -f compose.yaml logs --tail=100 backend
+             if [ "${status:-unknown}" != healthy ]; then
+               docker compose -f compose.yaml logs --tail=100 backend
+               exit 1
+             fi
+             for attempt in $(seq 1 15); do
+               if docker exec kosmo-staging-nginx wget -q -O /dev/null http://127.0.0.1/ && \
+                  docker exec kosmo-staging-nginx wget -q -O /dev/null http://127.0.0.1/api/v1/openapi.json; then
+                 docker compose -f compose.yaml ps
+                 exit 0
+               fi
+               sleep 2
+             done
+             docker compose -f compose.yaml logs --tail=100 nginx backend
              exit 1'
 
       - name: Remove this runner SSH access
