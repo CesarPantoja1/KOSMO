@@ -1,0 +1,60 @@
+name: Stop Staging
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+# A release or hotfix remains available for review in Staging. Once its PR to
+# main closes, the shared EC2 instance is no longer needed and can be stopped.
+concurrency:
+  group: stop-staging
+  cancel-in-progress: false
+
+jobs:
+  stop-staging:
+    name: Stop Staging instance
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'release/') ||
+      startsWith(github.event.pull_request.head.ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Stop the Staging instance when it is running
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          state="$(aws ec2 describe-instances \
+            --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}" \
+            --query 'Reservations[0].Instances[0].State.Name' \
+            --output text)"
+
+          case "$state" in
+            running)
+              aws ec2 stop-instances \
+                --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}" >/dev/null
+              aws ec2 wait instance-stopped \
+                --instance-ids "${{ vars.AWS_EC2_INSTANCE_ID }}"
+              echo "Staging instance stopped."
+              ;;
+            stopped)
+              echo "Staging instance is already stopped."
+              ;;
+            *)
+              echo "::error::Staging instance is in unsupported state: $state"
+              exit 1
+              ;;
+          esac
