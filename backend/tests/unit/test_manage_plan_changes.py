@@ -92,10 +92,10 @@ async def test_get_plan_state_counts_mixed_statuses() -> None:
     # Act
     result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
 
-    # Assert
+    # Assert — APPLIED y DISCARDED se excluyen de get_plan_state
     assert result.pending_count == 2
     assert result.conflict_count == 1
-    assert len(result.changes) == 4
+    assert len(result.changes) == 3
 
 
 # ── add_change ──
@@ -308,3 +308,40 @@ async def test_discard_plan_clears_all() -> None:
     result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
     assert result.pending_count == 0
     assert len(result.changes) == 0
+
+
+# ── get_plan_state excludes applied/discarded ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_plan_state_excludes_applied_and_discarded() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    uc = _make_uc(project_repo, chat_repo)
+
+    from kosmo.contracts import PlanCambio
+
+    def _pc(cid: str, status: EstadoPlanCambio) -> PlanCambio:
+        return PlanCambio(
+            id=PlanChangeId(cid),
+            section="S1",
+            description="d",
+            diff=DiffCambio(before="x", after="y"),
+            status=status,
+        )
+
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, _pc("chg_a", EstadoPlanCambio.ADDED))
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, _pc("chg_b", EstadoPlanCambio.APPLIED))
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, _pc("chg_c", EstadoPlanCambio.DISCARDED))
+
+    # Act
+    result = await uc.get_plan_state(project.id, SpecPhase.DESCUBRIMIENTO)
+
+    # Assert
+    assert len(result.changes) == 1
+    assert result.changes[0].id == PlanChangeId("chg_a")
+    assert result.pending_count == 1

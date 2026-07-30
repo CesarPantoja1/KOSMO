@@ -17,6 +17,8 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import ProjectRepository
 
+_NON_ACTIVE_STATUSES = frozenset({EstadoPlanCambio.APPLIED, EstadoPlanCambio.DISCARDED})
+
 
 @dataclass(frozen=True)
 class PlanStateOutput:
@@ -70,7 +72,8 @@ class ManagePlanChangesUseCase:
     ) -> PlanStateOutput:
         await self._verify_project(project_id)
         changes = await self._chat_repo.list_plan_changes(project_id, phase)
-        return self._build_state(project_id, phase, context_id, changes)
+        active_changes = [c for c in changes if c.status not in _NON_ACTIVE_STATUSES]
+        return self._build_state(project_id, phase, context_id, active_changes)
 
     async def add_change(
         self,

@@ -232,7 +232,7 @@ const DiscoveryPage = () => {
 				created_at: new Date().toISOString(),
 			};
 			addToPlan('discovery', change);
-			addPlanChange(currentProject.id, change.id).catch((err) => {
+			addPlanChange(currentProject.id, 'discovery', change).catch((err) => {
 				console.warn('[DiscoveryPage] Error al persistir cambio en backend:', err);
 			});
 		}
