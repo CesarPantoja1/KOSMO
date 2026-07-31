@@ -23,6 +23,11 @@ from kosmo.application.discovery.refine_discovery import (
     RefineDiscoveryOutput,
     RefineDiscoveryUseCase,
 )
+from kosmo.application.discovery.regenerate_discovery import (
+    RegenerateDiscoveryInput,
+    RegenerateDiscoveryOutput,
+    RegenerateDiscoveryUseCase,
+)
 from kosmo.application.discovery.save_discovery import (
     SaveDiscoveryInput,
     SaveDiscoveryOutput,
@@ -45,6 +50,9 @@ __all__ = [
     "RefineDiscoveryInput",
     "RefineDiscoveryOutput",
     "RefineDiscoveryUseCase",
+    "RegenerateDiscoveryInput",
+    "RegenerateDiscoveryOutput",
+    "RegenerateDiscoveryUseCase",
     "SaveDiscoveryInput",
     "SaveDiscoveryOutput",
     "SaveDiscoveryUseCase",
