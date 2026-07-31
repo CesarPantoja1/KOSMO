@@ -26,6 +26,7 @@ from kosmo.infrastructure.api.routers.knowledge import router as knowledge_route
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
 from kosmo.infrastructure.api.routers.plan import router as plan_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
+from kosmo.infrastructure.api.routers.requirement_chat import router as requirement_chat_router
 from kosmo.infrastructure.api.routers.requirements import router as requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
@@ -246,6 +247,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.get_requirements = requirements_components.get_requirements
     app.state.save_requirements = requirements_components.save_requirements
     app.state.refine_requirements = requirements_components.refine_requirements
+    app.state.process_requirement_chat_message = requirements_components.process_requirement_chat_message
+    app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
 
     modelo_components = build_modelo_components(session_factory, pipeline_components)
     app.state.generate_diagram = modelo_components.generate_diagram
@@ -302,6 +305,7 @@ app.include_router(discovery_router)
 app.include_router(features_router)
 app.include_router(feature_chat_router)
 app.include_router(requirements_router)
+app.include_router(requirement_chat_router)
 app.include_router(modelo_router)
 app.include_router(schemas_router)
 app.include_router(knowledge_router)

@@ -633,6 +633,8 @@ class RequirementsComponents:
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
     refine_requirements: RefineRequirementsUseCase
+    process_requirement_chat_message: Any
+    get_requirement_chat_history: Any
 
 
 def build_requirements_components(
@@ -643,6 +645,29 @@ def build_requirements_components(
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
     requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
+
+    chat_repo = SqlAlchemyChatRepository(session_factory)
+
+    from kosmo.application.requirements.process_requirement_chat_message import ProcessRequirementChatMessageUseCase
+
+    process_requirement_chat = ProcessRequirementChatMessageUseCase(
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        chat_repo=chat_repo,
+        agent=pipeline.agent,
+        context_builder=pipeline.context_builder,
+    )
+
+    from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
+
+    get_requirement_chat_history = GetRequirementChatHistoryUseCase(
+        feature_repo=feature_repo,
+        chat_repo=chat_repo,
+    )
+
     return RequirementsComponents(
         generate_ears=GenerateEARSUseCase(
             project_repo=project_repo,
@@ -667,6 +692,8 @@ def build_requirements_components(
             requirement_repo=requirement_repo,
             agent=pipeline.agent,
         ),
+        process_requirement_chat_message=process_requirement_chat,
+        get_requirement_chat_history=get_requirement_chat_history,
     )
 
 
