@@ -1,11 +1,22 @@
 'use client';
 
-import { MarkdownEditor, PanelAsistenteRequisito } from '@/feature';
+import {
+	FloatingPlan,
+	MarkdownEditor,
+	PanelAsistenteRequisito,
+	type ChangeSuggestion,
+} from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import {
+	addPlanChange,
+	deletePlanChange,
+	usePlanStore,
+	type PlanChange,
+} from '@/entities/plan';
 import {
 	generateRequirements,
 	getRequirements,
@@ -28,6 +39,11 @@ import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
 const RequirementsPage = () => {
 	const router = useRouter();
+
+	// Plan store
+	const addToPlan = usePlanStore((s) => s.addToPlan);
+	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
 	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
@@ -56,6 +72,49 @@ const RequirementsPage = () => {
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
 	const [editorKey, setEditorKey] = useState(0);
+
+	useEffect(() => {
+		if (currentProject) {
+			fetchAndHydratePlan(currentProject.id, 'requirements');
+		}
+	}, [currentProject, fetchAndHydratePlan]);
+
+	const handlePlanAction = (
+		action: 'add' | 'remove' | 'discard',
+		suggestion: ChangeSuggestion,
+		messageId: string,
+	) => {
+		if (!currentProject || !selectedId) return;
+
+		if (action === 'add') {
+			const change: PlanChange = {
+				id: messageId,
+				section: suggestion.section,
+				description: suggestion.description ?? suggestion.section,
+				diff: {
+					before: suggestion.diff_before,
+					after: suggestion.diff_after,
+				},
+				status: 'pending',
+				origin: 'chat',
+				phase: 'requirements',
+				context: selectedId,
+				rationale: suggestion.rationale ?? undefined,
+				created_at: new Date().toISOString(),
+			};
+			addToPlan('requirements', change);
+			addPlanChange(currentProject.id, 'requirements', change).catch((err) => {
+				console.warn('[RequirementsPage] Error al persistir cambio en backend:', err);
+			});
+		}
+
+		if (action === 'remove') {
+			removeFromPlan('requirements', messageId);
+			deletePlanChange(currentProject.id, 'requirements', messageId).catch((err) => {
+				console.warn('[RequirementsPage] Error al eliminar cambio en backend:', err);
+			});
+		}
+	};
 
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
@@ -393,7 +452,7 @@ const RequirementsPage = () => {
 							</div>
 						</aside>
 
-						<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
+						<div className='relative flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
 							{!selectedCharacteristic && (
 								<div className='flex flex-col items-center justify-center h-full gap-3'>
 									<CursorClickFill color='text-base-800' size={70} />
@@ -496,6 +555,11 @@ const RequirementsPage = () => {
 										</section>
 									</div>
 								)}
+
+							<FloatingPlan
+								phase='requirements'
+								navigateTo='/proyecto/requisitos/plan'
+							/>
 						</div>
 					</div>
 				</div>
@@ -512,6 +576,7 @@ const RequirementsPage = () => {
 					<PanelAsistenteRequisito
 						requirementId={selectedId}
 						onClose={() => setIsChatbotOpen(false)}
+						onPlanAction={handlePlanAction}
 					/>
 				</div>
 			</div>
