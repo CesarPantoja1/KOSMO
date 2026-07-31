@@ -611,9 +611,7 @@ async def test_remove_change_respects_context() -> None:
     )
 
     # Act — eliminar cambio de req_a, filtrando por su contexto
-    result_a = await uc.remove_change(
-        project.id, PlanChangeId("chg_01"), SpecPhase.REQUISITOS, context_id="req_a"
-    )
+    result_a = await uc.remove_change(project.id, PlanChangeId("chg_01"), SpecPhase.REQUISITOS, context_id="req_a")
 
     # Assert — req_a queda sin cambios tras eliminar el único
     assert result_a.pending_count == 0

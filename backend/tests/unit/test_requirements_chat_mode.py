@@ -38,8 +38,7 @@ def _make_requirement() -> EARSRequirement:
         title="Validación de timeout en conexiones",
         pattern=EARSPattern.event_driven,
         statement=(
-            "CUANDO se detecte un timeout en la conexión, "
-            "el sistema debe notificar al usuario con un mensaje de error."
+            "CUANDO se detecte un timeout en la conexión, el sistema debe notificar al usuario con un mensaje de error."
         ),
         origin="Deriva de la necesidad de manejo de errores de red en C01.",
         acceptance_criteria=[
@@ -412,9 +411,7 @@ async def test_requirements_chat_integration_with_agent() -> None:
             description="Agregar criterio de timeout",
             diff_before="Criterios existentes",
             diff_after=(
-                "Dado que el sistema detecta timeout\n"
-                "Cuando la conexión falla\n"
-                "Entonces muestra mensaje de error"
+                "Dado que el sistema detecta timeout\nCuando la conexión falla\nEntonces muestra mensaje de error"
             ),
             rationale="El usuario solicitó cobertura de timeout para el requisito.",
         ),
@@ -451,9 +448,7 @@ async def test_requirements_chat_integration_with_agent() -> None:
     assert result.suggested_change.section == "acceptance_criteria"
     assert result.suggested_change.diff.before == "Criterios existentes"
     assert result.suggested_change.diff.after == (
-        "Dado que el sistema detecta timeout\n"
-        "Cuando la conexión falla\n"
-        "Entonces muestra mensaje de error"
+        "Dado que el sistema detecta timeout\nCuando la conexión falla\nEntonces muestra mensaje de error"
     )
     assert result.suggested_change.rationale == "El usuario solicitó cobertura de timeout para el requisito."
     assert str(result.suggested_change.id).startswith("chg_")

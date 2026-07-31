@@ -159,9 +159,7 @@ async def test_process_chat_message_success() -> None:
     assert result.message.content == "respuesta"
     assert result.message.suggested_change is not None
 
-    history = await chat_repo.get_history(
-        feature.project_id, SpecPhase.REQUISITOS, context_id="req_01"
-    )
+    history = await chat_repo.get_history(feature.project_id, SpecPhase.REQUISITOS, context_id="req_01")
     assert history is not None
     assert history.message_count == 2
     msgs = list(history.messages)
@@ -191,12 +189,14 @@ async def test_process_chat_message_includes_prior_history() -> None:
     chat_repo = InMemoryChatRepository()
     # pre-seed history — messages already in memory with random keys
     await chat_repo.save_message(
-        feature.project_id, SpecPhase.REQUISITOS,
+        feature.project_id,
+        SpecPhase.REQUISITOS,
         MensajeChat(id=ChatMessageId("msg_old1"), role=ChatRole.USER, content="pregunta anterior"),
         context_id="req_01",
     )
     await chat_repo.save_message(
-        feature.project_id, SpecPhase.REQUISITOS,
+        feature.project_id,
+        SpecPhase.REQUISITOS,
         MensajeChat(id=ChatMessageId("msg_old2"), role=ChatRole.ASSISTANT, content="respuesta anterior"),
         context_id="req_01",
     )
@@ -342,8 +342,7 @@ async def test_context_contains_parsed_ears_requirement() -> None:
     assert req.display_id == "REQ-1.1"
     assert req.title == "Validacion de timeout en conexiones"
     assert req.statement == (
-        "CUANDO se detecte un timeout en la conexion, "
-        "el sistema debe notificar al usuario con un mensaje de error."
+        "CUANDO se detecte un timeout en la conexion, el sistema debe notificar al usuario con un mensaje de error."
     )
     assert len(req.acceptance_criteria) == 2
     assert req.acceptance_criteria[0].scenario == "Timeout detectado al enviar datos"
