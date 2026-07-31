@@ -15,10 +15,10 @@ class FastembedEmbedder:
 
     def _lazy_load(self) -> Any:
         if self._embedder is None:
-            from fastembed import TextEmbedding
+            from fastembed import TextEmbedding  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
 
             self._embedder = TextEmbedding(model_name=self._model_name)
-        return self._embedder
+        return self._embedder  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     async def embed(self, text: str) -> list[float] | None:
         try:
