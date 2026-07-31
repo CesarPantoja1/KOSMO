@@ -204,6 +204,24 @@ const mockSendRequirementChatMessage = async (
 		created_at: new Date().toISOString(),
 	};
 
+	const history = mockChatHistories[requirementId] ?? [];
+
+	const isModification =
+		history.length > 0 ||
+		content.toLowerCase().includes('modificar') ||
+		content.toLowerCase().includes('cambiar') ||
+		content.toLowerCase().includes('anterior') ||
+		content.toLowerCase().includes('diff');
+
+	const diff_before = isModification
+		? '```gherkin\n' +
+		  'Escenario: Validación antigua de datos\n' +
+		  '  Dado que el usuario no tiene verificación\n' +
+		  '  Cuando envía los datos incompletos\n' +
+		  '  Entonces el sistema genera un error genérico\n' +
+		  '```'
+		: 'No especificado';
+
 	const response: RequirementChatResponse = {
 		id: crypto.randomUUID(),
 		role: 'assistant',
@@ -219,8 +237,10 @@ const mockSendRequirementChatMessage = async (
 		change_suggestion: {
 			id: crypto.randomUUID(),
 			section: 'Criterios de Aceptación',
-			description: 'Agregar escenario Gherkin para validación de datos',
-			diff_before: 'No especificado',
+			description: isModification
+				? 'Actualizar escenario Gherkin para validación'
+				: 'Agregar escenario Gherkin para validación de datos',
+			diff_before,
 			diff_after:
 				'```gherkin\n' +
 				'Escenario: Validación exitosa\n' +
@@ -232,7 +252,6 @@ const mockSendRequirementChatMessage = async (
 		},
 	};
 
-	const history = mockChatHistories[requirementId] ?? [];
 	mockChatHistories[requirementId] = [...history, userMessage, response];
 	return response;
 };
