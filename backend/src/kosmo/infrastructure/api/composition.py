@@ -52,7 +52,6 @@ from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
-from kosmo.contracts.consistency import ConsistencyEvaluationOutput
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -62,6 +61,9 @@ from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
+from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    ConsistencyEvaluationMode,
+)
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
@@ -436,6 +438,14 @@ def build_pipeline_components(
             mode=RequirementsChatMode(),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate",
+            description="Evalua consistencia entre fases y determina artefactos afectados downstream",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyEvaluationMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -510,18 +520,6 @@ class DiscoveryComponents:
     propagate_discovery_changes: Any
 
 
-class _NoopConsistencyEvaluator:
-    async def evaluate(
-        self,
-        *,
-        source_phase: SpecPhase,  # noqa: ARG002
-        target_phase: SpecPhase,  # noqa: ARG002
-        project_id: Any,  # noqa: ARG002
-        applied_changes: Any,  # noqa: ARG002
-    ) -> ConsistencyEvaluationOutput:
-        return ConsistencyEvaluationOutput(report_id="__noop__", affected_artifact_ids=[])
-
-
 def build_discovery_components(
     session_factory: async_sessionmaker[AsyncSession],
     pipeline: PipelineComponents,
@@ -530,6 +528,7 @@ def build_discovery_components(
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
+    from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
     from kosmo.application.consistency.propagate_discovery_changes import PropagateDiscoveryChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
@@ -542,7 +541,13 @@ def build_discovery_components(
     requirement_repo = SqlAlchemyRequirementRepository(session_factory)
     diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
 
-    noop_evaluator: ConsistencyEvaluator = _NoopConsistencyEvaluator()
+    consistency_evaluator: ConsistencyEvaluator = EvaluateConsistencyUseCase(
+        agent=pipeline.agent,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        document_repo=document_repo,
+    )
 
     propagate_uc = PropagateDiscoveryChangesUseCase(
         project_repo=project_repo,
@@ -550,7 +555,7 @@ def build_discovery_components(
         requirement_repo=requirement_repo,
         diagram_repo=diagram_repo,
         chat_repo=chat_repo,
-        consistency_evaluator=noop_evaluator,
+        consistency_evaluator=consistency_evaluator,
     )
 
     return DiscoveryComponents(

@@ -4,11 +4,15 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
 from kosmo.contracts.pipeline.phase_contexts import (
+    DiscoveryChatContext,
     DiscoveryPhaseContext,
     EARSPhaseContext,
+    FeatureChatContext,
     FeaturesPhaseContext,
     ModeloPhaseContext,
+    RequirementChatContext,
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -98,11 +102,17 @@ class PhaseMode(Protocol):
 
     def build_user_prompt(
         self,
-        context: DiscoveryPhaseContext
-        | FeaturesPhaseContext
-        | EARSPhaseContext
-        | SuggestFeaturesContext
-        | ModeloPhaseContext,
+        context: (
+            ConsistencyPhaseContext
+            | DiscoveryChatContext
+            | DiscoveryPhaseContext
+            | EARSPhaseContext
+            | FeatureChatContext
+            | FeaturesPhaseContext
+            | ModeloPhaseContext
+            | RequirementChatContext
+            | SuggestFeaturesContext
+        ),
     ) -> str: ...
 
     def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult: ...
