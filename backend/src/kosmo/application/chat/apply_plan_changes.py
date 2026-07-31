@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from unicodedata import normalize
 
 from kosmo.contracts import ChatRepository, EstadoPlanCambio, PlanCambio
@@ -10,6 +11,12 @@ from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository, ProjectRepository
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
+
+if TYPE_CHECKING:
+    from kosmo.application.consistency.propagate_discovery_changes import (
+        PropagateDiscoveryChangesOutput,
+        PropagateDiscoveryChangesUseCase,
+    )
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,7 @@ class ApplyPlanChangesOutput:
     applied_count: int
     failed_count: int
     failed_changes: list[FailedChange] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    propagation: PropagateDiscoveryChangesOutput | None = None
 
     @property
     def applied_ids(self) -> list[str]:
@@ -43,11 +51,13 @@ class ApplyPlanChangesUseCase:
         chat_repo: ChatRepository,
         document_repo: DocumentRepository,
         feature_repo: FeatureRepository | None = None,
+        propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._chat_repo = chat_repo
         self._document_repo = document_repo
         self._feature_repo = feature_repo
+        self._propagate_uc = propagate_uc
 
     async def execute(self, input_data: ApplyPlanChangesInput) -> ApplyPlanChangesOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -86,11 +96,41 @@ class ApplyPlanChangesUseCase:
                 status=EstadoPlanCambio.APPLIED,
             )
 
+        propagation = await self._run_propagation(input_data, applied)
+
         return ApplyPlanChangesOutput(
             applied_count=len(applied),
             failed_count=len(failed),
             failed_changes=failed,
+            propagation=propagation,
         )
+
+    async def _run_propagation(
+        self,
+        input_data: ApplyPlanChangesInput,
+        applied: list[PlanCambio],
+    ) -> PropagateDiscoveryChangesOutput | None:
+        if self._propagate_uc is None:
+            return None
+        if input_data.phase != SpecPhase.DESCUBRIMIENTO:
+            return None
+        if not applied:
+            return None
+
+        try:
+            from kosmo.application.consistency.propagate_discovery_changes import (
+                PropagateDiscoveryChangesInput,
+            )
+
+            return await self._propagate_uc.execute(
+                PropagateDiscoveryChangesInput(
+                    project_id=input_data.project_id,
+                    phase=input_data.phase,
+                    applied_change_ids=[c.id for c in applied],
+                )
+            )
+        except Exception:
+            return None
 
     async def _apply_discovery_changes(
         self, project_id: ProjectId, changes: list[PlanCambio]

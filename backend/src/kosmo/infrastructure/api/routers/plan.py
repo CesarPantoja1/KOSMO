@@ -7,10 +7,6 @@ from kosmo.application.chat.apply_plan_changes import (
     ApplyPlanChangesUseCase,
 )
 from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
-from kosmo.application.consistency.propagate_discovery_changes import (
-    PropagateDiscoveryChangesInput,
-    PropagateDiscoveryChangesUseCase,
-)
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
@@ -47,10 +43,6 @@ def _manage_plan_changes(request: Request) -> ManagePlanChangesUseCase:
 
 def _apply_plan_changes(request: Request) -> ApplyPlanChangesUseCase:
     return request.app.state.apply_plan_changes
-
-
-def _propagate_discovery_changes(request: Request) -> PropagateDiscoveryChangesUseCase:
-    return request.app.state.propagate_discovery_changes
 
 
 @router.get(
@@ -178,7 +170,6 @@ async def apply_batch(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Annotated[ApplyBatchRequest, Body(...)],
     uc: Annotated[ApplyPlanChangesUseCase, Depends(_apply_plan_changes)],
-    propagation_uc: Annotated[PropagateDiscoveryChangesUseCase, Depends(_propagate_discovery_changes)],
 ) -> BatchResultView:
     try:
         output = await uc.execute(
@@ -196,28 +187,18 @@ async def apply_batch(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     propagation: PhaseNotificationList | None = None
-    if request.phase == SpecPhase.DESCUBRIMIENTO and output.applied_count > 0:
-        try:
-            propagation_result = await propagation_uc.execute(
-                PropagateDiscoveryChangesInput(
-                    project_id=ProjectId(project_id),
-                    phase=request.phase,
-                    applied_change_ids=[PlanChangeId(cid) for cid in request.changes],
-                )
+    if output.propagation is not None:
+        affected = [
+            PhaseNotificationView(
+                phase=p.phase,
+                affected_count=p.affected_count,
+                affected_ids=p.affected_ids,
             )
-            affected = [
-                PhaseNotificationView(
-                    phase=p.phase,
-                    affected_count=p.affected_count,
-                    affected_ids=p.affected_ids,
-                )
-                for p in propagation_result.affected_phases
-                if p.affected_count > 0
-            ]
-            if affected:
-                propagation = PhaseNotificationList(affected_phases=affected)
-        except Exception:
-            propagation = None
+            for p in output.propagation.affected_phases
+            if p.affected_count > 0
+        ]
+        if affected:
+            propagation = PhaseNotificationList(affected_phases=affected)
 
     return BatchResultView(
         applied_count=output.applied_count,

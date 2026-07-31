@@ -544,6 +544,15 @@ def build_discovery_components(
 
     noop_evaluator: ConsistencyEvaluator = _NoopConsistencyEvaluator()
 
+    propagate_uc = PropagateDiscoveryChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=noop_evaluator,
+    )
+
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
@@ -578,15 +587,9 @@ def build_discovery_components(
             chat_repo=chat_repo,
             document_repo=document_repo,
             feature_repo=feature_repo,
+            propagate_uc=propagate_uc,
         ),
-        propagate_discovery_changes=PropagateDiscoveryChangesUseCase(
-            project_repo=project_repo,
-            feature_repo=feature_repo,
-            requirement_repo=requirement_repo,
-            diagram_repo=diagram_repo,
-            chat_repo=chat_repo,
-            consistency_evaluator=noop_evaluator,
-        ),
+        propagate_discovery_changes=propagate_uc,
     )
 
 
