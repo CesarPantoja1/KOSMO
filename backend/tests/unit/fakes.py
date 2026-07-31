@@ -118,6 +118,9 @@ class InMemoryActivityDiagramRepository:
     async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
         return self._diagrams.get(str(feature_id))
 
+    async def exists(self, feature_id: FeatureId) -> bool:
+        return str(feature_id) in self._diagrams
+
 
 class StubEmbedder:
     def __init__(self, model_name: str = "stub-embedder", dimensions: int = 4) -> None:
@@ -342,3 +345,33 @@ class InMemoryChatRepository:
         phase: SpecPhase | None = None,  # noqa: ARG002
     ) -> None:
         self.plans.clear()
+
+
+class FakeConsistencyEvaluator:
+    def __init__(self) -> None:
+        self._results: dict[str, dict[str, list[str]]] = {}
+        self._should_fail: bool = False
+
+    def set_affected_ids(self, target_phase: str, artifact_ids: list[str]) -> None:
+        self._results[target_phase] = {"artifact_ids": artifact_ids}
+
+    def set_should_fail(self, value: bool = True) -> None:
+        self._should_fail = value
+
+    async def evaluate(
+        self,
+        *,
+        source_phase: SpecPhase,  # noqa: ARG002
+        target_phase: SpecPhase,
+        project_id: ProjectId,  # noqa: ARG002
+        applied_changes: list[PlanCambio],  # noqa: ARG002
+    ) -> Any:
+        from kosmo.contracts.consistency import ConsistencyEvaluationOutput
+
+        if self._should_fail:
+            raise RuntimeError("Fake evaluator failure")
+
+        phase_key = target_phase.value if hasattr(target_phase, "value") else str(target_phase)
+        result = self._results.get(phase_key, {"artifact_ids": []})
+        affected = result.get("artifact_ids", [])
+        return ConsistencyEvaluationOutput(report_id="rpt_fake", affected_artifact_ids=affected)

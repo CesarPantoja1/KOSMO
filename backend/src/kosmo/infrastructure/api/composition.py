@@ -52,6 +52,7 @@ from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
+from kosmo.contracts.consistency import ConsistencyEvaluationOutput
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -506,6 +507,19 @@ class DiscoveryComponents:
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
     manage_plan_changes: Any
     apply_plan_changes: Any
+    propagate_discovery_changes: Any
+
+
+class _NoopConsistencyEvaluator:
+    async def evaluate(
+        self,
+        *,
+        source_phase: SpecPhase,  # noqa: ARG002
+        target_phase: SpecPhase,  # noqa: ARG002
+        project_id: Any,  # noqa: ARG002
+        applied_changes: Any,  # noqa: ARG002
+    ) -> ConsistencyEvaluationOutput:
+        return ConsistencyEvaluationOutput(report_id="__noop__", affected_artifact_ids=[])
 
 
 def build_discovery_components(
@@ -516,11 +530,19 @@ def build_discovery_components(
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
+    from kosmo.application.consistency.propagate_discovery_changes import PropagateDiscoveryChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
+    from kosmo.contracts.consistency import ConsistencyEvaluator
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
+
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
+
+    noop_evaluator: ConsistencyEvaluator = _NoopConsistencyEvaluator()
 
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
@@ -555,7 +577,15 @@ def build_discovery_components(
             project_repo=project_repo,
             chat_repo=chat_repo,
             document_repo=document_repo,
-            feature_repo=SqlAlchemyFeatureRepository(session_factory),
+            feature_repo=feature_repo,
+        ),
+        propagate_discovery_changes=PropagateDiscoveryChangesUseCase(
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            diagram_repo=diagram_repo,
+            chat_repo=chat_repo,
+            consistency_evaluator=noop_evaluator,
         ),
     )
 
