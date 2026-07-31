@@ -3,7 +3,7 @@ export {
 	type MarkdownEditorHandle,
 } from './markdown-editor/ui/markdown-editor';
 
-export { Chatbot, ChatbotMessage } from './chatbot';
+export { Chatbot, PanelAsistenteRequisito, ChatbotMessage } from './chatbot';
 export type { ChatMessage, ChangeSuggestion } from './chatbot';
 
 export { PlantUmlViewer } from './plantuml-viewer';

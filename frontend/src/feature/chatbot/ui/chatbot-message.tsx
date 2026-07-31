@@ -29,7 +29,7 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				)}
 				<div
 					className={`
-						max-w-[85%] px-4 py-3 text-sm leading-6
+						max-w-[85%] px-5 py-2.5 text-sm leading-6 break-words whitespace-pre-wrap
 						${
 							isUser
 								? 'rounded-2xl rounded-br-sm bg-ai text-base-50'

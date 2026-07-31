@@ -6,7 +6,7 @@ from typing import Any
 from kosmo.contracts.agent_memory import AgentSession, AgentSessionSummary
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ActivityDiagramId, AgentMemoryId, FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import ActivityDiagramId, AgentMemoryId, FeatureId, ProjectId, RequirementId
 
 
 def a_session_id() -> AgentMemoryId:
@@ -110,6 +110,10 @@ def a_activity_diagram_id() -> ActivityDiagramId:
 
 def a_feature_id() -> FeatureId:
     return FeatureId("feat_01KT01FABRICATED01")
+
+
+def a_requirement_id() -> RequirementId:
+    return RequirementId("req_01KT01FABRICATED01")
 
 
 def a_diagrama_actividad(

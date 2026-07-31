@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { RequirementsResponse } from '../model/types';
+import type { RequirementChatResponse, RequirementsResponse } from '../model/types';
+
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -141,3 +142,118 @@ export const generateRequirements = (
 	USE_MOCKS
 		? mockGenerateRequirements(projectId, characteristicId)
 		: realGenerateRequirements(projectId, characteristicId);
+
+const mockChatHistories: Record<string, RequirementChatResponse[]> = {};
+
+export const getRequirementChatHistory = async (
+	requirementId: string,
+): Promise<RequirementChatResponse[]> => {
+	if (USE_MOCKS) {
+		await delay(300);
+		return mockChatHistories[requirementId] ?? [];
+	}
+	try {
+		return await apiClient<RequirementChatResponse[]>(
+			`/api/v1/requirements/${requirementId}/chat/history`,
+			{ method: 'GET' },
+		);
+	} catch (err) {
+		console.warn('[requirements/api] Backend endpoint no disponible, usando mock:', err);
+		return mockChatHistories[requirementId] ?? [];
+	}
+};
+
+export const sendRequirementChatMessage = async (
+	requirementId: string,
+	content: string,
+): Promise<RequirementChatResponse> => {
+	if (USE_MOCKS) {
+		return mockSendRequirementChatMessage(requirementId, content);
+	}
+
+	try {
+		return await apiClient<RequirementChatResponse>(
+			`/api/v1/requirements/${requirementId}/chat`,
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ content }),
+			},
+		);
+	} catch (err) {
+		console.warn('[requirements/api] Backend endpoint no disponible, usando mock:', err);
+		return mockSendRequirementChatMessage(requirementId, content);
+	}
+};
+
+const mockSendRequirementChatMessage = async (
+	requirementId: string,
+	content: string,
+): Promise<RequirementChatResponse> => {
+	await delay(600);
+
+	// Check for testing invalid format simulation
+	if (content.toLowerCase().includes('error_formato')) {
+		throw new Error('Respuesta del agente en formato inválido');
+	}
+
+	const userMessage: RequirementChatResponse = {
+		id: crypto.randomUUID(),
+		role: 'user',
+		content,
+		created_at: new Date().toISOString(),
+	};
+
+	const history = mockChatHistories[requirementId] ?? [];
+
+	const isModification =
+		history.length > 0 ||
+		content.toLowerCase().includes('modificar') ||
+		content.toLowerCase().includes('cambiar') ||
+		content.toLowerCase().includes('anterior') ||
+		content.toLowerCase().includes('diff');
+
+	const diff_before = isModification
+		? '```gherkin\n' +
+		  'Escenario: Validación antigua de datos\n' +
+		  '  Dado que el usuario no tiene verificación\n' +
+		  '  Cuando envía los datos incompletos\n' +
+		  '  Entonces el sistema genera un error genérico\n' +
+		  '```'
+		: 'No especificado';
+
+	const response: RequirementChatResponse = {
+		id: crypto.randomUUID(),
+		role: 'assistant',
+		content:
+			'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación en formato Gherkin:\n\n' +
+			'```gherkin\n' +
+			'Escenario: Validación exitosa de datos\n' +
+			'  Dado que el usuario tiene permisos de edición\n' +
+			'  Cuando envía los datos del formulario completos\n' +
+			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n' +
+			'```',
+		created_at: new Date().toISOString(),
+		change_suggestion: {
+			id: crypto.randomUUID(),
+			section: 'Criterios de Aceptación',
+			description: isModification
+				? 'Actualizar escenario Gherkin para validación'
+				: 'Agregar escenario Gherkin para validación de datos',
+			diff_before,
+			diff_after:
+				'```gherkin\n' +
+				'Escenario: Validación exitosa\n' +
+				'  Dado que el usuario está autenticado\n' +
+				'  Cuando completa la acción\n' +
+				'  Entonces se confirma la operación\n' +
+				'```',
+			rationale: 'Mejora la precisión de los criterios de aceptación EARS.',
+		},
+	};
+
+	mockChatHistories[requirementId] = [...history, userMessage, response];
+	return response;
+};
+
+
