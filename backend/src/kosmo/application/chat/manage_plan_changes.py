@@ -55,6 +55,8 @@ class ManagePlanChangesUseCase:
         changes: list[PlanCambio],
     ) -> PlanStateOutput:
         pending_states = {EstadoPlanCambio.PENDING, EstadoPlanCambio.ADDED}
+        if context_id is not None:
+            changes = [c for c in changes if c.context_id == context_id]
         return PlanStateOutput(
             project_id=project_id,
             phase=phase,

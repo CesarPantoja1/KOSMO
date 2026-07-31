@@ -7,6 +7,16 @@ from kosmo.application.requirements.generate_ears import (
     GetRequirementsOutput,
     GetRequirementsUseCase,
 )
+from kosmo.application.requirements.get_requirement_chat_history import (
+    GetRequirementChatHistoryInput,
+    GetRequirementChatHistoryOutput,
+    GetRequirementChatHistoryUseCase,
+)
+from kosmo.application.requirements.process_requirement_chat_message import (
+    ProcessRequirementChatMessageInput,
+    ProcessRequirementChatMessageOutput,
+    ProcessRequirementChatMessageUseCase,
+)
 from kosmo.application.requirements.refine_requirements import (
     RefineRequirementsInput,
     RefineRequirementsOutput,
@@ -20,6 +30,12 @@ __all__ = [
     "GenerateEARSUseCase",
     "GetRequirementsOutput",
     "GetRequirementsUseCase",
+    "GetRequirementChatHistoryInput",
+    "GetRequirementChatHistoryOutput",
+    "GetRequirementChatHistoryUseCase",
+    "ProcessRequirementChatMessageInput",
+    "ProcessRequirementChatMessageOutput",
+    "ProcessRequirementChatMessageUseCase",
     "RefineRequirementsInput",
     "RefineRequirementsOutput",
     "RefineRequirementsUseCase",

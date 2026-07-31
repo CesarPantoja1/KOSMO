@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.sdd.document import RichTextDocument
+from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 
@@ -70,6 +71,14 @@ class DiscoveryChatContext:
 
 @dataclass(frozen=True)
 class FeatureChatContext:
+    feature: Feature
+    discovery_document: RichTextDocument
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+
+@dataclass(frozen=True)
+class RequirementChatContext:
+    requirement: EARSRequirement
     feature: Feature
     discovery_document: RichTextDocument
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
