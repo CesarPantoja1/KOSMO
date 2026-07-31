@@ -68,7 +68,10 @@ export const PanelAsistenteRequisito = ({
 		let isMounted = true;
 
 		const fetchHistory = async () => {
-			setIsLoading(true);
+			const hasHistory = Boolean(useRequirementsStore.getState().chatHistories[requirementId]);
+			if (!hasHistory) {
+				setIsLoading(true);
+			}
 			try {
 				await loadChatHistory(requirementId);
 			} catch (err) {
@@ -114,6 +117,7 @@ export const PanelAsistenteRequisito = ({
 
 	return (
 		<Chatbot
+			key={requirementId || 'empty'}
 			title={title}
 			subtitle={subtitle}
 			greeting='Hola 👋. Soy tu asistente de Requisitos EARS. Puedo ayudarte a refinar los requisitos y generar sus criterios de aceptación en formato Gherkin (Dado-Cuando-Entonces).'

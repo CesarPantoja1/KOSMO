@@ -197,6 +197,13 @@ const mockSendRequirementChatMessage = async (
 		throw new Error('Respuesta del agente en formato inválido');
 	}
 
+	const userMessage: RequirementChatResponse = {
+		id: crypto.randomUUID(),
+		role: 'user',
+		content,
+		created_at: new Date().toISOString(),
+	};
+
 	const response: RequirementChatResponse = {
 		id: crypto.randomUUID(),
 		role: 'assistant',
@@ -226,7 +233,7 @@ const mockSendRequirementChatMessage = async (
 	};
 
 	const history = mockChatHistories[requirementId] ?? [];
-	mockChatHistories[requirementId] = [...history, response];
+	mockChatHistories[requirementId] = [...history, userMessage, response];
 	return response;
 };
 
