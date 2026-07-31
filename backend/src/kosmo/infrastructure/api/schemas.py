@@ -742,3 +742,56 @@ class ApplyBatchRequest(BaseModel):
     phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
     context: str | None = Field(default=None, description="Contexto específico de los cambios")
     change_ids: list[str] = Field(description="IDs de los cambios a aplicar")
+
+
+# ═══ Consistencia (Sprint 4 - HU17) ═══
+
+
+class ChangeInputView(BaseModel):
+    """Cambio individual dentro de la solicitud de evaluacion de consistencia."""
+
+    section: str = Field(description="Sección del documento afectada")
+    diff_before: str = Field(description="Contenido antes del cambio")
+    diff_after: str = Field(description="Contenido después del cambio")
+
+
+class EvaluateConsistencyRequestView(BaseModel):
+    """Payload para solicitar analisis de consistencia entre fases."""
+
+    model_config = ConfigDict(extra="forbid")
+    phase_origin: str = Field(description="Fase de origen de los cambios")
+    phase_destination: str | None = Field(
+        default=None, description="Fase destino a evaluar (opcional, si se omite evalúa todas las adyacentes)"
+    )
+    changes: list[ChangeInputView] = Field(description="Cambios a evaluar para consistencia")
+
+
+class ImpactItemView(BaseModel):
+    """Artefacto afectado por propagación de cambios."""
+
+    phase: str = Field(description="Fase del artefacto afectado")
+    artifact_id: str = Field(description="ID del artefacto afectado")
+    artifact_type: str = Field(description="Tipo de artefacto")
+    artifact_label: str = Field(description="Etiqueta visible del artefacto")
+    section: str = Field(default="", description="Sección o atributo afectado")
+    rationale: str = Field(default="", description="Justificación de por qué está desactualizado")
+    diff_suggestion: dict[str, object] | None = Field(
+        default=None, description="Diff sugerido para actualizar el artefacto"
+    )
+
+
+class ConsistencyReportView(BaseModel):
+    """Reporte de analisis de consistencia entre fases."""
+
+    id: str = Field(description="ID del reporte (cnr_ + ULID)")
+    phase_origin: str = Field(description="Fase donde se originaron los cambios")
+    own_changes: list[ChangeInputView] = Field(  # type: ignore[reportUnknownVariableType]
+        default_factory=list, description="Cambios propios evaluados"
+    )
+    upstream_impact: list[ImpactItemView] | None = Field(
+        default=None, description="Impacto en fases anteriores"
+    )
+    downstream_impact: list[ImpactItemView] | None = Field(
+        default=None, description="Impacto en fases posteriores"
+    )
+    created_at: str = Field(description="Timestamp ISO-8601 UTC")

@@ -19,6 +19,7 @@ from kosmo.infrastructure.api.composition import (
 )
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
+from kosmo.infrastructure.api.routers.consistency import router as consistency_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
@@ -235,6 +236,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.manage_plan_changes = discovery_components.manage_plan_changes
     app.state.apply_plan_changes = discovery_components.apply_plan_changes
     app.state.propagate_discovery_changes = discovery_components.propagate_discovery_changes
+    app.state.consistency_evaluator = discovery_components.consistency_evaluator
     app.state.generate_features = features_components.generate_features
     app.state.suggest_features = features_components.suggest_features
     app.state.save_selected_features = features_components.save_selected_features
@@ -250,10 +252,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.refine_requirements = requirements_components.refine_requirements
     app.state.process_requirement_chat_message = requirements_components.process_requirement_chat_message
     app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
+    app.state.requirement_repo = requirements_components.requirement_repo
 
     modelo_components = build_modelo_components(session_factory, pipeline_components)
     app.state.generate_diagram = modelo_components.generate_diagram
     app.state.get_diagram = modelo_components.get_diagram
+    app.state.diagram_repo = modelo_components.diagram_repo
 
     from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 
@@ -308,6 +312,7 @@ app.include_router(feature_chat_router)
 app.include_router(requirements_router)
 app.include_router(requirement_chat_router)
 app.include_router(modelo_router)
+app.include_router(consistency_router)
 app.include_router(schemas_router)
 app.include_router(knowledge_router)
 

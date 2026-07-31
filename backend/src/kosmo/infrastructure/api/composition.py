@@ -518,6 +518,7 @@ class DiscoveryComponents:
     manage_plan_changes: Any
     apply_plan_changes: Any
     propagate_discovery_changes: Any
+    consistency_evaluator: Any
 
 
 def build_discovery_components(
@@ -595,6 +596,7 @@ def build_discovery_components(
             propagate_uc=propagate_uc,
         ),
         propagate_discovery_changes=propagate_uc,
+        consistency_evaluator=consistency_evaluator,
     )
 
 
@@ -673,6 +675,7 @@ class RequirementsComponents:
     refine_requirements: RefineRequirementsUseCase
     process_requirement_chat_message: Any
     get_requirement_chat_history: Any
+    requirement_repo: Any
 
 
 def build_requirements_components(
@@ -732,6 +735,7 @@ def build_requirements_components(
         ),
         process_requirement_chat_message=process_requirement_chat,
         get_requirement_chat_history=get_requirement_chat_history,
+        requirement_repo=requirement_repo,
     )
 
 
@@ -739,6 +743,7 @@ def build_requirements_components(
 class ModeloComponents:
     generate_diagram: GenerateActivityDiagramUseCase
     get_diagram: GetActivityDiagramUseCase
+    diagram_repo: Any
 
 
 def build_modelo_components(
@@ -759,6 +764,7 @@ def build_modelo_components(
             feature_repo=feature_repo,
             diagram_repo=diagram_repo,
         ),
+        diagram_repo=diagram_repo,
     )
 
 
