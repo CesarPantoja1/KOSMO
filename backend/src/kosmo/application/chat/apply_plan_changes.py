@@ -36,6 +36,7 @@ class FailedChange:
 class ApplyPlanChangesOutput:
     applied_count: int
     failed_count: int
+    applied_changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     failed_changes: list[FailedChange] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     propagation: PropagateDiscoveryChangesOutput | None = None
 
@@ -101,6 +102,7 @@ class ApplyPlanChangesUseCase:
         return ApplyPlanChangesOutput(
             applied_count=len(applied),
             failed_count=len(failed),
+            applied_changes=applied,
             failed_changes=failed,
             propagation=propagation,
         )

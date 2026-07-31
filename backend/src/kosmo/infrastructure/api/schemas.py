@@ -706,19 +706,30 @@ class PhaseNotificationList(BaseModel):
     )
 
 
-class FailedChangeView(BaseModel):
-    """Representa un cambio que falló al aplicarse."""
+class AppliedChangeItemView(BaseModel):
+    """Cambio aplicado exitosamente."""
 
-    id: str = Field(description="ID del cambio que falló")
-    reason: str = Field(description="Motivo del fallo")
+    change_id: str = Field(description="ID del cambio aplicado")
+    section: str = Field(description="Sección del documento o atributo afectado")
+
+
+class FailedChangeItemView(BaseModel):
+    """Cambio que falló al aplicarse."""
+
+    change_id: str = Field(description="ID del cambio que falló")
+    section: str = Field(description="Sección del documento o atributo afectado")
+    error: str = Field(description="Motivo del fallo")
 
 
 class BatchResultView(BaseModel):
     """Resultado de aplicar un lote de cambios."""
 
-    applied_count: int = Field(description="Número de cambios aplicados con éxito")
-    failed_count: int = Field(description="Número de cambios que fallaron al aplicarse")
-    failed_changes: list[FailedChangeView] = Field(default=[], description="Cambios que fallaron, con el motivo")
+    applied: list[AppliedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
+        default_factory=list, description="Cambios aplicados exitosamente"
+    )
+    failed: list[FailedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
+        default_factory=list, description="Cambios que fallaron, con el motivo"
+    )
     propagation: PhaseNotificationList | None = Field(
         default=None, description="Fases notificadas tras la aplicación (si corresponde)"
     )
@@ -730,4 +741,4 @@ class ApplyBatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
     context: str | None = Field(default=None, description="Contexto específico de los cambios")
-    changes: list[str] = Field(description="IDs de los cambios a aplicar")
+    change_ids: list[str] = Field(description="IDs de los cambios a aplicar")

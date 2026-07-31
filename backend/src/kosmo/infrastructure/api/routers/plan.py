@@ -18,9 +18,10 @@ from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     AddPlanChangeRequest,
+    AppliedChangeItemView,
     ApplyBatchRequest,
     BatchResultView,
-    FailedChangeView,
+    FailedChangeItemView,
     HttpErrorResponse,
     PhaseNotificationList,
     PhaseNotificationView,
@@ -176,7 +177,7 @@ async def apply_batch(
             ApplyPlanChangesInput(
                 project_id=ProjectId(project_id),
                 phase=request.phase,
-                change_ids=[PlanChangeId(cid) for cid in request.changes],
+                change_ids=[PlanChangeId(cid) for cid in request.change_ids],
             )
         )
     except ProjectNotFoundError as e:
@@ -185,6 +186,15 @@ async def apply_batch(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    applied = [
+        AppliedChangeItemView(change_id=str(c.id), section=c.section)
+        for c in output.applied_changes
+    ]
+    failed = [
+        FailedChangeItemView(change_id=str(fc.id), section="", error=fc.reason)
+        for fc in output.failed_changes
+    ]
 
     propagation: PhaseNotificationList | None = None
     if output.propagation is not None:
@@ -201,8 +211,7 @@ async def apply_batch(
             propagation = PhaseNotificationList(affected_phases=affected)
 
     return BatchResultView(
-        applied_count=output.applied_count,
-        failed_count=output.failed_count,
-        failed_changes=[FailedChangeView(id=str(fc.id), reason=fc.reason) for fc in output.failed_changes],
+        applied=applied,
+        failed=failed,
         propagation=propagation,
     )

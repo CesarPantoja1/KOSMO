@@ -814,9 +814,19 @@ components:
 
     ApplyBatchRequest:
       type: object
-      required: [change_ids]
+      required: [phase, change_ids]
       additionalProperties: false
       properties:
+        phase:
+          type: string
+          enum: [discovery, features, requirements, model]
+          description: Fase a la cual aplicar los cambios
+          example: "discovery"
+        context:
+          type: string
+          description: Contexto específico de los cambios (opcional para Descubrimiento)
+          nullable: true
+          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
         change_ids:
           type: array
           items:
