@@ -1,6 +1,7 @@
 'use client';
 
-import { Chatbot, MarkdownEditor } from '@/feature';
+import { MarkdownEditor, PanelAsistenteRequisito } from '@/feature';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -508,8 +509,8 @@ const RequirementsPage = () => {
 						}
 				`}
 				>
-					<Chatbot
-						placeholder='ej., "Haz que los criterios de aceptación sean más completos agregando casos límite, escenarios alternativos y validaciones de error."'
+					<PanelAsistenteRequisito
+						requirementId={selectedId}
 						onClose={() => setIsChatbotOpen(false)}
 					/>
 				</div>

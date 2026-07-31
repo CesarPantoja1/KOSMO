@@ -62,6 +62,59 @@ function renderListItem(item: ListItem, key: number): ReactNode {
 	);
 }
 
+function renderGherkinLine(line: string, lineKey: number): ReactNode {
+	const trimmed = line.trimStart();
+	const indent = line.slice(0, line.length - trimmed.length);
+
+	const gherkinKeywords = [
+		{ regex: /^(Dado|Given)\b/, color: 'text-emerald-700 font-semibold' },
+		{ regex: /^(Cuando|When)\b/, color: 'text-sky-700 font-semibold' },
+		{ regex: /^(Entonces|Then)\b/, color: 'text-amber-700 font-semibold' },
+		{ regex: /^(Y|And)\b/, color: 'text-purple-700 font-semibold' },
+		{ regex: /^(Pero|But)\b/, color: 'text-rose-700 font-semibold' },
+		{ regex: /^(Escenario|Scenario|Característica|Feature|Esquema del escenario|Scenario Outline|Ejemplos|Examples):/, color: 'text-primary-100 font-bold' },
+	];
+
+	for (const { regex, color } of gherkinKeywords) {
+		const match = trimmed.match(regex);
+		if (match) {
+			const keyword = match[0];
+			const rest = trimmed.slice(keyword.length);
+			return (
+				<div key={lineKey} className='whitespace-pre-wrap break-words'>
+					{indent}
+					<span className={color}>{keyword}</span>
+					{rest}
+				</div>
+			);
+		}
+	}
+
+	return <div key={lineKey} className='whitespace-pre-wrap break-words'>{line}</div>;
+}
+
+function renderCodeBlock(value: string, lang?: string | null, key?: number): ReactNode {
+	const isGherkin =
+		lang === 'gherkin' ||
+		/^\s*(Dado|Cuando|Entonces|Given|When|Then|Escenario|Feature)/m.test(value);
+
+	if (isGherkin) {
+		const lines = value.split('\n');
+		return (
+			<pre key={key} className='rounded bg-black/5 p-2 text-xs font-mono text-stone-800 whitespace-pre-wrap break-words max-w-full overflow-hidden'>
+
+				<code>{lines.map((line, i) => renderGherkinLine(line, i))}</code>
+			</pre>
+		);
+	}
+
+	return (
+		<pre key={key} className='rounded bg-black/5 p-2 text-xs font-mono whitespace-pre-wrap break-words max-w-full overflow-hidden'>
+			<code>{value}</code>
+		</pre>
+	);
+}
+
 function renderBlock(node: RootContent, key: number): ReactNode {
 	switch (node.type) {
 		case 'paragraph':
@@ -95,11 +148,7 @@ function renderBlock(node: RootContent, key: number): ReactNode {
 				</blockquote>
 			);
 		case 'code':
-			return (
-				<pre key={key} className='overflow-x-auto rounded bg-black/5 p-2 text-[0.9em]'>
-					<code>{node.value}</code>
-				</pre>
-			);
+			return renderCodeBlock(node.value, node.lang, key);
 		case 'thematicBreak':
 			return <hr key={key} className='my-1 border-current opacity-30' />;
 		case 'html':
