@@ -162,10 +162,33 @@ class SqlAlchemyChatRepository(ChatRepository):
         change_id: PlanChangeId,
         status: EstadoPlanCambio,
         user_version: str | None = None,
+        *,
+        _session: AsyncSession | None = None,
     ) -> PlanCambio | None:
         stmt = select(PlanChangeModel).where(
             PlanChangeModel.project_id == str(project_id), PlanChangeModel.id == str(change_id)
         )
+
+        if _session is not None:
+            result = await _session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if not model:
+                return None
+            model.status = status.value
+            if user_version is not None:
+                model.user_version = user_version
+            return PlanCambio(
+                id=PlanChangeId(model.id),
+                section=model.section,
+                description=model.description,
+                diff=DiffCambio(before=model.diff_before, after=model.diff_after),
+                status=EstadoPlanCambio(model.status),
+                origin=model.origin,
+                rationale=model.rationale,
+                user_version=model.user_version,
+                context_id=model.context_id,
+            )
+
         async with self._session_factory() as session:
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()

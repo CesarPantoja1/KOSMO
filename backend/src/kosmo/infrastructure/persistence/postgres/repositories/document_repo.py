@@ -29,8 +29,23 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         self,
         project_id: ProjectId,
         document: RichTextDocument,
+        *,
+        _session: AsyncSession | None = None,
     ) -> RichTextDocument:
         markdown = document_to_markdown(document)
+
+        if _session is not None:
+            stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
+            result = await _session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                model = DiscoveryDocumentModel(project_id=str(project_id), markdown=markdown)
+                _session.add(model)
+            else:
+                model.markdown = markdown
+                model.updated_at = datetime.now(UTC)
+            return document
+
         async with self._session_factory() as session:
             stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
             result = await session.execute(stmt)

@@ -598,6 +598,7 @@ def build_discovery_components(
             document_repo=document_repo,
             feature_repo=feature_repo,
             propagate_uc=propagate_uc,
+            session_factory=session_factory,
         ),
         propagate_discovery_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
