@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import Row, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.agent_memory import (
@@ -81,14 +82,27 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
         *,
         phase: SpecPhase | None = None,
     ) -> list[AgentSessionSummary]:
+        cols = (
+            AgentSessionModel.id,
+            AgentSessionModel.project_id,
+            AgentSessionModel.session_type,
+            AgentSessionModel.phase,
+            AgentSessionModel.skill_name,
+            AgentSessionModel.is_completed,
+            AgentSessionModel.total_llm_calls,
+            AgentSessionModel.validation_errors,
+            AgentSessionModel.user_instructions,
+            AgentSessionModel.created_at,
+            AgentSessionModel.reflection,
+        )
         async with self._session_factory() as db:
-            stmt = select(AgentSessionModel).where(AgentSessionModel.project_id == str(project_id))
+            stmt = select(*cols).where(AgentSessionModel.project_id == str(project_id))
             if phase is not None:
                 stmt = stmt.where(AgentSessionModel.phase == phase.value)
             stmt = stmt.order_by(AgentSessionModel.created_at.desc())
             result = await db.execute(stmt)
-            models = result.scalars().all()
-            return [_model_to_summary(m) for m in models]
+            rows = result.all()
+            return [_row_to_summary(r) for r in rows]
 
     async def get_latest_session(
         self,
@@ -164,43 +178,69 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
         model: str | None = None,
     ) -> list[AgentSessionSummary]:
         async with self._session_factory() as db:
-            embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-            filters = "WHERE embedding IS NOT NULL"
+            stmt = select(
+                AgentSessionModel.id,
+                AgentSessionModel.project_id,
+                AgentSessionModel.session_type,
+                AgentSessionModel.phase,
+                AgentSessionModel.skill_name,
+                AgentSessionModel.is_completed,
+                AgentSessionModel.total_llm_calls,
+                AgentSessionModel.validation_errors,
+                AgentSessionModel.user_instructions,
+                AgentSessionModel.created_at,
+                AgentSessionModel.reflection,
+            ).where(AgentSessionModel.embedding.isnot(None))
             if exclude_project_id:
-                filters += " AND project_id != :exclude_id"
+                stmt = stmt.where(AgentSessionModel.project_id != str(exclude_project_id))
             if model:
-                filters += " AND embedding_model = :model"
-            stmt = text(
-                f"SELECT id FROM agent_sessions {filters} ORDER BY embedding <-> :embedding::vector LIMIT :limit"
-            )
-            params: dict[str, object] = {
-                "embedding": embedding_str,
-                "limit": limit,
-            }
-            if exclude_project_id is not None:
-                params["exclude_id"] = str(exclude_project_id)
-            if model:
-                params["model"] = model
+                stmt = stmt.where(AgentSessionModel.embedding_model == model)
 
-            result = await db.execute(stmt, params)
-            rows = result.fetchall()
-            summaries: list[AgentSessionSummary] = []
-            for row in rows:
-                session = await self.load_session(AgentMemoryId(str(row[0])))
-                if session is not None:
-                    summaries.append(_to_summary(session))
-            return summaries
+            stmt = stmt.order_by(AgentSessionModel.embedding.op("<=>")(embedding)).limit(limit)
+
+            result = await db.execute(stmt)
+            rows = result.all()
+
+            return [
+                AgentSessionSummary(
+                    session_id=AgentMemoryId(row[0]),
+                    project_id=ProjectId(row[1]),
+                    session_type=row[2],
+                    phase=SpecPhase(row[3]),
+                    skill_name=row[4],
+                    is_completed=row[5],
+                    total_llm_calls=row[6],
+                    validation_errors=row[7],
+                    user_instructions=row[8],
+                    created_at=row[9],
+                    reflection=row[10],
+                )
+                for row in rows
+            ]
 
     async def list_recent_sessions_global(
         self,
         *,
         limit: int = 50,
     ) -> list[AgentSessionSummary]:
+        cols = (
+            AgentSessionModel.id,
+            AgentSessionModel.project_id,
+            AgentSessionModel.session_type,
+            AgentSessionModel.phase,
+            AgentSessionModel.skill_name,
+            AgentSessionModel.is_completed,
+            AgentSessionModel.total_llm_calls,
+            AgentSessionModel.validation_errors,
+            AgentSessionModel.user_instructions,
+            AgentSessionModel.created_at,
+            AgentSessionModel.reflection,
+        )
         async with self._session_factory() as db:
-            stmt = select(AgentSessionModel).order_by(AgentSessionModel.created_at.desc()).limit(limit)
+            stmt = select(*cols).order_by(AgentSessionModel.created_at.desc()).limit(limit)
             result = await db.execute(stmt)
-            models = result.scalars().all()
-            return [_model_to_summary(m) for m in models]
+            rows = result.all()
+            return [_row_to_summary(r) for r in rows]
 
     async def count_completed_by_phase(
         self,
@@ -274,22 +314,6 @@ class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
             ]
 
 
-def _to_summary(session: AgentSession) -> AgentSessionSummary:
-    return AgentSessionSummary(
-        session_id=session.session_id,
-        project_id=session.project_id,
-        session_type=session.session_type,
-        phase=session.phase,
-        skill_name=session.skill_name,
-        is_completed=session.is_completed,
-        total_llm_calls=session.total_llm_calls,
-        validation_errors=session.validation_errors,
-        user_instructions=session.user_instructions,
-        created_at=session.created_at,
-        reflection=session.reflection,
-    )
-
-
 def _model_to_session(model: AgentSessionModel) -> AgentSession:
     return AgentSession(
         session_id=AgentMemoryId(model.id),
@@ -320,19 +344,19 @@ def _model_to_session(model: AgentSessionModel) -> AgentSession:
     )
 
 
-def _model_to_summary(model: AgentSessionModel) -> AgentSessionSummary:
+def _row_to_summary(row: Row[Any]) -> AgentSessionSummary:
     return AgentSessionSummary(
-        session_id=AgentMemoryId(model.id),
-        project_id=ProjectId(model.project_id),
-        session_type=model.session_type,
-        phase=SpecPhase(model.phase),
-        skill_name=model.skill_name,
-        is_completed=model.is_completed,
-        total_llm_calls=model.total_llm_calls,
-        validation_errors=model.validation_errors,
-        user_instructions=model.user_instructions,
-        created_at=model.created_at,
-        reflection=model.reflection,
+        session_id=AgentMemoryId(row[0]),
+        project_id=ProjectId(row[1]),
+        session_type=row[2],
+        phase=SpecPhase(row[3]),
+        skill_name=row[4],
+        is_completed=row[5],
+        total_llm_calls=row[6],
+        validation_errors=row[7],
+        user_instructions=row[8],
+        created_at=row[9],
+        reflection=row[10],
     )
 
 
