@@ -20,6 +20,7 @@ _PREFIX_MAP: dict[str, str] = {
     "plan_change": "chg_",
     "outbox": "out_",
     "doc_version": "dver_",
+    "trace_edge": "ted_",
 }
 
 

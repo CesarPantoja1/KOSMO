@@ -156,7 +156,7 @@ const RequirementsPage = () => {
 			setSavedContent('');
 			try {
 				const content = (await getRequirements(projectId, characteristicId))
-					.requirements_markdown;
+					.document_markdown;
 				if (cancelled) return;
 				if (content) {
 					setHasRequirements(characteristicId, true);
@@ -215,7 +215,7 @@ const RequirementsPage = () => {
 			await saveRequirements(
 				currentProject.id,
 				selectedCharacteristic.id,
-				content.requirements_markdown,
+				content.document_markdown,
 			);
 			if (content) {
 				setHasRequirements(selectedCharacteristic.id, true);
@@ -223,12 +223,12 @@ const RequirementsPage = () => {
 			setCharacteristics((prev) =>
 				prev.map((c) =>
 					c.id === selectedCharacteristic.id
-						? { ...c, requirements: content.requirements_markdown }
+						? { ...c, requirements: content.document_markdown }
 						: c,
 				),
 			);
-			setMarkdown(content.requirements_markdown);
-			setSavedContent(content.requirements_markdown);
+			setMarkdown(content.document_markdown);
+			setSavedContent(content.document_markdown);
 			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');

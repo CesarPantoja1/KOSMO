@@ -92,7 +92,7 @@ export const PlanPage = () => {
 					let originalContent = '';
 					try {
 						const reqRes = await getRequirements(currentProject.id, char.id);
-						originalContent = reqRes.requirements_markdown || '';
+						originalContent = reqRes.document_markdown || '';
 					} catch {
 						originalContent = '';
 					}

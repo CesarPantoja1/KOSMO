@@ -12,7 +12,7 @@ const mockStore: RequirementsResponse[] = [
 	{
 		feature_id: '1',
 		feature_number: 1,
-		requirements_markdown: '## EARS Mock Requirements\n\n',
+		document_markdown: '## EARS Mock Requirements\n\n',
 		total: 5,
 	},
 ];
@@ -28,7 +28,7 @@ const mockGetRequirements = async (
 	return {
 		feature_id: characteristicId,
 		feature_number: found?.feature_number ?? 0,
-		requirements_markdown: found?.requirements_markdown ?? '',
+		document_markdown: found?.document_markdown ?? '',
 		total: 0,
 	};
 };
@@ -41,7 +41,7 @@ const mockSaveRequirements = async (
 	await delay(500);
 	const idx = mockStore.findIndex((c) => c.feature_id === characteristicId);
 	if (idx !== -1) {
-		mockStore[idx] = { ...mockStore[idx], requirements_markdown: content };
+		mockStore[idx] = { ...mockStore[idx], document_markdown: content };
 	}
 };
 
@@ -64,13 +64,13 @@ const mockGenerateRequirements = async (
 
 	const idx = mockStore.findIndex((c) => c.feature_id === characteristicId);
 	if (idx !== -1) {
-		mockStore[idx] = { ...mockStore[idx], requirements_markdown: generated };
+		mockStore[idx] = { ...mockStore[idx], document_markdown: generated };
 	}
 
 	return {
 		feature_id: characteristicId,
 		feature_number: mockStore[idx]?.feature_number ?? 0,
-		requirements_markdown: generated,
+		document_markdown: generated,
 		total: 4,
 	};
 };
