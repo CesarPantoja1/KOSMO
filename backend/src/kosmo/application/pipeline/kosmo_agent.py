@@ -7,6 +7,8 @@ import json
 import time
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.chat import ChatRole, DiffCambio, MensajeChat, RespuestaChatLLM, SugerenciaCambio
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
@@ -27,6 +29,8 @@ if TYPE_CHECKING:
     from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 
 _CONSOLIDATION_THRESHOLD = 5
+
+_log = structlog.get_logger(__name__)
 
 
 class KOSMOAgent:
@@ -204,6 +208,7 @@ class KOSMOAgent:
                     max_tokens=mode.max_tokens,
                 )
             except Exception:
+                _log.warning("agent.llm_call_failed", skill_name=skill_name, iteration=iteration, exc_info=True)
                 break
 
             llm_calls += 1
@@ -270,6 +275,7 @@ class KOSMOAgent:
                             + ", ".join(r["tool"] for r in retry_records if r.get("found"))
                         )
                 except Exception:
+                    _log.warning("agent.retry_tools_failed", iteration=iteration, exc_info=True)
                     pass
 
             feedback = mode.build_validation_feedback(last_validation.errors)
@@ -438,6 +444,7 @@ class KOSMOAgent:
                 ]
                 return (text.strip(), invocations)
             except Exception:
+                _log.warning("agent.native_tools_failed", exc_info=True)
                 pass
 
         tool_prompt = PromptTemplate(
@@ -461,6 +468,7 @@ class KOSMOAgent:
                     max_tokens=200,
                 )
             except Exception:
+                _log.warning("agent.text_tools_call_failed", exc_info=True)
                 break
 
             text = response.text.strip()
@@ -536,6 +544,7 @@ class KOSMOAgent:
             if text and len(text) > 10:
                 return text
         except Exception:
+            _log.warning("agent.reflection_generation_failed", phase=phase.value, exc_info=True)
             pass
 
         return None

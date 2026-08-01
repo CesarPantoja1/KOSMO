@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import structlog
+
 from kosmo.contracts import ChatRepository, ConsistencyEvaluationOutput, ConsistencyEvaluator, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
@@ -12,6 +14,8 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
+
+_log = structlog.get_logger(__name__)
 
 _PHASE_TO_API: dict[SpecPhase, str] = {
     SpecPhase.DESCUBRIMIENTO: "discovery",
@@ -113,6 +117,12 @@ class PropagateDiscoveryChangesUseCase:
                 applied_changes=applied_changes,
             )
         except Exception:
+            _log.warning(
+                "propagate.evaluate_failed",
+                project_id=str(project_id),
+                phase="features",
+                exc_info=True,
+            )
             return PhasePropagationInfo(
                 phase=_PHASE_TO_API[SpecPhase.CARACTERISTICAS],
                 affected_count=len(features),
@@ -143,6 +153,12 @@ class PropagateDiscoveryChangesUseCase:
                 applied_changes=applied_changes,
             )
         except Exception:
+            _log.warning(
+                "propagate.evaluate_failed",
+                project_id=str(project_id),
+                phase="requirements",
+                exc_info=True,
+            )
             return PhasePropagationInfo(
                 phase=_PHASE_TO_API[SpecPhase.REQUISITOS],
                 affected_count=1,
@@ -173,6 +189,12 @@ class PropagateDiscoveryChangesUseCase:
                 applied_changes=applied_changes,
             )
         except Exception:
+            _log.warning(
+                "propagate.evaluate_failed",
+                project_id=str(project_id),
+                phase="model",
+                exc_info=True,
+            )
             return PhasePropagationInfo(
                 phase=_PHASE_TO_API[SpecPhase.MODELO],
                 affected_count=1,

@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from unicodedata import normalize
 
+import structlog
+
 from kosmo.contracts import ChatRepository, EstadoPlanCambio, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
@@ -17,6 +19,8 @@ if TYPE_CHECKING:
         PropagateDiscoveryChangesOutput,
         PropagateDiscoveryChangesUseCase,
     )
+
+_log = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -132,6 +136,7 @@ class ApplyPlanChangesUseCase:
                 )
             )
         except Exception:
+            _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
             return None
 
     async def _apply_discovery_changes(

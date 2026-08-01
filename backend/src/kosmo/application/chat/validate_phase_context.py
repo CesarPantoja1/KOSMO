@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import structlog
 from pydantic import BaseModel, Field
 
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.sdd.document import SpecPhase
+
+_log = structlog.get_logger(__name__)
 
 
 class PhaseClassification(BaseModel):
@@ -99,6 +102,7 @@ class ValidatePhaseContextUseCase:
                 max_tokens=256,
             )
         except Exception:
+            _log.warning("chat.phase_classifier_failed", exc_info=True)
             return ValidatePhaseContextOutput(is_valid=True)
 
         normalized_target = _normalize_phase(result.target_phase)

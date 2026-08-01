@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from ulid import ULID
 
@@ -23,6 +24,8 @@ from kosmo.infrastructure.api.schemas import (
     HttpErrorResponse,
     ImpactItemView,
 )
+
+_log = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/consistency",
@@ -149,6 +152,13 @@ async def evaluate_consistency(
                 applied_changes=applied_changes,
             )
         except Exception:
+            _log.warning(
+                "consistency.router.evaluate_failed",
+                project_id=project_id,
+                source=source_phase,
+                target=target_spec,
+                exc_info=True,
+            )
             continue
 
         items = await _enrich_affected(

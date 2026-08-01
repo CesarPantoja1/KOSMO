@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import structlog
 from ulid import ULID
 
 from kosmo.contracts.chat import PlanCambio
@@ -17,6 +18,8 @@ from kosmo.contracts.sdd.repositories import (
     FeatureRepository,
     RequirementRepository,
 )
+
+_log = structlog.get_logger(__name__)
 
 
 class EvaluateConsistencyUseCase:
@@ -65,6 +68,13 @@ class EvaluateConsistencyUseCase:
                 project_id=project_id,
             )
         except Exception:
+            _log.warning(
+                "consistency.evaluate_failed",
+                source=source_phase.value,
+                target=target_phase.value,
+                project_id=str(project_id),
+                exc_info=True,
+            )
             return ConsistencyEvaluationOutput(report_id=report_id, affected_artifact_ids=[])
 
         if not isinstance(raw_output, dict):
