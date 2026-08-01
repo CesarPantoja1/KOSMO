@@ -670,16 +670,25 @@ _ROLE_LABELS: dict[ChatRole, str] = {
 }
 
 
+_MAX_HISTORY_WINDOW = 20
+
+
 def _format_chat_history(messages: list[MensajeChat]) -> str:
     """Formatea el historial de conversación para el prompt del LLM.
 
+    Aplica ventana deslizante: conserva los últimos N mensajes y cualquier
+    mensaje anterior que contenga una decisión (suggested_change).
     Todos los mensajes del usuario se sanitizan contra inyección de prompt.
-
-    # ponytail: historial sin límite, agregar ventana deslizante cuando
-    # el contexto del LLM se sature.
     """
+    if len(messages) <= _MAX_HISTORY_WINDOW:
+        window = messages
+    else:
+        cut = len(messages) - _MAX_HISTORY_WINDOW
+        window = [m for m in messages[:cut] if m.suggested_change is not None]
+        window += messages[cut:]
+
     lines: list[str] = ["## Historial de conversacion", ""]
-    for msg in messages:
+    for msg in window:
         role_label = _ROLE_LABELS.get(msg.role, msg.role.value)
         content = msg.content
         if msg.role == ChatRole.USER:
