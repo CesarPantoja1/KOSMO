@@ -1,22 +1,12 @@
-from uuid import UUID, uuid4
-
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.audit import AuditEvent
+from kosmo.domain.sdd.id_generator import IdGenerator
 from kosmo.infrastructure.persistence.postgres.models import AuditEventModel
 
 _logger = structlog.get_logger("kosmo.audit")
-
-
-def _coerce_uuid(value: str | None) -> UUID | None:
-    if value is None:
-        return None
-    try:
-        return UUID(value)
-    except ValueError:
-        return None
 
 
 class SqlAlchemyAuditEventSink:
@@ -38,11 +28,11 @@ class SqlAlchemyAuditEventSink:
         user_agent = ctx.get("user_agent")
 
         row = AuditEventModel(
-            id=uuid4(),
+            id=IdGenerator.generate("audit"),
             created_at=event.occurred_at,
             event_type=event.event_type,
             outcome=event.outcome.value,
-            actor_id=_coerce_uuid(event.actor_id),
+            actor_id=event.actor_id,
             actor_email=event.actor_email,
             ip_address=str(ip_address) if ip_address else None,
             user_agent=str(user_agent) if user_agent else None,
