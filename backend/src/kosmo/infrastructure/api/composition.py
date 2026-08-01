@@ -276,6 +276,7 @@ class PipelineComponents:
     process_chat_message: Any
     chat_repo: Any
     traceability_repo: Any
+    outbox: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -491,6 +492,10 @@ def build_pipeline_components(
     traceability_repo = SqlAlchemyTraceabilityRepository(session_factory)
     knowledge_tools.register(*build_get_impact(traceability_repo))
 
+    from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
+
+    outbox = OutboxStore(session_factory)
+
     agent = KOSMOAgent(
         llm_client=llm_client,
         guard_registry=guard_registry,
@@ -499,6 +504,7 @@ def build_pipeline_components(
         embedding_generator=embedding_generator,
         knowledge_tools=knowledge_tools,
         pattern_store=pattern_store,  # type: ignore[reportArgumentType]
+        outbox=outbox,
     )
 
     from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
@@ -527,6 +533,7 @@ def build_pipeline_components(
         process_chat_message=process_chat_message,
         chat_repo=chat_repo,
         traceability_repo=traceability_repo,
+        outbox=outbox,
     )
 
 

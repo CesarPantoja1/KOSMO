@@ -1,13 +1,17 @@
+import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from kosmo.config import settings
+from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import (
     build_auth_components,
     build_discovery_components,
@@ -189,6 +193,37 @@ _GLOBAL_RESPONSES = {
 # Ciclo de vida y aplicación
 
 
+def _make_outbox_handler(pipeline: Any) -> Any:
+    async def handler(job_type: str, payload: dict[str, Any]) -> None:
+        import structlog
+
+        _log = structlog.get_logger("kosmo.outbox")
+        agent = pipeline.agent
+        if job_type == "reflect_and_consolidate":
+            from kosmo.contracts.agent_memory import AgentMemoryId
+            from kosmo.contracts.pipeline.phase_outputs import ValidationResult
+            from kosmo.contracts.sdd.document import SpecPhase
+
+            try:
+                await agent._reflect_and_consolidate(  # type: ignore[reportPrivateUsage]
+                    session_id=AgentMemoryId(payload["session_id"]),
+                    phase=SpecPhase(payload["phase"]),
+                    session_type=payload["session_type"],
+                    is_completed=payload.get("is_completed", True),
+                    current_iteration=payload.get("current_iteration", 1),
+                    validation=ValidationResult(
+                        is_valid=payload.get("validation_is_valid", True),
+                        errors=payload.get("validation_errors", "").split("; "),
+                    ),
+                )
+            except Exception:
+                _log.warning("outbox.handler_failed", job_type=job_type, exc_info=True)
+        else:
+            _log.warning("outbox.unknown_job_type", job_type=job_type)
+
+    return handler
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
@@ -271,10 +306,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
     app.state.consolidate_patterns = consolidate_uc
 
+    from kosmo.infrastructure.persistence.postgres.outbox import run_outbox_worker
+
+    outbox_store = pipeline_components.outbox
+    app.state.outbox = outbox_store
+
+    outbox_task = asyncio.create_task(
+        run_outbox_worker(outbox_store, _make_outbox_handler(pipeline_components))
+    )
+
     instrument_app(settings, app=app, db_engine=db_engine)
     try:
         yield
     finally:
+        outbox_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await outbox_task
         if auth_components is not None:
             await auth_components.redis.aclose()
         await db_engine.dispose()
@@ -295,6 +342,27 @@ app = FastAPI(
 )
 
 instrument_prometheus(app)
+
+
+@app.exception_handler(SpecError)
+async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
+    problem = exc.problem
+    return JSONResponse(
+        status_code=problem.status,
+        content={
+            "type": problem.type,
+            "title": problem.title,
+            "status": problem.status,
+            "detail": problem.detail,
+            "instance": problem.instance,
+            "trace_id": problem.trace_id,
+            "violations": [
+                {"loc": v.loc, "msg": v.msg, "input": v.input} for v in problem.violations
+            ],
+        },
+        media_type="application/problem+json",
+    )
+
 
 app.add_middleware(
     CORSMiddleware,

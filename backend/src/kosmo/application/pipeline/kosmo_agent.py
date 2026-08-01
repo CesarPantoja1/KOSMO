@@ -45,6 +45,7 @@ class KOSMOAgent:
         knowledge_tools: KnowledgeToolRegistry | None = None,
         pattern_store: KnowledgePatternStore | None = None,
         consolidation_threshold: int = _CONSOLIDATION_THRESHOLD,
+        outbox: Any = None,
     ) -> None:
         self._llm_client = llm_client
         self._guard_registry = guard_registry
@@ -55,6 +56,8 @@ class KOSMOAgent:
         self._knowledge_tools: KnowledgeToolRegistry | None = knowledge_tools
         self._pattern_store = pattern_store
         self._consolidation_threshold = consolidation_threshold
+        self._outbox = outbox
+        self._consolidated_counts: dict[str, int] = {}
 
     async def execute_with_skill(
         self,
@@ -473,16 +476,30 @@ class KOSMOAgent:
 
         await self._memory.save_session(session)
 
-        asyncio.create_task(
-            self._reflect_and_consolidate(
-                session_id=session.session_id,
-                phase=phase,
-                session_type=session_type,
-                is_completed=is_completed,
-                current_iteration=current_iteration,
-                validation=validation,
+        if self._outbox is not None:
+            await self._outbox.enqueue(
+                "reflect_and_consolidate",
+                {
+                    "session_id": str(session.session_id),
+                    "phase": phase.value,
+                    "session_type": session_type,
+                    "is_completed": is_completed,
+                    "current_iteration": current_iteration,
+                    "validation_is_valid": validation.is_valid,
+                    "validation_errors": "; ".join(validation.errors[:5]),
+                },
             )
-        )
+        else:
+            asyncio.create_task(
+                self._reflect_and_consolidate(
+                    session_id=session.session_id,
+                    phase=phase,
+                    session_type=session_type,
+                    is_completed=is_completed,
+                    current_iteration=current_iteration,
+                    validation=validation,
+                )
+            )
 
     async def _save_chat_session(
         self,
@@ -543,7 +560,9 @@ class KOSMOAgent:
         if is_completed and self._pattern_store is not None:
             counts = await self._memory.count_completed_by_phase()
             for _phase, count in counts.items():
-                if count >= self._consolidation_threshold and count % self._consolidation_threshold == 0:
+                last = self._consolidated_counts.get(str(_phase), 0)
+                if count - last >= self._consolidation_threshold:
+                    self._consolidated_counts[str(_phase)] = count
                     from kosmo.application.knowledge import ConsolidateInput, ConsolidateKnowledgePatterns
 
                     uc = ConsolidateKnowledgePatterns(

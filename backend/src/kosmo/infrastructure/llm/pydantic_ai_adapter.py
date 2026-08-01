@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, TypeVar
@@ -64,16 +65,21 @@ def _extract_balanced(text: str, start: int, open_char: str) -> str | None:
 
 class PydanticAILLMClient:
     _DEFAULT_TIMEOUT_SECONDS = 120
+    _MAX_AGENTS = 32
 
     def __init__(self, model: Any) -> None:
         self._model = model
-        self._agents: dict[str, Agent[Any]] = {}
+        self._agents: OrderedDict[str, Agent[Any]] = OrderedDict()
 
     def _get_agent(self, system_prompt: str) -> Agent[Any]:
         agent = self._agents.get(system_prompt)
-        if agent is None:
-            agent = Agent(model=self._model, system_prompt=system_prompt)  # type: ignore[reportCallIssue]
-            self._agents[system_prompt] = agent
+        if agent is not None:
+            self._agents.move_to_end(system_prompt)
+            return agent
+        agent = Agent(model=self._model, system_prompt=system_prompt)  # type: ignore[reportCallIssue]
+        if len(self._agents) >= self._MAX_AGENTS:
+            self._agents.popitem(last=False)
+        self._agents[system_prompt] = agent
         return agent
 
     async def complete(
