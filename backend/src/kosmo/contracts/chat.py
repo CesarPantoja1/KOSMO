@@ -107,6 +107,7 @@ class ChatRepository(Protocol):
         project_id: ProjectId,
         phase: SpecPhase,
         context_id: str | None = None,
+        limit: int = 200,
     ) -> HistorialChat | None: ...
 
     async def save_history(

@@ -162,18 +162,18 @@ class KnowledgePatternModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class ChatHistoryModel(Base):
-    __tablename__ = "chat_histories"
+class ChatMessageModel(Base):
+    __tablename__ = "chat_messages"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
     context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    messages: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
-
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text(), nullable=False)
+    suggested_change: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class PlanChangeModel(Base):

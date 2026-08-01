@@ -11,7 +11,7 @@ from kosmo.contracts.agent_memory import (
 )
 from kosmo.contracts.chat import ChatRepository, EstadoPlanCambio, HistorialChat, MensajeChat, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import AgentMemoryId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, PlanChangeId, ProjectId
 
 
 class InMemoryAgentSessionStore(AgentMemoryPort):
@@ -230,36 +230,40 @@ class InMemoryKnowledgePatternStore:
 
 class InMemoryChatRepository(ChatRepository):
     def __init__(self) -> None:
-        self._histories: dict[str, HistorialChat] = {}
+        self._messages: dict[str, list[MensajeChat]] = {}
         self._plan_changes: dict[str, list[PlanCambio]] = {}
+
+    @staticmethod
+    def _composite_key(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:
+        return f"{project_id}_{phase.value}_{context_id or ''}"
 
     async def save_message(
         self, project_id: ProjectId, phase: SpecPhase, message: MensajeChat, context_id: str | None = None
     ) -> MensajeChat:
-        history = await self.get_history(project_id, phase, context_id)
-        if not history:
-            from kosmo.contracts.sdd.ids import ChatHistoryId
-            from kosmo.domain.sdd.id_generator import IdGenerator
-
-            history = HistorialChat(
-                id=ChatHistoryId(IdGenerator.generate("chat_history")),
-                project_id=project_id,
-                phase=phase,
-                context_id=context_id,
-            )
-        history = history.add_message(message)
-        await self.save_history(history)
+        key = self._composite_key(project_id, phase, context_id)
+        if key not in self._messages:
+            self._messages[key] = []
+        self._messages[key].append(message)
         return message
 
     async def get_history(
-        self, project_id: ProjectId, phase: SpecPhase, context_id: str | None = None
+        self, project_id: ProjectId, phase: SpecPhase, context_id: str | None = None, limit: int = 200
     ) -> HistorialChat | None:
-        key = f"{project_id}_{phase.value}_{context_id or ''}"
-        return self._histories.get(key)
+        key = self._composite_key(project_id, phase, context_id)
+        messages = self._messages.get(key)
+        if not messages:
+            return None
+
+        recent = messages[-limit:]
+        return HistorialChat(
+            id=ChatHistoryId(key),
+            project_id=project_id,
+            phase=phase,
+            context_id=context_id,
+            messages=tuple(recent),
+        )
 
     async def save_history(self, history: HistorialChat) -> HistorialChat:
-        key = f"{history.project_id}_{history.phase.value}_{history.context_id or ''}"
-        self._histories[key] = history
         return history
 
     async def add_plan_change(self, project_id: ProjectId, phase: SpecPhase, change: PlanCambio) -> PlanCambio:
