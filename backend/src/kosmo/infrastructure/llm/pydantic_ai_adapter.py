@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 from pydantic_ai.agent import Agent
@@ -9,6 +11,8 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import Tool
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
+
+T = TypeVar("T")
 
 
 def _extract_json(text: str) -> str | None:
@@ -184,3 +188,30 @@ class PydanticAILLMClient:
         )
 
         return (result.output or "", records)
+
+    @asynccontextmanager  # type: ignore[reportUntypedFunctionDecorator]
+    async def stream_typed(
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> AsyncIterator[StreamedTypedResult[T]]:
+        agent = self._get_agent(prompt.system_prompt)
+        async with agent.run_stream(  # type: ignore[reportUnknownMemberType]
+            prompt.user_prompt,
+            result_type=output_type,  # type: ignore[reportArgumentType]
+            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+        ) as streamed:  # type: ignore[reportUnknownVariableType]
+            yield StreamedTypedResult(streamed)  # type: ignore[reportArgumentType]
+
+
+class StreamedTypedResult[T]:
+    def __init__(self, streamed: Any) -> None:
+        self._streamed = streamed
+
+    def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:
+        return self._streamed.stream_text(delta=delta)  # type: ignore[reportReturnType]
+
+    async def get_data(self) -> T:
+        return await self._streamed.get_data()  # type: ignore[reportReturnType]

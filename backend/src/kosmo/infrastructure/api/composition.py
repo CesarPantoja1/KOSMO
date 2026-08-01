@@ -274,6 +274,7 @@ class PipelineComponents:
     pattern_store: KnowledgePatternStore
     validate_phase_context: Any
     process_chat_message: Any
+    chat_repo: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -497,8 +498,10 @@ def build_pipeline_components(
 
     validate_phase_context = ValidatePhaseContextUseCase(llm_client=llm_client)
 
+    chat_repo = SqlAlchemyChatRepository(session_factory)
+
     process_chat_message = ProcessChatMessageUseCase(
-        chat_repo=SqlAlchemyChatRepository(session_factory),
+        chat_repo=chat_repo,
         agent=agent,
         project_repo=project_repo,
     )
@@ -513,6 +516,7 @@ def build_pipeline_components(
         pattern_store=pattern_store,
         validate_phase_context=validate_phase_context,
         process_chat_message=process_chat_message,
+        chat_repo=chat_repo,
     )
 
 

@@ -173,6 +173,75 @@ class KOSMOAgent:
 
         return _to_assistant_message(output)
 
+    async def execute_conversation_stream(
+        self,
+        skill_name: str,
+        messages: list[MensajeChat],
+        context: Any,
+        *,
+        project_id: ProjectId | None = None,
+    ):
+        """Streaming: genera tokens en tiempo real y retorna el mensaje final.
+
+        Usa `complete_typed` con streaming de pydantic-ai. Emite eventos SSE:
+        - data: {"type":"token","content":"..."} por cada fragmento de texto
+        - data: {"type":"message","content":"...","suggested_change":{...}} al final
+
+        La persistencia del mensaje la hace el router tras el último evento.
+        """
+        if self._skill_registry is None:
+            raise ValueError("SkillRegistry no configurado")
+
+        sanitized_ctx = _sanitize_context(context)
+        mode = self._skill_registry.resolve(skill_name)
+
+        system_prompt = mode.system_prompt
+        base_user_prompt = mode.build_user_prompt(sanitized_ctx)
+        history_block = _format_chat_history(messages)
+        user_prompt = f"{base_user_prompt}\n\n{history_block}\n\nResponde al ultimo mensaje del usuario."
+
+        prompt = PromptTemplate(system_prompt=system_prompt, user_prompt=user_prompt)
+
+        stream = getattr(self._llm_client, "stream_typed", None)
+        if stream is None:
+            result = await self._llm_client.complete_typed(
+                prompt=prompt,
+                output_type=mode.output_type,
+                temperature=mode.temperature,
+                max_tokens=mode.max_tokens,
+            )
+            message = _to_assistant_message(result) if isinstance(result, RespuestaChatLLM) else _to_assistant_message(
+                RespuestaChatLLM(content=str(result), change_suggestion=None)
+            )
+            yield message
+            return
+
+        async with stream(
+            prompt=prompt,
+            output_type=mode.output_type,
+            temperature=mode.temperature,
+            max_tokens=mode.max_tokens,
+        ) as streamed:
+            async for chunk in streamed.stream_text(delta=True):
+                yield chunk
+            result = await streamed.get_data()
+
+        if not isinstance(result, RespuestaChatLLM):
+            result = RespuestaChatLLM(content="", change_suggestion=None)
+
+        message = _to_assistant_message(result)
+
+        if self._memory is not None and project_id is not None:
+            await self._save_chat_session(
+                project_id=project_id,
+                phase=mode.phase_name,
+                skill_name=skill_name,
+                messages=messages,
+                output=result,
+            )
+
+        yield message
+
     async def _execute_loop(
         self,
         mode: PhaseMode,

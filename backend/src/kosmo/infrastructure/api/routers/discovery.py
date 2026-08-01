@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 
 from kosmo.application.chat.process_chat_message import (
     ProcessChatMessageInput,
@@ -24,7 +26,9 @@ from kosmo.application.discovery import (
     SaveDiscoveryInput,
     SaveDiscoveryUseCase,
 )
+from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.chat import ChatRepository
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
@@ -397,3 +401,101 @@ async def get_chat_history(
         return ChatHistoryResponse.from_domain(empty_history)
 
     return ChatHistoryResponse.from_domain(output.history)
+
+
+def _agent_dep(request: Request) -> KOSMOAgent:
+    return request.app.state.agent
+
+
+def _chat_repo_dep(request: Request) -> ChatRepository:
+    return request.app.state.chat_repo
+
+
+@router.post(
+    "/chat/stream",
+    summary="Enviar mensaje al chat de Descubrimiento con streaming SSE",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"description": "Error de validación."},
+        status.HTTP_404_NOT_FOUND: {"description": "Proyecto no encontrado."},
+    },
+)
+async def stream_chat_message(
+    project_id: str,
+    payload: Annotated[SendChatRequest, Body(...)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
+    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    agent: Annotated[KOSMOAgent, Depends(_agent_dep)],
+    chat_repo: Annotated[ChatRepository, Depends(_chat_repo_dep)],
+) -> StreamingResponse:
+    from kosmo.contracts.chat import ChatRole, MensajeChat
+    from kosmo.contracts.sdd.ids import ChatMessageId
+    from kosmo.domain.sdd.id_generator import IdGenerator
+
+    validation = await validate_uc.execute(
+        ValidatePhaseContextInput(
+            content=payload.content,
+            current_phase=SpecPhase.DESCUBRIMIENTO,
+        )
+    )
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=validation.redirect_message or "Mensaje fuera de fase",
+        )
+
+    pid = ProjectId(project_id)
+    context = await ctx_builder.build_discovery_chat_context(pid)
+
+    history = await chat_repo.get_history(pid, SpecPhase.DESCUBRIMIENTO)
+    prior_messages = list(history.messages) if history else []
+
+    user_msg = MensajeChat(
+        id=ChatMessageId(IdGenerator.generate("chat_message")),
+        role=ChatRole.USER,
+        content=payload.content,
+    )
+    await chat_repo.save_message(pid, SpecPhase.DESCUBRIMIENTO, user_msg)
+
+    messages = prior_messages + [user_msg]
+
+    async def event_stream():
+        try:
+            async for chunk in agent.execute_conversation_stream(
+                skill_name="discovery_chat",
+                messages=messages,
+                context=context,
+                project_id=pid,
+            ):
+                if isinstance(chunk, MensajeChat):
+                    await chat_repo.save_message(pid, SpecPhase.DESCUBRIMIENTO, chunk)
+                    msg_data = {
+                        "type": "message",
+                        "id": str(chunk.id),
+                        "role": "assistant",
+                        "content": chunk.content,
+                        "suggested_change": {
+                            "id": chunk.suggested_change.id,
+                            "section": chunk.suggested_change.section,
+                            "description": chunk.suggested_change.description,
+                            "diff_before": chunk.suggested_change.diff.before,
+                            "diff_after": chunk.suggested_change.diff.after,
+                            "rationale": chunk.suggested_change.rationale,
+                        }
+                        if chunk.suggested_change
+                        else None,
+                        "timestamp": chunk.timestamp.isoformat(),
+                    }
+                    yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
+        except Exception:
+            yield f"data: {json.dumps({'type': 'error', 'content': 'Error interno'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
