@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
@@ -153,9 +152,7 @@ class GetRequirementsUseCase:
             )
 
         markdown = await self._requirement_repo.by_feature_id(feature_id)
-        total = self._count_requirements(markdown) if markdown else 0
-        return GetRequirementsOutput(markdown=markdown, total=total)
+        from kosmo.domain.sdd.requirements_markdown import count_requirements
 
-    @staticmethod
-    def _count_requirements(markdown: str) -> int:
-        return len(re.findall(r"^###\s+REQ-\d+\.\d+", markdown, re.MULTILINE))
+        total = count_requirements(markdown) if markdown else 0
+        return GetRequirementsOutput(markdown=markdown, total=total)
