@@ -50,6 +50,8 @@ class InMemoryProjectRepository:
 class InMemoryDocumentRepository:
     def __init__(self) -> None:
         self.discovery_docs: dict[str, RichTextDocument] = {}
+        self.versions: dict[str, str] = {}
+        self._version_counter = 0
 
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
         return self.discovery_docs.get(str(project_id))
@@ -67,6 +69,17 @@ class InMemoryDocumentRepository:
         document: RichTextDocument,  # noqa: ARG002
     ) -> RichTextDocument:
         return document
+
+    async def save_version(  # type: ignore[override]
+        self, project_id: ProjectId, phase: object, markdown: str, change_ids: list[object]
+    ) -> str:
+        self._version_counter += 1
+        version_id = f"ver_{self._version_counter}"
+        self.versions[version_id] = markdown
+        return version_id
+
+    async def get_version(self, version_id: str) -> str | None:
+        return self.versions.get(version_id)
 
 
 class InMemoryFeatureRepository:

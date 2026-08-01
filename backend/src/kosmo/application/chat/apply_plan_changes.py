@@ -116,6 +116,13 @@ class ApplyPlanChangesUseCase:
                     change_id=change.id,
                     status=EstadoPlanCambio.APPLIED,
                 )
+            if input_data.phase == SpecPhase.DESCUBRIMIENTO and applied:
+                await self._document_repo.save_version(  # type: ignore[call-arg]
+                    project_id=input_data.project_id,
+                    phase=input_data.phase,
+                    markdown=final_markdown,  # type: ignore[reportPossiblyUnboundVariable]
+                    change_ids=[c.id for c in applied],
+                )
 
         propagation = await self._run_propagation(input_data, applied)
 
@@ -143,6 +150,13 @@ class ApplyPlanChangesUseCase:
                     status=EstadoPlanCambio.APPLIED,
                     _session=session,  # type: ignore[call-arg]
                 )
+            await self._document_repo.save_version(  # type: ignore[call-arg]
+                project_id=project_id,
+                phase=SpecPhase.DESCUBRIMIENTO,
+                markdown=markdown,
+                change_ids=[c.id for c in applied],
+                _session=session,  # type: ignore[call-arg]
+            )
             await session.commit()
 
     async def _mark_changes_applied_uow(self, project_id: ProjectId, applied: list[PlanCambio]) -> None:
@@ -258,6 +272,20 @@ class ApplyPlanChangesUseCase:
             await self._feature_repo.save(feature)
             applied.append(change)
         return applied, failed
+
+
+async def revert_to_version(
+    document_repo: DocumentRepository,
+    project_id: ProjectId,
+    version_id: str,
+) -> str | None:
+    markdown: object | None = await document_repo.get_version(version_id)
+    if markdown is None:
+        return None
+    if not isinstance(markdown, str):  # type: ignore[reportUnnecessaryIsInstance]
+        return None
+    await document_repo.save_discovery(project_id=project_id, document=markdown_to_document(markdown))
+    return markdown
 
 
 def _feature_attribute(section: str) -> str | None:

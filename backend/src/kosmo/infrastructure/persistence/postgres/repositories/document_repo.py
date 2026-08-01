@@ -5,11 +5,12 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.sdd.document import RichTextDocument
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
-from kosmo.infrastructure.persistence.postgres.models import DiscoveryDocumentModel
+from kosmo.domain.sdd.id_generator import IdGenerator
+from kosmo.infrastructure.persistence.postgres.models import DiscoveryDocumentModel, DocumentVersionModel
 
 
 class SqlAlchemyDocumentRepository(DocumentRepository):
@@ -77,3 +78,36 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
     ) -> RichTextDocument:
         _ = feature_id
         return document
+
+    async def save_version(  # type: ignore[override]
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        markdown: str,
+        change_ids: list[PlanChangeId],
+        *,
+        _session: AsyncSession | None = None,
+    ) -> str:
+        version_id = IdGenerator.generate("doc_version")
+        model = DocumentVersionModel(
+            id=version_id,
+            project_id=str(project_id),
+            phase=phase.value,
+            markdown=markdown,
+            change_ids=[str(cid) for cid in change_ids],
+        )
+        if _session is not None:
+            _session.add(model)
+            return version_id
+
+        async with self._session_factory() as session:
+            session.add(model)
+            await session.commit()
+            return version_id
+
+    async def get_version(self, version_id: str) -> str | None:
+        async with self._session_factory() as session:
+            stmt = select(DocumentVersionModel).where(DocumentVersionModel.id == version_id)
+            result = await session.execute(stmt)
+            model = result.scalar_one_or_none()
+            return model.markdown if model else None

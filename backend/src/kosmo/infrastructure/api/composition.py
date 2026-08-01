@@ -531,6 +531,7 @@ class DiscoveryComponents:
     apply_plan_changes: Any
     propagate_discovery_changes: Any
     consistency_evaluator: Any
+    document_repo: Any
 
 
 def build_discovery_components(
@@ -602,6 +603,7 @@ def build_discovery_components(
         ),
         propagate_discovery_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
+        document_repo=document_repo,
     )
 
 

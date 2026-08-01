@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, sta
 from kosmo.application.chat.apply_plan_changes import (
     ApplyPlanChangesInput,
     ApplyPlanChangesUseCase,
+    revert_to_version,
 )
 from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
 from kosmo.contracts.auth import Principal
@@ -15,6 +16,7 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     AddPlanChangeRequest,
@@ -215,3 +217,34 @@ async def apply_batch(
         failed=failed,
         propagation=propagation,
     )
+
+
+def _document_repo(request: Request) -> DocumentRepository:
+    return request.app.state.document_repo
+
+
+@router.post(
+    "/revert",
+    summary="Revertir a una versión anterior del documento",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Versión no encontrada."},
+    },
+)
+async def revert_document(
+    project_id: str,
+    version_id: Annotated[str, Body(..., embed=True)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    doc_repo: Annotated[DocumentRepository, Depends(_document_repo)],
+):
+    result = await revert_to_version(
+        document_repo=doc_repo,
+        project_id=ProjectId(project_id),
+        version_id=version_id,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Versión no encontrada",
+        )
+    return {"status": "ok", "version_id": version_id}
