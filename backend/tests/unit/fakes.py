@@ -112,12 +112,22 @@ class InMemoryFeatureRepository:
 class InMemoryRequirementRepository:
     def __init__(self) -> None:
         self._requirements: dict[str, str] = {}
+        self._items: dict[str, list[dict]] = {}
 
     async def save(self, feature_id: FeatureId, markdown: str) -> None:
         self._requirements[str(feature_id)] = markdown
 
     async def by_feature_id(self, feature_id: FeatureId) -> str | None:
         return self._requirements.get(str(feature_id))
+
+    async def save_items(self, feature_id: FeatureId, items: list[object]) -> None:  # type: ignore[override]
+        self._items[str(feature_id)] = [
+            dict(item) if isinstance(item, dict) else item.__dict__  # type: ignore[reportUnknownVariableType]
+            for item in items
+        ]  # type: ignore[reportUnknownVariableType]
+
+    async def list_items(self, feature_id: FeatureId) -> list[object]:  # type: ignore[override]
+        return self._items.get(str(feature_id), [])
 
 
 class InMemoryActivityDiagramRepository:

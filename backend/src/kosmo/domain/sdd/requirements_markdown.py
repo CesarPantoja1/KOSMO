@@ -187,3 +187,30 @@ def _parse_origin(block: str) -> str:
         if stripped.startswith("**Origen:**"):
             return stripped.removeprefix("**Origen:**").strip()
     return ""
+
+
+def render_requirements_markdown(requirements: list[EARSRequirement]) -> str:
+    blocks: list[str] = []
+    for r in requirements:
+        lines: list[str] = [
+            f"### {r.display_id} {r.title}",
+            "",
+            f"**{r.pattern.value}**",
+            "",
+            r.statement,
+            "",
+        ]
+        if r.origin:
+            lines.append(f"**Origen:** {r.origin}")
+            lines.append("")
+        if r.acceptance_criteria:
+            lines.append("**Criterios de aceptación**")
+            lines.append("")
+            for ac in r.acceptance_criteria:
+                lines.append(f"**Escenario:** {ac.scenario}")
+                lines.append(f"- **Dado** que {ac.given}")
+                lines.append(f"- **Cuando** {ac.when}")
+                lines.append(f"- **Entonces** {ac.then}")
+                lines.append("")
+        blocks.append("\n".join(lines))
+    return "\n".join(blocks)
