@@ -307,7 +307,8 @@ async def test_process_chat_message_raises_on_llm_failure() -> None:
     msgs = list(history.messages)
     assert msgs[0].role == ChatRole.USER
     assert msgs[1].role == ChatRole.ASSISTANT
-    assert msgs[1].error is not None
+    assert msgs[1].error is None
+    assert msgs[1].content == "No se pudo procesar la solicitud. Intenta nuevamente."
 
 
 # ── Context contains parsed EARS requirement ──

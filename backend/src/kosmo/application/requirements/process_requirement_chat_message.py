@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import structlog
 from tenacity import (
     retry,
     retry_if_not_exception_type,
@@ -20,6 +21,8 @@ from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 _MAX_CONTENT_LENGTH = 4000
+
+_log = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -98,12 +101,11 @@ class ProcessRequirementChatMessageUseCase:
         except ValueError:
             raise
         except Exception as exc:
-            error_text = str(exc)
+            _log.error("chat.llm_error", exc_info=True)
             error_msg = MensajeChat(
                 id=ChatMessageId(IdGenerator.generate("chat_message")),
                 role=ChatRole.ASSISTANT,
                 content="No se pudo procesar la solicitud. Intenta nuevamente.",
-                error=error_text,
             )
             await self._chat_repo.save_message(
                 project_id=feature.project_id,
@@ -112,7 +114,7 @@ class ProcessRequirementChatMessageUseCase:
                 context_id=str(input_data.requirement_id),
             )
             raise LLMInvocationError(
-                detail=f"Error al procesar el mensaje del chat: {error_text}",
+                detail="Error interno al procesar el mensaje. Reintenta más tarde.",
                 instance=f"/api/v1/requirements/{input_data.requirement_id}/chat",
             ) from exc
 

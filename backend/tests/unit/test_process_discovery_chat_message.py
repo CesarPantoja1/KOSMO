@@ -233,8 +233,8 @@ async def test_process_chat_message_retries_on_llm_timeout() -> None:
     msgs = list(history.messages)
     assert msgs[0].role == ChatRole.USER
     assert msgs[1].role == ChatRole.ASSISTANT
-    assert msgs[1].error is not None
-    assert "connection timeout" in msgs[1].error
+    assert msgs[1].error is None
+    assert msgs[1].content == "No se pudo procesar la solicitud. Intenta nuevamente."
 
 
 @pytest.mark.asyncio
