@@ -364,8 +364,9 @@ def _json_to_dict(value: str | None) -> dict[str, Any] | None:
     if not value:
         return None
     try:
-        return dict(json.loads(value))  # type: ignore[reportUnknownArgumentType,reportUnknownVariableType]
-    except (json.JSONDecodeError, TypeError):
+        result = json.loads(value)
+        return result if isinstance(result, dict) else {"raw": str(result)}  # type: ignore[reportUnknownVariableType]
+    except (json.JSONDecodeError, TypeError, ValueError):
         return None
 
 

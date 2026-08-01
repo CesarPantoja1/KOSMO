@@ -331,8 +331,10 @@ class KOSMOAgent:
                 _log.warning("agent.llm_call_failed", skill_name=skill_name, iteration=iteration, exc_info=True)
                 break
 
+            _log.info("agent.llm_call_ok", skill_name=skill_name, iteration=iteration, output_type=str(type(last_output)), output_preview=str(last_output)[:200])  # type: ignore[reportUnknownArgumentType]
             llm_calls += 1
             last_validation = mode.validate_output(last_output, context=context)
+            _log.info("agent.validation_done", is_valid=last_validation.is_valid, errors=last_validation.errors[:5])
 
             conversation.append(
                 json.dumps(
@@ -355,6 +357,7 @@ class KOSMOAgent:
                 )
 
                 if self._memory is not None and project_id is not None:
+                    _log.info("agent.saving_session", project_id=str(project_id), phase=mode.phase_name.value)
                     await self._save_completed_session(
                         project_id=project_id,
                         phase=mode.phase_name,
@@ -368,8 +371,11 @@ class KOSMOAgent:
                         reasoning_log=reason_entries,
                         tool_results=tool_invocations,
                     )
+                    _log.info("agent.session_saved")
 
-                return mode.build_output(last_output, last_validation, metadata, context=context)
+                result = mode.build_output(last_output, last_validation, metadata, context=context)
+                _log.info("agent.build_output_done", result_type=str(type(result)))  # type: ignore[reportUnknownArgumentType]
+                return result
 
             delay_s = min(1.0 * (2 ** (iteration - 1)), 30.0)
             await asyncio.sleep(delay_s)
@@ -448,7 +454,7 @@ class KOSMOAgent:
         if self._memory is None:
             return
 
-        output_json = json.dumps(output, default=str) if output else None
+        output_json = _serialize_output(output)
 
         embedding: list[float] | None = None
         if self._embedder is not None and output is not None:
@@ -516,7 +522,7 @@ class KOSMOAgent:
         if self._memory is None:
             return
 
-        output_json = json.dumps(output, default=str) if output else None
+        output_json = _serialize_output(output)
         conversation = [json.dumps({"role": m.role.value, "content": m.content[:200]}) for m in messages[-10:]]
 
         session = create_session(
@@ -930,3 +936,12 @@ def _to_assistant_message(output: Any) -> MensajeChat:
         content=output.content,
         suggested_change=suggested_change,
     )
+
+
+def _serialize_output(output: object) -> str | None:
+    if output is None:
+        return None
+    try:
+        return output.model_dump_json()  # type: ignore[reportUnknownMemberType,reportAttributeAccessIssue]
+    except AttributeError:
+        return json.dumps(output, default=str)

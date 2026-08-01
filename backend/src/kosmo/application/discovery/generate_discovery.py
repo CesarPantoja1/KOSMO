@@ -56,6 +56,9 @@ class GenerateDiscoveryUseCase:
                 project_id=input_data.project_id,
             )
         except Exception as exc:
+            import structlog
+
+            structlog.get_logger(__name__).error("discovery.generate_failed", exc_info=True)
             raise LLMInvocationError(
                 detail=f"Error al generar el documento de descubrimiento: {exc}",
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery",
