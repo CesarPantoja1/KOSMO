@@ -193,6 +193,7 @@ class SqlAlchemyChatRepository(ChatRepository):
         stmt = select(PlanChangeModel).where(PlanChangeModel.project_id == str(project_id))
         if phase:
             stmt = stmt.where(PlanChangeModel.phase == phase.value)
+        stmt = stmt.order_by(PlanChangeModel.created_at, PlanChangeModel.id)
 
         async with self._session_factory() as session:
             result = await session.execute(stmt)

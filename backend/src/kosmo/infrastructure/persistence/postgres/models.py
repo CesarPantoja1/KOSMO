@@ -189,7 +189,11 @@ class PlanChangeModel(Base):
     diff_before: Mapped[str] = mapped_column(Text(), nullable=False)
     diff_after: Mapped[str] = mapped_column(Text(), nullable=False)
     rationale: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        comment="pending | added | conflict | applied | discarded",
+    )
     origin: Mapped[str] = mapped_column(String(64), nullable=False)
     user_version: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
