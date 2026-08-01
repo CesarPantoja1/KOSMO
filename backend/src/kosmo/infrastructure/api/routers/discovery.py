@@ -8,6 +8,10 @@ from kosmo.application.chat.process_chat_message import (
     ProcessChatMessageInput,
     ProcessChatMessageUseCase,
 )
+from kosmo.application.chat.validate_phase_context import (
+    ValidatePhaseContextInput,
+    ValidatePhaseContextUseCase,
+)
 from kosmo.application.discovery import (
     GenerateDiscoveryInput,
     GenerateDiscoveryUseCase,
@@ -34,6 +38,7 @@ from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRa
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
     ChatMessage,
+    ContextRedirectResponse,
     DiscoveryResponse,
     RefineDiscoveryRequest,
     SendChatRequest,
@@ -69,6 +74,10 @@ def _process_discovery_chat(request: Request) -> ProcessChatMessageUseCase:
 
 def _context_builder(request: Request) -> ContextBuilder:
     return request.app.state.context_builder
+
+
+def _validate_phase_context(request: Request) -> ValidatePhaseContextUseCase:
+    return request.app.state.validate_phase_context
 
 
 def _get_discovery_chat_history(request: Request) -> GetDiscoveryChatHistoryUseCase:
@@ -285,12 +294,14 @@ def _markdown_to_document(content: str) -> RichTextDocument:
     "/chat",
     summary="Enviar mensaje al chat de Descubrimiento",
     description=(
-        "Procesa un mensaje del usuario en el contexto de Descubrimiento, invoca al agente IA y devuelve la respuesta."
+        "Procesa un mensaje del usuario en el contexto de Descubrimiento, validando que "
+        "la solicitud corresponda al ámbito de la fase. Si el mensaje corresponde a otra "
+        "fase, devuelve una redirección."
     ),
-    response_model=ChatMessage,
+    response_model=ChatMessage | ContextRedirectResponse,
     status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_200_OK: {"description": "Mensaje procesado exitosamente."},
+        status.HTTP_200_OK: {"description": "Mensaje procesado o redirección."},
         status.HTTP_400_BAD_REQUEST: {"description": "Error de validación o tamaño de mensaje."},
         status.HTTP_401_UNAUTHORIZED: {"description": "Token inválido."},
         status.HTTP_404_NOT_FOUND: {"description": "Proyecto no encontrado."},
@@ -303,7 +314,21 @@ async def process_chat_message(
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[ProcessChatMessageUseCase, Depends(_process_discovery_chat)],
     ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
-) -> ChatMessage:
+    validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
+) -> ChatMessage | ContextRedirectResponse:
+    validation = await validate_uc.execute(
+        ValidatePhaseContextInput(
+            content=payload.content,
+            current_phase=SpecPhase.DESCUBRIMIENTO,
+        )
+    )
+
+    if not validation.is_valid:
+        return ContextRedirectResponse(
+            message=validation.redirect_message or "Este cambio no pertenece a la fase de Descubrimiento.",
+            target_phase=validation.target_phase or "",
+        )
+
     try:
         context = await ctx_builder.build_discovery_chat_context(ProjectId(project_id))
         output = await use_case.execute(
