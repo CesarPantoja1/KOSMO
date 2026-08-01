@@ -4,6 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
+from kosmo.application.chat.process_chat_message import (
+    ProcessChatMessageInput,
+    ProcessChatMessageUseCase,
+)
 from kosmo.application.discovery import (
     GenerateDiscoveryInput,
     GenerateDiscoveryUseCase,
@@ -11,21 +15,20 @@ from kosmo.application.discovery import (
     GetDiscoveryChatHistoryUseCase,
     GetDiscoveryInput,
     GetDiscoveryUseCase,
-    ProcessDiscoveryChatMessageInput,
-    ProcessDiscoveryChatMessageUseCase,
     RefineDiscoveryInput,
     RefineDiscoveryUseCase,
     SaveDiscoveryInput,
     SaveDiscoveryUseCase,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.sdd.document import RichTextDocument
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     LLMInvocationError,
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
@@ -60,8 +63,12 @@ def _refine_discovery(request: Request) -> RefineDiscoveryUseCase:
     return request.app.state.refine_discovery
 
 
-def _process_discovery_chat(request: Request) -> ProcessDiscoveryChatMessageUseCase:
-    return request.app.state.process_discovery_chat_message
+def _process_discovery_chat(request: Request) -> ProcessChatMessageUseCase:
+    return request.app.state.process_chat_message
+
+
+def _context_builder(request: Request) -> ContextBuilder:
+    return request.app.state.context_builder
 
 
 def _get_discovery_chat_history(request: Request) -> GetDiscoveryChatHistoryUseCase:
@@ -294,13 +301,18 @@ async def process_chat_message(
     project_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
-    use_case: Annotated[ProcessDiscoveryChatMessageUseCase, Depends(_process_discovery_chat)],
+    use_case: Annotated[ProcessChatMessageUseCase, Depends(_process_discovery_chat)],
+    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> ChatMessage:
     try:
+        context = await ctx_builder.build_discovery_chat_context(ProjectId(project_id))
         output = await use_case.execute(
-            ProcessDiscoveryChatMessageInput(
+            ProcessChatMessageInput(
                 project_id=ProjectId(project_id),
+                phase=SpecPhase.DESCUBRIMIENTO,
                 content=payload.content,
+                context=context,
+                instance=f"/api/v1/projects/{project_id}/discovery/chat",
             )
         )
     except ValueError as exc:

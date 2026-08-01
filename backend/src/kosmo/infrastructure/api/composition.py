@@ -22,7 +22,6 @@ from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
     GetDiscoveryChatHistoryUseCase,
     GetDiscoveryUseCase,
-    ProcessDiscoveryChatMessageUseCase,
     RefineDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
@@ -274,6 +273,7 @@ class PipelineComponents:
     agent_memory: AgentMemoryPort
     pattern_store: KnowledgePatternStore
     validate_phase_context: Any
+    process_chat_message: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -491,9 +491,17 @@ def build_pipeline_components(
         pattern_store=pattern_store,  # type: ignore[reportArgumentType]
     )
 
+    from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
     from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
     validate_phase_context = ValidatePhaseContextUseCase(llm_client=llm_client)
+
+    process_chat_message = ProcessChatMessageUseCase(
+        chat_repo=SqlAlchemyChatRepository(session_factory),
+        agent=agent,
+        project_repo=project_repo,
+    )
 
     return PipelineComponents(
         llm_client=llm_client,
@@ -504,6 +512,7 @@ def build_pipeline_components(
         agent_memory=agent_memory,
         pattern_store=pattern_store,
         validate_phase_context=validate_phase_context,
+        process_chat_message=process_chat_message,
     )
 
 
@@ -513,7 +522,6 @@ class DiscoveryComponents:
     get_discovery: GetDiscoveryUseCase
     save_discovery: SaveDiscoveryUseCase
     refine_discovery: RefineDiscoveryUseCase
-    process_discovery_chat_message: ProcessDiscoveryChatMessageUseCase
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
     manage_plan_changes: Any
     apply_plan_changes: Any
@@ -532,7 +540,6 @@ def build_discovery_components(
     from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
     from kosmo.application.consistency.propagate_discovery_changes import PropagateDiscoveryChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
-    from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
     from kosmo.contracts.consistency import ConsistencyEvaluator
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
@@ -573,13 +580,6 @@ def build_discovery_components(
             context_builder=pipeline.context_builder,
             agent=pipeline.agent,
         ),
-        process_discovery_chat_message=ProcessDiscoveryChatMessageUseCase(
-            project_repo=project_repo,
-            document_repo=document_repo,
-            chat_repo=chat_repo,
-            context_builder=pipeline.context_builder,
-            agent=pipeline.agent,
-        ),
         get_discovery_chat_history=GetDiscoveryChatHistoryUseCase(
             project_repo=project_repo,
             chat_repo=chat_repo,
@@ -607,7 +607,6 @@ class FeaturesComponents:
     save_selected_features: SaveSelectedFeaturesUseCase
     create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
-    process_feature_chat_message: Any
     get_feature_chat_history: Any
 
 
@@ -627,17 +626,6 @@ def build_features_components(
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
-
-    from kosmo.application.features.process_feature_chat_message import ProcessFeatureChatMessageUseCase
-
-    process_feature_chat = ProcessFeatureChatMessageUseCase(
-        project_repo=project_repo,
-        document_repo=document_repo,
-        feature_repo=feature_repo,
-        chat_repo=chat_repo,
-        context_builder=pipeline.context_builder,
-        agent=pipeline.agent,
-    )
 
     from kosmo.application.features.get_feature_chat_history import GetFeatureChatHistoryUseCase
 
@@ -662,7 +650,6 @@ def build_features_components(
             suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
-        process_feature_chat_message=process_feature_chat,
         get_feature_chat_history=get_feature_chat_history,
     )
 
@@ -673,7 +660,6 @@ class RequirementsComponents:
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
     refine_requirements: RefineRequirementsUseCase
-    process_requirement_chat_message: Any
     get_requirement_chat_history: Any
     requirement_repo: Any
 
@@ -690,17 +676,6 @@ def build_requirements_components(
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
-
-    from kosmo.application.requirements.process_requirement_chat_message import ProcessRequirementChatMessageUseCase
-
-    process_requirement_chat = ProcessRequirementChatMessageUseCase(
-        document_repo=document_repo,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        chat_repo=chat_repo,
-        agent=pipeline.agent,
-        context_builder=pipeline.context_builder,
-    )
 
     from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
 
@@ -733,7 +708,6 @@ def build_requirements_components(
             requirement_repo=requirement_repo,
             agent=pipeline.agent,
         ),
-        process_requirement_chat_message=process_requirement_chat,
         get_requirement_chat_history=get_requirement_chat_history,
         requirement_repo=requirement_repo,
     )

@@ -4,6 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
+from kosmo.application.chat.process_chat_message import (
+    ProcessChatMessageInput,
+    ProcessChatMessageUseCase,
+)
 from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextInput,
     ValidatePhaseContextUseCase,
@@ -11,16 +15,16 @@ from kosmo.application.chat.validate_phase_context import (
 from kosmo.application.requirements import (
     GetRequirementChatHistoryInput,
     GetRequirementChatHistoryUseCase,
-    ProcessRequirementChatMessageInput,
-    ProcessRequirementChatMessageUseCase,
 )
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
+    ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId, RequirementId
+from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
@@ -35,8 +39,8 @@ router = APIRouter(
 )
 
 
-def _process_requirement_chat(request: Request) -> ProcessRequirementChatMessageUseCase:
-    return request.app.state.process_requirement_chat_message
+def _process_requirement_chat(request: Request) -> ProcessChatMessageUseCase:
+    return request.app.state.process_chat_message
 
 
 def _get_requirement_chat_history(request: Request) -> GetRequirementChatHistoryUseCase:
@@ -45,6 +49,10 @@ def _get_requirement_chat_history(request: Request) -> GetRequirementChatHistory
 
 def _validate_phase_context(request: Request) -> ValidatePhaseContextUseCase:
     return request.app.state.validate_phase_context
+
+
+def _context_builder(request: Request) -> ContextBuilder:
+    return request.app.state.context_builder
 
 
 @router.post(
@@ -70,8 +78,9 @@ async def process_requirement_chat_message(
     requirement_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
-    chat_uc: Annotated[ProcessRequirementChatMessageUseCase, Depends(_process_requirement_chat)],
+    chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_process_requirement_chat)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
+    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> ChatMessage | ContextRedirectResponse:
     fid = FeatureId(feature_id)
     rid = RequirementId(requirement_id)
@@ -90,11 +99,15 @@ async def process_requirement_chat_message(
         )
 
     try:
+        context = await ctx_builder.build_requirement_chat_context(fid, rid)
         output = await chat_uc.execute(
-            ProcessRequirementChatMessageInput(
-                feature_id=fid,
-                requirement_id=rid,
+            ProcessChatMessageInput(
+                project_id=context.feature.project_id,
+                phase=SpecPhase.REQUISITOS,
                 content=payload.content,
+                context=context,
+                context_id=str(rid),
+                instance=f"/api/v1/features/{feature_id}/requirements/{requirement_id}/chat",
             )
         )
     except ValueError as exc:
@@ -102,7 +115,7 @@ async def process_requirement_chat_message(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    except FeatureNotFoundError as exc:
+    except (FeatureNotFoundError, ProjectNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.problem.detail,

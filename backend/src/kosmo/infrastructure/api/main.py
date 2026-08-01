@@ -225,13 +225,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     pipeline_components = build_pipeline_components(settings, session_factory)
     app.state.validate_phase_context = pipeline_components.validate_phase_context
+    app.state.process_chat_message = pipeline_components.process_chat_message
+    app.state.context_builder = pipeline_components.context_builder
     discovery_components = build_discovery_components(session_factory, pipeline_components)
     features_components = build_features_components(session_factory, pipeline_components)
     app.state.generate_discovery = discovery_components.generate_discovery
     app.state.get_discovery = discovery_components.get_discovery
     app.state.save_discovery = discovery_components.save_discovery
     app.state.refine_discovery = discovery_components.refine_discovery
-    app.state.process_discovery_chat_message = discovery_components.process_discovery_chat_message
     app.state.get_discovery_chat_history = discovery_components.get_discovery_chat_history
     app.state.manage_plan_changes = discovery_components.manage_plan_changes
     app.state.apply_plan_changes = discovery_components.apply_plan_changes
@@ -242,7 +243,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.save_selected_features = features_components.save_selected_features
     app.state.create_characteristic = features_components.create_characteristic
     app.state.feature_repo = features_components.feature_repo
-    app.state.process_feature_chat_message = features_components.process_feature_chat_message
     app.state.get_feature_chat_history = features_components.get_feature_chat_history
 
     requirements_components = build_requirements_components(session_factory, pipeline_components)
@@ -250,7 +250,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.get_requirements = requirements_components.get_requirements
     app.state.save_requirements = requirements_components.save_requirements
     app.state.refine_requirements = requirements_components.refine_requirements
-    app.state.process_requirement_chat_message = requirements_components.process_requirement_chat_message
     app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
     app.state.requirement_repo = requirements_components.requirement_repo
 

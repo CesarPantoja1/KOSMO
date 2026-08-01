@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.application.requirements import (
+from kosmo.application.requirements.process_requirement_chat_message import (
     ProcessRequirementChatMessageInput,
     ProcessRequirementChatMessageUseCase,
 )
