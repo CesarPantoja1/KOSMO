@@ -11,7 +11,12 @@ from kosmo.contracts import ChatRepository, EstadoPlanCambio, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
-from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository, ProjectRepository
+from kosmo.contracts.sdd.repositories import (
+    DocumentRepository,
+    FeatureRepository,
+    ProjectRepository,
+    RequirementRepository,
+)
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 
@@ -57,6 +62,7 @@ class ApplyPlanChangesUseCase:
         chat_repo: ChatRepository,
         document_repo: DocumentRepository,
         feature_repo: FeatureRepository | None = None,
+        requirement_repo: RequirementRepository | None = None,
         propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
     ) -> None:
@@ -64,6 +70,7 @@ class ApplyPlanChangesUseCase:
         self._chat_repo = chat_repo
         self._document_repo = document_repo
         self._feature_repo = feature_repo
+        self._requirement_repo = requirement_repo
         self._propagate_uc = propagate_uc
         self._session_factory = session_factory
 
@@ -75,7 +82,7 @@ class ApplyPlanChangesUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/plan/apply",
             )
 
-        if input_data.phase not in {SpecPhase.DESCUBRIMIENTO, SpecPhase.CARACTERISTICAS}:
+        if input_data.phase not in {SpecPhase.DESCUBRIMIENTO, SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS}:
             raise ValueError(f"Aplicación de cambios no soportada para la fase '{input_data.phase.value}'")
 
         all_changes = await self._chat_repo.list_plan_changes(input_data.project_id, input_data.phase)
@@ -100,6 +107,10 @@ class ApplyPlanChangesUseCase:
                 await self._persist_with_uow(
                     input_data.project_id, applied, final_markdown
                 )
+        elif input_data.phase == SpecPhase.REQUISITOS:
+            applied, phase_failed = await self._apply_requirement_changes(
+                input_data.project_id, matched
+            )
         else:
             applied, phase_failed = await self._apply_feature_changes(input_data.project_id, matched)
             if applied and self._session_factory is not None:
@@ -272,6 +283,66 @@ class ApplyPlanChangesUseCase:
             await self._feature_repo.save(feature)
             applied.append(change)
         return applied, failed
+
+    async def _apply_requirement_changes(
+        self, project_id: ProjectId, changes: list[PlanCambio]  # noqa: ARG002
+    ) -> tuple[list[PlanCambio], list[FailedChange]]:
+        if self._requirement_repo is None:
+            raise ValueError("La aplicación de cambios de requisitos no está configurada.")
+
+        feature_id_by_change = _find_feature_for_requirement_changes(changes)
+        if not feature_id_by_change:
+            reason = "No se pudo determinar la característica para los cambios de requisitos"
+            return [], [FailedChange(id=c.id, reason=reason) for c in changes]
+
+        applied: list[PlanCambio] = []
+        failed: list[FailedChange] = []
+        for fid in feature_id_by_change:
+            a_ids = {a.id for a in applied}
+            f_ids = {f.id for f in failed}
+            f_changes = [c for c in changes if c.id not in a_ids and c.id not in f_ids]
+            if not f_changes:
+                break
+
+            markdown = await self._requirement_repo.by_feature_id(fid)
+            if markdown is None:
+                for c in f_changes:
+                    failed.append(
+                        FailedChange(id=c.id, reason=f"No hay requisitos para la característica {fid}")
+                    )
+                continue
+
+            for change in f_changes:
+                result = apply_change_diff(
+                    markdown, before=change.diff.before, after=change.diff.after
+                )
+                if result is None:
+                    failed.append(
+                        FailedChange(
+                            id=change.id,
+                            reason="El fragmento original ya no se encuentra en los requisitos",
+                        )
+                    )
+                elif result == markdown:
+                    applied.append(change)
+                else:
+                    markdown = result
+                    applied.append(change)
+
+            if applied:
+                await self._requirement_repo.save(fid, markdown)
+
+        return applied, failed
+
+
+def _find_feature_for_requirement_changes(changes: list[PlanCambio]) -> list[FeatureId]:
+    fids: list[FeatureId] = []
+    seen: set[str] = set()
+    for c in changes:
+        if c.context_id and c.context_id.startswith("feat_") and c.context_id not in seen:
+            seen.add(c.context_id)
+            fids.append(FeatureId(c.context_id))
+    return fids
 
 
 async def revert_to_version(
