@@ -229,6 +229,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.context_builder = pipeline_components.context_builder
     app.state.agent = pipeline_components.agent
     app.state.chat_repo = pipeline_components.chat_repo
+    app.state.traceability_repo = pipeline_components.traceability_repo
     discovery_components = build_discovery_components(session_factory, pipeline_components)
     features_components = build_features_components(session_factory, pipeline_components)
     app.state.generate_discovery = discovery_components.generate_discovery

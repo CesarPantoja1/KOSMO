@@ -275,6 +275,7 @@ class PipelineComponents:
     validate_phase_context: Any
     process_chat_message: Any
     chat_repo: Any
+    traceability_repo: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -482,6 +483,14 @@ def build_pipeline_components(
     if embedding_generator is not None:
         knowledge_tools.register(*build_find_similar_sessions(agent_memory, embedding_generator))
 
+    from kosmo.infrastructure.llm.knowledge_tools import build_get_impact
+    from kosmo.infrastructure.persistence.postgres.repositories.traceability_repo import (
+        SqlAlchemyTraceabilityRepository,
+    )
+
+    traceability_repo = SqlAlchemyTraceabilityRepository(session_factory)
+    knowledge_tools.register(*build_get_impact(traceability_repo))
+
     agent = KOSMOAgent(
         llm_client=llm_client,
         guard_registry=guard_registry,
@@ -517,6 +526,7 @@ def build_pipeline_components(
         validate_phase_context=validate_phase_context,
         process_chat_message=process_chat_message,
         chat_repo=chat_repo,
+        traceability_repo=traceability_repo,
     )
 
 
@@ -699,6 +709,7 @@ def build_requirements_components(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             agent=pipeline.agent,
+            traceability_repo=pipeline.traceability_repo,
         ),
         get_requirements=GetRequirementsUseCase(
             project_repo=project_repo,

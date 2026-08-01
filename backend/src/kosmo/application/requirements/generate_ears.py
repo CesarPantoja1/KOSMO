@@ -46,12 +46,14 @@ class GenerateEARSUseCase:
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
         agent: AgentPort,
+        traceability_repo: object | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._document_repo = document_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._agent = agent
+        self._traceability_repo = traceability_repo
 
     async def execute(self, input_data: GenerateEARSInput) -> GenerateEARSOutput:
         from kosmo.contracts.sdd.errors import (
@@ -114,6 +116,33 @@ class GenerateEARSUseCase:
             )
 
         await self._requirement_repo.save(input_data.feature_id, phase_output.requirements_markdown)
+
+        items = [
+            {
+                "id": str(r.id),
+                "requirement_number": r.requirement_number,
+                "display_id": r.display_id,
+                "title": r.title,
+                "pattern": r.pattern.value,
+                "statement": r.statement,
+                "origin": r.origin,
+                "acceptance_criteria": [
+                    {"scenario": ac.scenario, "given": ac.given, "when": ac.when, "then": ac.then}
+                    for ac in r.acceptance_criteria
+                ],
+            }
+            for r in phase_output.requirements
+        ]
+        await self._requirement_repo.save_items(input_data.feature_id, items)  # type: ignore[reportAttributeAccessIssue]
+
+        if self._traceability_repo is not None:
+            for r in phase_output.requirements:
+                await self._traceability_repo.add_edge(  # type: ignore[reportAttributeAccessIssue]
+                    source_type="feature",
+                    source_id=str(input_data.feature_id),
+                    target_type="requirement",
+                    target_id=str(r.id),
+                )
 
         return GenerateEARSOutput(
             project_id=input_data.project_id,
