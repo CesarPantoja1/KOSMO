@@ -55,6 +55,7 @@ class PropagateDiscoveryChangesUseCase:
         diagram_repo: ActivityDiagramRepository,
         chat_repo: ChatRepository,
         consistency_evaluator: ConsistencyEvaluator,
+        traceability_repo: object | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
@@ -62,6 +63,7 @@ class PropagateDiscoveryChangesUseCase:
         self._diagram_repo = diagram_repo
         self._chat_repo = chat_repo
         self._consistency_evaluator = consistency_evaluator
+        self._traceability_repo = traceability_repo
 
     async def execute(self, input_data: PropagateDiscoveryChangesInput) -> PropagateDiscoveryChangesOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -138,6 +140,7 @@ class PropagateDiscoveryChangesUseCase:
     async def _evaluate_requirements(
         self, feature_id_str: str, project_id: ProjectId, applied_changes: list[PlanCambio]
     ) -> PhasePropagationInfo:
+
         from kosmo.contracts.sdd.ids import FeatureId
 
         feature_id = FeatureId(feature_id_str)
@@ -145,9 +148,22 @@ class PropagateDiscoveryChangesUseCase:
         if requirements is None:
             return PhasePropagationInfo(phase=_PHASE_TO_API[SpecPhase.REQUISITOS], affected_count=0, affected_ids=[])
 
+        if self._traceability_repo is not None:
+            impact = await self._traceability_repo.get_impact(feature_id_str)  # type: ignore[reportAttributeAccessIssue]  # noqa: E501
+            downstream: list[str] = [d["id"] for d in impact.get("downstream", []) if d.get("type") == "requirement"]  # type: ignore[reportUnknownVariableType, reportUnknownArgumentType]  # noqa: E501
+            if downstream:
+                return PhasePropagationInfo(
+                    phase=_PHASE_TO_API[SpecPhase.REQUISITOS],
+                    affected_count=len(downstream),
+                    affected_ids=downstream,
+                )
+            return PhasePropagationInfo(
+                phase=_PHASE_TO_API[SpecPhase.REQUISITOS], affected_count=0, affected_ids=[]
+            )
+
         try:
             result = await self._consistency_evaluator.evaluate(
-                source_phase=SpecPhase.DESCUBRIMIENTO,
+                source_phase=SpecPhase.CARACTERISTICAS,
                 target_phase=SpecPhase.REQUISITOS,
                 project_id=project_id,
                 applied_changes=applied_changes,

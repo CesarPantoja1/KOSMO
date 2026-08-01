@@ -579,6 +579,7 @@ def build_discovery_components(
         diagram_repo=diagram_repo,
         chat_repo=chat_repo,
         consistency_evaluator=consistency_evaluator,
+        traceability_repo=pipeline.traceability_repo,
     )
 
     return DiscoveryComponents(
