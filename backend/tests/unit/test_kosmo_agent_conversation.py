@@ -13,7 +13,6 @@ from kosmo.contracts import (
 from kosmo.contracts.llm.ports import PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import Skill
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 
 
@@ -145,7 +144,6 @@ class _StubChatMode:
 
 
 def _make_conversation_agent(llm, skill_name="test_chat"):
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -157,7 +155,6 @@ def _make_conversation_agent(llm, skill_name="test_chat"):
     )
     return KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         skill_registry=skill_reg,
     )
 
@@ -392,10 +389,8 @@ async def test_execute_conversation_raises_when_skill_not_found() -> None:
 async def test_execute_conversation_raises_when_no_skill_registry() -> None:
     # Arrange
     llm = _StubChatLLM()
-    guard_registry = GuardRegistry()
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
     )
     context = object()
     messages = [_user_message("Hola")]

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import (
@@ -54,12 +54,8 @@ from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
-from kosmo.contracts.pipeline.phase_outputs import (
-    ValidationResult,
-)
-from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
     ConsistencyEvaluationMode,
@@ -77,26 +73,7 @@ from kosmo.domain.pipeline.phase_modes.requirements_chat_mode import Requirement
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
 )
-from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
-    validate_business_level,
-)
-from kosmo.domain.pipeline.phase_validators.discovery_validator import (
-    validate_discovery_quality,
-    validate_discovery_structure,
-)
-from kosmo.domain.pipeline.phase_validators.features_validator import (
-    validate_feature_structure,
-    validate_feature_uniqueness,
-)
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
-from kosmo.domain.sdd.validators.activity_diagram_validator import (
-    validate_activity_diagram_syntax,
-)
-from kosmo.domain.sdd.validators.ears_validator import (
-    validate_ears_quality,
-    validate_ears_software_level,
-    validate_ears_syntax,
-)
 from kosmo.infrastructure.llm.embedder import OpenAIEmbedder
 from kosmo.infrastructure.llm.knowledge_tools import (
     build_find_similar_sessions,
@@ -269,7 +246,6 @@ class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
     agent: AgentPort
-    guard_registry: GuardRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
     pattern_store: KnowledgePatternStore
@@ -326,49 +302,8 @@ def build_pipeline_components(
         feature_repo=feature_repo,
     )
 
-    # 4. Configurar el registro de guardrails con los validadores existentes
-    guard_registry = GuardRegistry()
-    guard_registry.register(
-        "validate_discovery_structure",
-        lambda inp: _adapt_validation_result(validate_discovery_structure(_markdown_input(inp))),
-    )
-    guard_registry.register(
-        "validate_discovery_quality",
-        lambda inp: _adapt_validation_result(validate_discovery_quality(_markdown_input(inp))),
-    )
-    guard_registry.register(
-        "validate_business_level",
-        lambda inp: _adapt_validation_result(validate_business_level(_markdown_input(inp))),
-    )
-    guard_registry.register(
-        "validate_feature_structure",
-        lambda inp: _adapt_validation_result(_validate_features_input(inp)),
-    )
-    guard_registry.register(
-        "validate_feature_uniqueness",
-        lambda inp: _adapt_validation_result(validate_feature_uniqueness(_extract_array(inp, "features"))),
-    )
-    guard_registry.register(
-        "validate_ears_syntax",
-        lambda inp: _adapt_validation_result(_validate_ears_syntax_raw(inp)),
-    )
-    guard_registry.register(
-        "validate_ears_quality",
-        lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
-    )
-    guard_registry.register(
-        "validate_ears_software_level",
-        lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
-    )
-    guard_registry.register(
-        "validate_activity_diagram_syntax",
-        lambda inp: _adapt_validation_result(validate_activity_diagram_syntax(str(inp.get("diagram", "")))),
-    )
-
-    # 6. Instanciar el repositorio de memoria del agente
     agent_memory = SqlAlchemyAgentSessionStore(session_factory)
 
-    # 7. Instanciar el SkillRegistry y registrar todos los skills
     skill_registry = SkillRegistry()
     skill_registry.register(
         Skill(
@@ -499,7 +434,6 @@ def build_pipeline_components(
 
     agent = KOSMOAgent(
         llm_client=llm_client,
-        guard_registry=guard_registry,
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
         embedding_generator=embedding_generator,
@@ -526,7 +460,6 @@ def build_pipeline_components(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
-        guard_registry=guard_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
         pattern_store=pattern_store,
@@ -771,58 +704,3 @@ def build_modelo_components(
         diagram_repo=diagram_repo,
     )
 
-
-def _markdown_input(inp: dict[str, object]) -> RichTextDocument:
-    from kosmo.domain.sdd.document_converters import markdown_to_document
-
-    raw = inp.get("document", inp.get("text", ""))
-    return markdown_to_document(str(raw))
-
-
-def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
-    return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}
-
-
-def _extract_array(inp: dict[str, object], key: str) -> list[Any]:
-    import json
-
-    raw = inp.get(key, [])
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return []
-    if not isinstance(raw, list):
-        return []
-
-    result: list[Any] = []
-    for item in cast(list[object], raw):
-        if isinstance(item, dict):
-            cleaned: dict[str, Any] = {}
-            for k, v in cast(dict[object, object], item).items():
-                if isinstance(k, str):
-                    cleaned[k] = v
-            result.append(cleaned)
-        else:
-            result.append(item)
-    return result
-
-
-def _validate_features_input(inp: dict[str, object]) -> ValidationResult:
-    features = _extract_array(inp, "features")
-    return validate_feature_structure(features)
-
-
-def _validate_ears_syntax_raw(inp: dict[str, object]) -> ValidationResult:
-    requirements = _extract_array(inp, "requirements")
-    return validate_ears_syntax(requirements)
-
-
-def _validate_ears_quality_raw(inp: dict[str, object]) -> ValidationResult:
-    requirements = _extract_array(inp, "requirements")
-    return validate_ears_quality(requirements)
-
-
-def _validate_ears_software_level_raw(inp: dict[str, object]) -> ValidationResult:
-    requirements = _extract_array(inp, "requirements")
-    return validate_ears_software_level(requirements)

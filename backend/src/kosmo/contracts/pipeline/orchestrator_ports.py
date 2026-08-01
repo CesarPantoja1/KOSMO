@@ -89,9 +89,6 @@ class PhaseMode(Protocol):
     def system_prompt(self) -> str: ...
 
     @property
-    def available_tools(self) -> list[ToolDefinition]: ...
-
-    @property
     def temperature(self) -> float: ...
 
     @property

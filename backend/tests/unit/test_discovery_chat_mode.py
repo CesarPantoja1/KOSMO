@@ -13,7 +13,6 @@ from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.pipeline.orchestrator_ports import Skill
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryChatContext
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.sdd.document_converters import markdown_to_document
@@ -356,7 +355,6 @@ async def test_discovery_chat_integration_with_agent() -> None:
         ),
     )
     llm = _StubChatLLM(response=llm_output)
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -368,7 +366,6 @@ async def test_discovery_chat_integration_with_agent() -> None:
     )
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         skill_registry=skill_reg,
     )
     ctx = _context()

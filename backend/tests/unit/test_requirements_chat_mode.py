@@ -24,7 +24,6 @@ from kosmo.contracts.sdd.document import (
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.phase_modes.requirements_chat_mode import RequirementsChatMode
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 
@@ -417,7 +416,6 @@ async def test_requirements_chat_integration_with_agent() -> None:
         ),
     )
     llm = _StubChatLLM(response=llm_output)
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -429,7 +427,6 @@ async def test_requirements_chat_integration_with_agent() -> None:
     )
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         skill_registry=skill_reg,
     )
     ctx = _make_context()
