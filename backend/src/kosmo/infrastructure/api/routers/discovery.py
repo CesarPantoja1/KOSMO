@@ -411,6 +411,19 @@ def _chat_repo_dep(request: Request) -> ChatRepository:
     return request.app.state.chat_repo
 
 
+def _suggested_change_dict(sc: object) -> dict[str, object] | None:
+    if sc is None:
+        return None
+    return {
+        "id": sc.id,  # type: ignore[reportAttributeAccessIssue]
+        "section": sc.section,  # type: ignore[reportAttributeAccessIssue]
+        "description": sc.description,  # type: ignore[reportAttributeAccessIssue]
+        "diff_before": sc.diff.before,  # type: ignore[reportAttributeAccessIssue]
+        "diff_after": sc.diff.after,  # type: ignore[reportAttributeAccessIssue]
+        "rationale": sc.rationale,  # type: ignore[reportAttributeAccessIssue]
+    }
+
+
 @router.post(
     "/chat/stream",
     summary="Enviar mensaje al chat de Descubrimiento con streaming SSE",
@@ -476,16 +489,7 @@ async def stream_chat_message(
                         "id": str(chunk.id),
                         "role": "assistant",
                         "content": chunk.content,
-                        "suggested_change": {
-                            "id": chunk.suggested_change.id,
-                            "section": chunk.suggested_change.section,
-                            "description": chunk.suggested_change.description,
-                            "diff_before": chunk.suggested_change.diff.before,
-                            "diff_after": chunk.suggested_change.diff.after,
-                            "rationale": chunk.suggested_change.rationale,
-                        }
-                        if chunk.suggested_change
-                        else None,
+                        "suggested_change": _suggested_change_dict(chunk.suggested_change),
                         "timestamp": chunk.timestamp.isoformat(),
                     }
                     yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"

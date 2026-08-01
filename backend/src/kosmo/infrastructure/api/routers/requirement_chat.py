@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 
 from kosmo.application.chat.process_chat_message import (
     ProcessChatMessageInput,
@@ -12,11 +14,13 @@ from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextInput,
     ValidatePhaseContextUseCase,
 )
+from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.application.requirements import (
     GetRequirementChatHistoryInput,
     GetRequirementChatHistoryUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.chat import ChatRepository
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
@@ -174,3 +178,110 @@ async def get_requirement_chat_history(
         return ChatHistoryResponse.from_domain(empty_history)
 
     return ChatHistoryResponse.from_domain(output.history)
+
+
+def _agent_dep(request: Request):
+    return request.app.state.agent
+
+
+def _chat_repo_dep(request: Request) -> ChatRepository:
+    return request.app.state.chat_repo  # type: ignore[reportReturnType]
+
+
+def _suggested_change_dict(sc: object) -> dict[str, object] | None:
+    if sc is None:
+        return None
+    return {
+        "id": sc.id,  # type: ignore[reportAttributeAccessIssue]
+        "section": sc.section,  # type: ignore[reportAttributeAccessIssue]
+        "description": sc.description,  # type: ignore[reportAttributeAccessIssue]
+        "diff_before": sc.diff.before,  # type: ignore[reportAttributeAccessIssue]
+        "diff_after": sc.diff.after,  # type: ignore[reportAttributeAccessIssue]
+        "rationale": sc.rationale,  # type: ignore[reportAttributeAccessIssue]
+    }
+
+
+@router.post(
+    "/stream",
+    summary="Enviar mensaje al chat de Requisitos con streaming SSE",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"description": "Error de validación."},
+        status.HTTP_404_NOT_FOUND: {"description": "Característica o requisito no encontrado."},
+    },
+)
+async def stream_requirement_chat_message(
+    feature_id: str,
+    requirement_id: str,
+    payload: Annotated[SendChatRequest, Body(...)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
+    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    agent: Annotated[KOSMOAgent, Depends(_agent_dep)],
+    chat_repo: Annotated[ChatRepository, Depends(_chat_repo_dep)],
+) -> StreamingResponse:
+    from kosmo.contracts.chat import ChatRole, MensajeChat
+    from kosmo.contracts.sdd.ids import ChatMessageId
+    from kosmo.domain.sdd.id_generator import IdGenerator
+
+    validation = await validate_uc.execute(
+        ValidatePhaseContextInput(
+            content=payload.content,
+            current_phase=SpecPhase.REQUISITOS,
+        )
+    )
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=validation.redirect_message or "Mensaje fuera de fase",
+        )
+
+    fid = FeatureId(feature_id)
+    rid = RequirementId(requirement_id)
+    context = await ctx_builder.build_requirement_chat_context(fid, rid)
+    pid = context.feature.project_id
+
+    history = await chat_repo.get_history(pid, SpecPhase.REQUISITOS, context_id=str(rid))
+    prior_messages = list(history.messages) if history else []
+
+    user_msg = MensajeChat(
+        id=ChatMessageId(IdGenerator.generate("chat_message")),
+        role=ChatRole.USER,
+        content=payload.content,
+    )
+    await chat_repo.save_message(pid, SpecPhase.REQUISITOS, user_msg, context_id=str(rid))
+
+    messages = prior_messages + [user_msg]
+
+    async def event_stream():
+        try:
+            async for chunk in agent.execute_conversation_stream(
+                skill_name="requirements_chat",
+                messages=messages,
+                context=context,
+                project_id=pid,
+            ):
+                if isinstance(chunk, MensajeChat):
+                    await chat_repo.save_message(
+                        pid, SpecPhase.REQUISITOS, chunk, context_id=str(rid)
+                    )
+                    msg_data = {
+                        "type": "message",
+                        "id": str(chunk.id),
+                        "role": "assistant",
+                        "content": chunk.content,
+                        "suggested_change": _suggested_change_dict(chunk.suggested_change),
+                        "timestamp": chunk.timestamp.isoformat(),
+                    }
+                    yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
+        except Exception:
+            yield f"data: {json.dumps({'type': 'error', 'content': 'Error interno'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
