@@ -690,12 +690,14 @@ def build_modelo_components(
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
     requirement_repo = SqlAlchemyRequirementRepository(session_factory)
     diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
+    project_repo = SqlAlchemyProjectRepository(session_factory)
     return ModeloComponents(
         generate_diagram=GenerateActivityDiagramUseCase(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             diagram_repo=diagram_repo,
             agent=pipeline.agent,
+            project_repo=project_repo,
         ),
         get_diagram=GetActivityDiagramUseCase(
             feature_repo=feature_repo,

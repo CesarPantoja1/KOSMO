@@ -7,6 +7,7 @@ from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,
 )
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
@@ -16,6 +17,15 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
+
+
+async def _advance_phase(project_repo: ProjectRepository, project_id: ProjectId, phase: SpecPhase) -> None:
+    project = await project_repo.by_id(project_id)
+    if project is not None and project.current_phase != phase.value:
+        import dataclasses
+
+        updated = dataclasses.replace(project, current_phase=phase.value)
+        await project_repo.save(updated)
 
 
 @dataclass(frozen=True)
@@ -143,6 +153,8 @@ class GenerateEARSUseCase:
                     target_type="requirement",
                     target_id=str(r.id),
                 )
+
+        await _advance_phase(self._project_repo, input_data.project_id, SpecPhase.REQUISITOS)
 
         return GenerateEARSOutput(
             project_id=input_data.project_id,
