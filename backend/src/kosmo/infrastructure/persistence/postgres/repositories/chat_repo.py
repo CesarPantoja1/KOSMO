@@ -1,6 +1,7 @@
 from typing import Any
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.chat import (
@@ -39,7 +40,14 @@ class SqlAlchemyChatRepository(ChatRepository):
                 context_id=context_id,
             )
         history = history.add_message(message)
-        await self.save_history(history)
+        try:
+            await self.save_history(history)
+        except IntegrityError:
+            history = await self.get_history(project_id, phase, context_id)
+            if history is None:
+                raise
+            history = history.add_message(message)
+            await self.save_history(history)
         return message
 
     async def get_history(
@@ -59,7 +67,7 @@ class SqlAlchemyChatRepository(ChatRepository):
 
         async with self._session_factory() as session:
             result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = result.scalars().first()
 
             if model is None:
                 return None
