@@ -102,6 +102,7 @@ class ProcessChatMessageUseCase:
                 skill_name=skill_name,
                 messages=messages,
                 context=input_data.context,
+                project_id=input_data.project_id,
             )
         except ValueError:
             raise
@@ -140,6 +141,7 @@ class ProcessChatMessageUseCase:
         skill_name: str,
         messages: list[MensajeChat],
         context: Any,
+        project_id: ProjectId,
     ) -> MensajeChat:
         @retry(
             stop=stop_after_attempt(3),
@@ -152,6 +154,7 @@ class ProcessChatMessageUseCase:
                 skill_name=skill_name,
                 messages=messages,
                 context=context,
+                project_id=project_id,
             )
 
         return await _call()

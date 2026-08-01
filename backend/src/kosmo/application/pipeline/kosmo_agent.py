@@ -85,14 +85,13 @@ class KOSMOAgent:
         skill_name: str,
         messages: list[MensajeChat],
         context: Any,
+        *,
+        project_id: ProjectId | None = None,
     ) -> MensajeChat:
         """Ejecuta una conversación con el LLM usando un skill de chat.
 
-        Recibe el historial completo de mensajes y el contexto del documento,
-        invoca al LLM en modo conversacional (una sola llamada, sin retry loop
-        ni validación) y retorna un MensajeChat del asistente con sugerencia de
-        cambio opcional.
-
+        El flujo incluye pre-consulta de knowledge tools, validación del output
+        con un reintento, y persistencia de la sesión en memoria del agente.
         Las excepciones del LLM propagan hacia arriba para que el caso de uso
         las maneje con reintentos (tenacity) o las convierta en ErrorChat.
         """
@@ -104,27 +103,73 @@ class KOSMOAgent:
 
         system_prompt = mode.system_prompt
         base_user_prompt = mode.build_user_prompt(sanitized_ctx)
+
+        knowledge_context = ""
+        if self._knowledge_tools is not None and project_id is not None:
+            tools_desc = self._knowledge_tools.describe_for_llm()
+            if tools_desc:
+                tool_system = system_prompt + "\n\n" + tools_desc
+                try:
+                    knowledge_context, _ = await self._resolve_knowledge_tools(
+                        tool_system, base_user_prompt, project_id
+                    )
+                except Exception:
+                    _log.warning("chat.tools_preflight_failed", exc_info=True)
+
         history_block = _format_chat_history(messages)
         user_prompt = f"{base_user_prompt}\n\n{history_block}\n\nResponde al ultimo mensaje del usuario."
+        if knowledge_context:
+            user_prompt += "\n\n## Informacion adicional recuperada\n\n" + knowledge_context
 
         prompt = PromptTemplate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
         )
-        try:
-            output = await self._llm_client.complete_typed(
-                prompt=prompt,
-                output_type=mode.output_type,
-                temperature=mode.temperature,
-                max_tokens=mode.max_tokens,
+
+        output: Any = None
+        for attempt in range(2):
+            try:
+                output = await self._llm_client.complete_typed(
+                    prompt=prompt,
+                    output_type=mode.output_type,
+                    temperature=mode.temperature,
+                    max_tokens=mode.max_tokens,
+                )
+            except Exception:
+                _log.warning("chat.llm_call_failed", attempt=attempt, exc_info=True)
+                if attempt == 0:
+                    continue
+                break
+
+            validation = mode.validate_output(output)
+            if validation.is_valid:
+                break
+
+            if attempt == 0 and validation.errors:
+                feedback = mode.build_validation_feedback(validation.errors)
+                user_prompt += "\n\n" + feedback
+
+        if output is None:
+            output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestion=None)
+        elif not isinstance(output, RespuestaChatLLM):
+            try:
+                raw = await self._llm_client.complete(
+                    prompt=prompt,
+                    temperature=mode.temperature,
+                    max_tokens=mode.max_tokens,
+                )
+                output = RespuestaChatLLM(content=raw.text.strip(), change_suggestion=None)
+            except Exception:
+                output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestion=None)
+
+        if self._memory is not None and project_id is not None:
+            await self._save_chat_session(
+                project_id=project_id,
+                phase=mode.phase_name,
+                skill_name=skill_name,
+                messages=messages,
+                output=output,
             )
-        except ValueError:
-            raw = await self._llm_client.complete(
-                prompt=prompt,
-                temperature=mode.temperature,
-                max_tokens=mode.max_tokens,
-            )
-            output = RespuestaChatLLM(content=raw.text.strip(), change_suggestion=None)
 
         return _to_assistant_message(output)
 
@@ -369,6 +414,38 @@ class KOSMOAgent:
                 validation=validation,
             )
         )
+
+    async def _save_chat_session(
+        self,
+        *,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        skill_name: str,
+        messages: list[MensajeChat],
+        output: Any,
+    ) -> None:
+        if self._memory is None:
+            return
+
+        output_json = json.dumps(output, default=str) if output else None
+        conversation = [json.dumps({"role": m.role.value, "content": m.content[:200]}) for m in messages[-10:]]
+
+        session = create_session(
+            project_id=project_id,
+            session_type="chat",
+            phase=phase,
+            skill_name=skill_name,
+            conversation=conversation,
+            output_json=output_json,
+            current_iteration=1,
+            max_iterations=1,
+            is_completed=True,
+            validation_is_valid=True,
+            embedding=None,
+            embedding_model=None,
+        )
+
+        await self._memory.save_session(session)
 
     async def _reflect_and_consolidate(
         self,

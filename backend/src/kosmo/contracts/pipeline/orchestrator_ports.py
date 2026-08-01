@@ -151,4 +151,6 @@ class AgentPort(Protocol):
         skill_name: str,
         messages: list[MensajeChat],
         context: Any,
+        *,
+        project_id: Any | None = None,
     ) -> MensajeChat: ...

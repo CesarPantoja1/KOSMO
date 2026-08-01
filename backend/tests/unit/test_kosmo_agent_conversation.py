@@ -349,20 +349,24 @@ async def test_execute_conversation_includes_history_in_prompt() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_execute_conversation_propagates_llm_error() -> None:
+async def test_execute_conversation_fallback_on_llm_error() -> None:
+    """Ante fallos del LLM, el agente retorna una respuesta genérica sin lanzar excepción."""
     # Arrange
     llm = _RaisingChatLLM()
     agent = _make_conversation_agent(llm)
     context = object()
     messages = [_user_message("Hola")]
 
-    # Act & Assert
-    with pytest.raises(TimeoutError, match="timeout"):
-        await agent.execute_conversation(
-            skill_name="test_chat",
-            messages=messages,
-            context=context,
-        )
+    # Act
+    result = await agent.execute_conversation(
+        skill_name="test_chat",
+        messages=messages,
+        context=context,
+    )
+
+    # Assert
+    assert result.role == ChatRole.ASSISTANT
+    assert "No se pudo" in result.content
 
 
 @pytest.mark.asyncio

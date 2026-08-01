@@ -37,7 +37,7 @@ class _SpyAgent:
         )
         self.calls: list[tuple] = []
 
-    async def execute_conversation(self, skill_name, messages, context):
+    async def execute_conversation(self, skill_name, messages, context, **kwargs):
         self.calls.append((skill_name, list(messages), context))
         return self._response
 
@@ -50,7 +50,7 @@ class _RaisingAgent:
         self._exc = exc
         self.call_count = 0
 
-    async def execute_conversation(self, skill_name, messages, context):
+    async def execute_conversation(self, skill_name, messages, context, **kwargs):
         self.call_count += 1
         raise self._exc
 
