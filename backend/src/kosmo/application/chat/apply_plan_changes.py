@@ -153,11 +153,15 @@ class ApplyPlanChangesUseCase:
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
         for change in changes:
-            result = apply_change_diff(markdown, before=change.diff.before, after=change.diff.after)
+            result = apply_change_diff(
+                markdown, before=change.diff.before, after=change.diff.after, section=change.section
+            )
             if result is None:
                 failed.append(
                     FailedChange(id=change.id, reason="El fragmento original ya no se encuentra en el documento")
                 )
+            elif result == markdown:
+                applied.append(change)
             else:
                 markdown = result
                 applied.append(change)
