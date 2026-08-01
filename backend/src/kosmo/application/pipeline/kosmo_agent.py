@@ -680,31 +680,63 @@ _ROLE_LABELS: dict[ChatRole, str] = {
 
 
 _MAX_HISTORY_WINDOW = 20
+_MAX_HISTORY_TOKENS = 6000
+
+
+def _count_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
 
 
 def _format_chat_history(messages: list[MensajeChat]) -> str:
     """Formatea el historial de conversación para el prompt del LLM.
 
-    Aplica ventana deslizante: conserva los últimos N mensajes y cualquier
-    mensaje anterior que contenga una decisión (suggested_change).
-    Todos los mensajes del usuario se sanitizan contra inyección de prompt.
+    Aplica ventana numérica y presupuesto de tokens: conserva los últimos N
+    mensajes y decisiones anteriores, respetando un máximo de tokens estimados.
+    Si se excede el presupuesto, descarta los mensajes más antiguos (excepto
+    decisiones). Los mensajes de usuario se sanitizan contra inyección.
     """
+    decisions: list[MensajeChat] = []
+    recent: list[MensajeChat] = []
+
     if len(messages) <= _MAX_HISTORY_WINDOW:
-        window = messages
+        recent = list(messages)
     else:
         cut = len(messages) - _MAX_HISTORY_WINDOW
-        window = [m for m in messages[:cut] if m.suggested_change is not None]
-        window += messages[cut:]
+        decisions = [m for m in messages[:cut] if m.suggested_change is not None]
+        recent = list(messages[cut:])
 
-    lines: list[str] = ["## Historial de conversacion", ""]
-    for msg in window:
+    header = "## Historial de conversacion\n\n"
+    budget = _MAX_HISTORY_TOKENS - _count_tokens(header)
+
+    def _format_one(msg: MensajeChat) -> str:
         role_label = _ROLE_LABELS.get(msg.role, msg.role.value)
         content = msg.content
         if msg.role == ChatRole.USER:
             content = sanitize_user_instructions(content)
-        lines.append(f"**{role_label}:** {content}")
-        lines.append("")
-    return "\n".join(lines)
+        return f"**{role_label}:** {content}\n\n"
+
+    lines = [header]
+    used = _count_tokens(header)
+
+    for msg in decisions:
+        line = _format_one(msg)
+        tokens = _count_tokens(line)
+        if used + tokens > budget:
+            break
+        used += tokens
+        lines.append(line)
+
+    for msg in recent:
+        line = _format_one(msg)
+        tokens = _count_tokens(line)
+        if used + tokens > budget:
+            break
+        used += tokens
+        lines.append(line)
+
+    result = "".join(lines)
+    _log.debug("chat.history_tokens", messages_total=len(messages), used_tokens=used, budget=_MAX_HISTORY_TOKENS)
+    return result
 
 
 def _to_assistant_message(output: Any) -> MensajeChat:
