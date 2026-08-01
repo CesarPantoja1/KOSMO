@@ -52,8 +52,8 @@ export const PanelAsistenteRequisito = ({
 	onClose,
 	onPlanAction,
 	title = 'Asistente de Requisitos EARS',
-	subtitle = 'Refinamiento y criterios de aceptación Gherkin',
-	placeholder = 'Ej., Agregar escenarios alternativos en formato Gherkin...',
+	subtitle = 'Refinamiento y criterios de aceptación',
+	placeholder = 'Ej., Agregar escenarios alternativos...',
 }: PanelAsistenteRequisitoProps) => {
 	const [isLoading, setIsLoading] = useState(false);
 
@@ -120,7 +120,7 @@ export const PanelAsistenteRequisito = ({
 			key={requirementId || 'empty'}
 			title={title}
 			subtitle={subtitle}
-			greeting='Hola 👋. Soy tu asistente de Requisitos EARS. Puedo ayudarte a refinar los requisitos y generar sus criterios de aceptación en formato Gherkin (Dado-Cuando-Entonces).'
+			greeting='Hola 👋. Soy tu asistente de Requisitos EARS. Puedo ayudarte a refinar los requisitos y generar sus criterios de aceptación (Dado-Cuando-Entonces).'
 			placeholder={placeholder}
 			onClose={onClose}
 			messages={messages}

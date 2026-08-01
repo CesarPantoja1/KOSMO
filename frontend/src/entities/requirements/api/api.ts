@@ -214,40 +214,34 @@ const mockSendRequirementChatMessage = async (
 		content.toLowerCase().includes('diff');
 
 	const diff_before = isModification
-		? '```gherkin\n' +
-		  'Escenario: Validación antigua de datos\n' +
+		? 'Escenario: Validación antigua de datos\n' +
 		  '  Dado que el usuario no tiene verificación\n' +
 		  '  Cuando envía los datos incompletos\n' +
-		  '  Entonces el sistema genera un error genérico\n' +
-		  '```'
+		  '  Entonces el sistema genera un error genérico\n'
 		: 'No especificado';
 
 	const response: RequirementChatResponse = {
 		id: crypto.randomUUID(),
 		role: 'assistant',
 		content:
-			'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación en formato Gherkin:\n\n' +
-			'```gherkin\n' +
+			'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación:\n\n' +
 			'Escenario: Validación exitosa de datos\n' +
 			'  Dado que el usuario tiene permisos de edición\n' +
 			'  Cuando envía los datos del formulario completos\n' +
-			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n' +
-			'```',
+			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n',
 		created_at: new Date().toISOString(),
 		change_suggestion: {
 			id: crypto.randomUUID(),
 			section: 'Criterios de Aceptación',
 			description: isModification
-				? 'Actualizar escenario Gherkin para validación'
-				: 'Agregar escenario Gherkin para validación de datos',
+				? 'Actualizar escenario de validación'
+				: 'Agregar escenario de validación de datos',
 			diff_before,
 			diff_after:
-				'```gherkin\n' +
 				'Escenario: Validación exitosa\n' +
 				'  Dado que el usuario está autenticado\n' +
 				'  Cuando completa la acción\n' +
-				'  Entonces se confirma la operación\n' +
-				'```',
+				'  Entonces se confirma la operación\n',
 			rationale: 'Mejora la precisión de los criterios de aceptación EARS.',
 		},
 	};

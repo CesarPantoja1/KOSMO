@@ -67,7 +67,7 @@ const RequirementsPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 
 	// Otros estados
-	const [isChatbotOpen, setIsChatbotOpen] = useState(true);
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
@@ -389,6 +389,15 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+							{selectedId && (
+								<button
+									onClick={() => setIsChatbotOpen(true)}
+									className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+								>
+									<Ai size={20} color='text-base-50' />
+									<span className='text-center'>Refinar</span>
+								</button>
+							)}
 							<Link
 								href='modelo'
 								onClick={handleNextLink('modelo')}

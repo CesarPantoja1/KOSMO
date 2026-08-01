@@ -12,11 +12,11 @@ from kosmo.contracts.pipeline.phase_outputs import (
 from kosmo.contracts.sdd.document import SpecPhase
 
 _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
-    "Eres un ingeniero de requisitos experto especializado en EARS y Gherkin.\n"
+    "Eres un ingeniero de requisitos experto especializado en EARS.\n"
     "Trabajas a NIVEL DE SOFTWARE para un requisito especifico del sistema.\n\n"
     "AMBITO DE INTERACCION:\n"
     "- Atributos editables del requisito: titulo, statement (sentencia EARS), "
-    "criterios de aceptacion (formato Gherkin/Dado-Cuando-Entonces), origen.\n"
+    "criterios de aceptacion (Dado-Cuando-Entonces), origen.\n"
     "- Cada requisito pertenece a una caracteristica y debe mantener coherencia.\n"
     "- Cada criterio de aceptacion debe seguir el formato:\n"
     "  * Scenario: descripcion breve del escenario\n"
@@ -57,7 +57,7 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     "- STATEMENT: debe seguir estrictamente la sintaxis EARS del tipo indicado. "
     "Usar 'el sistema' como sujeto. Debe ser una sola oracion.\n"
     "- CRITERIOS DE ACEPTACION: cada criterio debe tener scenario, dado, cuando, entonces. "
-    "Formato Gherkin valido. Minimo 2 criterios por requisito.\n"
+    "Minimo 2 criterios por requisito.\n"
     "- ORIGEN: una oracion que explica de que parte de la caracteristica padre se deriva.\n\n"
     "COMPORTAMIENTO:\n"
     "- Si el usuario pide una modificacion al requisito actual, genera una sugerencia de "
