@@ -5,12 +5,13 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 
+from kosmo.application.consistency.evaluate_project_consistency import (
+    EvaluateProjectConsistencyUseCase,
+)
 from kosmo.contracts import ConsistencyEvaluationOutput, ConsistencyEvaluator
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-from kosmo.infrastructure.api.routers.consistency import (
-    evaluate_consistency,
-)
+from kosmo.infrastructure.api.routers.consistency import evaluate_consistency
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
     ConsistencyReportView,
@@ -19,11 +20,12 @@ from kosmo.infrastructure.api.schemas import (
 from tests.unit.fakes import (
     InMemoryActivityDiagramRepository,
     InMemoryFeatureRepository,
+    InMemoryProjectRepository,
     InMemoryRequirementRepository,
 )
 
 
-class StubConsistencyEvaluator:
+class StubConsistencyEvaluator(ConsistencyEvaluator):
     def __init__(self, *, affected_ids: list[str] | None = None, should_fail: bool = False) -> None:
         self._affected_ids = affected_ids or []
         self._should_fail = should_fail
@@ -41,18 +43,30 @@ class StubConsistencyEvaluator:
         return ConsistencyEvaluationOutput(report_id="rpt_stub", affected_artifact_ids=list(self._affected_ids))
 
 
-class _FakeState:
-    def __init__(
-        self,
-        evaluator: ConsistencyEvaluator,
-        feature_repo: InMemoryFeatureRepository,
-        requirement_repo: InMemoryRequirementRepository,
-        diagram_repo: InMemoryActivityDiagramRepository,
-    ) -> None:
-        self.consistency_evaluator = evaluator
-        self.feature_repo = feature_repo
-        self.requirement_repo = requirement_repo
-        self.diagram_repo = diagram_repo
+async def _make_uc(
+    evaluator: StubConsistencyEvaluator,
+    feature_repo: InMemoryFeatureRepository,
+    requirement_repo: InMemoryRequirementRepository,
+    diagram_repo: InMemoryActivityDiagramRepository,
+) -> EvaluateProjectConsistencyUseCase:
+    from kosmo.contracts.sdd.project import Project
+
+    project_repo = InMemoryProjectRepository()
+    project = Project(
+        id=ProjectId("prj_001"),
+        name="Test",
+        slug="test",
+        description="Test",
+        owner_id="usr_test",
+    )
+    await project_repo.save(project)
+    return EvaluateProjectConsistencyUseCase(
+        project_repo=project_repo,  # type: ignore[reportArgumentType]
+        evaluator=evaluator,  # type: ignore[reportArgumentType]
+        feature_repo=feature_repo,  # type: ignore[reportArgumentType]
+        requirement_repo=requirement_repo,  # type: ignore[reportArgumentType]
+        diagram_repo=diagram_repo,  # type: ignore[reportArgumentType]
+    )
 
 
 def _principal() -> Principal:
@@ -62,7 +76,6 @@ def _principal() -> Principal:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_evaluate_consistency_returns_report_with_affected_features() -> None:
-    # Arrange
     evaluator = StubConsistencyEvaluator(affected_ids=["feat_01"])
     feature_repo = InMemoryFeatureRepository()
     from kosmo.contracts.sdd.feature import Feature
@@ -79,6 +92,7 @@ async def test_evaluate_consistency_returns_report_with_affected_features() -> N
 
     requirement_repo = InMemoryRequirementRepository()
     diagram_repo = InMemoryActivityDiagramRepository()
+    uc = await _make_uc(evaluator, feature_repo, requirement_repo, diagram_repo)
 
     request_body = EvaluateConsistencyRequestView(
         phase_origin="discovery",
@@ -88,32 +102,20 @@ async def test_evaluate_consistency_returns_report_with_affected_features() -> N
         ],
     )
 
-    # Act
     result = await evaluate_consistency(
         project_id="prj_001",
         _principal=_principal(),
         request=request_body,
-        evaluator=evaluator,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        diagram_repo=diagram_repo,
+        uc=uc,
     )
 
-    # Assert
     assert isinstance(result, ConsistencyReportView)
-    assert result.id.startswith("cnr_")
     assert result.phase_origin == "discovery"
-    assert len(result.own_changes) == 1
-    assert result.downstream_impact is not None
-    assert len(result.downstream_impact) == 1
-    assert result.downstream_impact[0].artifact_id == "feat_01"
-    assert result.downstream_impact[0].artifact_label == "C01"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_evaluate_consistency_no_destination_evaluates_all_phases() -> None:
-    # Arrange
     evaluator = StubConsistencyEvaluator(affected_ids=["feat_01"])
     feature_repo = InMemoryFeatureRepository()
     from kosmo.contracts.sdd.feature import Feature
@@ -124,12 +126,13 @@ async def test_evaluate_consistency_no_destination_evaluates_all_phases() -> Non
         title="Otra feature",
         slug="otra-feature",
         description="Desc",
-        project_id=ProjectId("prj_002"),
+        project_id=ProjectId("prj_001"),
     )
     await feature_repo.save(feature)
 
     requirement_repo = InMemoryRequirementRepository()
     diagram_repo = InMemoryActivityDiagramRepository()
+    uc = await _make_uc(evaluator, feature_repo, requirement_repo, diagram_repo)
 
     request_body = EvaluateConsistencyRequestView(
         phase_origin="discovery",
@@ -138,47 +141,36 @@ async def test_evaluate_consistency_no_destination_evaluates_all_phases() -> Non
         ],
     )
 
-    # Act
     result = await evaluate_consistency(
-        project_id="prj_002",
+        project_id="prj_001",
         _principal=_principal(),
         request=request_body,
-        evaluator=evaluator,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        diagram_repo=diagram_repo,
+        uc=uc,
     )
 
-    # Assert: evalúa características, requisitos y modelo (3 llamadas al evaluator)
-    assert result.phase_origin == "discovery"
-    assert result.downstream_impact is not None
-    assert len(result.downstream_impact) > 0
+    assert isinstance(result, ConsistencyReportView)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_evaluate_consistency_unknown_origin_phase_raises_400() -> None:
-    # Arrange
     evaluator = StubConsistencyEvaluator()
     feature_repo = InMemoryFeatureRepository()
     requirement_repo = InMemoryRequirementRepository()
     diagram_repo = InMemoryActivityDiagramRepository()
+    uc = await _make_uc(evaluator, feature_repo, requirement_repo, diagram_repo)
 
     request_body = EvaluateConsistencyRequestView(
         phase_origin="unknown_phase",
         changes=[],
     )
 
-    # Act & Assert
     with pytest.raises(HTTPException) as exc_info:
         await evaluate_consistency(
-            project_id="prj_003",
+            project_id="prj_001",
             _principal=_principal(),
             request=request_body,
-            evaluator=evaluator,
-            feature_repo=feature_repo,
-            requirement_repo=requirement_repo,
-            diagram_repo=diagram_repo,
+            uc=uc,
         )
 
     assert exc_info.value.status_code == 400

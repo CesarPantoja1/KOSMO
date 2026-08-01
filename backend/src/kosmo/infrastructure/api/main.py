@@ -277,6 +277,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.document_repo = discovery_components.document_repo
     app.state.propagate_discovery_changes = discovery_components.propagate_discovery_changes
     app.state.consistency_evaluator = discovery_components.consistency_evaluator
+
+    from kosmo.application.consistency.evaluate_project_consistency import EvaluateProjectConsistencyUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyProjectRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
+        SqlAlchemyActivityDiagramRepository,
+    )
+    from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import SqlAlchemyFeatureRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import SqlAlchemyRequirementRepository
+
+    app.state.evaluate_project_consistency = EvaluateProjectConsistencyUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        evaluator=discovery_components.consistency_evaluator,
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+    )
+
     app.state.generate_features = features_components.generate_features
     app.state.suggest_features = features_components.suggest_features
     app.state.save_selected_features = features_components.save_selected_features

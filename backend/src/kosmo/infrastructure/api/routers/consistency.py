@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Annotated
 
-import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from ulid import ULID
 
-from kosmo.contracts import ConsistencyEvaluator, DiffCambio, PlanCambio
+from kosmo.application.consistency.evaluate_project_consistency import (
+    EvaluateProjectConsistencyInput,
+    EvaluateProjectConsistencyOutput,
+    EvaluateProjectConsistencyUseCase,
+)
+from kosmo.contracts import DiffCambio, PlanCambio
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
-from kosmo.contracts.sdd.repositories import (
-    ActivityDiagramRepository,
-    FeatureRepository,
-    RequirementRepository,
-)
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
@@ -24,8 +22,6 @@ from kosmo.infrastructure.api.schemas import (
     HttpErrorResponse,
     ImpactItemView,
 )
-
-_log = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/consistency",
@@ -36,30 +32,39 @@ router = APIRouter(
     },
 )
 
-_PHASE_TO_API: dict[str, str] = {
-    "descubrimiento": "discovery",
-    "caracteristicas": "features",
-    "requisitos": "requirements",
-    "modelo": "model",
-}
 
-_DOWNSTREAM_PHASES = ["caracteristicas", "requisitos", "modelo"]
+def _consistency_uc(request: Request) -> EvaluateProjectConsistencyUseCase:
+    return request.app.state.evaluate_project_consistency
 
 
-def _consistency_evaluator(request: Request) -> ConsistencyEvaluator:
-    return request.app.state.consistency_evaluator
+@router.post(
+    "/evaluate",
+    summary="Evaluar consistencia entre fases",
+    description="Evalúa el impacto de cambios sobre artefactos de fases adyacentes.",
+    response_model=ConsistencyReportView,
+    operation_id="evaluate_consistency",
+)
+async def evaluate_consistency(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Annotated[EvaluateConsistencyRequestView, Body(...)],
+    uc: Annotated[EvaluateProjectConsistencyUseCase, Depends(_consistency_uc)],
+) -> ConsistencyReportView:
+    source_phase = _resolve_origin_phase(request.phase_origin)
+    changes = _changes_to_plan(request.changes)
+    targets = _resolve_targets(request.phase_destination)
+    target_specs = [_to_spec_phase(t) for t in targets]
 
+    result = await uc.execute(
+        EvaluateProjectConsistencyInput(
+            project_id=ProjectId(project_id),
+            source_phase=source_phase,
+            target_phases=target_specs,
+            applied_changes=changes,
+        )
+    )
 
-def _feature_repo(request: Request) -> FeatureRepository:
-    return request.app.state.feature_repo
-
-
-def _requirement_repo(request: Request) -> RequirementRepository:
-    return request.app.state.requirement_repo
-
-
-def _diagram_repo(request: Request) -> ActivityDiagramRepository:
-    return request.app.state.diagram_repo
+    return _to_view(result, request.phase_origin, request.changes)
 
 
 def _resolve_origin_phase(phase_name: str) -> SpecPhase:
@@ -71,19 +76,15 @@ def _resolve_origin_phase(phase_name: str) -> SpecPhase:
     if phase_name not in reverse:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Fase de origen desconocida: '{phase_name}'. Valores esperados: discovery, features, requirements.",
+            detail=f"Fase de origen desconocida: '{phase_name}'.",
         )
     return reverse[phase_name]
-
-
-def _to_api_phase(spec: SpecPhase) -> str:
-    return _PHASE_TO_API.get(spec.value, spec.value)
 
 
 def _resolve_targets(phase_destination: str | None) -> list[str]:
     if phase_destination:
         return [phase_destination]
-    return list(_DOWNSTREAM_PHASES)
+    return ["caracteristicas", "requisitos", "modelo"]
 
 
 def _to_spec_phase(api_phase: str) -> SpecPhase:
@@ -98,7 +99,7 @@ def _to_spec_phase(api_phase: str) -> SpecPhase:
 
 def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
     result: list[PlanCambio] = []
-    for _idx, c in enumerate(changes):
+    for c in changes:
         change_id = PlanChangeId(f"chg_eval_{ULID().hex}")
         result.append(
             PlanCambio(
@@ -111,142 +112,31 @@ def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
     return result
 
 
-@router.post(
-    "/evaluate",
-    summary="Evaluar consistencia entre fases",
-    description="Evalúa el impacto de cambios sobre artefactos de fases adyacentes.",
-    response_model=ConsistencyReportView,
-    operation_id="evaluate_consistency",
-)
-async def evaluate_consistency(
-    project_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
-    request: Annotated[EvaluateConsistencyRequestView, Body(...)],
-    evaluator: Annotated[ConsistencyEvaluator, Depends(_consistency_evaluator)],
-    feature_repo: Annotated[FeatureRepository, Depends(_feature_repo)],
-    requirement_repo: Annotated[RequirementRepository, Depends(_requirement_repo)],
-    diagram_repo: Annotated[ActivityDiagramRepository, Depends(_diagram_repo)],
+def _to_view(
+    output: EvaluateProjectConsistencyOutput,
+    phase_origin: str,
+    changes: list[ChangeInputView],
 ) -> ConsistencyReportView:
-    report_id = f"cnr_{ULID().hex}"
+    from datetime import UTC, datetime
 
-    try:
-        source_phase = _resolve_origin_phase(request.phase_origin)
-    except HTTPException:
-        raise
-
-    applied_changes = _changes_to_plan(request.changes)
-    targets = _resolve_targets(request.phase_destination)
-
-    downstream_impact: list[ImpactItemView] = []
-    upstream_impact: list[ImpactItemView] = []
-
-    for target_api in targets:
-        target_spec = _to_spec_phase(target_api)
-        api_phase = _to_api_phase(target_spec)
-
-        try:
-            result = await evaluator.evaluate(
-                source_phase=source_phase,
-                target_phase=target_spec,
-                project_id=ProjectId(project_id),
-                applied_changes=applied_changes,
-            )
-        except Exception:
-            _log.warning(
-                "consistency.router.evaluate_failed",
-                project_id=project_id,
-                source=source_phase,
-                target=target_spec,
-                exc_info=True,
-            )
-            continue
-
-        items = await _enrich_affected(
-            result.affected_artifact_ids,
-            api_phase,
-            target_spec,
-            feature_repo,
-            requirement_repo,
-            diagram_repo,
-        )
-
-        if _is_upstream(api_phase, request.phase_origin):
-            upstream_impact.extend(items)
-        else:
-            downstream_impact.extend(items)
-
+    upstream = [_impact_to_view(i) for i in output.upstream_impact] if output.upstream_impact else None
+    downstream = [_impact_to_view(i) for i in output.downstream_impact] if output.downstream_impact else None
     return ConsistencyReportView(
-        id=report_id,
-        phase_origin=request.phase_origin,
-        own_changes=request.changes,
-        upstream_impact=upstream_impact if upstream_impact else None,
-        downstream_impact=downstream_impact if downstream_impact else None,
+        id=output.report_id,
+        phase_origin=phase_origin,
+        own_changes=changes,
+        upstream_impact=upstream,
+        downstream_impact=downstream,
         created_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 
 
-async def _enrich_affected(
-    artifact_ids: list[str],
-    api_phase: str,
-    target_spec: SpecPhase,
-    feature_repo: FeatureRepository,
-    requirement_repo: RequirementRepository,
-    diagram_repo: ActivityDiagramRepository,
-) -> list[ImpactItemView]:
-    items: list[ImpactItemView] = []
-
-    if target_spec in {SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO}:
-        for fid_str in artifact_ids:
-            from kosmo.contracts.sdd.ids import FeatureId
-
-            feature = await feature_repo.by_id(FeatureId(fid_str))
-            if feature is None:
-                continue
-
-            if target_spec == SpecPhase.CARACTERISTICAS:
-                items.append(
-                    ImpactItemView(
-                        phase=api_phase,
-                        artifact_id=fid_str,
-                        artifact_type="Feature",
-                        artifact_label=feature.display_id,
-                        section="title",
-                        rationale="El cambio en Descubrimiento afecta esta característica.",
-                    )
-                )
-            elif target_spec == SpecPhase.REQUISITOS:
-                req_md = await requirement_repo.by_feature_id(feature.id)
-                if req_md is not None:
-                    items.append(
-                        ImpactItemView(
-                            phase=api_phase,
-                            artifact_id=fid_str,
-                            artifact_type="EARSRequirement",
-                            artifact_label=f"REQ-{feature.display_id}",
-                            section="estructura EARS",
-                            rationale="El cambio en Descubrimiento afecta los requisitos de esta característica.",
-                        )
-                    )
-            elif target_spec == SpecPhase.MODELO:
-                diagram_exists = await diagram_repo.exists(feature.id)
-                if diagram_exists:
-                    items.append(
-                        ImpactItemView(
-                            phase=api_phase,
-                            artifact_id=fid_str,
-                            artifact_type="ActivityDiagram",
-                            artifact_label=f"Diagrama {feature.display_id}",
-                            section="diagram",
-                            rationale="El cambio en Descubrimiento afecta el diagrama de esta característica.",
-                        )
-                    )
-
-    return items
-
-
-def _is_upstream(api_phase: str, phase_origin: str) -> bool:
-    order = ["discovery", "features", "requirements", "model"]
-    try:
-        return order.index(api_phase) < order.index(phase_origin)
-    except ValueError:
-        return False
+def _impact_to_view(item: object) -> ImpactItemView:
+    return ImpactItemView(
+        phase=item.phase,  # type: ignore[reportAttributeAccessIssue]
+        artifact_id=item.artifact_id,  # type: ignore[reportAttributeAccessIssue]
+        artifact_type=item.artifact_type,  # type: ignore[reportAttributeAccessIssue]
+        artifact_label=item.artifact_label,  # type: ignore[reportAttributeAccessIssue]
+        section=item.section,  # type: ignore[reportAttributeAccessIssue]
+        rationale=item.rationale,  # type: ignore[reportAttributeAccessIssue]
+    )
