@@ -20,6 +20,7 @@ from kosmo.contracts.sdd.errors import (
     RequirementsNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 
 router = APIRouter(
@@ -32,19 +33,16 @@ class GenerateDiagramRequest(BaseModel):
     project_id: str
 
 
-async def _resolve_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    if id_or_slug.startswith("feat_"):
-        return FeatureId(id_or_slug)
-
-    feature_repo = request.app.state.feature_repo
-    features = await feature_repo.list_by_project(ProjectId(project_id))
-    match = next((f for f in features if f.slug == id_or_slug), None)
-    if match is None:
+async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
+    fid = await resolve_feature_id(
+        request.app.state.feature_repo, ProjectId(project_id), id_or_slug
+    )
+    if fid is None:
         raise FeatureNotFoundError(
             feature_id=id_or_slug,
             instance=f"/api/v1/features/{id_or_slug}/diagram",
         )
-    return match.id
+    return fid
 
 
 @router.post(
@@ -59,7 +57,7 @@ async def generate_diagram(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
 
     try:
@@ -100,7 +98,7 @@ async def get_diagram(
     request: Request,
     project_id: str = Query(...),
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, project_id, feature_id)
+    fid = await _get_feature_id(request, project_id, feature_id)
     uc = cast("GetActivityDiagramUseCase", request.app.state.get_diagram)
 
     try:

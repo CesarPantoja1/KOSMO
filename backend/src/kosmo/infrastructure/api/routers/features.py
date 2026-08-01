@@ -14,6 +14,10 @@ from kosmo.application.features import (
     SuggestFeaturesInput,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.list_features import (
+    ListFeaturesInput,
+    ListFeaturesUseCase,
+)
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
@@ -21,7 +25,6 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ProjectId
-from kosmo.contracts.sdd.repositories import FeatureRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
@@ -55,8 +58,8 @@ def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
     return request.app.state.create_characteristic
 
 
-def _feature_repo(request: Request) -> FeatureRepository:
-    return request.app.state.feature_repo
+def _list_features(request: Request) -> ListFeaturesUseCase:
+    return request.app.state.list_features
 
 
 @router.post(
@@ -124,10 +127,10 @@ async def generate_features(
 async def list_features(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
-    repo: Annotated[FeatureRepository, Depends(_feature_repo)],
+    uc: Annotated[ListFeaturesUseCase, Depends(_list_features)],
 ) -> list[FeatureResponse]:
-    features = await repo.list_by_project(ProjectId(project_id))
-    return [_feature_to_response(f) for f in features]
+    output = await uc.execute(ListFeaturesInput(project_id=ProjectId(project_id)))
+    return [_feature_to_response(f) for f in output.features]
 
 
 @router.post(

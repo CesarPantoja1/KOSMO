@@ -31,6 +31,7 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.list_features import ListFeaturesUseCase
 from kosmo.application.modelo import (
     GenerateActivityDiagramUseCase,
     GetActivityDiagramUseCase,
@@ -634,6 +635,7 @@ class FeaturesComponents:
     create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
     get_feature_chat_history: Any
+    list_features: Any
 
 
 def build_features_components(
@@ -677,6 +679,7 @@ def build_features_components(
         ),
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,
+        list_features=ListFeaturesUseCase(feature_repo=feature_repo),
     )
 
 

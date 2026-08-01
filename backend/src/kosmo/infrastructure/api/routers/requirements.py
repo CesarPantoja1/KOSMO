@@ -22,6 +22,7 @@ from kosmo.contracts.sdd.errors import (
     RequirementsNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 
 router = APIRouter(
@@ -44,19 +45,13 @@ class RefineRequirementsRequest(BaseModel):
     instructions: str = Field(min_length=1, max_length=500)
 
 
-async def _resolve_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    if id_or_slug.startswith("feat_"):
-        return FeatureId(id_or_slug)
-
-    feature_repo = request.app.state.feature_repo
-    features = await feature_repo.list_by_project(ProjectId(project_id))
-    match = next((f for f in features if f.slug == id_or_slug), None)
-    if match is None:
-        raise FeatureNotFoundError(
-            feature_id=id_or_slug,
-            instance=f"/api/v1/features/{id_or_slug}/requirements",
-        )
-    return match.id
+async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
+    fid = await resolve_feature_id(
+        request.app.state.feature_repo, ProjectId(project_id), id_or_slug
+    )
+    if fid is None:
+        raise FeatureNotFoundError(feature_id=id_or_slug, instance=f"/api/v1/features/{id_or_slug}/requirements")
+    return fid
 
 
 @router.post(
@@ -71,7 +66,7 @@ async def generate_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("GenerateEARSUseCase", request.app.state.generate_ears)
 
     try:
@@ -111,7 +106,7 @@ async def get_requirements(
     request: Request,
     project_id: str = Query(...),
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, project_id, feature_id)
+    fid = await _get_feature_id(request, project_id, feature_id)
     uc = cast("GetRequirementsUseCase", request.app.state.get_requirements)
 
     try:
@@ -139,7 +134,7 @@ async def save_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, str]:
-    fid = await _resolve_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("SaveRequirementsUseCase", request.app.state.save_requirements)
 
     try:
@@ -175,7 +170,7 @@ async def refine_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("RefineRequirementsUseCase", request.app.state.refine_requirements)
 
     try:
