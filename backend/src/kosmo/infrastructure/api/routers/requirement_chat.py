@@ -27,7 +27,7 @@ from kosmo.contracts.sdd.errors import (
     LLMInvocationError,
     ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import FeatureId, RequirementId
+from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
@@ -38,7 +38,7 @@ from kosmo.infrastructure.api.schemas import (
 )
 
 router = APIRouter(
-    prefix="/api/v1/features/{feature_id}/requirements/{requirement_id}/chat",
+    prefix="/api/v1/features/{feature_id}/requirements/chat",
     tags=["requirements"],
 )
 
@@ -79,7 +79,6 @@ def _context_builder(request: Request) -> ContextBuilder:
 )
 async def process_requirement_chat_message(
     feature_id: str,
-    requirement_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_process_requirement_chat)],
@@ -87,7 +86,6 @@ async def process_requirement_chat_message(
     ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> ChatMessage | ContextRedirectResponse:
     fid = FeatureId(feature_id)
-    rid = RequirementId(requirement_id)
 
     validation = await validate_uc.execute(
         ValidatePhaseContextInput(
@@ -103,18 +101,20 @@ async def process_requirement_chat_message(
         )
 
     try:
-        context = await ctx_builder.build_requirement_chat_context(fid, rid)
+        context = await ctx_builder.build_requirement_chat_context(fid)
         output = await chat_uc.execute(
             ProcessChatMessageInput(
                 project_id=context.feature.project_id,
                 phase=SpecPhase.REQUISITOS,
                 content=payload.content,
                 context=context,
-                context_id=str(rid),
-                instance=f"/api/v1/features/{feature_id}/requirements/{requirement_id}/chat",
+                context_id=str(fid),
+                instance=f"/api/v1/features/{feature_id}/requirements/chat",
             )
         )
     except ValueError as exc:
+        import structlog
+        structlog.get_logger(__name__).error("requirement_chat.value_error", detail=str(exc), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -146,7 +146,6 @@ async def process_requirement_chat_message(
 )
 async def get_requirement_chat_history(
     feature_id: str,
-    requirement_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetRequirementChatHistoryUseCase, Depends(_get_requirement_chat_history)],
 ) -> ChatHistoryResponse:
@@ -154,7 +153,6 @@ async def get_requirement_chat_history(
         output = await use_case.execute(
             GetRequirementChatHistoryInput(
                 feature_id=FeatureId(feature_id),
-                requirement_id=RequirementId(requirement_id),
             )
         )
     except FeatureNotFoundError as exc:
@@ -165,7 +163,6 @@ async def get_requirement_chat_history(
 
     if output.history is None:
         from kosmo.contracts.chat import HistorialChat
-        from kosmo.contracts.sdd.document import SpecPhase
         from kosmo.contracts.sdd.ids import ChatHistoryId, ProjectId
         from kosmo.domain.sdd.id_generator import IdGenerator
 
@@ -173,7 +170,7 @@ async def get_requirement_chat_history(
             id=ChatHistoryId(IdGenerator.generate("chat_history")),
             project_id=ProjectId(""),
             phase=SpecPhase.REQUISITOS,
-            context_id=requirement_id,
+            context_id=feature_id,
         )
         return ChatHistoryResponse.from_domain(empty_history)
 
@@ -213,7 +210,6 @@ def _suggested_change_dict(sc: object) -> dict[str, object] | None:
 )
 async def stream_requirement_chat_message(
     feature_id: str,
-    requirement_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
@@ -238,11 +234,10 @@ async def stream_requirement_chat_message(
         )
 
     fid = FeatureId(feature_id)
-    rid = RequirementId(requirement_id)
-    context = await ctx_builder.build_requirement_chat_context(fid, rid)
+    context = await ctx_builder.build_requirement_chat_context(fid)
     pid = context.feature.project_id
 
-    history = await chat_repo.get_history(pid, SpecPhase.REQUISITOS, context_id=str(rid))
+    history = await chat_repo.get_history(pid, SpecPhase.REQUISITOS, context_id=str(fid))
     prior_messages = list(history.messages) if history else []
 
     user_msg = MensajeChat(
@@ -250,7 +245,7 @@ async def stream_requirement_chat_message(
         role=ChatRole.USER,
         content=payload.content,
     )
-    await chat_repo.save_message(pid, SpecPhase.REQUISITOS, user_msg, context_id=str(rid))
+    await chat_repo.save_message(pid, SpecPhase.REQUISITOS, user_msg, context_id=str(fid))
 
     messages = prior_messages + [user_msg]
 
@@ -264,7 +259,7 @@ async def stream_requirement_chat_message(
             ):
                 if isinstance(chunk, MensajeChat):
                     await chat_repo.save_message(
-                        pid, SpecPhase.REQUISITOS, chunk, context_id=str(rid)
+                        pid, SpecPhase.REQUISITOS, chunk, context_id=str(fid)
                     )
                     msg_data = {
                         "type": "message",

@@ -5,19 +5,18 @@ from dataclasses import dataclass
 from kosmo.contracts.chat import ChatRepository, HistorialChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, RequirementId
+from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 
 
 @dataclass(frozen=True)
 class GetRequirementChatHistoryInput:
     feature_id: FeatureId
-    requirement_id: RequirementId
 
 
 @dataclass(frozen=True)
 class GetRequirementChatHistoryOutput:
-    requirement_id: RequirementId
+    feature_id: FeatureId
     history: HistorialChat | None
 
 
@@ -35,16 +34,16 @@ class GetRequirementChatHistoryUseCase:
         if feature is None:
             raise FeatureNotFoundError(
                 feature_id=str(input_data.feature_id),
-                instance=f"/api/v1/features/{input_data.feature_id}/requirements/{input_data.requirement_id}/chat",
+                instance=f"/api/v1/features/{input_data.feature_id}/requirements/chat",
             )
 
         history = await self._chat_repo.get_history(
             project_id=feature.project_id,
             phase=SpecPhase.REQUISITOS,
-            context_id=str(input_data.requirement_id),
+            context_id=str(input_data.feature_id),
         )
 
         return GetRequirementChatHistoryOutput(
-            requirement_id=input_data.requirement_id,
+            feature_id=input_data.feature_id,
             history=history,
         )

@@ -81,4 +81,5 @@ class RequirementChatContext:
     requirement: EARSRequirement
     feature: Feature
     discovery_document: RichTextDocument
+    requirements_markdown: str = ""
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]

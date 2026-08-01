@@ -146,44 +146,34 @@ export const generateRequirements = (
 const mockChatHistories: Record<string, RequirementChatResponse[]> = {};
 
 export const getRequirementChatHistory = async (
-	requirementId: string,
+	featureId: string,
 ): Promise<RequirementChatResponse[]> => {
 	if (USE_MOCKS) {
 		await delay(300);
-		return mockChatHistories[requirementId] ?? [];
+		return mockChatHistories[featureId] ?? [];
 	}
-	try {
-		return await apiClient<RequirementChatResponse[]>(
-			`/api/v1/requirements/${requirementId}/chat/history`,
-			{ method: 'GET' },
-		);
-	} catch (err) {
-		console.warn('[requirements/api] Backend endpoint no disponible, usando mock:', err);
-		return mockChatHistories[requirementId] ?? [];
-	}
+	return await apiClient<RequirementChatResponse[]>(
+		`/api/v1/features/${featureId}/requirements/chat/history`,
+		{ method: 'GET' },
+	);
 };
 
 export const sendRequirementChatMessage = async (
-	requirementId: string,
+	featureId: string,
 	content: string,
 ): Promise<RequirementChatResponse> => {
 	if (USE_MOCKS) {
-		return mockSendRequirementChatMessage(requirementId, content);
+		return mockSendRequirementChatMessage(featureId, content);
 	}
 
-	try {
-		return await apiClient<RequirementChatResponse>(
-			`/api/v1/requirements/${requirementId}/chat`,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content }),
-			},
-		);
-	} catch (err) {
-		console.warn('[requirements/api] Backend endpoint no disponible, usando mock:', err);
-		return mockSendRequirementChatMessage(requirementId, content);
-	}
+	return await apiClient<RequirementChatResponse>(
+		`/api/v1/features/${featureId}/requirements/chat`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ content }),
+		},
+	);
 };
 
 const mockSendRequirementChatMessage = async (

@@ -12,12 +12,12 @@ interface RequirementsStore {
 	resetRequirements: () => void;
 
 	chatHistories: Record<string, RequirementChatResponse[]>;
-	loadChatHistory: (requirementId: string) => Promise<RequirementChatResponse[]>;
+	loadChatHistory: (featureId: string) => Promise<RequirementChatResponse[]>;
 	sendChatMessage: (
-		requirementId: string,
+		featureId: string,
 		content: string,
 	) => Promise<RequirementChatResponse>;
-	clearChatHistory: (requirementId: string) => void;
+	clearChatHistory: (featureId: string) => void;
 }
 
 export const useRequirementsStore = create<RequirementsStore>()(
@@ -31,14 +31,15 @@ export const useRequirementsStore = create<RequirementsStore>()(
 			resetRequirements: () => set({ hasRequirements: {} }),
 
 			chatHistories: {},
-			loadChatHistory: async (requirementId) => {
-				const history = await getRequirementChatHistory(requirementId);
-				set((state) => ({
-					chatHistories: { ...state.chatHistories, [requirementId]: history },
-				}));
-				return history;
-			},
-			sendChatMessage: async (requirementId, content) => {
+			loadChatHistory: async (featureId) => {
+			const response = await getRequirementChatHistory(featureId);
+			const history = Array.isArray(response) ? response : (response as any)?.messages ?? [];
+			set((state) => ({
+				chatHistories: { ...state.chatHistories, [featureId]: history },
+			}));
+			return history;
+		},
+			sendChatMessage: async (featureId, content) => {
 				const userMessage: RequirementChatResponse = {
 					id: crypto.randomUUID(),
 					role: 'user',
@@ -46,21 +47,21 @@ export const useRequirementsStore = create<RequirementsStore>()(
 					created_at: new Date().toISOString(),
 				};
 
-				const current = get().chatHistories[requirementId] ?? [];
+				const current = get().chatHistories[featureId] ?? [];
 				set({
 					chatHistories: {
 						...get().chatHistories,
-						[requirementId]: [...current, userMessage],
+						[featureId]: [...current, userMessage],
 					},
 				});
 
 				try {
-					const response = await sendRequirementChatMessageApi(requirementId, content);
-					const afterUser = get().chatHistories[requirementId] ?? [];
+					const response = await sendRequirementChatMessageApi(featureId, content);
+					const afterUser = get().chatHistories[featureId] ?? [];
 					set({
 						chatHistories: {
 							...get().chatHistories,
-							[requirementId]: [...afterUser, response],
+							[featureId]: [...afterUser, response],
 						},
 					});
 					return response;
@@ -80,19 +81,19 @@ export const useRequirementsStore = create<RequirementsStore>()(
 						is_invalid_format: isInvalidFormat,
 					};
 
-					const afterUser = get().chatHistories[requirementId] ?? [];
+					const afterUser = get().chatHistories[featureId] ?? [];
 					set({
 						chatHistories: {
 							...get().chatHistories,
-							[requirementId]: [...afterUser, errorMessage],
+							[featureId]: [...afterUser, errorMessage],
 						},
 					});
 					throw error;
 				}
 			},
-			clearChatHistory: (requirementId) =>
+			clearChatHistory: (featureId) =>
 				set((state) => ({
-					chatHistories: { ...state.chatHistories, [requirementId]: [] },
+					chatHistories: { ...state.chatHistories, [featureId]: [] },
 				})),
 		}),
 		{

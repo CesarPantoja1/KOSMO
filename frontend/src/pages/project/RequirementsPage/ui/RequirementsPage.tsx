@@ -582,11 +582,11 @@ const RequirementsPage = () => {
 						}
 				`}
 				>
-					<PanelAsistenteRequisito
-						requirementId={selectedId}
-						onClose={() => setIsChatbotOpen(false)}
-						onPlanAction={handlePlanAction}
-					/>
+				<PanelAsistenteRequisito
+					featureId={selectedId}
+					onClose={() => setIsChatbotOpen(false)}
+					onPlanAction={handlePlanAction}
+				/>
 				</div>
 			</div>
 		</>

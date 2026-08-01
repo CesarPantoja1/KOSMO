@@ -300,6 +300,7 @@ def build_pipeline_components(
         document_repo=document_repo,
         project_repo=project_repo,
         feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
     )
 
     agent_memory = SqlAlchemyAgentSessionStore(session_factory)

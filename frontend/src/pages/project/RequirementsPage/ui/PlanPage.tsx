@@ -39,6 +39,7 @@ export const PlanPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const planByPhase = usePlanStore((s) => s.planByPhase);
 	const clearPlan = usePlanStore((s) => s.clearPlan);
+	const updatePlanChangeStatus = usePlanStore((s) => s.updatePlanChangeStatus);
 
 	const [items, setItems] = useState<CharWithDiff[]>([]);
 	const [currentIndex, setCurrentIndex] = useState(0);
@@ -134,6 +135,10 @@ export const PlanPage = () => {
 				toast.error(`${result.failed_count} cambio(s) fallaron: ${reasons}`);
 			} else {
 				toast.success(`${result.applied_count} cambio(s) aplicados correctamente`);
+			}
+
+			for (const cid of changeIds) {
+				updatePlanChangeStatus('requirements', cid, 'applied');
 			}
 
 			const next = currentIndex + 1;
