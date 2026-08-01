@@ -43,7 +43,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             model.current_iteration = session.current_iteration
             model.max_iterations = session.max_iterations
             model.is_completed = session.is_completed
-            model.output_json = _safe_json_dump(session.output_json)
+            model.output_json = _json_to_dict(session.output_json)
             model.validation_is_valid = session.validation_is_valid
             model.validation_errors = session.validation_errors
             model.validation_error_messages = list(session.validation_error_messages)
@@ -358,6 +358,15 @@ def _row_to_summary(row: Row[Any]) -> AgentSessionSummary:
         created_at=row[9],
         reflection=row[10],
     )
+
+
+def _json_to_dict(value: str | None) -> dict[str, Any] | None:
+    if not value:
+        return None
+    try:
+        return dict(json.loads(value))  # type: ignore[reportUnknownArgumentType,reportUnknownVariableType]
+    except (json.JSONDecodeError, TypeError):
+        return None
 
 
 def _safe_json_dump(value: object) -> str | None:

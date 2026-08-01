@@ -152,7 +152,7 @@ class AgentSessionModel(Base):
     max_iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
     is_completed: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    output_json: Mapped[str | None] = mapped_column(pg.JSONB(), nullable=True)
+    output_json: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
     validation_is_valid: Mapped[bool] = mapped_column(default=False, nullable=False)
     validation_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_error_messages: Mapped[list[Any]] = mapped_column(
