@@ -140,6 +140,10 @@ class PydanticAILLMClient:
             if len(field_names) == 1:
                 return output_type.model_validate({field_names[0]: text})  # type: ignore[reportReturnType]
 
+            primary = field_names[0] if field_names else "content"
+            fallback: dict[str, Any] = {name: (text if name == primary else None) for name in field_names}
+            return output_type.model_validate(fallback)  # type: ignore[reportReturnType]
+
         msg = f"No se pudo convertir la respuesta del LLM a {output_type.__name__}"
         raise ValueError(msg)
 

@@ -221,7 +221,7 @@ const DiscoveryPage = () => {
 
 		if (action === 'add') {
 			const change: PlanChange = {
-				id: messageId,
+				id: suggestion.id,
 				section: suggestion.section,
 				description: suggestion.description ?? suggestion.section,
 				diff: {
@@ -242,8 +242,8 @@ const DiscoveryPage = () => {
 		}
 
 		if (action === 'remove') {
-			removeFromPlan('discovery', messageId);
-			deletePlanChange(currentProject.id, 'discovery', messageId).catch((err) => {
+			removeFromPlan('discovery', suggestion.id);
+			deletePlanChange(currentProject.id, 'discovery', suggestion.id).catch((err) => {
 				console.warn('[DiscoveryPage] Error al eliminar cambio en backend:', err);
 			});
 		}

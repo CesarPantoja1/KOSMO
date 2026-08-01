@@ -88,7 +88,7 @@ const RequirementsPage = () => {
 
 		if (action === 'add') {
 			const change: PlanChange = {
-				id: messageId,
+				id: suggestion.id,
 				section: suggestion.section,
 				description: suggestion.description ?? suggestion.section,
 				diff: {
@@ -109,8 +109,8 @@ const RequirementsPage = () => {
 		}
 
 		if (action === 'remove') {
-			removeFromPlan('requirements', messageId);
-			deletePlanChange(currentProject.id, 'requirements', messageId).catch((err) => {
+			removeFromPlan('requirements', suggestion.id);
+			deletePlanChange(currentProject.id, 'requirements', suggestion.id).catch((err) => {
 				console.warn('[RequirementsPage] Error al eliminar cambio en backend:', err);
 			});
 		}

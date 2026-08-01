@@ -1,5 +1,6 @@
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 
 from kosmo.application.chat.apply_plan_changes import (
@@ -29,6 +30,8 @@ from kosmo.infrastructure.api.schemas import (
     PhaseNotificationView,
     PlanStateView,
 )
+
+_log = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/plan",
@@ -179,7 +182,7 @@ async def apply_batch(
             ApplyPlanChangesInput(
                 project_id=ProjectId(project_id),
                 phase=request.phase,
-                change_ids=[PlanChangeId(cid) for cid in request.change_ids],
+                change_ids=[PlanChangeId(cid) for cid in request.changes],
             )
         )
     except ProjectNotFoundError as e:
@@ -187,6 +190,7 @@ async def apply_batch(
     except DocumentNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     except ValueError as e:
+        _log.error("plan.apply_value_error", detail=str(e), exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     applied = [
@@ -213,6 +217,8 @@ async def apply_batch(
             propagation = PhaseNotificationList(affected_phases=affected)
 
     return BatchResultView(
+        applied_count=output.applied_count,
+        failed_count=output.failed_count,
         applied=applied,
         failed=failed,
         propagation=propagation,

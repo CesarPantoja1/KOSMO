@@ -26,7 +26,7 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 	const planByPhase = usePlanStore((s) => s.planByPhase);
 	const planChange = Object.values(planByPhase)
 		.flat()
-		.find((c) => c.id === messageId);
+		.find((c) => c.id === suggestion.id);
 
 	let status: CardStatus;
 

@@ -724,6 +724,8 @@ class FailedChangeItemView(BaseModel):
 class BatchResultView(BaseModel):
     """Resultado de aplicar un lote de cambios."""
 
+    applied_count: int = Field(default=0, description="Número de cambios aplicados")
+    failed_count: int = Field(default=0, description="Número de cambios que fallaron")
     applied: list[AppliedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
         default_factory=list, description="Cambios aplicados exitosamente"
     )
@@ -741,7 +743,7 @@ class ApplyBatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
     context: str | None = Field(default=None, description="Contexto específico de los cambios")
-    change_ids: list[str] = Field(description="IDs de los cambios a aplicar")
+    changes: list[str] = Field(description="IDs de los cambios a aplicar")
 
 
 # ═══ Consistencia (Sprint 4 - HU17) ═══
