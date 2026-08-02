@@ -610,7 +610,6 @@ def build_features_components(
         ),
         create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
-            suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,
