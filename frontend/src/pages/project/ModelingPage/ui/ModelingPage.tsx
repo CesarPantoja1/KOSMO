@@ -23,6 +23,12 @@ import { Modeling } from '@/widgets/main-navbar/ui/icons';
 
 import { generatePlantUmlDiagram, getDiagram } from '@/entities/modeling';
 
+const generatingPlantUmlMessages = [
+	'Analizando requisitos...',
+	'Generando diagrama de actividad UML...',
+	'Finalizando generación del diagrama...',
+];
+
 const ModelingPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
@@ -304,6 +310,7 @@ const ModelingPage = () => {
 				<Loading
 					title='Generando diagrama de actividad'
 					description='Analizando los requisitos EARS para construir el diagrama PlantUML. Esto tomará unos segundos.'
+					messages={generatingPlantUmlMessages}
 				/>
 			)}
 
@@ -431,25 +438,43 @@ const ModelingPage = () => {
 
 							{/* Caso 1: La característica NO tiene requisitos EARS generados todavía */}
 							{selectedCharacteristic && !isLoadingRequirements && !hasReqs && (
-								<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-									<Ai color='text-ai' size={70} />
-									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Sin requisitos EARS generados
-									</span>
-									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos EARS generados. Primero
-										debes generar los requisitos en la sección correspondiente para poder
-										construir el diagrama UML.
-									</p>
-									<Link
-										href='/proyecto/requisitos'
-										onClick={handleNextLink('/proyecto/requisitos')}
-										className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
-									>
-										Ir a Requisitos
-										<ArrowRight color='' size={20} />
-									</Link>
-								</section>
+								<div className='flex flex-col flex-1 min-h-0 gap-4'>
+									<div className='flex flex-col gap-2 px-2'>
+										<div className='inline-flex justify-between items-center w-full'>
+											<div className='inline-flex justify-start gap-3 items-center'>
+												<span className='text-2xl font-bold text-base-800'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-2xl font-bold text-primary-100'>
+													{selectedCharacteristic.title}
+												</span>
+											</div>
+										</div>
+										<p className='text-base-600 text-base'>
+											{selectedCharacteristic.description}
+										</p>
+									</div>
+
+									<section className='flex flex-col my-auto items-center gap-5 px-20'>
+										<Ai color='text-ai' size={70} />
+										<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+											Sin requisitos EARS generados
+										</span>
+										<p className='text-base-800 text-lg text-center'>
+											Esta característica aún no tiene requisitos EARS generados. Primero
+											debes generar los requisitos en la sección correspondiente para
+											poder construir el diagrama UML.
+										</p>
+										<Link
+											href='/proyecto/requisitos'
+											onClick={handleNextLink('/proyecto/requisitos')}
+											className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
+										>
+											Ir a Requisitos
+											<ArrowRight color='' size={20} />
+										</Link>
+									</section>
+								</div>
 							)}
 
 							{/* Caso 2: Tiene requisitos EARS Y el diagrama ya fue generado -> Mostrar PlantUmlViewer */}
@@ -491,27 +516,44 @@ const ModelingPage = () => {
 								!isLoadingRequirements &&
 								hasReqs &&
 								!hasDiag && (
-									<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-										<Ai color='text-ai' size={70} />
+									<div className='flex flex-col flex-1 min-h-0 gap-4'>
+										<div className='flex flex-col gap-2 px-2'>
+											<div className='inline-flex justify-between items-center w-full'>
+												<div className='inline-flex justify-start gap-3 items-center'>
+													<span className='text-2xl font-bold text-base-800'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-2xl font-bold text-primary-100'>
+														{selectedCharacteristic.title}
+													</span>
+												</div>
+											</div>
+											<p className='text-base-600 text-base'>
+												{selectedCharacteristic.description}
+											</p>
+										</div>
+										<section className='flex flex-col my-auto items-center gap-5 px-20'>
+											<Ai color='text-ai' size={70} />
 
-										<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-											Sin modelo generado
-										</span>
+											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+												Sin modelo generado
+											</span>
 
-										<p className='text-base-800 text-lg text-center'>
-											Los requisitos EARS están listos. Haz clic en el botón{' '}
-											<span className='text-xl font-bold'>Generar </span>
-											para construir el diagrama de actividad UML automáticamente.
-										</p>
+											<p className='text-base-800 text-lg text-center'>
+												Los requisitos EARS están listos. Haz clic en el botón{' '}
+												<span className='text-xl font-bold'>Generar </span>
+												para construir el diagrama de actividad UML automáticamente.
+											</p>
 
-										<button
-											onClick={handleGenerate}
-											className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-										>
-											<Ai color='' size={20} />
-											Generar
-										</button>
-									</section>
+											<button
+												onClick={handleGenerate}
+												className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
+											>
+												<Ai color='' size={20} />
+												Generar
+											</button>
+										</section>
+									</div>
 								)}
 						</div>
 					</div>

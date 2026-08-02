@@ -21,6 +21,12 @@ import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
 
+const generatingCharacteristicMessages = [
+	'Analizando descubrimiento del proyecto...',
+	'Generando características del proyecto...',
+	'Finalizando generación de características...',
+];
+
 function toChatMessage(r: CharacteristicChatResponse): ChatMessage {
 	return {
 		id: r.id,
@@ -51,8 +57,8 @@ const CharacteristicsPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 
 	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
-	const storeSendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
-	const storeGenerateCharacteristics = useCharacteristicStore(
+	const sendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
+	const generateCharacteristics = useCharacteristicStore(
 		(s) => s.generateCharacteristics,
 	);
 
@@ -75,7 +81,8 @@ const CharacteristicsPage = () => {
 
 		setIsGeneratingCharacteristics(true);
 		try {
-			await storeGenerateCharacteristics(currentProject.id);
+			await generateCharacteristics(currentProject.id);
+			fetchAndHydratePlan(currentProject.id, 'features');
 			toast.success('Características generadas exitosamente');
 		} catch (err) {
 			const message =
@@ -90,7 +97,7 @@ const CharacteristicsPage = () => {
 		if (!activeFeatureId) return;
 		setIsChatLoading(true);
 		try {
-			await storeSendChatMessage(activeFeatureId, content);
+			await sendChatMessage(activeFeatureId, content);
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
@@ -147,6 +154,7 @@ const CharacteristicsPage = () => {
 				<Loading
 					title='Generando Características'
 					description='La IA está analizando el descubrimiento para generar las características. Por favor, espera un momento.'
+					messages={generatingCharacteristicMessages}
 				/>
 			)}
 

@@ -15,6 +15,12 @@ import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+const generatingDiscoveryMessages = [
+	'Analizando información del proyecto...',
+	'Identificando problemas y oportunidades...',
+	'Generando documento de descubrimiento...',
+];
+
 /** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
 function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
 	return {
@@ -272,6 +278,7 @@ const DiscoveryPage = () => {
 				<Loading
 					title='Generando Descubrimiento'
 					description='La IA está analizando la información del proyecto. Por favor, espera un momento.'
+					messages={generatingDiscoveryMessages}
 				/>
 			)}
 

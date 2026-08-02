@@ -52,9 +52,7 @@ const CardCharacterist = ({
 				<h3 className='text-primary-100 text-xl font-semibold'>
 					{highlightTitle(title, searchQuery)}
 				</h3>
-				<p className='feature-description-scroll text-base-800'>
-					{description}
-				</p>
+				<p className='text-base-800'>{description}</p>
 			</div>
 			<div className='py-3 flex flex-col justify-end items-center gap-2'>
 				<button
