@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -219,66 +218,19 @@ async def stream_requirement_chat_message(
     agent: Annotated[KOSMOAgent, Depends(_agent_dep)],
     chat_repo: Annotated[ChatRepository, Depends(_chat_repo_dep)],
 ) -> StreamingResponse:
-    from kosmo.contracts.chat import ChatRole, MensajeChat
-    from kosmo.contracts.sdd.ids import ChatMessageId
-    from kosmo.domain.sdd.id_generator import IdGenerator
-
-    validation = await validate_uc.execute(
-        ValidatePhaseContextInput(
-            content=payload.content,
-            current_phase=SpecPhase.REQUISITOS,
-        )
-    )
-    if not validation.is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=validation.redirect_message or "Mensaje fuera de fase",
-        )
+    from kosmo.infrastructure.api.async_generation import sse_chat_response
 
     fid = FeatureId(feature_id)
     context = await ctx_builder.build_requirement_chat_context(fid)
-    pid = context.feature.project_id
 
-    history = await chat_repo.get_history(pid, SpecPhase.REQUISITOS, context_id=str(fid))
-    prior_messages = list(history.messages) if history else []
-
-    user_msg = MensajeChat(
-        id=ChatMessageId(IdGenerator.generate("chat_message")),
-        role=ChatRole.USER,
+    return await sse_chat_response(
         content=payload.content,
-    )
-    await chat_repo.save_message(pid, SpecPhase.REQUISITOS, user_msg, context_id=str(fid))
-
-    messages = prior_messages + [user_msg]
-
-    async def event_stream():
-        try:
-            async for chunk in agent.execute_conversation_stream(
-                skill_name="requirements_chat",
-                messages=messages,
-                context=context,
-                project_id=pid,
-            ):
-                if isinstance(chunk, MensajeChat):
-                    await chat_repo.save_message(
-                        pid, SpecPhase.REQUISITOS, chunk, context_id=str(fid)
-                    )
-                    msg_data = {
-                        "type": "message",
-                        "id": str(chunk.id),
-                        "role": "assistant",
-                        "content": chunk.content,
-                        "suggested_change": _suggested_change_dict(chunk.suggested_change),
-                        "timestamp": chunk.timestamp.isoformat(),
-                    }
-                    yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
-                else:
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-        except Exception:
-            yield f"data: {json.dumps({'type': 'error', 'content': 'Error interno'}, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        phase=SpecPhase.REQUISITOS,
+        skill_name="requirements_chat",
+        context=context,
+        pid=context.feature.project_id,
+        context_id=str(fid),
+        chat_repo=chat_repo,
+        agent=agent,
+        validate_uc=validate_uc,
     )
