@@ -309,7 +309,24 @@ const DiscoveryPage = () => {
 					<div className='flex-1 flex flex-col min-h-0'>
 						{isLoading && (
 							<div className='w-full min-h-105 relative'>
-								<div className='w-full h-full rounded-xl border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
+								<div className='flex justify-end gap-3 mb-4'>
+									<button
+										disabled={true}
+										className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+									>
+										<Ai size={20} color='text-base-50' />
+										<span className='text-center'>Refinar</span>
+									</button>
+									<button
+										disabled={true}
+										className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
+									>
+										<span className='text-center'>Ir a características</span>
+										<ArrowRight size={20} color='text-base-50' />
+									</button>
+								</div>
+
+								<div className='w-full h-full rounded-sm border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
 									<div className='flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3'>
 										<div className='flex items-center gap-2'>
 											<div className='h-4 w-20 animate-pulse rounded bg-base-200' />

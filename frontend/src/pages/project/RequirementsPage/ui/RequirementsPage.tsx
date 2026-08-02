@@ -33,7 +33,7 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
-import { getCharacteristics, type Characteristic } from '@/entities/characteristic';
+import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
@@ -46,10 +46,12 @@ const RequirementsPage = () => {
 	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
-	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
+
+	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
+	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 
 	// Requisitos estado
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
@@ -129,8 +131,7 @@ const RequirementsPage = () => {
 		const fetch = async () => {
 			setIsLoading(true);
 			try {
-				const data = await getCharacteristics(currentProject.id);
-				setCharacteristics(data);
+				await storeGetCharacteristics(currentProject.id);
 			} catch (err) {
 				const message =
 					err instanceof Error ? err.message : 'Error al cargar las características';
@@ -141,7 +142,7 @@ const RequirementsPage = () => {
 		};
 
 		fetch();
-	}, [currentProject, router]);
+	}, [currentProject, router, storeGetCharacteristics]);
 
 	useEffect(() => {
 		if (!selectedId || !currentProject) return;
@@ -161,11 +162,11 @@ const RequirementsPage = () => {
 				if (content) {
 					setHasRequirements(characteristicId, true);
 				}
-				setCharacteristics((prev) =>
-					prev.map((c) =>
+				useCharacteristicStore.setState((state) => ({
+					currentCharacteristics: state.currentCharacteristics.map((c) =>
 						c.id === characteristicId ? { ...c, requirements: content } : c,
 					),
-				);
+				}));
 				setMarkdown(content);
 				setSavedContent(content);
 			} catch {
@@ -194,6 +195,10 @@ const RequirementsPage = () => {
 	const applySelected = (id: string) => {
 		setSelectedId(id);
 		setPendingCharSwitch(null);
+		// Cerrar chat si la nueva característica no tiene requisitos
+		if (!hasRequirements[id]) {
+			setIsChatbotOpen(false);
+		}
 	};
 
 	const handleConfirmSwitch = () => {
@@ -215,13 +220,13 @@ const RequirementsPage = () => {
 			if (content) {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}
-			setCharacteristics((prev) =>
-				prev.map((c) =>
+			useCharacteristicStore.setState((state) => ({
+				currentCharacteristics: state.currentCharacteristics.map((c) =>
 					c.id === selectedCharacteristic.id
 						? { ...c, requirements: content.document_markdown }
 						: c,
 				),
-			);
+			}));
 			setMarkdown(content.document_markdown);
 			setSavedContent(content.document_markdown);
 			setEditorKey((prev) => prev + 1);
@@ -244,11 +249,11 @@ const RequirementsPage = () => {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}
 			setSavedContent(markdown);
-			setCharacteristics((prev) =>
-				prev.map((c) =>
+			useCharacteristicStore.setState((state) => ({
+				currentCharacteristics: state.currentCharacteristics.map((c) =>
 					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
 				),
-			);
+			}));
 			toast.close(savingToast);
 			toast.success('Guardado');
 			return true;
@@ -337,9 +342,7 @@ const RequirementsPage = () => {
 							<ArrowRight color='' size={20} />
 						</Link>
 					</div>
-				</div>
 
-				<div className='page-row'>
 					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
 						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
 							<div className='h-7 bg-base-200 rounded w-48' />
@@ -384,15 +387,15 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							{selectedId && (
-								<button
-									onClick={() => setIsChatbotOpen(true)}
-									className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
-								>
-									<Ai size={20} color='text-base-50' />
-									<span className='text-center'>Refinar</span>
-								</button>
-							)}
+							<button
+								onClick={() => setIsChatbotOpen(true)}
+								disabled={!hasRequirements[selectedId ? selectedId : '']}
+								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+							>
+								<Ai size={20} color='text-base-50' />
+								<span className='text-center'>Refinar</span>
+							</button>
+
 							<Link
 								href='modelo'
 								onClick={handleNextLink('modelo')}
@@ -560,10 +563,7 @@ const RequirementsPage = () => {
 									</div>
 								)}
 
-							<FloatingPlan
-								phase='requirements'
-								navigateTo='/proyecto/requisitos/plan'
-							/>
+							<FloatingPlan phase='requirements' navigateTo='/proyecto/requisitos/plan' />
 						</div>
 					</div>
 				</div>
@@ -577,11 +577,11 @@ const RequirementsPage = () => {
 						}
 				`}
 				>
-				<PanelAsistenteRequisito
-					featureId={selectedId}
-					onClose={() => setIsChatbotOpen(false)}
-					onPlanAction={handlePlanAction}
-				/>
+					<PanelAsistenteRequisito
+						featureId={selectedId}
+						onClose={() => setIsChatbotOpen(false)}
+						onPlanAction={handlePlanAction}
+					/>
 				</div>
 			</div>
 		</>
