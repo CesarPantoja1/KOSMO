@@ -12,6 +12,9 @@ from kosmo.infrastructure.persistence.postgres.models import OutboxJobModel
 
 _log = structlog.get_logger(__name__)
 
+_MAX_ATTEMPTS = 3
+_BACKOFF_SECONDS = 5.0
+
 
 class OutboxStore:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -53,15 +56,37 @@ class OutboxStore:
             )
             await session.commit()
 
-    async def mark_failed(self, job_id: str) -> None:
+    async def mark_failed(self, job_id: str, *, error: str | None = None) -> None:
         async with self._session_factory() as session:
-            await session.execute(
-                update(OutboxJobModel).where(OutboxJobModel.id == job_id).values(status="failed")
+            stmt = (
+                select(OutboxJobModel)
+                .where(OutboxJobModel.id == job_id)
+                .with_for_update()
             )
+            result = await session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model is None:
+                return
+            current_attempts = model.attempts or 0
+            if current_attempts >= _MAX_ATTEMPTS:
+                model.status = "dead"
+            else:
+                model.status = "failed"
+            if error:
+                model.last_error = error[:1000]  # truncate for safety
             await session.commit()
 
 
-async def run_outbox_worker(store: OutboxStore, handler: Any, poll_interval: float = 2.0) -> None:
+async def run_outbox_worker(
+    store: OutboxStore,
+    handler: Any,
+    poll_interval: float = 2.0,
+    *,
+    max_attempts: int = _MAX_ATTEMPTS,
+    backoff_seconds: float = _BACKOFF_SECONDS,
+) -> None:
+    fail_timestamps: list[float] = []
+
     while True:
         try:
             job = await store.dequeue()
@@ -69,14 +94,26 @@ async def run_outbox_worker(store: OutboxStore, handler: Any, poll_interval: flo
                 try:
                     await handler(job.job_type, job.payload)
                     await store.mark_done(job.id)
-                except Exception:
+                except Exception as exc:
+                    error_msg = f"{type(exc).__name__}: {exc!s}"[:500]
                     _log.warning(
                         "outbox.worker_job_failed",
                         job_type=job.job_type,
                         job_id=job.id,
+                        attempts=job.attempts,
                         exc_info=True,
                     )
-                    await store.mark_failed(job.id)
+                    await store.mark_failed(job.id, error=error_msg)
+
+                    if job.attempts < max_attempts:
+                        fail_timestamps.append(asyncio.get_event_loop().time())
+                        # Remove timestamps older than the backoff window
+                        now = asyncio.get_event_loop().time()
+                        fail_timestamps = [t for t in fail_timestamps if now - t < backoff_seconds]
+                        if len(fail_timestamps) >= 3:
+                            _log.info("outbox.backoff_applied", delay=backoff_seconds)
+                            await asyncio.sleep(backoff_seconds)
+                            fail_timestamps.clear()
         except Exception:
             _log.warning("outbox.worker_error", exc_info=True)
         await asyncio.sleep(poll_interval)
