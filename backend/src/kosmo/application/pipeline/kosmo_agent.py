@@ -233,68 +233,12 @@ class KOSMOAgent:
         system_prompt = mode.system_prompt
         base_user_prompt = mode.build_user_prompt(context)
 
-        memory_task: asyncio.Task[object] | None = None
-        patterns_task: asyncio.Task[object] | None = None
-        embed_task: asyncio.Task[object] | None = None
-
-        if self._memory is not None and project_id is not None:
-            memory_task = asyncio.create_task(self._memory.get_project_context(project_id))
-
-        if self._pattern_store is not None:
-            patterns_task = asyncio.create_task(self._pattern_store.list_patterns(phase=mode.phase_name, limit=5))
-
-        if self._embedder is not None and self._memory is not None and project_id is not None:
-            async def _embed_and_search() -> Any:
-                query_embedding = await self._embedder.embed(base_user_prompt)  # type: ignore[reportOptionalMemberAccess]
-                if query_embedding is None:
-                    return None
-                similar = await self._memory.get_similar_sessions(  # type: ignore[reportOptionalMemberAccess]
-                    query_embedding,
-                    limit=3,
-                    exclude_project_id=project_id,
-                    model=self._embedder.model_name if self._embedder else None,  # type: ignore[reportOptionalMemberAccess]
-                )
-                return similar if similar else None
-
-            embed_task = asyncio.create_task(_embed_and_search())
-
-        if memory_task is not None:
-            project_context = await memory_task  # type: ignore[reportUnknownVariableType]
-            if project_context.total_sessions > 0:
-                system_prompt = self._inject_context(system_prompt, project_context)
-
-        if embed_task is not None:
-            similar = await embed_task  # type: ignore[reportUnknownVariableType]
-            if similar:
-                system_prompt = self._inject_cross_project_context(system_prompt, similar)  # type: ignore[reportArgumentType]
-
-        if patterns_task is not None:
-            patterns = await patterns_task
-            if patterns:
-                system_prompt = self._inject_patterns(system_prompt, patterns)
-
-        knowledge_context = ""
-        tool_invocations: list[dict[str, Any]] = []
-        reason_entries: list[str] = []
-        if self._knowledge_tools is not None:
-            tools_desc = self._knowledge_tools.describe_for_llm()
-            if tools_desc:
-                tool_system_prompt = system_prompt + "\n\n" + tools_desc
-                knowledge_context, tool_invocations = await self._resolve_knowledge_tools(
-                    tool_system_prompt, base_user_prompt, project_id
-                )
-                if knowledge_context:
-                    reason_entries.append(
-                        "pre_consulta_tools: herramientas consultadas: "
-                        + ", ".join(t["tool"] for t in tool_invocations if t.get("found"))
-                        or "ninguna encontrada"
-                    )
-                else:
-                    reason_entries.append("pre_consulta_tools: sin consulta de herramientas")
-            else:
-                reason_entries.append("pre_consulta_tools: sin herramientas registradas")
-        else:
-            reason_entries.append("pre_consulta_tools: no disponible")
+        system_prompt = await self._enrich_system_prompt(
+            system_prompt, base_user_prompt, project_id, phase=mode.phase_name
+        )
+        knowledge_context, tool_invocations, reason_entries = await self._resolve_tools(
+            system_prompt, base_user_prompt, project_id
+        )
 
         user_prompt = base_user_prompt
         if knowledge_context:
@@ -428,6 +372,88 @@ class KOSMOAgent:
             )
 
         return mode.build_output(last_output, last_validation, metadata, context=context)
+
+    async def _enrich_system_prompt(
+        self,
+        system_prompt: str,
+        base_user_prompt: str,
+        project_id: ProjectId | None,
+        *,
+        phase: SpecPhase | None = None,
+    ) -> str:
+        memory_task: asyncio.Task[object] | None = None
+        patterns_task: asyncio.Task[object] | None = None
+        embed_task: asyncio.Task[object] | None = None
+
+        if self._memory is not None and project_id is not None:
+            memory_task = asyncio.create_task(self._memory.get_project_context(project_id))
+
+        if self._pattern_store is not None and phase is not None:
+            patterns_task = asyncio.create_task(self._pattern_store.list_patterns(phase=phase, limit=5))
+
+        if self._embedder is not None and self._memory is not None and project_id is not None:
+            async def _embed_and_search() -> Any:
+                query_embedding = await self._embedder.embed(base_user_prompt)  # type: ignore[reportOptionalMemberAccess]
+                if query_embedding is None:
+                    return None
+                similar = await self._memory.get_similar_sessions(  # type: ignore[reportOptionalMemberAccess]
+                    query_embedding,
+                    limit=3,
+                    exclude_project_id=project_id,
+                    model=self._embedder.model_name if self._embedder else None,  # type: ignore[reportOptionalMemberAccess]
+                )
+                return similar if similar else None
+
+            embed_task = asyncio.create_task(_embed_and_search())
+
+        if memory_task is not None:
+            project_context = await memory_task  # type: ignore[reportUnknownVariableType]
+            if project_context.total_sessions > 0:
+                system_prompt = self._inject_context(system_prompt, project_context)
+
+        if embed_task is not None:
+            similar = await embed_task  # type: ignore[reportUnknownVariableType]
+            if similar:
+                system_prompt = self._inject_cross_project_context(system_prompt, similar)  # type: ignore[reportArgumentType]
+
+        if patterns_task is not None:
+            patterns = await patterns_task
+            if patterns:
+                system_prompt = self._inject_patterns(system_prompt, patterns)
+
+        return system_prompt
+
+    async def _resolve_tools(
+        self,
+        system_prompt: str,
+        base_user_prompt: str,
+        project_id: ProjectId | None,
+    ) -> tuple[str, list[dict[str, Any]], list[str]]:
+        knowledge_context = ""
+        tool_invocations: list[dict[str, Any]] = []
+        reason_entries: list[str] = []
+
+        if self._knowledge_tools is not None:
+            tools_desc = self._knowledge_tools.describe_for_llm()
+            if tools_desc:
+                tool_system_prompt = system_prompt + "\n\n" + tools_desc
+                knowledge_context, tool_invocations = await self._resolve_knowledge_tools(
+                    tool_system_prompt, base_user_prompt, project_id
+                )
+                if knowledge_context:
+                    reason_entries.append(
+                        "pre_consulta_tools: herramientas consultadas: "
+                        + ", ".join(t["tool"] for t in tool_invocations if t.get("found"))
+                        or "ninguna encontrada"
+                    )
+                else:
+                    reason_entries.append("pre_consulta_tools: sin consulta de herramientas")
+            else:
+                reason_entries.append("pre_consulta_tools: sin herramientas registradas")
+        else:
+            reason_entries.append("pre_consulta_tools: no disponible")
+
+        return knowledge_context, tool_invocations, reason_entries
 
     async def _save_completed_session(
         self,
