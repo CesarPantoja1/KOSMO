@@ -104,7 +104,7 @@ class ApplyPlanChangesUseCase:
             if applied and self._session_factory is not None:
                 await self._persist_with_uow(input_data.project_id, applied, final_markdown)
         elif input_data.phase == SpecPhase.REQUISITOS:
-            applied, phase_failed = await self._apply_requirement_changes(input_data.project_id, matched)
+            applied, phase_failed = await self._apply_requirement_changes(matched)
         else:
             applied, phase_failed = await self._apply_feature_changes(input_data.project_id, matched)
             if applied and self._session_factory is not None:
@@ -278,8 +278,7 @@ class ApplyPlanChangesUseCase:
 
     async def _apply_requirement_changes(
         self,
-        project_id: ProjectId,
-        changes: list[PlanCambio],  # noqa: ARG002
+        changes: list[PlanCambio],
     ) -> tuple[list[PlanCambio], list[FailedChange]]:
         if self._requirement_repo is None:
             raise ValueError("La aplicación de cambios de requisitos no está configurada.")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-_section_header_re = re.compile(r"^(#{2,3})\s+(.+)$", re.MULTILINE)
+_section_header_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 
 
 def apply_change_diff(markdown: str, *, before: str, after: str, section: str | None = None) -> str | None:
@@ -14,52 +14,72 @@ def apply_change_diff(markdown: str, *, before: str, after: str, section: str | 
     if section:
         return _apply_section_diff(markdown, before, after, section)
 
-    if before in markdown:
-        return markdown.replace(before, after, 1)
+    return _try_replace(markdown, before, after)
 
-    if after in markdown:
-        return markdown
 
+def _try_replace(text: str, before: str, after: str) -> str | None:
+    if before in text:
+        return text.replace(before, after, 1)
+    if after in text:
+        return text
+    if before.strip() in text:
+        return text.replace(before.strip(), after.strip(), 1)
+    normalized_before = _collapse_whitespace(before)
+    normalized_text = _collapse_whitespace(text)
+    if normalized_before in normalized_text:
+        return _apply_normalized_replace(text, before, after)
     return None
 
 
 def _apply_section_diff(markdown: str, before: str, after: str, section: str) -> str | None:
     section_text, start, end = _find_section(markdown, section)
-    if section_text is None:
-        if before in markdown:
-            return markdown.replace(before, after, 1)
-        if after in markdown:
+    if section_text is not None:
+        result = _try_replace(section_text, before, after)
+        if result is not None and result != section_text:
+            return markdown[:start] + result + markdown[end:]
+        if result is not None:
             return markdown
-        return None
 
-    if before in section_text:
-        new_section = section_text.replace(before, after, 1)
-        return markdown[:start] + new_section + markdown[end:]
-
-    if after in section_text:
-        return markdown
-
-    return None
+    return _try_replace(markdown, before, after)
 
 
 def _find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
-    """Busca una sección por nombre y retorna (texto_de_sección, inicio, fin)."""
     matches = list(_section_header_re.finditer(markdown))
-    target_idx: int | None = None
-    normalized = _normalize(section)
+    normalized_query = _normalize(section)
 
     for i, m in enumerate(matches):
-        if normalized in _normalize(m.group(2)):
-            target_idx = i
-            break
+        heading_text = m.group(2)
+        if _normalize(heading_text) == normalized_query:
+            return _extract_section(markdown, matches, i)
+        if normalized_query in _normalize(heading_text):
+            return _extract_section(markdown, matches, i)
 
-    if target_idx is None:
-        return None, 0, 0
+    return None, 0, 0
 
-    start = matches[target_idx].start()
-    end = matches[target_idx + 1].start() if target_idx + 1 < len(matches) else len(markdown)
 
+def _extract_section(markdown: str, matches: list[re.Match[str]], idx: int) -> tuple[str, int, int]:
+    start = matches[idx].start()
+    end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
     return markdown[start:end], start, end
+
+
+def _collapse_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _apply_normalized_replace(text: str, before: str, after: str) -> str | None:
+    lines = text.splitlines(keepends=True)
+    before_lines = before.strip().splitlines()
+    after_lines = after.strip().splitlines()
+
+    for i in range(len(lines) - len(before_lines) + 1):
+        window = [lines[j].strip() for j in range(i, i + len(before_lines))]
+        if window == [bl.strip() for bl in before_lines]:
+            result_lines = list(lines)
+            result_lines[i : i + len(before_lines)] = [al + "\n" for al in after_lines]
+            return "".join(result_lines)
+
+    return None
 
 
 def _normalize(text: str) -> str:

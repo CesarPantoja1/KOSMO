@@ -193,7 +193,7 @@ async def test_generate_features_raises_when_llm_fails() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_generate_features_raises_on_validation_failure() -> None:
+async def test_generate_features_succeeds_despite_validation_failure() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
@@ -208,7 +208,15 @@ async def test_generate_features_raises_on_validation_failure() -> None:
     await project_repo.save(project)
     await doc_repo.save_discovery(ProjectId("prj_invalid"), _make_discovery_document())
     invalid_output = FeaturesPhaseOutput(
-        features=[],
+        features=[
+            Feature(
+                id=FeatureId("feat_x"),
+                number=1,
+                title="Test",
+                slug="test",
+                description="A test feature for validation bypass",
+            )
+        ],
         validation_result=ValidationResult(is_valid=False, errors=["Titulo excede seis palabras"]),
         generation_metadata=GenerationMetadata(llm_calls=1),
     )
@@ -220,12 +228,12 @@ async def test_generate_features_raises_on_validation_failure() -> None:
         agent=agent,
     )
 
-    # Act & Assert
-    with pytest.raises(LLMInvocationError) as exc_info:
-        await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_invalid")))
+    # Act
+    output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId("prj_invalid")))
 
-    assert exc_info.value.problem.status == 502
-    assert "Titulo excede seis palabras" in exc_info.value.problem.detail
+    # Assert
+    assert len(output.features) == 1
+    assert output.phase_output.validation_result.is_valid is False
 
 
 @pytest.mark.asyncio

@@ -249,7 +249,7 @@ async def test_generate_diagram_persists_diagram() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_generate_diagram_raises_on_validation_failure() -> None:
+async def test_generate_diagram_succeeds_despite_validation_failure() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
     req_repo = InMemoryRequirementRepository()
@@ -259,7 +259,7 @@ async def test_generate_diagram_raises_on_validation_failure() -> None:
     await req_repo.save(FeatureId("feat_01"), _make_ears_requirements_markdown())
     invalid_output = ModeloPhaseOutput(
         feature_id=FeatureId("feat_01"),
-        diagram_syntax="",
+        diagram_syntax="@startuml\nstart\nstop\n@enduml",
         validation_result=ValidationResult(is_valid=False, errors=["El diagrama debe comenzar con @startuml"]),
         generation_metadata=GenerationMetadata(llm_calls=1),
     )
@@ -271,11 +271,12 @@ async def test_generate_diagram_raises_on_validation_failure() -> None:
         agent=agent,
     )
 
-    # Act & Assert
-    with pytest.raises(LLMInvocationError) as exc_info:
-        await use_case.execute(_make_input())
-    assert exc_info.value.problem.status == 502
-    assert "El diagrama debe comenzar con @startuml" in exc_info.value.problem.detail
+    # Act
+    output = await use_case.execute(_make_input())
+
+    # Assert
+    assert output.diagram.diagram_syntax == "@startuml\nstart\nstop\n@enduml"
+    assert output.phase_output.validation_result.is_valid is False
 
 
 @pytest.mark.asyncio

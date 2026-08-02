@@ -270,9 +270,9 @@ class KOSMOAgent:
                 "agent.llm_call_ok",
                 skill_name=skill_name,
                 iteration=iteration,
-                output_type=str(type(last_output)),
+                output_type=str(type(last_output)),  # type: ignore[reportUnknownArgumentType]
                 output_preview=str(last_output)[:200],
-            )  # type: ignore[reportUnknownArgumentType]
+            )
             llm_calls += 1
             last_validation = mode.validate_output(last_output, context=context)
             _log.info("agent.validation_done", is_valid=last_validation.is_valid, errors=last_validation.errors[:5])

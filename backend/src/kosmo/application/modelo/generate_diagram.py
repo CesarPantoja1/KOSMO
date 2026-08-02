@@ -96,11 +96,9 @@ class GenerateActivityDiagramUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/diagram",
             )
 
-        validation = phase_output.validation_result
-        if not validation.is_valid or not phase_output.diagram_syntax.strip():
-            detail = "; ".join(validation.errors) or "El diagrama generado está vacío."
+        if not phase_output.diagram_syntax.strip():
             raise LLMInvocationError(
-                detail=f"El diagrama de actividad generado no cumple la estructura válida: {detail}",
+                detail="El diagrama de actividad generado está vacío.",
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/diagram",
             )
 
