@@ -34,6 +34,12 @@ import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
+const generatingRequirementsMessages = [
+	'Analizando característica...',
+	'Generando requisitos EARS...',
+	'Finalizando generación de requisitos...',
+];
+
 const RequirementsPage = () => {
 	const router = useRouter();
 
@@ -348,6 +354,7 @@ const RequirementsPage = () => {
 				<Loading
 					title='Generando requisitos EARS'
 					description='Estructurando la característica seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
+					messages={generatingRequirementsMessages}
 				/>
 			)}
 
@@ -512,7 +519,7 @@ const RequirementsPage = () => {
 											</p>
 										</div>
 
-										<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
+										<section className='flex flex-col my-auto items-center gap-5 px-20'>
 											<Ai color='text-ai' size={70} />
 
 											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
