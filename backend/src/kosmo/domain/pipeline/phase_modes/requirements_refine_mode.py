@@ -13,6 +13,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.domain.pipeline._dict_utils import dict_str_keys
 from kosmo.domain.pipeline.phase_validators.requirements_refine_validator import (
     validate_refine_input_exists,
 )
@@ -265,10 +266,7 @@ class RequirementsRefineMode:
                 result: list[dict[str, Any]] = []
                 for item in cast(list[object], raw):
                     if isinstance(item, dict):
-                        req_dict: dict[str, Any] = {}
-                        for k, v in cast(dict[object, object], item).items():
-                            if isinstance(k, str):
-                                req_dict[k] = v
+                        req_dict = dict_str_keys(item)
                         result.append(req_dict)
                 return result
         if isinstance(content, list):

@@ -21,6 +21,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.domain.pipeline._dict_utils import dict_str_keys
 
 FIRST_GENERATION_COUNT = 5
 
@@ -240,10 +241,7 @@ class FeaturesMode:
                 if isinstance(raw_features, list):
                     for item in cast(list[object], raw_features):
                         if isinstance(item, dict):
-                            feat_dict: dict[str, Any] = {}
-                            for k, v in cast(dict[object, object], item).items():
-                                if isinstance(k, str):
-                                    feat_dict[k] = v
+                            feat_dict = dict_str_keys(item)
                             features_list.append(feat_dict)
             elif "raw_text" in output_dict:
                 try:
@@ -260,18 +258,12 @@ class FeaturesMode:
                             if isinstance(raw_features, list):
                                 for item in cast(list[object], raw_features):
                                     if isinstance(item, dict):
-                                        feat_dict: dict[str, Any] = {}
-                                        for k, v in cast(dict[object, object], item).items():
-                                            if isinstance(k, str):
-                                                feat_dict[k] = v
+                                        feat_dict = dict_str_keys(item)
                                         features_list.append(feat_dict)
                     elif isinstance(parsed, list):
                         for item in cast(list[object], parsed):
                             if isinstance(item, dict):
-                                feat_dict: dict[str, Any] = {}
-                                for k, v in cast(dict[object, object], item).items():
-                                    if isinstance(k, str):
-                                        feat_dict[k] = v
+                                feat_dict = dict_str_keys(item)
                                 features_list.append(feat_dict)
                 except Exception:
                     return ValidationResult(
@@ -286,10 +278,7 @@ class FeaturesMode:
         elif isinstance(output, list):
             for item in cast(list[object], output):
                 if isinstance(item, dict):
-                    feat_dict: dict[str, Any] = {}
-                    for k, v in cast(dict[object, object], item).items():
-                        if isinstance(k, str):
-                            feat_dict[k] = v
+                    feat_dict = dict_str_keys(item)
                     features_list.append(feat_dict)
         else:
             return ValidationResult(
@@ -386,12 +375,9 @@ class FeaturesMode:
         if isinstance(content, list):
             result: list[dict[str, Any]] = []
             for item in cast(list[object], content):
-                if isinstance(item, dict):
-                    feat_dict: dict[str, Any] = {}
-                    for k, v in cast(dict[object, object], item).items():
-                        if isinstance(k, str):
-                            feat_dict[k] = v
-                    result.append(feat_dict)
+                    if isinstance(item, dict):
+                        feat_dict = dict_str_keys(item)
+                        result.append(feat_dict)
             return result
         if isinstance(content, dict):
             raw = cast(dict[str, object], content).get("features", [])
@@ -399,10 +385,7 @@ class FeaturesMode:
                 result: list[dict[str, Any]] = []
                 for item in cast(list[object], raw):
                     if isinstance(item, dict):
-                        feat_dict: dict[str, Any] = {}
-                        for k, v in cast(dict[object, object], item).items():
-                            if isinstance(k, str):
-                                feat_dict[k] = v
+                        feat_dict = dict_str_keys(item)
                         result.append(feat_dict)
                 return result
         return []
