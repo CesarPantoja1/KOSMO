@@ -90,28 +90,16 @@ def _get_discovery_chat_history(request: Request) -> GetDiscoveryChatHistoryUseC
 
 @router.post(
     "",
-    summary="Generar documento de descubrimiento con IA",
+    summary="Generar documento de descubrimiento con IA (asíncrono)",
     description=(
         "Genera el documento de visión de producto para un proyecto "
-        "utilizando inteligencia artificial. El documento se estructura "
-        "en 7 secciones obligatorias siguiendo el formato de descubrimiento KOSMO. "
-        "Requiere autenticación mediante Bearer token."
+        "utilizando inteligencia artificial. Devuelve un job_id para seguir el progreso "
+        "via GET /api/v1/jobs/{job_id} o SSE en /api/v1/jobs/{job_id}/stream."
     ),
-    response_model=DiscoveryResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
-        status.HTTP_201_CREATED: {
-            "description": "Documento de descubrimiento generado exitosamente.",
-        },
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Token de acceso inválido o ausente.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Proyecto no encontrado.",
-        },
-        status.HTTP_502_BAD_GATEWAY: {
-            "description": "Error al invocar el servicio de IA.",
-        },
+        status.HTTP_202_ACCEPTED: {"description": "Job de generación creado exitosamente."},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Token de acceso inválido o ausente."},
     },
 )
 async def generate_discovery(
@@ -119,19 +107,17 @@ async def generate_discovery(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateDiscoveryUseCase, Depends(_generate_discovery)],
-) -> DiscoveryResponse:
-    try:
-        output = await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId(project_id)))
-    except LLMInvocationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.problem.detail,
-        ) from exc
-    return DiscoveryResponse(
-        id=str(output.project_id),
-        project_id=str(output.project_id),
-        content=_document_to_markdown(output.document),
+    request: Request,
+) -> dict[str, str]:
+    from kosmo.infrastructure.api.async_generation import launch_async
+
+    job_id = await launch_async(
+        request.app.state.async_job_store,
+        "discovery_generate",
+        project_id,
+        use_case.execute(GenerateDiscoveryInput(project_id=ProjectId(project_id))),
     )
+    return {"job_id": job_id}
 
 
 @router.get(

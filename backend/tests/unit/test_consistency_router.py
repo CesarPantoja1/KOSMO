@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from fastapi import HTTPException
+from unittest.mock import AsyncMock, MagicMock
 
 from kosmo.application.consistency.evaluate_project_consistency import (
     EvaluateProjectConsistencyUseCase,
@@ -102,15 +103,19 @@ async def test_evaluate_consistency_returns_report_with_affected_features() -> N
         ],
     )
 
+    job_mock = MagicMock()
+    job_mock.create = AsyncMock(return_value="job_001")
+    req = MagicMock()
+    req.app.state.async_job_store = job_mock
+
     result = await evaluate_consistency(
         project_id="prj_001",
         _principal=_principal(),
         request=request_body,
         uc=uc,
+        req=req,
     )
-
-    assert isinstance(result, ConsistencyReportView)
-    assert result.phase_origin == "discovery"
+    assert result["job_id"] == "job_001"
 
 
 @pytest.mark.unit
@@ -141,14 +146,19 @@ async def test_evaluate_consistency_no_destination_evaluates_all_phases() -> Non
         ],
     )
 
+    job_mock = MagicMock()
+    job_mock.create = AsyncMock(return_value="job_001")
+    req = MagicMock()
+    req.app.state.async_job_store = job_mock
+
     result = await evaluate_consistency(
         project_id="prj_001",
         _principal=_principal(),
         request=request_body,
         uc=uc,
+        req=req,
     )
-
-    assert isinstance(result, ConsistencyReportView)
+    assert result["job_id"] == "job_001"
 
 
 @pytest.mark.unit
@@ -171,6 +181,7 @@ async def test_evaluate_consistency_unknown_origin_phase_raises_400() -> None:
             _principal=_principal(),
             request=request_body,
             uc=uc,
+            req=MagicMock(),
         )
 
     assert exc_info.value.status_code == 400

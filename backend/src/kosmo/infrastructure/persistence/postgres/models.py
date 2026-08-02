@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from pgvector.sqlalchemy import Vector  # pyright: ignore[reportMissingTypeStubs]
 from sqlalchemy import DateTime, Integer, String, Text, func, text
@@ -15,7 +14,7 @@ class Base(DeclarativeBase):
 class UserModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[UUID] = mapped_column(pg.UUID(as_uuid=True), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(pg.CITEXT(), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -32,7 +31,7 @@ class UserModel(Base):
 class AuditEventModel(Base):
     __tablename__ = "audit_log"
 
-    id: Mapped[UUID] = mapped_column(pg.UUID(as_uuid=True), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -40,7 +39,7 @@ class AuditEventModel(Base):
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
-    actor_id: Mapped[UUID | None] = mapped_column(pg.UUID(as_uuid=True), nullable=True)
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     actor_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(pg.INET(), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(Text(), nullable=True)
@@ -260,3 +259,18 @@ class UserPreferenceModel(Base):
     user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     rule_text: Mapped[str] = mapped_column(Text(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AsyncJobModel(Base):
+    __tablename__ = "async_jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

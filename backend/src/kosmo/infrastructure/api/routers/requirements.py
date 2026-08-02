@@ -15,7 +15,6 @@ from kosmo.application.requirements import (
 )
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import (
-    DocumentNotFoundError,
     FeatureNotFoundError,
     LLMInvocationError,
     ProjectNotFoundError,
@@ -56,43 +55,28 @@ async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) ->
 
 @router.post(
     "/generate",
-    summary="Generar requisitos EARS",
-    description=("Genera requisitos utilizando el estándar EARS para la característica especificada."),
-    status_code=status.HTTP_200_OK,
+    summary="Generar requisitos EARS (asíncrono)",
+    description=("Genera requisitos EARS. Devuelve un job_id para seguir el progreso."),
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def generate_requirements(
     feature_id: str,
     body: GenerateRequirementsRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
-) -> dict[str, Any]:
+) -> dict[str, str]:
+    from kosmo.infrastructure.api.async_generation import launch_async
+
     fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("GenerateEARSUseCase", request.app.state.generate_ears)
 
-    try:
-        output = await uc.execute(
-            GenerateEARSInput(
-                project_id=ProjectId(body.project_id),
-                feature_id=fid,
-            )
-        )
-    except (ProjectNotFoundError, FeatureNotFoundError, DocumentNotFoundError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=exc.problem.detail,
-        ) from exc
-    except LLMInvocationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.problem.detail,
-        ) from exc
-
-    return {
-        "feature_id": str(output.feature_id),
-        "feature_number": output.phase_output.feature_number,
-        "document_markdown": output.phase_output.requirements_markdown,
-        "total": len(output.requirements),
-    }
+    job_id = await launch_async(
+        request.app.state.async_job_store,
+        "ears_generate",
+        body.project_id,
+        uc.execute(GenerateEARSInput(project_id=ProjectId(body.project_id), feature_id=fid)),
+    )
+    return {"job_id": job_id}
 
 
 @router.get(

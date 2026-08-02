@@ -39,6 +39,9 @@ def _make_mock_request(generate_uc: Any = None, get_uc: Any = None) -> MagicMock
     req = MagicMock()
     req.app.state.generate_diagram = generate_uc
     req.app.state.get_diagram = get_uc
+    job_mock = MagicMock()
+    job_mock.create = AsyncMock(return_value="job_001")
+    req.app.state.async_job_store = job_mock
     return req
 
 
@@ -73,9 +76,7 @@ async def test_generate_diagram_endpoint_success() -> None:
 
     res = await generate_diagram("feat_01", body, _principal(), req)
 
-    assert res["id"] == "diag_01"
-    assert res["feature_id"] == "feat_01"
-    assert "@startuml" in res["diagram_syntax"]
+    assert res["job_id"] == "job_001"
 
 
 @pytest.mark.asyncio
@@ -87,10 +88,8 @@ async def test_generate_diagram_endpoint_feature_not_found() -> None:
     req = _make_mock_request(generate_uc=mock_uc)
     body = GenerateDiagramRequest(project_id="prj_01")
 
-    with pytest.raises(HTTPException) as exc_info:
-        await generate_diagram("feat_missing", body, _principal(), req)
-
-    assert exc_info.value.status_code == 404
+    res = await generate_diagram("feat_missing", body, _principal(), req)
+    assert res["job_id"] == "job_001"
 
 
 @pytest.mark.asyncio
@@ -102,10 +101,8 @@ async def test_generate_diagram_endpoint_llm_error() -> None:
     req = _make_mock_request(generate_uc=mock_uc)
     body = GenerateDiagramRequest(project_id="prj_01")
 
-    with pytest.raises(HTTPException) as exc_info:
-        await generate_diagram("feat_01", body, _principal(), req)
-
-    assert exc_info.value.status_code == 502
+    res = await generate_diagram("feat_01", body, _principal(), req)
+    assert res["job_id"] == "job_001"
 
 
 @pytest.mark.asyncio

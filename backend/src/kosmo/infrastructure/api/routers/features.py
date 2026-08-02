@@ -21,8 +21,6 @@ from kosmo.application.features.list_features import (
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
-    LLMInvocationError,
-    ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
@@ -64,27 +62,16 @@ def _list_features(request: Request) -> ListFeaturesUseCase:
 
 @router.post(
     "",
-    summary="Generar características con IA",
+    summary="Generar características con IA (asíncrono)",
     description=(
         "Genera las características del producto software a partir del "
         "documento de descubrimiento utilizando inteligencia artificial. "
-        "Requiere autenticación mediante Bearer token."
+        "Devuelve un job_id para seguir el progreso."
     ),
-    response_model=list[FeatureResponse],
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
-        status.HTTP_201_CREATED: {
-            "description": "Características generadas exitosamente.",
-        },
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Token de acceso inválido o ausente.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Proyecto o documento de descubrimiento no encontrado.",
-        },
-        status.HTTP_502_BAD_GATEWAY: {
-            "description": "Error al invocar el servicio de IA.",
-        },
+        status.HTTP_202_ACCEPTED: {"description": "Job de generación creado."},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Token de acceso inválido o ausente."},
     },
 )
 async def generate_features(
@@ -92,20 +79,17 @@ async def generate_features(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
-) -> list[FeatureResponse]:
-    try:
-        output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
-    except (ProjectNotFoundError, DocumentNotFoundError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=exc.problem.detail,
-        ) from exc
-    except LLMInvocationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.problem.detail,
-        ) from exc
-    return [_feature_to_response(f) for f in output.features]
+    request: Request,
+) -> dict[str, str]:
+    from kosmo.infrastructure.api.async_generation import launch_async
+
+    job_id = await launch_async(
+        request.app.state.async_job_store,
+        "features_generate",
+        project_id,
+        use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id))),
+    )
+    return {"job_id": job_id}
 
 
 @router.get(
