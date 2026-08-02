@@ -21,6 +21,7 @@ _PREFIX_MAP: dict[str, str] = {
     "outbox": "out_",
     "doc_version": "dver_",
     "trace_edge": "ted_",
+    "user_pref": "upf_",
 }
 
 

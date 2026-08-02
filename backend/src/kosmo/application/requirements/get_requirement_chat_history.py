@@ -12,6 +12,7 @@ from kosmo.contracts.sdd.repositories import FeatureRepository
 @dataclass(frozen=True)
 class GetRequirementChatHistoryInput:
     feature_id: FeatureId
+    before: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class GetRequirementChatHistoryUseCase:
             project_id=feature.project_id,
             phase=SpecPhase.REQUISITOS,
             context_id=str(input_data.feature_id),
+            before=input_data.before,
         )
 
         return GetRequirementChatHistoryOutput(

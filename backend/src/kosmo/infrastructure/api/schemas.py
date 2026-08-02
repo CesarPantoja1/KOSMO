@@ -596,11 +596,13 @@ class ChatMessage(BaseModel):
 
 
 class ChatHistoryResponse(BaseModel):
-    """Respuesta con el historial completo de un chat."""
+    """Respuesta con el historial paginado de un chat."""
 
     phase: str = Field(description="Fase a la que pertenece el historial")
     context: str = Field(description="Contexto específico (ej. project_id)")
     messages: list[ChatMessage] = Field(description="Lista de mensajes.")
+    has_more: bool = Field(default=False, description="Indica si hay más mensajes anteriores")
+    next_cursor: str | None = Field(default=None, description="Cursor para la siguiente página (ISO-8601)")
 
     @classmethod
     def from_domain(cls, history: HistorialChat) -> "ChatHistoryResponse":
@@ -608,6 +610,8 @@ class ChatHistoryResponse(BaseModel):
             phase=str(history.phase.value if hasattr(history.phase, "value") else history.phase),
             context=str(history.project_id),
             messages=[ChatMessage.from_domain(msg) for msg in history.messages],
+            has_more=history.has_more,
+            next_cursor=history.next_cursor,
         )
 
 

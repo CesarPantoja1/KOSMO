@@ -66,10 +66,23 @@ def _extract_balanced(text: str, start: int, open_char: str) -> str | None:
 class PydanticAILLMClient:
     _DEFAULT_TIMEOUT_SECONDS = 120
     _MAX_AGENTS = 32
+    _RETRY_ATTEMPTS = 2
+    _RETRY_DELAY_SECONDS = 1.0
 
     def __init__(self, model: Any) -> None:
         self._model = model
         self._agents: OrderedDict[str, Agent[Any]] = OrderedDict()
+
+    async def _run_with_retry(self, coro_fn: Any) -> Any:
+        last_exc: Exception | None = None
+        for attempt in range(self._RETRY_ATTEMPTS):
+            try:
+                return await coro_fn()
+            except Exception as exc:
+                last_exc = exc
+                if attempt < self._RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(self._RETRY_DELAY_SECONDS)
+        raise last_exc  # type: ignore[reportPossiblyUnboundVariable]
 
     def _get_agent(self, system_prompt: str) -> Agent[Any]:
         agent = self._agents.get(system_prompt)
@@ -90,13 +103,16 @@ class PydanticAILLMClient:
     ) -> LLMResponse:
         agent = self._get_agent(prompt.system_prompt)
 
-        result = await asyncio.wait_for(
-            agent.run(
-                prompt.user_prompt,
-                model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
-            ),
-            timeout=self._DEFAULT_TIMEOUT_SECONDS,
-        )
+        async def _call() -> Any:
+            return await asyncio.wait_for(
+                agent.run(
+                    prompt.user_prompt,
+                    model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+                ),
+                timeout=self._DEFAULT_TIMEOUT_SECONDS,
+            )
+
+        result = await self._run_with_retry(_call)
 
         usage = result.usage()
         return LLMResponse(
@@ -189,13 +205,17 @@ class PydanticAILLMClient:
         ]
 
         agent: Agent[Any] = Agent(self._model, system_prompt=prompt.system_prompt, tools=pydantic_tools)  # type: ignore[reportCallIssue]
-        result = await asyncio.wait_for(
-            agent.run(
-                prompt.user_prompt,
-                model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
-            ),
-            timeout=self._DEFAULT_TIMEOUT_SECONDS,
-        )
+
+        async def _call() -> Any:
+            return await asyncio.wait_for(
+                agent.run(
+                    prompt.user_prompt,
+                    model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+                ),
+                timeout=self._DEFAULT_TIMEOUT_SECONDS,
+            )
+
+        result = await self._run_with_retry(_call)
 
         return (result.output or "", records)
 

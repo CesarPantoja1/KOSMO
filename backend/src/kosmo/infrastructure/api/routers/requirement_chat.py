@@ -148,11 +148,13 @@ async def get_requirement_chat_history(
     feature_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetRequirementChatHistoryUseCase, Depends(_get_requirement_chat_history)],
+    before: str | None = None,
 ) -> ChatHistoryResponse:
     try:
         output = await use_case.execute(
             GetRequirementChatHistoryInput(
                 feature_id=FeatureId(feature_id),
+                before=before,
             )
         )
     except FeatureNotFoundError as exc:

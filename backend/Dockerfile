@@ -89,4 +89,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import os,urllib.request,sys; port=os.environ.get('PORT','8000'); r=urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=3); sys.exit(0 if r.status==200 else 1)" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2} --limit-max-requests 1000"]

@@ -62,6 +62,7 @@ class SqlAlchemyChatRepository(ChatRepository):
         phase: SpecPhase,
         context_id: str | None = None,
         limit: int = 200,
+        before: str | None = None,
     ) -> HistorialChat | None:
         stmt = select(ChatMessageModel).where(
             ChatMessageModel.project_id == str(project_id),
@@ -71,6 +72,12 @@ class SqlAlchemyChatRepository(ChatRepository):
             stmt = stmt.where(ChatMessageModel.context_id == context_id)
         else:
             stmt = stmt.where(ChatMessageModel.context_id.is_(None))
+
+        if before:
+            from datetime import datetime as _datetime
+
+            cursor_dt = _datetime.fromisoformat(before)
+            stmt = stmt.where(ChatMessageModel.created_at < cursor_dt)
 
         stmt = stmt.order_by(ChatMessageModel.created_at.desc()).limit(limit)
 
@@ -83,7 +90,11 @@ class SqlAlchemyChatRepository(ChatRepository):
 
         models.reverse()
         messages = tuple(_model_to_message(m) for m in models)
+
         history_id = self._compose_history_id(project_id, phase, context_id)
+
+        has_more = len(models) == limit
+        next_cursor = models[0].created_at.isoformat() if has_more else None
 
         return HistorialChat(
             id=ChatHistoryId(history_id),
@@ -91,12 +102,17 @@ class SqlAlchemyChatRepository(ChatRepository):
             phase=phase,
             context_id=context_id,
             messages=messages,
+            has_more=has_more,
+            next_cursor=next_cursor,
         )
 
     @staticmethod
     def _compose_history_id(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:
         return f"{project_id}:{phase.value}:{context_id or ''}"
 
+    # ponytail: no-op — el historial se persiste como mensajes individuales (save_message).
+    # save_history existe por el contrato ChatRepository Protocol; eliminar cuando el
+    # contrato migre a append-only.
     async def save_history(
         self,
         history: HistorialChat,

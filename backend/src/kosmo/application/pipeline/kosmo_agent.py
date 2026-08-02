@@ -55,6 +55,7 @@ class KOSMOAgent:
         self._consolidation_threshold = consolidation_threshold
         self._outbox = outbox
         self._consolidated_counts: dict[str, int] = {}
+        self._pending_tasks: set[asyncio.Task[Any]] = set()
 
     async def execute_with_skill(
         self,
@@ -231,28 +232,45 @@ class KOSMOAgent:
     ) -> Any:
         start_time = time.monotonic()
         system_prompt = mode.system_prompt
-
-        if self._memory is not None and project_id is not None:
-            project_context = await self._memory.get_project_context(project_id)
-            if project_context.total_sessions > 0:
-                system_prompt = self._inject_context(system_prompt, project_context)
-
         base_user_prompt = mode.build_user_prompt(context)
 
+        memory_task: asyncio.Task[object] | None = None
+        patterns_task: asyncio.Task[object] | None = None
+        embed_task: asyncio.Task[object] | None = None
+
+        if self._memory is not None and project_id is not None:
+            memory_task = asyncio.create_task(self._memory.get_project_context(project_id))
+
+        if self._pattern_store is not None:
+            patterns_task = asyncio.create_task(self._pattern_store.list_patterns(phase=mode.phase_name, limit=5))
+
         if self._embedder is not None and self._memory is not None and project_id is not None:
-            query_embedding = await self._embedder.embed(base_user_prompt)
-            if query_embedding is not None:
-                similar = await self._memory.get_similar_sessions(
+            async def _embed_and_search() -> list[object] | None:
+                query_embedding = await self._embedder.embed(base_user_prompt)  # type: ignore[reportOptionalMemberAccess]
+                if query_embedding is None:
+                    return None
+                similar = await self._memory.get_similar_sessions(  # type: ignore[reportOptionalMemberAccess]
                     query_embedding,
                     limit=3,
                     exclude_project_id=project_id,
-                    model=self._embedder.model_name if self._embedder else None,
+                    model=self._embedder.model_name if self._embedder else None,  # type: ignore[reportOptionalMemberAccess]
                 )
-                if similar:
-                    system_prompt = self._inject_cross_project_context(system_prompt, similar)
+                return similar if similar else None
 
-        if self._pattern_store is not None:
-            patterns = await self._pattern_store.list_patterns(phase=mode.phase_name, limit=5)
+            embed_task = asyncio.create_task(_embed_and_search())
+
+        if memory_task is not None:
+            project_context = await memory_task
+            if project_context is not None and project_context.total_sessions > 0:
+                system_prompt = self._inject_context(system_prompt, project_context)
+
+        if embed_task is not None:
+            similar = await embed_task
+            if similar is not None:
+                system_prompt = self._inject_cross_project_context(system_prompt, similar)
+
+        if patterns_task is not None:
+            patterns = await patterns_task
             if patterns:
                 system_prompt = self._inject_patterns(system_prompt, patterns)
 
@@ -476,7 +494,7 @@ class KOSMOAgent:
                 },
             )
         else:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._reflect_and_consolidate(
                     session_id=session.session_id,
                     phase=phase,
@@ -486,6 +504,8 @@ class KOSMOAgent:
                     validation=validation,
                 )
             )
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
 
     async def _reflect_and_consolidate(
         self,

@@ -70,6 +70,8 @@ class HistorialChat:
     phase: SpecPhase
     context_id: str | None = None
     messages: tuple[MensajeChat, ...] = field(default_factory=tuple)
+    has_more: bool = False
+    next_cursor: str | None = None
 
     def add_message(self, message: MensajeChat) -> HistorialChat:
         return HistorialChat(
@@ -108,6 +110,7 @@ class ChatRepository(Protocol):
         phase: SpecPhase,
         context_id: str | None = None,
         limit: int = 200,
+        before: str | None = None,
     ) -> HistorialChat | None: ...
 
     async def save_history(

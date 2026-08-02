@@ -12,6 +12,7 @@ from kosmo.contracts.sdd.repositories import ProjectRepository
 @dataclass(frozen=True)
 class GetDiscoveryChatHistoryInput:
     project_id: ProjectId
+    before: str | None = None
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class GetDiscoveryChatHistoryUseCase:
         history = await self._chat_repo.get_history(
             project_id=input_data.project_id,
             phase=SpecPhase.DESCUBRIMIENTO,
+            before=input_data.before,
         )
 
         return GetDiscoveryChatHistoryOutput(

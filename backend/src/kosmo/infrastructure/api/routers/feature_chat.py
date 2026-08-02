@@ -146,9 +146,10 @@ async def get_feature_chat_history(
     feature_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetFeatureChatHistoryUseCase, Depends(_get_feature_chat_history)],
+    before: str | None = None,
 ) -> ChatHistoryResponse:
     try:
-        output = await use_case.execute(GetFeatureChatHistoryInput(feature_id=FeatureId(feature_id)))
+        output = await use_case.execute(GetFeatureChatHistoryInput(feature_id=FeatureId(feature_id), before=before))
     except FeatureNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -47,6 +47,9 @@ class Skill:
     mode: PhaseMode
 
 
+# ponytail: ToolResult, AgentStep y AgentTrace no tienen consumidores en producción.
+# Se conservan en el contrato para futura instrumentación de tracing del agente.
+# Eliminar si tras 3 releases siguen sin uso.
 @dataclass(frozen=True)
 class ToolResult:
     tool_name: str

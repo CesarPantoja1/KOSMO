@@ -23,6 +23,9 @@ async def consolidate_patterns(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
+    # ponytail: endpoint sin restricción de rol más allá de autenticación básica.
+    # Debería requerir scope "admin" o "knowledge:write". Mientras tanto, solo
+    # usuarios autenticados pueden disparar la consolidación global.
     uc = cast("ConsolidateKnowledgePatterns", request.app.state.consolidate_patterns)
     result = await uc.execute(ConsolidateInput(sessions_limit=50))
     return {"phases": result}

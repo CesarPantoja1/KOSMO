@@ -378,9 +378,12 @@ async def get_chat_history(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetDiscoveryChatHistoryUseCase, Depends(_get_discovery_chat_history)],
+    before: str | None = None,
 ) -> ChatHistoryResponse:
     try:
-        output = await use_case.execute(GetDiscoveryChatHistoryInput(project_id=ProjectId(project_id)))
+        output = await use_case.execute(
+            GetDiscoveryChatHistoryInput(project_id=ProjectId(project_id), before=before)
+        )
     except ProjectNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
