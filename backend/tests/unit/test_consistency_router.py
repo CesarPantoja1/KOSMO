@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
-from unittest.mock import AsyncMock, MagicMock
 
 from kosmo.application.consistency.evaluate_project_consistency import (
     EvaluateProjectConsistencyUseCase,
@@ -15,7 +15,6 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.routers.consistency import evaluate_consistency
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
-    ConsistencyReportView,
     EvaluateConsistencyRequestView,
 )
 from tests.unit.fakes import (
