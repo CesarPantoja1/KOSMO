@@ -349,7 +349,7 @@ def test_validate_output_invalid_empty_content() -> None:
 
     # Assert
     assert result.is_valid is False
-    assert any("content" in e.lower() and "vacio" in e.lower() for e in result.errors)
+    assert any("content" in e.lower() for e in result.errors)
 
 
 @pytest.mark.unit

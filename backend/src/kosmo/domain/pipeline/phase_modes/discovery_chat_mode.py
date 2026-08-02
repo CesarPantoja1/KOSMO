@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
-from kosmo.contracts import RespuestaChatLLM
-from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryChatContext
-from kosmo.contracts.pipeline.phase_outputs import (
-    GenerationMetadata,
-    ValidationResult,
-)
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 
 _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "Eres un asistente conversacional especializado en descubrimiento de producto. "
@@ -74,30 +67,14 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
 )
 
 
-class DiscoveryChatMode:
+class DiscoveryChatMode(BaseChatMode):
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.DESCUBRIMIENTO
 
     @property
-    def temperature(self) -> float:
-        return 0.4
-
-    @property
-    def max_tokens(self) -> int:
-        return 4096
-
-    @property
-    def output_type(self) -> type[RespuestaChatLLM]:
-        return RespuestaChatLLM
-
-    @property
     def system_prompt(self) -> str:
         return _DISCOVERY_CHAT_SYSTEM_PROMPT
-
-    @property
-    def available_tools(self) -> list[ToolDefinition]:
-        return []
 
     def build_user_prompt(self, context: DiscoveryChatContext) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
@@ -111,63 +88,3 @@ class DiscoveryChatMode:
             prefs = "\n".join(f"- {p.rule_text}" for p in context.user_preferences)
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
         return "\n".join(parts)
-
-    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
-        errors: list[str] = []
-
-        if isinstance(output, RespuestaChatLLM):
-            if not output.content or not output.content.strip():
-                errors.append("El campo content no puede estar vacio.")
-            if output.change_suggestion is not None:
-                cs = output.change_suggestion
-                if not cs.section or not cs.section.strip():
-                    errors.append("El campo section no puede estar vacio.")
-                if not cs.description or not cs.description.strip():
-                    errors.append("El campo description no puede estar vacio.")
-                if not cs.diff_before or not cs.diff_before.strip():
-                    errors.append("El campo diff_before no puede estar vacio.")
-                if not cs.diff_after or not cs.diff_after.strip():
-                    errors.append("El campo diff_after no puede estar vacio.")
-                if cs.diff_before.strip() == cs.diff_after.strip():
-                    errors.append("diff_before y diff_after son identicos; la sugerencia no propone cambios reales.")
-        elif isinstance(output, dict):
-            errors.append("Formato de salida no reconocido. Se esperaba RespuestaChatLLM.")
-        else:
-            errors.append("Formato de salida no reconocido.")
-
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-        )
-
-    def build_validation_feedback(self, errors: list[str]) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            "## Feedback de validacion\n\n"
-            f"La respuesta tiene los siguientes errores:\n\n{error_list}\n\n"
-            "Corrige los problemas indicados y genera una nueva respuesta en el formato JSON esperado."
-        )
-
-    def build_retry_prompt(
-        self,
-        original_prompt: str,
-        errors: list[str],
-        retry_count: int,
-    ) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            f"{original_prompt}\n\n"
-            f"## Correcciones necesarias (intento {retry_count})\n\n"
-            f"Errores detectados:\n{error_list}\n\n"
-            "Genera una nueva respuesta corrigiendo exclusivamente estos errores."
-        )
-
-    def build_output(
-        self,
-        raw_output: Any,
-        validation_result: ValidationResult,  # noqa: ARG002
-        metadata: GenerationMetadata,  # noqa: ARG002
-        *,
-        context: Any = None,  # noqa: ARG002
-    ) -> Any:
-        return raw_output
