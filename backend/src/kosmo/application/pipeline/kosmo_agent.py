@@ -54,7 +54,6 @@ class KOSMOAgent:
         self._pattern_store = pattern_store
         self._consolidation_threshold = consolidation_threshold
         self._outbox = outbox
-        self._consolidated_counts: dict[str, int] = {}
         self._pending_tasks: set[asyncio.Task[Any]] = set()
 
     async def execute_with_skill(
@@ -534,9 +533,7 @@ class KOSMOAgent:
         if is_completed and self._pattern_store is not None:
             counts = await self._memory.count_completed_by_phase()
             for _phase, count in counts.items():
-                last = self._consolidated_counts.get(str(_phase), 0)
-                if count - last >= self._consolidation_threshold:
-                    self._consolidated_counts[str(_phase)] = count
+                if count > 0 and count % self._consolidation_threshold == 0:
                     from kosmo.application.knowledge import ConsolidateInput, ConsolidateKnowledgePatterns
 
                     uc = ConsolidateKnowledgePatterns(
