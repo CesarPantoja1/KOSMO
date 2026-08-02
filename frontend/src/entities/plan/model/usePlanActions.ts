@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { usePlanStore } from './store';
+import { normalizeDiff } from './normalizeDiff';
 import { addPlanChange, deletePlanChange } from '../api/api';
 import type { ChangeSuggestion } from '@/feature/chatbot/types/chatbot';
 import type { PlanChange } from './types';
@@ -17,11 +18,15 @@ export function usePlanActions(projectId: string | null, phase: string, contextI
 			if (!projectId || !contextId) return;
 
 			if (action === 'add') {
+				const { before, after } = normalizeDiff(
+					suggestion.diff_before || '',
+					suggestion.diff_after || '',
+				);
 				const change: PlanChange = {
 					id: suggestion.id,
 					section: suggestion.section,
 					description: suggestion.description ?? suggestion.section,
-					diff: { before: suggestion.diff_before, after: suggestion.diff_after },
+					diff: { before, after },
 					status: 'pending',
 					origin: 'chat',
 					phase,

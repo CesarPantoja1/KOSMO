@@ -7,6 +7,7 @@ import Plus from '@/shared/ui/icons/Plus';
 import Trash from '@/shared/ui/icons/Trash';
 import { MarkdownText } from '@/shared/ui/markdown-text';
 import { usePlanStore } from '@/entities/plan';
+import { normalizeDiff } from '@/entities/plan/model/normalizeDiff';
 import { useState } from 'react';
 import type { ChangeSuggestion } from '../types/chatbot';
 
@@ -59,11 +60,20 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 		suggestion.diff_before.trim().toLowerCase() === 'ninguno';
 
 	const isDeletion = suggestion.diff_after != null && !suggestion.diff_after.trim();
+
+	const { before: normalizedBefore, after: normalizedAfter } = normalizeDiff(
+		suggestion.diff_before || '',
+		suggestion.diff_after || '',
+	);
+	const wasNormalized = normalizedBefore === '' && suggestion.diff_before !== '';
+
 	const isPureAddition =
 		isNoSpec ||
-		(!isDeletion && suggestion.diff_before?.trim() === suggestion.diff_after?.trim());
+		(!isDeletion && suggestion.diff_before?.trim() === suggestion.diff_after?.trim()) ||
+		wasNormalized;
 	const isModification = !isPureAddition && !isDeletion;
-	const hasDiffBefore = Boolean(suggestion.diff_before && isModification);
+	const hasDiffBefore = Boolean(normalizedBefore && isModification);
+	const displayAfter = wasNormalized ? normalizedAfter : suggestion.diff_after;
 
 	return (
 		<div className='mt-2 flex flex-col gap-3 rounded-lg border border-base-300 bg-white p-4 shadow-sm'>
@@ -127,14 +137,14 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 						<MarkdownText content={suggestion.diff_before} />
 					</div>
 				)}
-				{!isDeletion && suggestion.diff_after && (
+				{!isDeletion && displayAfter && (
 					<div className='border-l-2 border-primary-100 bg-primary-50 p-2.5 text-primary-900 [&_pre]:!bg-primary-100/15 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
 						{isModification && (
 							<div className='mb-1 font-mono text-[10px] font-semibold text-primary-600 uppercase tracking-wider'>
 								+ Propuesto
 							</div>
 						)}
-						<MarkdownText content={suggestion.diff_after} />
+						<MarkdownText content={displayAfter} />
 					</div>
 				)}
 			</div>
