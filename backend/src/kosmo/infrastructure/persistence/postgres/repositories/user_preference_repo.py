@@ -20,10 +20,7 @@ class SqlAlchemyUserPreferenceRepository:
                 .order_by(UserPreferenceModel.created_at)
             )
             result = await session.execute(stmt)
-            return [
-                UserPreference(id=m.id, user_id=m.user_id, rule_text=m.rule_text)
-                for m in result.scalars().all()
-            ]
+            return [UserPreference(id=m.id, user_id=m.user_id, rule_text=m.rule_text) for m in result.scalars().all()]
 
     async def save(self, user_id: str, rule_text: str) -> UserPreference:
         model = UserPreferenceModel(

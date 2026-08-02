@@ -4,9 +4,7 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 
 
-async def resolve_feature_id(
-    repo: FeatureRepository, project_id: ProjectId, id_or_slug: str
-) -> FeatureId | None:
+async def resolve_feature_id(repo: FeatureRepository, project_id: ProjectId, id_or_slug: str) -> FeatureId | None:
     if id_or_slug.startswith("feat_"):
         return FeatureId(id_or_slug)
 

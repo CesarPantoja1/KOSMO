@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
-import structlog
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
@@ -12,34 +10,6 @@ from kosmo.contracts.chat import ChatRepository, ChatRole, MensajeChat, Sugerenc
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatMessageId, ProjectId
 from kosmo.domain.sdd.id_generator import IdGenerator
-from kosmo.infrastructure.persistence.postgres.async_job_store import AsyncJobStore
-
-_log = structlog.get_logger(__name__)
-
-
-async def _run_generation_job(
-    job_store: AsyncJobStore,
-    job_id: str,
-    coro: Any,
-) -> None:
-    try:
-        await job_store.update_status(job_id, "processing")
-        result = await coro
-        await job_store.update_status(job_id, "completed", result=result)
-    except Exception as exc:
-        _log.warning("async_job.failed", job_id=job_id, exc_info=True)
-        await job_store.update_status(job_id, "failed", error=str(exc))
-
-
-async def launch_async(
-    job_store: AsyncJobStore,
-    job_type: str,
-    project_id: str,
-    coro: Any,
-) -> str:
-    job_id = await job_store.create(job_type=job_type, project_id=project_id)
-    asyncio.create_task(_run_generation_job(job_store, job_id, coro))
-    return job_id
 
 
 def _suggested_change_dict(sc: SugerenciaCambio | None) -> dict[str, Any] | None:
@@ -68,9 +38,7 @@ async def sse_chat_response(
         ValidatePhaseContextInput,
     )
 
-    validation = await validate_uc.execute(
-        ValidatePhaseContextInput(content=content, current_phase=phase)
-    )
+    validation = await validate_uc.execute(ValidatePhaseContextInput(content=content, current_phase=phase))
     if not validation.is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

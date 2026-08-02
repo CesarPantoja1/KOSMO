@@ -113,6 +113,7 @@ async def process_requirement_chat_message(
         )
     except ValueError as exc:
         import structlog
+
         structlog.get_logger(__name__).error("requirement_chat.value_error", detail=str(exc), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -184,6 +185,7 @@ def _agent_dep(request: Request):
 
 def _chat_repo_dep(request: Request) -> ChatRepository:
     return request.app.state.chat_repo  # type: ignore[reportReturnType]
+
 
 @router.post(
     "/stream",

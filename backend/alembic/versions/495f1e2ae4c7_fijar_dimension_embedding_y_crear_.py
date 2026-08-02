@@ -17,9 +17,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TABLE agent_sessions ALTER COLUMN embedding TYPE vector(384) USING embedding::vector(384)"
-    )
+    op.execute("ALTER TABLE agent_sessions ALTER COLUMN embedding TYPE vector(384) USING embedding::vector(384)")
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_agent_sessions_embedding_hnsw "
         "ON agent_sessions USING hnsw (embedding vector_cosine_ops)"
@@ -28,6 +26,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS ix_agent_sessions_embedding_hnsw")
-    op.execute(
-        "ALTER TABLE agent_sessions ALTER COLUMN embedding TYPE vector USING embedding::vector"
-    )
+    op.execute("ALTER TABLE agent_sessions ALTER COLUMN embedding TYPE vector USING embedding::vector")

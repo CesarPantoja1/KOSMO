@@ -375,9 +375,9 @@ class FeaturesMode:
         if isinstance(content, list):
             result: list[dict[str, Any]] = []
             for item in cast(list[object], content):
-                    if isinstance(item, dict):
-                        feat_dict = dict_str_keys(item)
-                        result.append(feat_dict)
+                if isinstance(item, dict):
+                    feat_dict = dict_str_keys(item)
+                    result.append(feat_dict)
             return result
         if isinstance(content, dict):
             raw = cast(dict[str, object], content).get("features", [])

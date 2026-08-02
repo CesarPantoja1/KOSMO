@@ -100,17 +100,11 @@ class ApplyPlanChangesUseCase:
                 matched.append(change)
 
         if input_data.phase == SpecPhase.DESCUBRIMIENTO:
-            applied, phase_failed, final_markdown = await self._apply_discovery_changes(
-                input_data.project_id, matched
-            )
+            applied, phase_failed, final_markdown = await self._apply_discovery_changes(input_data.project_id, matched)
             if applied and self._session_factory is not None:
-                await self._persist_with_uow(
-                    input_data.project_id, applied, final_markdown
-                )
+                await self._persist_with_uow(input_data.project_id, applied, final_markdown)
         elif input_data.phase == SpecPhase.REQUISITOS:
-            applied, phase_failed = await self._apply_requirement_changes(
-                input_data.project_id, matched
-            )
+            applied, phase_failed = await self._apply_requirement_changes(input_data.project_id, matched)
         else:
             applied, phase_failed = await self._apply_feature_changes(input_data.project_id, matched)
             if applied and self._session_factory is not None:
@@ -145,9 +139,7 @@ class ApplyPlanChangesUseCase:
             propagation=propagation,
         )
 
-    async def _persist_with_uow(
-        self, project_id: ProjectId, applied: list[PlanCambio], markdown: str
-    ) -> None:
+    async def _persist_with_uow(self, project_id: ProjectId, applied: list[PlanCambio], markdown: str) -> None:
         async with self._session_factory() as session:  # type: ignore[reportOptionalMemberAccess]
             await self._document_repo.save_discovery(
                 project_id=project_id,
@@ -285,7 +277,9 @@ class ApplyPlanChangesUseCase:
         return applied, failed
 
     async def _apply_requirement_changes(
-        self, project_id: ProjectId, changes: list[PlanCambio]  # noqa: ARG002
+        self,
+        project_id: ProjectId,
+        changes: list[PlanCambio],  # noqa: ARG002
     ) -> tuple[list[PlanCambio], list[FailedChange]]:
         if self._requirement_repo is None:
             raise ValueError("La aplicación de cambios de requisitos no está configurada.")
@@ -307,15 +301,11 @@ class ApplyPlanChangesUseCase:
             markdown = await self._requirement_repo.by_feature_id(fid_typed)
             if markdown is None:
                 for c in f_changes:
-                    failed.append(
-                        FailedChange(id=c.id, reason=f"No hay requisitos para la característica {fid}")
-                    )
+                    failed.append(FailedChange(id=c.id, reason=f"No hay requisitos para la característica {fid}"))
                 continue
 
             for change in f_changes:
-                result = apply_change_diff(
-                    markdown, before=change.diff.before, after=change.diff.after
-                )
+                result = apply_change_diff(markdown, before=change.diff.before, after=change.diff.after)
                 if result is None:
                     failed.append(
                         FailedChange(

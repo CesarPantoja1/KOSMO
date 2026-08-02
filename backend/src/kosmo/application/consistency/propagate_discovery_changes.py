@@ -157,9 +157,7 @@ class PropagateDiscoveryChangesUseCase:
                     affected_count=len(downstream),
                     affected_ids=downstream,
                 )
-            return PhasePropagationInfo(
-                phase=_PHASE_TO_API[SpecPhase.REQUISITOS], affected_count=0, affected_ids=[]
-            )
+            return PhasePropagationInfo(phase=_PHASE_TO_API[SpecPhase.REQUISITOS], affected_count=0, affected_ids=[])
 
         try:
             result = await self._consistency_evaluator.evaluate(

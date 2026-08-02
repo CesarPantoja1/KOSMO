@@ -51,18 +51,12 @@ class OutboxStore:
 
     async def mark_done(self, job_id: str) -> None:
         async with self._session_factory() as session:
-            await session.execute(
-                update(OutboxJobModel).where(OutboxJobModel.id == job_id).values(status="done")
-            )
+            await session.execute(update(OutboxJobModel).where(OutboxJobModel.id == job_id).values(status="done"))
             await session.commit()
 
     async def mark_failed(self, job_id: str, *, error: str | None = None) -> None:
         async with self._session_factory() as session:
-            stmt = (
-                select(OutboxJobModel)
-                .where(OutboxJobModel.id == job_id)
-                .with_for_update()
-            )
+            stmt = select(OutboxJobModel).where(OutboxJobModel.id == job_id).with_for_update()
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if model is None:

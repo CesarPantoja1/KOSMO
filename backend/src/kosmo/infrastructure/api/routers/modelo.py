@@ -32,9 +32,7 @@ class GenerateDiagramRequest(BaseModel):
 
 
 async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    fid = await resolve_feature_id(
-        request.app.state.feature_repo, ProjectId(project_id), id_or_slug
-    )
+    fid = await resolve_feature_id(request.app.state.feature_repo, ProjectId(project_id), id_or_slug)
     if fid is None:
         raise FeatureNotFoundError(
             feature_id=id_or_slug,
@@ -45,28 +43,27 @@ async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) ->
 
 @router.post(
     "/generate",
-    summary="Generar diagrama de actividad (asíncrono)",
-    description="Genera un diagrama PlantUML. Devuelve un job_id para seguir el progreso.",
-    status_code=status.HTTP_202_ACCEPTED,
+    summary="Generar diagrama de actividad",
+    description="Genera un diagrama PlantUML para la característica indicada.",
+    status_code=status.HTTP_200_OK,
 )
 async def generate_diagram(
     feature_id: str,
     body: GenerateDiagramRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
-) -> dict[str, str]:
-    from kosmo.infrastructure.api.async_generation import launch_async
-
+) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
 
-    job_id = await launch_async(
-        request.app.state.async_job_store,
-        "modelo_generate",
-        body.project_id,
-        uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid)),
-    )
-    return {"job_id": job_id}
+    output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
+    return {
+        "id": str(output.diagram.id),
+        "feature_id": str(output.diagram.feature_id),
+        "diagram_syntax": output.diagram.diagram_syntax,
+        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
+        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
+    }
 
 
 @router.get(

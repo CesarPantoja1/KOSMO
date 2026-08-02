@@ -193,14 +193,8 @@ async def apply_batch(
         _log.error("plan.apply_value_error", detail=str(e), exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    applied = [
-        AppliedChangeItemView(change_id=str(c.id), section=c.section)
-        for c in output.applied_changes
-    ]
-    failed = [
-        FailedChangeItemView(change_id=str(fc.id), section="", error=fc.reason)
-        for fc in output.failed_changes
-    ]
+    applied = [AppliedChangeItemView(change_id=str(c.id), section=c.section) for c in output.applied_changes]
+    failed = [FailedChangeItemView(change_id=str(fc.id), section="", error=fc.reason) for fc in output.failed_changes]
 
     propagation: PhaseNotificationList | None = None
     if output.propagation is not None:

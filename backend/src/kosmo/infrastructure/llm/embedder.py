@@ -50,6 +50,3 @@ class OpenAIEmbedder:
         if validation_errors:
             parts.append("Errores: " + "; ".join(validation_errors[:5]))
         return "\n".join(parts)
-
-
-

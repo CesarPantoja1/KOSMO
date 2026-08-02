@@ -43,7 +43,11 @@ class StubConsistencyAgent:
         return {"affected_artifact_ids": list(self._affected_ids), "rationale": "Stub evaluation"}
 
     async def execute_conversation(
-        self, skill_name: str, messages: list[object], context: object, **kwargs: object  # noqa: ARG002
+        self,
+        skill_name: str,
+        messages: list[object],
+        context: object,
+        **kwargs: object,  # noqa: ARG002
     ) -> object:
         raise NotImplementedError("Not used in consistency tests")
 

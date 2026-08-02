@@ -179,6 +179,7 @@ def _agent_dep(request: Request):
 def _chat_repo_dep(request: Request) -> ChatRepository:
     return request.app.state.chat_repo  # type: ignore[reportReturnType]
 
+
 @router.post(
     "/stream",
     summary="Enviar mensaje al chat de Características con streaming SSE",

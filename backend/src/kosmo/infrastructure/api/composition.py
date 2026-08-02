@@ -254,7 +254,6 @@ class PipelineComponents:
     chat_repo: Any
     traceability_repo: Any
     outbox: Any
-    async_job_store: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -430,11 +429,9 @@ def build_pipeline_components(
     traceability_repo = SqlAlchemyTraceabilityRepository(session_factory)
     knowledge_tools.register(*build_get_impact(traceability_repo))
 
-    from kosmo.infrastructure.persistence.postgres.async_job_store import AsyncJobStore
     from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
 
     outbox = OutboxStore(session_factory)
-    async_job_store = AsyncJobStore(session_factory)
 
     agent = KOSMOAgent(
         llm_client=llm_client,
@@ -473,7 +470,6 @@ def build_pipeline_components(
         chat_repo=chat_repo,
         traceability_repo=traceability_repo,
         outbox=outbox,
-        async_job_store=async_job_store,
     )
 
 
@@ -711,4 +707,3 @@ def build_modelo_components(
         ),
         diagram_repo=diagram_repo,
     )
-

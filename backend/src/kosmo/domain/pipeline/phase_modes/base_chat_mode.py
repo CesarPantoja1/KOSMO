@@ -44,9 +44,7 @@ class BaseChatMode:
                 if not cs.diff_after or not cs.diff_after.strip():
                     errors.append("El campo diff_after no puede estar vacío.")
                 if cs.diff_before.strip() == cs.diff_after.strip():
-                    errors.append(
-                        "diff_before y diff_after son idénticos; la sugerencia no propone cambios reales."
-                    )
+                    errors.append("diff_before y diff_after son idénticos; la sugerencia no propone cambios reales.")
         elif isinstance(output, dict):
             errors.append("Formato de salida no reconocido. Se esperaba RespuestaChatLLM.")
         else:

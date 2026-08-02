@@ -226,8 +226,7 @@ def build_get_impact(
     tool_def = KnowledgeToolDef(
         name="get_impact",
         description=(
-            "Consulta que artefactos dependen de uno dado "
-            "(features de un requisito, diagramas de un requisito, etc.)"
+            "Consulta que artefactos dependen de uno dado (features de un requisito, diagramas de un requisito, etc.)"
         ),
         parameters={
             "type": "object",

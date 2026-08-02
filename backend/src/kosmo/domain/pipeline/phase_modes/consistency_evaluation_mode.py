@@ -61,7 +61,7 @@ class ConsistencyEvaluationMode:
             for c in context.applied_changes
         )
         artifacts_text = "\n".join(
-            f"- [{a.artifact_type}] id={a.artifact_id}, titulo=\"{a.title}\", descripcion=\"{a.description[:200]}\""
+            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", descripcion="{a.description[:200]}"'
             for a in context.downstream_artifacts
         )
         return (

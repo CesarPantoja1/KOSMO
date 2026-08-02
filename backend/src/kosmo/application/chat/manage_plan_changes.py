@@ -91,10 +91,7 @@ class ManagePlanChangesUseCase:
         await self._verify_project(project_id)
 
         changes = await self._chat_repo.list_plan_changes(project_id, phase)
-        if any(
-            c.section == section and c.diff.after == diff_after and c.status in _ACTIVE_STATUSES
-            for c in changes
-        ):
+        if any(c.section == section and c.diff.after == diff_after and c.status in _ACTIVE_STATUSES for c in changes):
             return self._build_state(project_id, phase, context_id, changes)
 
         existing_by_id = next((c for c in changes if str(c.id) == change_id), None)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from ulid import ULID
@@ -36,38 +36,35 @@ def _consistency_uc(request: Request) -> EvaluateProjectConsistencyUseCase:
 
 @router.post(
     "/evaluate",
-    summary="Evaluar consistencia entre fases (asíncrono)",
-    description="Evalúa impacto de cambios sobre artefactos. Devuelve job_id.",
-    status_code=status.HTTP_202_ACCEPTED,
+    summary="Evaluar consistencia entre fases",
+    description="Evalúa el impacto de cambios propuestos sobre artefactos del proyecto.",
+    status_code=status.HTTP_200_OK,
 )
 async def evaluate_consistency(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Annotated[EvaluateConsistencyRequestView, Body(...)],
     uc: Annotated[EvaluateProjectConsistencyUseCase, Depends(_consistency_uc)],
-    req: Request,
-) -> dict[str, str]:
-    from kosmo.infrastructure.api.async_generation import launch_async
-
+) -> dict[str, Any]:
     source_phase = _resolve_origin_phase(request.phase_origin)
     changes = _changes_to_plan(request.changes)
     targets = _resolve_targets(request.phase_destination)
     target_specs = [_to_spec_phase(t) for t in targets]
 
-    job_id = await launch_async(
-        req.app.state.async_job_store,
-        "consistency_evaluate",
-        project_id,
-        uc.execute(
-            EvaluateProjectConsistencyInput(
-                project_id=ProjectId(project_id),
-                source_phase=source_phase,
-                target_phases=target_specs,
-                applied_changes=changes,
-            )
-        ),
+    output = await uc.execute(
+        EvaluateProjectConsistencyInput(
+            project_id=ProjectId(project_id),
+            source_phase=source_phase,
+            target_phases=target_specs,
+            applied_changes=changes,
+        )
     )
-    return {"job_id": job_id}
+    return {
+        "report_id": output.report_id,
+        "source_phase": output.source_phase,
+        "upstream_impact": [_impact_dict(i) for i in output.upstream_impact],
+        "downstream_impact": [_impact_dict(i) for i in output.downstream_impact],
+    }
 
 
 def _resolve_origin_phase(phase_name: str) -> SpecPhase:
@@ -113,3 +110,14 @@ def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
             )
         )
     return result
+
+
+def _impact_dict(i: Any) -> dict[str, str]:
+    return {
+        "phase": i.phase,
+        "artifact_id": i.artifact_id,
+        "artifact_type": i.artifact_type,
+        "artifact_label": i.artifact_label,
+        "section": i.section,
+        "rationale": i.rationale,
+    }

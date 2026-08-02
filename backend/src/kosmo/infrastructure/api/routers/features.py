@@ -62,15 +62,15 @@ def _list_features(request: Request) -> ListFeaturesUseCase:
 
 @router.post(
     "",
-    summary="Generar características con IA (asíncrono)",
+    summary="Generar características del producto con IA",
     description=(
-        "Genera las características del producto software a partir del "
-        "documento de descubrimiento utilizando inteligencia artificial. "
-        "Devuelve un job_id para seguir el progreso."
+        "Genera características de alto nivel evaluando el documento de "
+        "descubrimiento del proyecto. Las características representan capacidades "
+        "funcionales del producto software a construir."
     ),
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_202_ACCEPTED: {"description": "Job de generación creado."},
+        status.HTTP_200_OK: {"description": "Características generadas exitosamente."},
         status.HTTP_401_UNAUTHORIZED: {"description": "Token de acceso inválido o ausente."},
     },
 )
@@ -79,17 +79,22 @@ async def generate_features(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
-    request: Request,
-) -> dict[str, str]:
-    from kosmo.infrastructure.api.async_generation import launch_async
-
-    job_id = await launch_async(
-        request.app.state.async_job_store,
-        "features_generate",
-        project_id,
-        use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id))),
-    )
-    return {"job_id": job_id}
+) -> dict[str, Any]:
+    output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
+    return {
+        "project_id": str(output.project_id),
+        "features": [
+            {
+                "id": str(f.id),
+                "title": f.title,
+                "description": f.description,
+                "origin": f.origin,
+                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
+            }
+            for f in output.features
+        ],
+    }
 
 
 @router.get(

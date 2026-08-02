@@ -794,10 +794,6 @@ class ConsistencyReportView(BaseModel):
     own_changes: list[ChangeInputView] = Field(  # type: ignore[reportUnknownVariableType]
         default_factory=list, description="Cambios propios evaluados"
     )
-    upstream_impact: list[ImpactItemView] | None = Field(
-        default=None, description="Impacto en fases anteriores"
-    )
-    downstream_impact: list[ImpactItemView] | None = Field(
-        default=None, description="Impacto en fases posteriores"
-    )
+    upstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases anteriores")
+    downstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases posteriores")
     created_at: str = Field(description="Timestamp ISO-8601 UTC")

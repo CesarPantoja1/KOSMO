@@ -134,4 +134,3 @@ class ContextBuilder:
             discovery_document=discovery_doc,
             requirements_markdown=full_markdown,
         )
-

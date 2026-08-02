@@ -67,9 +67,7 @@ class RegenerateDiscoveryUseCase:
         current_markdown = document_to_markdown(current_doc)
 
         features = await self._feature_repo.list_by_project(input_data.project_id)
-        ctx_artifacts = await self._build_artifacts_summary(
-            features, input_data.project_id
-        )
+        ctx_artifacts = await self._build_artifacts_summary(features, input_data.project_id)
 
         user_instructions = (
             "Regenera completamente el documento de descubrimiento del proyecto "
@@ -131,7 +129,9 @@ class RegenerateDiscoveryUseCase:
         )
 
     async def _build_artifacts_summary(
-        self, features: list[Feature], project_id: ProjectId  # noqa: ARG002
+        self,
+        features: list[Feature],
+        project_id: ProjectId,  # noqa: ARG002
     ) -> str:
         parts: list[str] = []
 

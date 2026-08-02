@@ -37,33 +37,31 @@ class SqlAlchemyTraceabilityRepository:
         downstream: list[dict[str, str]] = []
 
         async with self._session_factory() as session:
-            up_stmt = select(TraceabilityEdgeModel).where(
-                TraceabilityEdgeModel.target_id == artifact_id
-            )
+            up_stmt = select(TraceabilityEdgeModel).where(TraceabilityEdgeModel.target_id == artifact_id)
             up_result = await session.execute(up_stmt)
             for edge in up_result.scalars().all():
-                upstream.append({
-                    "type": edge.source_type,
-                    "id": edge.source_id,
-                    "origin": edge.origin,
-                })
+                upstream.append(
+                    {
+                        "type": edge.source_type,
+                        "id": edge.source_id,
+                        "origin": edge.origin,
+                    }
+                )
 
-            down_stmt = select(TraceabilityEdgeModel).where(
-                TraceabilityEdgeModel.source_id == artifact_id
-            )
+            down_stmt = select(TraceabilityEdgeModel).where(TraceabilityEdgeModel.source_id == artifact_id)
             down_result = await session.execute(down_stmt)
             for edge in down_result.scalars().all():
-                downstream.append({
-                    "type": edge.target_type,
-                    "id": edge.target_id,
-                    "origin": edge.origin,
-                })
+                downstream.append(
+                    {
+                        "type": edge.target_type,
+                        "id": edge.target_id,
+                        "origin": edge.origin,
+                    }
+                )
 
         return {"upstream": upstream, "downstream": downstream}
 
-    async def add_feature_requirement_edges(
-        self, feature_id: FeatureId, requirement_ids: list[RequirementId]
-    ) -> None:
+    async def add_feature_requirement_edges(self, feature_id: FeatureId, requirement_ids: list[RequirementId]) -> None:
         async with self._session_factory() as session:
             for req_id in requirement_ids:
                 session.add(

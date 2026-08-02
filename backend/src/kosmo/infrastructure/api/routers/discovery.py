@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -89,15 +89,13 @@ def _get_discovery_chat_history(request: Request) -> GetDiscoveryChatHistoryUseC
 
 @router.post(
     "",
-    summary="Generar documento de descubrimiento con IA (asíncrono)",
+    summary="Generar documento de descubrimiento con IA",
     description=(
-        "Genera el documento de visión de producto para un proyecto "
-        "utilizando inteligencia artificial. Devuelve un job_id para seguir el progreso "
-        "via GET /api/v1/jobs/{job_id} o SSE en /api/v1/jobs/{job_id}/stream."
+        "Genera un documento de visión de producto estructurado en 8 secciones, utilizando inteligencia artificial."
     ),
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_202_ACCEPTED: {"description": "Job de generación creado exitosamente."},
+        status.HTTP_200_OK: {"description": "Documento de descubrimiento generado exitosamente."},
         status.HTTP_401_UNAUTHORIZED: {"description": "Token de acceso inválido o ausente."},
     },
 )
@@ -106,17 +104,12 @@ async def generate_discovery(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateDiscoveryUseCase, Depends(_generate_discovery)],
-    request: Request,
-) -> dict[str, str]:
-    from kosmo.infrastructure.api.async_generation import launch_async
-
-    job_id = await launch_async(
-        request.app.state.async_job_store,
-        "discovery_generate",
-        project_id,
-        use_case.execute(GenerateDiscoveryInput(project_id=ProjectId(project_id))),
-    )
-    return {"job_id": job_id}
+) -> dict[str, Any]:
+    output = await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId(project_id)))
+    return {
+        "project_id": str(output.project_id),
+        "content": _document_to_markdown(output.document),
+    }
 
 
 @router.get(
@@ -366,9 +359,7 @@ async def get_chat_history(
     before: str | None = None,
 ) -> ChatHistoryResponse:
     try:
-        output = await use_case.execute(
-            GetDiscoveryChatHistoryInput(project_id=ProjectId(project_id), before=before)
-        )
+        output = await use_case.execute(GetDiscoveryChatHistoryInput(project_id=ProjectId(project_id), before=before))
     except ProjectNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -397,6 +388,7 @@ def _agent_dep(request: Request) -> KOSMOAgent:
 
 def _chat_repo_dep(request: Request) -> ChatRepository:
     return request.app.state.chat_repo
+
 
 @router.post(
     "/chat/stream",

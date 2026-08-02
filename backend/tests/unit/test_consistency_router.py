@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -102,19 +101,15 @@ async def test_evaluate_consistency_returns_report_with_affected_features() -> N
         ],
     )
 
-    job_mock = MagicMock()
-    job_mock.create = AsyncMock(return_value="job_001")
-    req = MagicMock()
-    req.app.state.async_job_store = job_mock
-
     result = await evaluate_consistency(
         project_id="prj_001",
         _principal=_principal(),
         request=request_body,
         uc=uc,
-        req=req,
     )
-    assert result["job_id"] == "job_001"
+    assert result["report_id"].startswith("cnr_")
+    assert len(result["downstream_impact"]) == 1
+    assert result["downstream_impact"][0]["artifact_id"] == "feat_01"
 
 
 @pytest.mark.unit
@@ -145,19 +140,15 @@ async def test_evaluate_consistency_no_destination_evaluates_all_phases() -> Non
         ],
     )
 
-    job_mock = MagicMock()
-    job_mock.create = AsyncMock(return_value="job_001")
-    req = MagicMock()
-    req.app.state.async_job_store = job_mock
-
     result = await evaluate_consistency(
         project_id="prj_001",
         _principal=_principal(),
         request=request_body,
         uc=uc,
-        req=req,
     )
-    assert result["job_id"] == "job_001"
+    assert result["report_id"].startswith("cnr_")
+    assert result["upstream_impact"] == []
+    assert len(result["downstream_impact"]) >= 1
 
 
 @pytest.mark.unit
@@ -180,7 +171,6 @@ async def test_evaluate_consistency_unknown_origin_phase_raises_400() -> None:
             _principal=_principal(),
             request=request_body,
             uc=uc,
-            req=MagicMock(),
         )
 
     assert exc_info.value.status_code == 400

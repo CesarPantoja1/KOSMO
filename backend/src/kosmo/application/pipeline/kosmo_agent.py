@@ -197,8 +197,10 @@ class KOSMOAgent:
                 temperature=mode.temperature,
                 max_tokens=mode.max_tokens,
             )
-            message = _to_assistant_message(result) if isinstance(result, RespuestaChatLLM) else _to_assistant_message(
-                RespuestaChatLLM(content=str(result), change_suggestion=None)
+            message = (
+                _to_assistant_message(result)
+                if isinstance(result, RespuestaChatLLM)
+                else _to_assistant_message(RespuestaChatLLM(content=str(result), change_suggestion=None))
             )
             yield message
             return
@@ -392,6 +394,7 @@ class KOSMOAgent:
             patterns_task = asyncio.create_task(self._pattern_store.list_patterns(phase=phase, limit=5))
 
         if self._embedder is not None and self._memory is not None and project_id is not None:
+
             async def _embed_and_search() -> Any:
                 query_embedding = await self._embedder.embed(base_user_prompt)  # type: ignore[reportOptionalMemberAccess]
                 if query_embedding is None:

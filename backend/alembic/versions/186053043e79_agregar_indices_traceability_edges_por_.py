@@ -17,12 +17,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "ix_traceability_edges_source_id", "traceability_edges", ["source_id"], if_not_exists=True
-    )
-    op.create_index(
-        "ix_traceability_edges_target_id", "traceability_edges", ["target_id"], if_not_exists=True
-    )
+    op.create_index("ix_traceability_edges_source_id", "traceability_edges", ["source_id"], if_not_exists=True)
+    op.create_index("ix_traceability_edges_target_id", "traceability_edges", ["target_id"], if_not_exists=True)
 
 
 def downgrade() -> None:

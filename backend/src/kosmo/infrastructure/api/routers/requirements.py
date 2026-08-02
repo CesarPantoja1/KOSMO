@@ -45,9 +45,7 @@ class RefineRequirementsRequest(BaseModel):
 
 
 async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    fid = await resolve_feature_id(
-        request.app.state.feature_repo, ProjectId(project_id), id_or_slug
-    )
+    fid = await resolve_feature_id(request.app.state.feature_repo, ProjectId(project_id), id_or_slug)
     if fid is None:
         raise FeatureNotFoundError(feature_id=id_or_slug, instance=f"/api/v1/features/{id_or_slug}/requirements")
     return fid
@@ -55,28 +53,34 @@ async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) ->
 
 @router.post(
     "/generate",
-    summary="Generar requisitos EARS (asíncrono)",
-    description=("Genera requisitos EARS. Devuelve un job_id para seguir el progreso."),
-    status_code=status.HTTP_202_ACCEPTED,
+    summary="Generar requisitos EARS",
+    description="Genera requisitos EARS para la característica indicada.",
+    status_code=status.HTTP_200_OK,
 )
 async def generate_requirements(
     feature_id: str,
     body: GenerateRequirementsRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
-) -> dict[str, str]:
-    from kosmo.infrastructure.api.async_generation import launch_async
-
+) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("GenerateEARSUseCase", request.app.state.generate_ears)
 
-    job_id = await launch_async(
-        request.app.state.async_job_store,
-        "ears_generate",
-        body.project_id,
-        uc.execute(GenerateEARSInput(project_id=ProjectId(body.project_id), feature_id=fid)),
-    )
-    return {"job_id": job_id}
+    output = await uc.execute(GenerateEARSInput(project_id=ProjectId(body.project_id), feature_id=fid))
+    return {
+        "project_id": str(output.project_id),
+        "feature_id": str(output.feature_id),
+        "requirements": [
+            {
+                "id": str(r.id),
+                "title": r.title,
+                "statement": r.statement,
+                "pattern": r.pattern.value if hasattr(r.pattern, "value") else r.pattern,
+                "acceptance_criteria": r.acceptance_criteria,
+            }
+            for r in output.requirements
+        ],
+    }
 
 
 @router.get(

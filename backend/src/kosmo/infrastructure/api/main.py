@@ -22,7 +22,6 @@ from kosmo.infrastructure.api.composition import (
     build_requirements_components,
 )
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
-from kosmo.infrastructure.api.routers.async_jobs import router as async_jobs_router
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
@@ -267,7 +266,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.agent = pipeline_components.agent
     app.state.chat_repo = pipeline_components.chat_repo
     app.state.traceability_repo = pipeline_components.traceability_repo
-    app.state.async_job_store = pipeline_components.async_job_store
     discovery_components = build_discovery_components(session_factory, pipeline_components)
     features_components = build_features_components(session_factory, pipeline_components)
     app.state.generate_discovery = discovery_components.generate_discovery
@@ -332,9 +330,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     outbox_store = pipeline_components.outbox
     app.state.outbox = outbox_store
 
-    outbox_task = asyncio.create_task(
-        run_outbox_worker(outbox_store, _make_outbox_handler(pipeline_components))
-    )
+    outbox_task = asyncio.create_task(run_outbox_worker(outbox_store, _make_outbox_handler(pipeline_components)))
 
     instrument_app(settings, app=app, db_engine=db_engine)
     try:
@@ -377,9 +373,7 @@ async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
             "detail": problem.detail,
             "instance": problem.instance,
             "trace_id": problem.trace_id,
-            "violations": [
-                {"loc": v.loc, "msg": v.msg, "input": v.input} for v in problem.violations
-            ],
+            "violations": [{"loc": v.loc, "msg": v.msg, "input": v.input} for v in problem.violations],
         },
         media_type="application/problem+json",
     )
@@ -407,7 +401,6 @@ app.include_router(modelo_router)
 app.include_router(consistency_router)
 app.include_router(schemas_router)
 app.include_router(knowledge_router)
-app.include_router(async_jobs_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
