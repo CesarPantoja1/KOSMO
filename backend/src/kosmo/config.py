@@ -39,9 +39,6 @@ class Settings(BaseSettings):
 
     # DSN de persistencia
     database_url: SecretStr
-    # ponytail: mongo_url está deprecado; el proyecto no usa MongoDB.
-    # Eliminar el campo y el directorio persistence/mongodb/ cuando ningún .env lo defina.
-    mongo_url: SecretStr | None = None
     redis_url: SecretStr | None = None
 
     # LLM BYOK
