@@ -17,8 +17,7 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
-import type { Characteristic } from '@/entities/characteristic';
-import { getCharacteristics } from '@/entities/characteristic';
+import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { Modeling } from '@/widgets/main-navbar/ui/icons';
 
@@ -28,7 +27,6 @@ const ModelingPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
@@ -43,6 +41,9 @@ const ModelingPage = () => {
 
 	const [plantumlSource, setPlantumlSource] = useState('');
 	const [isPlantumlMaximized, setPlantumlMaximized] = useState(false);
+
+	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
+	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -70,8 +71,7 @@ const ModelingPage = () => {
 		const fetch = async () => {
 			setIsLoading(true);
 			try {
-				const data = await getCharacteristics(currentProject.id);
-				setCharacteristics(data);
+				await storeGetCharacteristics(currentProject.id);
 			} catch (err) {
 				const message =
 					err instanceof Error ? err.message : 'Error al cargar las características';
@@ -82,7 +82,7 @@ const ModelingPage = () => {
 		};
 
 		fetch();
-	}, [currentProject, router]);
+	}, [currentProject, router, storeGetCharacteristics]);
 
 	useEffect(() => {
 		if (!selectedId || !currentProject) return;
@@ -105,11 +105,11 @@ const ModelingPage = () => {
 				if (content) {
 					setHasRequirements(characteristicId, true);
 				}
-				setCharacteristics((prev) =>
-					prev.map((c) =>
+				useCharacteristicStore.setState((state) => ({
+					currentCharacteristics: state.currentCharacteristics.map((c) =>
 						c.id === characteristicId ? { ...c, requirements: content } : c,
 					),
-				);
+				}));
 				setUML(content.diagram_syntax);
 				setSavedContent(content.diagram_syntax);
 
@@ -155,6 +155,11 @@ const ModelingPage = () => {
 	const applySelected = (id: string) => {
 		setSelectedId(id);
 		setPendingCharSwitch(null);
+		// Cerrar chat si la nueva característica no tiene diagrama
+		const cHasDiag = hasDiagram[id] || false;
+		if (!cHasDiag) {
+			setIsChatbotOpen(false);
+		}
 	};
 
 	const handleConfirmSwitch = () => {
@@ -253,16 +258,15 @@ const ModelingPage = () => {
 							<ArrowRight color='' size={20} />
 						</Link>
 					</div>
-				</div>
-
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
-						<div className='h-7 bg-base-200 rounded w-48' />
-						{[1, 2, 3, 4].map((i) => (
-							<div key={i} className='h-14 bg-base-200 rounded' />
-						))}
+					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
+						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
+							<div className='h-7 bg-base-200 rounded w-48' />
+							{[1, 2, 3, 4].map((i) => (
+								<div key={i} className='h-14 bg-base-200 rounded' />
+							))}
+						</div>
+						<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
 					</div>
-					<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
 				</div>
 			</div>
 		);
