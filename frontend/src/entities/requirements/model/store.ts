@@ -11,6 +11,9 @@ interface RequirementsStore {
 	setHasRequirements: (id: string, has: boolean) => void;
 	resetRequirements: () => void;
 
+	selectedFeatureId: string | null;
+	setSelectedFeatureId: (id: string | null) => void;
+
 	chatHistories: Record<string, RequirementChatResponse[]>;
 	loadChatHistory: (featureId: string) => Promise<RequirementChatResponse[]>;
 	sendChatMessage: (
@@ -29,6 +32,9 @@ export const useRequirementsStore = create<RequirementsStore>()(
 					hasRequirements: { ...state.hasRequirements, [id]: has },
 				})),
 			resetRequirements: () => set({ hasRequirements: {} }),
+
+			selectedFeatureId: null,
+			setSelectedFeatureId: (id) => set({ selectedFeatureId: id }),
 
 			chatHistories: {},
 			loadChatHistory: async (featureId) => {

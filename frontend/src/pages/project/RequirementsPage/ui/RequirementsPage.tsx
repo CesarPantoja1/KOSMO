@@ -57,6 +57,8 @@ const RequirementsPage = () => {
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
 	const hasRequirements = useRequirementsStore((s) => s.hasRequirements);
 	const setHasRequirements = useRequirementsStore((s) => s.setHasRequirements);
+	const selectedFeatureId = useRequirementsStore((s) => s.selectedFeatureId);
+	const setSelectedFeatureId = useRequirementsStore((s) => s.setSelectedFeatureId);
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 
@@ -182,6 +184,14 @@ const RequirementsPage = () => {
 			cancelled = true;
 		};
 	}, [selectedId, currentProject]);
+
+	useEffect(() => {
+		if (selectedFeatureId) {
+			setSelectedId(selectedFeatureId);
+			setSelectedFeatureId(null);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
