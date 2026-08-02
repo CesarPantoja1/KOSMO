@@ -65,7 +65,7 @@ async def stream_job(
             await asyncio.sleep(1)
 
     return StreamingResponse(
-        event_stream(),
+        event_stream(),  # type: ignore[reportArgumentType]
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )

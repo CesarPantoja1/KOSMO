@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -49,7 +50,7 @@ class AsyncJobStore:
                 model.error = error
             await session.commit()
 
-    async def get(self, job_id: str) -> dict | None:
+    async def get(self, job_id: str) -> dict[str, Any] | None:
         async with self._session_factory() as session:
             result = await session.execute(
                 select(AsyncJobModel).where(AsyncJobModel.id == job_id)
