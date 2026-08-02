@@ -4,7 +4,6 @@ import {
 	FloatingPlan,
 	MarkdownEditor,
 	PanelAsistenteRequisito,
-	type ChangeSuggestion,
 } from '@/feature';
 
 import Link from 'next/link';
@@ -12,10 +11,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
-	addPlanChange,
-	deletePlanChange,
+	usePlanActions,
 	usePlanStore,
-	type PlanChange,
 } from '@/entities/plan';
 import {
 	generateRequirements,
@@ -41,8 +38,6 @@ const RequirementsPage = () => {
 	const router = useRouter();
 
 	// Plan store
-	const addToPlan = usePlanStore((s) => s.addToPlan);
-	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
 	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
@@ -83,42 +78,11 @@ const RequirementsPage = () => {
 		}
 	}, [currentProject, fetchAndHydratePlan]);
 
-	const handlePlanAction = (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => {
-		if (!currentProject || !selectedId) return;
-
-		if (action === 'add') {
-			const change: PlanChange = {
-				id: suggestion.id,
-				section: suggestion.section,
-				description: suggestion.description ?? suggestion.section,
-				diff: {
-					before: suggestion.diff_before,
-					after: suggestion.diff_after,
-				},
-				status: 'pending',
-				origin: 'chat',
-				phase: 'requirements',
-				context: selectedId,
-				rationale: suggestion.rationale ?? undefined,
-				created_at: new Date().toISOString(),
-			};
-			addToPlan('requirements', change);
-			addPlanChange(currentProject.id, 'requirements', change).catch((err) => {
-				console.warn('[RequirementsPage] Error al persistir cambio en backend:', err);
-			});
-		}
-
-		if (action === 'remove') {
-			removeFromPlan('requirements', suggestion.id);
-			deletePlanChange(currentProject.id, 'requirements', suggestion.id).catch((err) => {
-				console.warn('[RequirementsPage] Error al eliminar cambio en backend:', err);
-			});
-		}
-	};
+	const handlePlanAction = usePlanActions(
+		currentProject?.id ?? null,
+		'requirements',
+		selectedId,
+	);
 
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
@@ -573,7 +537,7 @@ const RequirementsPage = () => {
 									</div>
 								)}
 
-							<FloatingPlan phase='requirements' navigateTo='/proyecto/requisitos/plan' />
+							<FloatingPlan phase='requirements' navigateTo='/proyecto/requisitos/plan' contextId={selectedId} />
 						</div>
 					</div>
 				</div>

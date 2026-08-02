@@ -5,13 +5,11 @@ import {
 	type CharacteristicChatResponse,
 } from '@/entities/characteristic';
 import {
-	addPlanChange,
-	deletePlanChange,
+	usePlanActions,
 	usePlanStore,
-	type PlanChange,
 } from '@/entities/plan';
 import { Chatbot, FloatingPlan } from '@/feature';
-import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
+import type { ChatMessage } from '@/feature/chatbot';
 import { Ai, Loading, Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import { useAppStore } from 'app/store/app.store';
@@ -56,8 +54,6 @@ const CharacteristicsPage = () => {
 		(s) => s.generateCharacteristics,
 	);
 
-	const addToPlan = usePlanStore((s) => s.addToPlan);
-	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
 	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	useEffect(() => {
@@ -100,42 +96,11 @@ const CharacteristicsPage = () => {
 		}
 	};
 
-	const handlePlanAction = (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		_messageId: string,
-	) => {
-		if (!currentProject || !activeFeatureId) return;
-
-		if (action === 'add') {
-			const change: PlanChange = {
-				id: suggestion.id,
-				section: suggestion.section,
-				description: suggestion.description ?? suggestion.section,
-				diff: {
-					before: suggestion.diff_before,
-					after: suggestion.diff_after,
-				},
-				status: 'pending',
-				origin: 'chat',
-				phase: 'features',
-				context: activeFeatureId,
-				rationale: suggestion.rationale ?? undefined,
-				created_at: new Date().toISOString(),
-			};
-			addToPlan('features', change);
-			addPlanChange(currentProject.id, 'features', change).catch((err) => {
-				console.warn('[CharacteristicsPage] Error al persistir cambio en backend:', err);
-			});
-		}
-
-		if (action === 'remove') {
-			removeFromPlan('features', suggestion.id);
-			deletePlanChange(currentProject.id, 'features', suggestion.id).catch((err) => {
-				console.warn('[CharacteristicsPage] Error al eliminar cambio en backend:', err);
-			});
-		}
-	};
+	const handlePlanAction = usePlanActions(
+		currentProject?.id ?? null,
+		'features',
+		activeFeatureId,
+	);
 
 	const chatMessages: ChatMessage[] = (chatHistories[activeFeatureId!] ?? []).map(
 		toChatMessage,
@@ -255,6 +220,7 @@ const CharacteristicsPage = () => {
 								<FloatingPlan
 									phase='features'
 									navigateTo='/proyecto/caracteristicas/plan'
+									contextId={activeFeatureId}
 								/>
 							</>
 						)}

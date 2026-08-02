@@ -105,6 +105,8 @@ class ApplyPlanChangesUseCase:
                 await self._persist_with_uow(input_data.project_id, applied, final_markdown)
         elif input_data.phase == SpecPhase.REQUISITOS:
             applied, phase_failed = await self._apply_requirement_changes(matched)
+            if applied and self._session_factory is not None:
+                await self._mark_changes_applied_uow(input_data.project_id, applied)
         else:
             applied, phase_failed = await self._apply_feature_changes(input_data.project_id, matched)
             if applied and self._session_factory is not None:
