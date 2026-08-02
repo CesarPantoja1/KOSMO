@@ -1,15 +1,14 @@
 'use client';
 
 import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
-import type { PlanChange } from '@/entities/plan';
-import { addPlanChange, deletePlanChange, usePlanStore } from '@/entities/plan';
+import { usePlanActions, usePlanStore } from '@/entities/plan';
 import {
 	Chatbot,
 	FloatingPlan,
 	MarkdownEditor,
 	type MarkdownEditorHandle,
 } from '@/feature';
-import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
+import type { ChatMessage } from '@/feature/chatbot';
 import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
@@ -67,8 +66,7 @@ const DiscoveryPage = () => {
 	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
 	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
 
-	const addToPlan = usePlanStore((s) => s.addToPlan);
-	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
@@ -77,8 +75,6 @@ const DiscoveryPage = () => {
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
-
-	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -219,42 +215,11 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handlePlanAction = (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => {
-		if (!currentProject) return;
-
-		if (action === 'add') {
-			const change: PlanChange = {
-				id: suggestion.id,
-				section: suggestion.section,
-				description: suggestion.description ?? suggestion.section,
-				diff: {
-					before: suggestion.diff_before,
-					after: suggestion.diff_after,
-				},
-				status: 'pending',
-				origin: 'chat',
-				phase: 'discovery',
-				context: currentProject.id,
-				rationale: suggestion.rationale ?? undefined,
-				created_at: new Date().toISOString(),
-			};
-			addToPlan('discovery', change);
-			addPlanChange(currentProject.id, 'discovery', change).catch((err) => {
-				console.warn('[DiscoveryPage] Error al persistir cambio en backend:', err);
-			});
-		}
-
-		if (action === 'remove') {
-			removeFromPlan('discovery', suggestion.id);
-			deletePlanChange(currentProject.id, 'discovery', suggestion.id).catch((err) => {
-				console.warn('[DiscoveryPage] Error al eliminar cambio en backend:', err);
-			});
-		}
-	};
+	const handlePlanAction = usePlanActions(
+		currentProject?.id ?? null,
+		'discovery',
+		currentProject?.id ?? null,
+	);
 
 	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
@@ -391,6 +356,7 @@ const DiscoveryPage = () => {
 								<FloatingPlan
 									phase='discovery'
 									navigateTo='/proyecto/descubrimiento/plan'
+									contextId={currentProject?.id ?? null}
 								/>
 							</div>
 						)}
