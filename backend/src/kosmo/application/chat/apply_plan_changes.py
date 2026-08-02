@@ -290,21 +290,21 @@ class ApplyPlanChangesUseCase:
         if self._requirement_repo is None:
             raise ValueError("La aplicación de cambios de requisitos no está configurada.")
 
-        feature_id_by_change = _find_feature_for_requirement_changes(changes)
-        if not feature_id_by_change:
+        grouped: dict[str, list[PlanCambio]] = {}
+        for c in changes:
+            fid = _feature_id_from_change(c)
+            if fid:
+                grouped.setdefault(fid, []).append(c)
+
+        if not grouped:
             reason = "No se pudo determinar la característica para los cambios de requisitos"
             return [], [FailedChange(id=c.id, reason=reason) for c in changes]
 
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
-        for fid in feature_id_by_change:
-            a_ids = {a.id for a in applied}
-            f_ids = {f.id for f in failed}
-            f_changes = [c for c in changes if c.id not in a_ids and c.id not in f_ids]
-            if not f_changes:
-                break
-
-            markdown = await self._requirement_repo.by_feature_id(fid)
+        for fid, f_changes in grouped.items():
+            fid_typed = FeatureId(fid)
+            markdown = await self._requirement_repo.by_feature_id(fid_typed)
             if markdown is None:
                 for c in f_changes:
                     failed.append(
@@ -329,20 +329,16 @@ class ApplyPlanChangesUseCase:
                     markdown = result
                     applied.append(change)
 
-            if applied:
-                await self._requirement_repo.save(fid, markdown)
+            if any(a.id == c.id for c in f_changes for a in applied):
+                await self._requirement_repo.save(fid_typed, markdown)
 
         return applied, failed
 
 
-def _find_feature_for_requirement_changes(changes: list[PlanCambio]) -> list[FeatureId]:
-    fids: list[FeatureId] = []
-    seen: set[str] = set()
-    for c in changes:
-        if c.context_id and c.context_id.startswith("feat_") and c.context_id not in seen:
-            seen.add(c.context_id)
-            fids.append(FeatureId(c.context_id))
-    return fids
+def _feature_id_from_change(change: PlanCambio) -> str | None:
+    if change.context_id and change.context_id.startswith("feat_"):
+        return change.context_id
+    return None
 
 
 async def revert_to_version(
