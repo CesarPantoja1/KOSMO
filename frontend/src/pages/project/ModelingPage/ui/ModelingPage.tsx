@@ -105,36 +105,18 @@ const ModelingPage = () => {
 			setPlantumlMaximized(false);
 
 			try {
-				const content = await getDiagram(projectId, characteristicId);
-
-				if (cancelled) return;
-				if (content) {
-					setHasRequirements(characteristicId, true);
-				}
-				useCharacteristicStore.setState((state) => ({
-					currentCharacteristics: state.currentCharacteristics.map((c) =>
-						c.id === characteristicId ? { ...c, requirements: content } : c,
-					),
-				}));
-				setUML(content.diagram_syntax);
-				setSavedContent(content.diagram_syntax);
-
-				// Intentar cargar el diagrama existente
-				try {
-					const res = await getDiagram(projectId, characteristicId);
-					if (!cancelled && res.diagram_syntax) {
-						setPlantumlSource(res.diagram_syntax);
-						setHasDiagram(characteristicId, true);
-					}
-				} catch {
-					if (!cancelled) {
-						setPlantumlSource('');
-						setHasDiagram(characteristicId, false);
-					}
+				const res = await getDiagram(projectId, characteristicId);
+				if (!cancelled && res?.diagram_syntax) {
+					setUML(res.diagram_syntax);
+					setSavedContent(res.diagram_syntax);
+					setPlantumlSource(res.diagram_syntax);
+					setHasDiagram(characteristicId, true);
 				}
 			} catch {
-				if (!cancelled)
-					toast.error('Error al cargar la información de la característica');
+				if (!cancelled) {
+					setPlantumlSource('');
+					setHasDiagram(characteristicId, false);
+				}
 			} finally {
 				if (!cancelled) {
 					setIsLoadingRequirements(false);
