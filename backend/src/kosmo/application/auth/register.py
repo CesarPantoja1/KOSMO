@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -27,7 +28,7 @@ class RegisterUser:
         user = User(
             id=IdGenerator.generate("user"),
             email=normalized_email,
-            hashed_password=self.password_hasher.hash(password),
+            hashed_password=await asyncio.to_thread(self.password_hasher.hash, password),
             created_at=datetime.now(UTC),
         )
         await self.user_repository.create(user)

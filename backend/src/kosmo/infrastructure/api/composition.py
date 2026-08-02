@@ -447,13 +447,14 @@ def build_pipeline_components(
     from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
-    validate_phase_context = ValidatePhaseContextUseCase(llm_client=llm_client)
+    validate_phase_context = ValidatePhaseContextUseCase()
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
 
     process_chat_message = ProcessChatMessageUseCase(
         chat_repo=chat_repo,
         agent=agent,
+        skill_registry=skill_registry,
         project_repo=project_repo,
     )
 

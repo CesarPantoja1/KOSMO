@@ -64,5 +64,16 @@ class SqlAlchemyTraceabilityRepository:
     async def add_feature_requirement_edges(
         self, feature_id: FeatureId, requirement_ids: list[RequirementId]
     ) -> None:
-        for req_id in requirement_ids:
-            await self.add_edge("feature", str(feature_id), "requirement", str(req_id))
+        async with self._session_factory() as session:
+            for req_id in requirement_ids:
+                session.add(
+                    TraceabilityEdgeModel(
+                        id=IdGenerator.generate("trace_edge"),
+                        source_type="feature",
+                        source_id=str(feature_id),
+                        target_type="requirement",
+                        target_id=str(req_id),
+                        origin="llm",
+                    )
+                )
+            await session.commit()

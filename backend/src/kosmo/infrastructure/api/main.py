@@ -218,6 +218,7 @@ def _make_outbox_handler(pipeline: Any) -> Any:
                 )
             except Exception:
                 _log.warning("outbox.handler_failed", job_type=job_type, exc_info=True)
+                raise
         else:
             _log.warning("outbox.unknown_job_type", job_type=job_type)
 

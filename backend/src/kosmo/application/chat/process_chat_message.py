@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from tenacity import (
@@ -19,16 +19,12 @@ from kosmo.contracts.sdd.ids import ChatMessageId, ProjectId
 from kosmo.contracts.sdd.repositories import ProjectRepository
 from kosmo.domain.sdd.id_generator import IdGenerator
 
+if TYPE_CHECKING:
+    from kosmo.domain.pipeline.skill_registry import SkillRegistry
+
 _MAX_CONTENT_LENGTH = 4000
 
 _log = structlog.get_logger(__name__)
-
-# ponytail: mapping hardcodeado; el nombre del skill debería derivarse del PhaseMode
-_SKILL_BY_PHASE: dict[SpecPhase, str] = {
-    SpecPhase.DESCUBRIMIENTO: "discovery_chat",
-    SpecPhase.CARACTERISTICAS: "features_chat",
-    SpecPhase.REQUISITOS: "requirements_chat",
-}
 
 
 @dataclass(frozen=True)
@@ -52,10 +48,13 @@ class ProcessChatMessageUseCase:
         self,
         chat_repo: ChatRepository,
         agent: AgentPort,
+        *,
+        skill_registry: SkillRegistry | None = None,
         project_repo: ProjectRepository | None = None,
     ) -> None:
         self._chat_repo = chat_repo
         self._agent = agent
+        self._skill_registry = skill_registry
         self._project_repo = project_repo
 
     async def execute(self, input_data: ProcessChatMessageInput) -> ProcessChatMessageOutput:
@@ -74,7 +73,7 @@ class ProcessChatMessageUseCase:
                     instance=input_data.instance,
                 )
 
-        skill_name = _SKILL_BY_PHASE[input_data.phase]
+        skill_name = self._resolve_chat_skill(input_data.phase)
 
         history = await self._chat_repo.get_history(
             project_id=input_data.project_id,
@@ -158,3 +157,8 @@ class ProcessChatMessageUseCase:
             )
 
         return await _call()
+
+    def _resolve_chat_skill(self, phase: SpecPhase) -> str:
+        if self._skill_registry is not None:
+            return self._skill_registry.resolve_chat_skill(phase)
+        raise ValueError(f"No hay SkillRegistry configurado para resolver el skill de chat de la fase {phase.value}")

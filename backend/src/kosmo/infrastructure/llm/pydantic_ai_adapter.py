@@ -208,10 +208,13 @@ class PydanticAILLMClient:
         max_tokens: int = 4096,
     ) -> AsyncIterator[StreamedTypedResult[T]]:
         agent = self._get_agent(prompt.system_prompt)
-        async with agent.run_stream(  # type: ignore[reportUnknownMemberType]
-            prompt.user_prompt,
-            result_type=output_type,  # type: ignore[reportArgumentType]
-            model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+        async with asyncio.wait_for(  # type: ignore[reportUnknownMemberType]
+            agent.run_stream(  # type: ignore[reportUnknownMemberType]
+                prompt.user_prompt,
+                result_type=output_type,  # type: ignore[reportArgumentType]
+                model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+            ),
+            timeout=self._DEFAULT_TIMEOUT_SECONDS,
         ) as streamed:  # type: ignore[reportUnknownVariableType]
             yield StreamedTypedResult(streamed)  # type: ignore[reportArgumentType]
 

@@ -3,7 +3,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import structlog
 from openai import AsyncOpenAI
+
+_log = structlog.get_logger(__name__)
 
 
 class OpenAIEmbedder:
@@ -38,6 +41,7 @@ class OpenAIEmbedder:
             )
             return list(result.data[0].embedding)
         except Exception:
+            _log.warning("embedder.failed", model=self._model_name, exc_info=True)
             return None
 
     @staticmethod

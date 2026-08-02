@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Row, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.agent_memory import (
@@ -25,35 +26,58 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
 
     async def save_session(self, session: AgentSession) -> None:
         async with self._session_factory() as db:
-            stmt = select(AgentSessionModel).where(AgentSessionModel.id == session.session_id)
-            result = await db.execute(stmt)
-            model = result.scalar_one_or_none()
-
-            if model is None:
-                model = AgentSessionModel(id=session.session_id)
-                db.add(model)
-
-            model.project_id = session.project_id
-            model.session_type = session.session_type
-            model.phase = session.phase.value
-            model.skill_name = session.skill_name
-            model.conversation = list(session.conversation)
-            model.reasoning_log = list(session.reasoning_log)
-            model.tool_results = list(session.tool_results)
-            model.current_iteration = session.current_iteration
-            model.max_iterations = session.max_iterations
-            model.is_completed = session.is_completed
-            model.output_json = _json_to_dict(session.output_json)
-            model.validation_is_valid = session.validation_is_valid
-            model.validation_errors = session.validation_errors
-            model.validation_error_messages = list(session.validation_error_messages)
-            model.total_llm_calls = session.total_llm_calls
-            model.user_instructions = session.user_instructions
-            model.embedding = list(session.embedding) if session.embedding else None
-            model.embedding_model = session.embedding_model
-            model.reflection = session.reflection
-            model.updated_at = datetime.now(UTC)
-
+            stmt = (
+                pg_insert(AgentSessionModel)
+                .values(
+                    id=session.session_id,
+                    project_id=session.project_id,
+                    session_type=session.session_type,
+                    phase=session.phase.value,
+                    skill_name=session.skill_name,
+                    conversation=list(session.conversation),
+                    reasoning_log=list(session.reasoning_log),
+                    tool_results=list(session.tool_results),
+                    current_iteration=session.current_iteration,
+                    max_iterations=session.max_iterations,
+                    is_completed=session.is_completed,
+                    output_json=_json_to_dict(session.output_json),
+                    validation_is_valid=session.validation_is_valid,
+                    validation_errors=session.validation_errors,
+                    validation_error_messages=list(session.validation_error_messages),
+                    total_llm_calls=session.total_llm_calls,
+                    user_instructions=session.user_instructions,
+                    embedding=list(session.embedding) if session.embedding else None,
+                    embedding_model=session.embedding_model,
+                    reflection=session.reflection,
+                    updated_at=datetime.now(UTC),
+                )
+                .on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={
+                        "project_id": session.project_id,
+                        "session_type": session.session_type,
+                        "phase": session.phase.value,
+                        "skill_name": session.skill_name,
+                        "conversation": list(session.conversation),
+                        "reasoning_log": list(session.reasoning_log),
+                        "tool_results": list(session.tool_results),
+                        "current_iteration": session.current_iteration,
+                        "max_iterations": session.max_iterations,
+                        "is_completed": session.is_completed,
+                        "output_json": _json_to_dict(session.output_json),
+                        "validation_is_valid": session.validation_is_valid,
+                        "validation_errors": session.validation_errors,
+                        "validation_error_messages": list(session.validation_error_messages),
+                        "total_llm_calls": session.total_llm_calls,
+                        "user_instructions": session.user_instructions,
+                        "embedding": list(session.embedding) if session.embedding else None,
+                        "embedding_model": session.embedding_model,
+                        "reflection": session.reflection,
+                        "updated_at": datetime.now(UTC),
+                    },
+                )
+            )
+            await db.execute(stmt)
             await db.commit()
 
     async def update_reflection(self, session_id: AgentMemoryId, reflection: str) -> None:
@@ -99,7 +123,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             stmt = select(*cols).where(AgentSessionModel.project_id == str(project_id))
             if phase is not None:
                 stmt = stmt.where(AgentSessionModel.phase == phase.value)
-            stmt = stmt.order_by(AgentSessionModel.created_at.desc())
+            stmt = stmt.order_by(AgentSessionModel.created_at.desc()).limit(50)
             result = await db.execute(stmt)
             rows = result.all()
             return [_row_to_summary(r) for r in rows]
@@ -272,11 +296,11 @@ class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
         phase: SpecPhase,
         patterns: list[KnowledgePattern],
     ) -> None:
+        from sqlalchemy import delete as sqla_delete
+
         async with self._session_factory() as db:
-            delete_stmt = select(KnowledgePatternModel).where(KnowledgePatternModel.phase == phase.value)
-            result = await db.execute(delete_stmt)
-            for existing in result.scalars().all():
-                await db.delete(existing)
+            del_stmt = sqla_delete(KnowledgePatternModel).where(KnowledgePatternModel.phase == phase.value)
+            await db.execute(del_stmt)
             for p in patterns:
                 db.add(
                     KnowledgePatternModel(

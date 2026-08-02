@@ -32,5 +32,11 @@ class SkillRegistry:
     def get_for_phase(self, phase: SpecPhase) -> list[Skill]:
         return [s for s in self._skills.values() if s.phase == phase]
 
+    def resolve_chat_skill(self, phase: SpecPhase) -> str:
+        for s in self._skills.values():
+            if s.phase == phase and s.name.endswith("_chat"):
+                return s.name
+        raise ValueError(f"No chat skill for phase {phase.value}")
+
     def list_all(self) -> list[Skill]:
         return list(self._skills.values())

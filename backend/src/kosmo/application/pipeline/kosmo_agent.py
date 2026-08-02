@@ -86,7 +86,7 @@ class KOSMOAgent:
         messages: list[MensajeChat],
         context: Any,
         *,
-        project_id: ProjectId | None = None,
+        project_id: ProjectId | None = None,  # noqa: ARG002  # reservado para memoria futura de chat
     ) -> MensajeChat:
         """Ejecuta una conversación con el LLM usando un skill de chat.
 
@@ -105,16 +105,6 @@ class KOSMOAgent:
         base_user_prompt = mode.build_user_prompt(sanitized_ctx)
 
         knowledge_context = ""
-        if self._knowledge_tools is not None and project_id is not None:
-            tools_desc = self._knowledge_tools.describe_for_llm()
-            if tools_desc:
-                tool_system = system_prompt + "\n\n" + tools_desc
-                try:
-                    knowledge_context, _ = await self._resolve_knowledge_tools(
-                        tool_system, base_user_prompt, project_id
-                    )
-                except Exception:
-                    _log.warning("chat.tools_preflight_failed", exc_info=True)
 
         history_block = _format_chat_history(messages)
         user_prompt = f"{base_user_prompt}\n\n{history_block}\n\nResponde al ultimo mensaje del usuario."
@@ -168,15 +158,6 @@ class KOSMOAgent:
             except Exception:
                 output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestion=None)
 
-        if self._memory is not None and project_id is not None:
-            await self._save_chat_session(
-                project_id=project_id,
-                phase=mode.phase_name,
-                skill_name=skill_name,
-                messages=messages,
-                output=output,
-            )
-
         return _to_assistant_message(output)
 
     async def execute_conversation_stream(
@@ -185,7 +166,7 @@ class KOSMOAgent:
         messages: list[MensajeChat],
         context: Any,
         *,
-        project_id: ProjectId | None = None,
+        project_id: ProjectId | None = None,  # noqa: ARG002  # reservado para memoria futura de chat
     ):
         """Streaming: genera tokens en tiempo real y retorna el mensaje final.
 
@@ -236,15 +217,6 @@ class KOSMOAgent:
             result = RespuestaChatLLM(content="", change_suggestion=None)
 
         message = _to_assistant_message(result)
-
-        if self._memory is not None and project_id is not None:
-            await self._save_chat_session(
-                project_id=project_id,
-                phase=mode.phase_name,
-                skill_name=skill_name,
-                messages=messages,
-                output=result,
-            )
 
         yield message
 
@@ -331,7 +303,13 @@ class KOSMOAgent:
                 _log.warning("agent.llm_call_failed", skill_name=skill_name, iteration=iteration, exc_info=True)
                 break
 
-            _log.info("agent.llm_call_ok", skill_name=skill_name, iteration=iteration, output_type=str(type(last_output)), output_preview=str(last_output)[:200])  # type: ignore[reportUnknownArgumentType]
+            _log.info(
+                "agent.llm_call_ok",
+                skill_name=skill_name,
+                iteration=iteration,
+                output_type=str(type(last_output)),
+                output_preview=str(last_output)[:200],
+            )  # type: ignore[reportUnknownArgumentType]
             llm_calls += 1
             last_validation = mode.validate_output(last_output, context=context)
             _log.info("agent.validation_done", is_valid=last_validation.is_valid, errors=last_validation.errors[:5])
@@ -377,7 +355,7 @@ class KOSMOAgent:
                 _log.info("agent.build_output_done", result_type=str(type(result)))  # type: ignore[reportUnknownArgumentType]
                 return result
 
-            delay_s = min(1.0 * (2 ** (iteration - 1)), 30.0)
+            delay_s = min(1.0 * (2 ** (iteration - 1)), 5.0)
             await asyncio.sleep(delay_s)
 
             retry_context = ""
@@ -402,7 +380,6 @@ class KOSMOAgent:
                         )
                 except Exception:
                     _log.warning("agent.retry_tools_failed", iteration=iteration, exc_info=True)
-                    pass
 
             feedback = mode.build_validation_feedback(last_validation.errors)
             user_prompt = base_user_prompt
@@ -510,38 +487,6 @@ class KOSMOAgent:
                 )
             )
 
-    async def _save_chat_session(
-        self,
-        *,
-        project_id: ProjectId,
-        phase: SpecPhase,
-        skill_name: str,
-        messages: list[MensajeChat],
-        output: Any,
-    ) -> None:
-        if self._memory is None:
-            return
-
-        output_json = _serialize_output(output)
-        conversation = [json.dumps({"role": m.role.value, "content": m.content[:200]}) for m in messages[-10:]]
-
-        session = create_session(
-            project_id=project_id,
-            session_type="chat",
-            phase=phase,
-            skill_name=skill_name,
-            conversation=conversation,
-            output_json=output_json,
-            current_iteration=1,
-            max_iterations=1,
-            is_completed=True,
-            validation_is_valid=True,
-            embedding=None,
-            embedding_model=None,
-        )
-
-        await self._memory.save_session(session)
-
     async def _reflect_and_consolidate(
         self,
         *,
@@ -619,7 +564,6 @@ class KOSMOAgent:
                 return (text.strip(), invocations)
             except Exception:
                 _log.warning("agent.native_tools_failed", exc_info=True)
-                pass
 
         tool_prompt = PromptTemplate(
             system_prompt=(
@@ -719,7 +663,6 @@ class KOSMOAgent:
                 return text
         except Exception:
             _log.warning("agent.reflection_generation_failed", phase=phase.value, exc_info=True)
-            pass
 
         return None
 

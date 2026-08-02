@@ -8,7 +8,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
 )
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId
 from kosmo.contracts.sdd.repositories import (
     DocumentRepository,
     FeatureRepository,
@@ -111,10 +111,7 @@ class ContextBuilder:
             )
 
         full_markdown = await self._requirement_repo.by_feature_id(feature_id) or ""
-        from kosmo.contracts.sdd.ids import RequirementId
-        from kosmo.domain.sdd.id_generator import IdGenerator
-
-        rid = RequirementId(IdGenerator.generate("requirement"))
+        rid = RequirementId(f"req_{feature_id}_chat")
         requirement = parse_requirement_from_markdown(full_markdown, feature_id, feature.number, rid)
 
         if requirement is None:

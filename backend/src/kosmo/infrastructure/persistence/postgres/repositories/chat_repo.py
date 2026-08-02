@@ -72,15 +72,16 @@ class SqlAlchemyChatRepository(ChatRepository):
         else:
             stmt = stmt.where(ChatMessageModel.context_id.is_(None))
 
-        stmt = stmt.order_by(ChatMessageModel.created_at.asc()).limit(limit)
+        stmt = stmt.order_by(ChatMessageModel.created_at.desc()).limit(limit)
 
         async with self._session_factory() as session:
             result = await session.execute(stmt)
-            models = result.scalars().all()
+            models = list(result.scalars().all())
 
         if not models:
             return None
 
+        models.reverse()
         messages = tuple(_model_to_message(m) for m in models)
         history_id = self._compose_history_id(project_id, phase, context_id)
 
@@ -258,7 +259,7 @@ def _model_to_message(model: ChatMessageModel) -> MensajeChat:
         id=ChatMessageId(model.id),
         role=ChatRole(model.role),
         content=model.content,
-        timestamp=model.created_at.replace(tzinfo=None) if model.created_at else datetime.now(UTC),
+        timestamp=model.created_at if model.created_at else datetime.now(UTC),
         suggested_change=sugg,
         error=model.error,
     )

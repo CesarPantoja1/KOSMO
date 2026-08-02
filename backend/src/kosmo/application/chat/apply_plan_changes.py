@@ -52,7 +52,7 @@ class ApplyPlanChangesOutput:
 
     @property
     def applied_ids(self) -> list[str]:
-        return [str(fc.id) for fc in self.failed_changes]
+        return [str(c.id) for c in self.applied_changes]
 
 
 class ApplyPlanChangesUseCase:

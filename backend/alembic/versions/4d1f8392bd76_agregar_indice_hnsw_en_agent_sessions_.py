@@ -8,9 +8,6 @@ Create Date: 2026-07-31
 
 from collections.abc import Sequence
 
-from alembic import op
-
-
 revision: str = "4d1f8392bd76"
 down_revision: str | Sequence[str] | None = "d9eb81634a75"
 branch_labels: str | Sequence[str] | None = None
