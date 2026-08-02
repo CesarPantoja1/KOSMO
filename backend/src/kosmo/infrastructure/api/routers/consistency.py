@@ -7,7 +7,6 @@ from ulid import ULID
 
 from kosmo.application.consistency.evaluate_project_consistency import (
     EvaluateProjectConsistencyInput,
-    EvaluateProjectConsistencyOutput,
     EvaluateProjectConsistencyUseCase,
 )
 from kosmo.contracts import DiffCambio, PlanCambio
@@ -17,10 +16,8 @@ from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
-    ConsistencyReportView,
     EvaluateConsistencyRequestView,
     HttpErrorResponse,
-    ImpactItemView,
 )
 
 router = APIRouter(
@@ -116,33 +113,3 @@ def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
             )
         )
     return result
-
-
-def _to_view(
-    output: EvaluateProjectConsistencyOutput,
-    phase_origin: str,
-    changes: list[ChangeInputView],
-) -> ConsistencyReportView:
-    from datetime import UTC, datetime
-
-    upstream = [_impact_to_view(i) for i in output.upstream_impact] if output.upstream_impact else None
-    downstream = [_impact_to_view(i) for i in output.downstream_impact] if output.downstream_impact else None
-    return ConsistencyReportView(
-        id=output.report_id,
-        phase_origin=phase_origin,
-        own_changes=changes,
-        upstream_impact=upstream,
-        downstream_impact=downstream,
-        created_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    )
-
-
-def _impact_to_view(item: object) -> ImpactItemView:
-    return ImpactItemView(
-        phase=item.phase,  # type: ignore[reportAttributeAccessIssue]
-        artifact_id=item.artifact_id,  # type: ignore[reportAttributeAccessIssue]
-        artifact_type=item.artifact_type,  # type: ignore[reportAttributeAccessIssue]
-        artifact_label=item.artifact_label,  # type: ignore[reportAttributeAccessIssue]
-        section=item.section,  # type: ignore[reportAttributeAccessIssue]
-        rationale=item.rationale,  # type: ignore[reportAttributeAccessIssue]
-    )
