@@ -30,16 +30,18 @@ class SqlAlchemyChatRepository(ChatRepository):
         message: MensajeChat,
         context_id: str | None = None,
     ) -> MensajeChat:
-        suggested_change: dict[str, Any] | None = None
-        if message.suggested_change:
-            sc = message.suggested_change
-            suggested_change = {
-                "id": sc.id,
-                "section": sc.section,
-                "description": sc.description,
-                "diff": {"before": sc.diff.before, "after": sc.diff.after},
-                "rationale": sc.rationale,
-            }
+        suggested_changes: list[dict[str, Any]] | None = None
+        if message.suggested_changes:
+            suggested_changes = [
+                {
+                    "id": sc.id,
+                    "section": sc.section,
+                    "description": sc.description,
+                    "diff": {"before": sc.diff.before, "after": sc.diff.after},
+                    "rationale": sc.rationale,
+                }
+                for sc in message.suggested_changes
+            ]
 
         model = ChatMessageModel(
             id=str(message.id),
@@ -48,7 +50,7 @@ class SqlAlchemyChatRepository(ChatRepository):
             context_id=context_id,
             role=message.role.value,
             content=message.content,
-            suggested_change=suggested_change,
+            suggested_change=suggested_changes,
             error=message.error,
         )
         async with self._session_factory() as session:
@@ -257,25 +259,32 @@ class SqlAlchemyChatRepository(ChatRepository):
 
 
 def _model_to_message(model: ChatMessageModel) -> MensajeChat:
-    sugg = None
-    if model.suggested_change:
-        diff_dict = model.suggested_change.get("diff", {})
-        sugg = SugerenciaCambio(
-            id=model.suggested_change["id"],
-            section=model.suggested_change.get("section", ""),
-            description=model.suggested_change.get("description", ""),
-            diff=DiffCambio(
-                before=diff_dict.get("before", ""),
-                after=diff_dict.get("after", ""),
-            ),
-            rationale=model.suggested_change.get("rationale"),
-        )
+    from typing import Any as TypingAny
+
+    suggested_changes: list[SugerenciaCambio] = []
+    raw: TypingAny = model.suggested_change
+    if raw is not None:
+        items: list[TypingAny] = raw if isinstance(raw, list) else [raw]  # type: ignore[reportUnknownVariableType]
+        for item in items:
+            diff_dict: dict[str, str] = item.get("diff", {})
+            suggested_changes.append(
+                SugerenciaCambio(
+                    id=item["id"],
+                    section=item.get("section", ""),
+                    description=item.get("description", ""),
+                    diff=DiffCambio(
+                        before=diff_dict.get("before", ""),
+                        after=diff_dict.get("after", ""),
+                    ),
+                    rationale=item.get("rationale"),
+                )
+            )
 
     return MensajeChat(
         id=ChatMessageId(model.id),
         role=ChatRole(model.role),
         content=model.content,
         timestamp=model.created_at if model.created_at else datetime.now(UTC),
-        suggested_change=sugg,
+        suggested_changes=suggested_changes,
         error=model.error,
     )

@@ -42,8 +42,10 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "para una version futura o que esta fuera del alcance actual. Si el usuario "
     "pide agregarlo, asume que es para el alcance actual.\n\n"
     "COMPORTAMIENTO:\n"
-    "- Si el usuario pide una modificacion al documento, genera una sugerencia de "
-    "cambio en el campo change_suggestion con los siguientes atributos:\n"
+    "- Si el usuario pide una modificacion al documento, genera una o varias sugerencias de "
+    "cambio en el campo change_suggestions (lista). Cada sugerencia representa una modificacion "
+    "independiente en una seccion especifica del documento. Si el cambio afecta varias secciones, "
+    "genera una sugerencia por cada seccion afectada. Atributos de cada sugerencia:\n"
     "  * section: titulo exacto de la seccion afectada tal como aparece en el "
     "documento (ej. 'Alcance', 'Vision del producto', 'Actores').\n"
     "  * description: explicacion breve de lo que cambia.\n"
@@ -62,13 +64,15 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "FORMATO DE SALIDA (JSON):\n"
     "{\n"
     '  "content": "<tu respuesta conversacional>",\n'
-    '  "change_suggestion": null | {\n'
-    '    "section": "<titulo exacto de seccion>",\n'
-    '    "description": "<descripcion breve>",\n'
-    '    "diff_before": "<fragmento textual exacto actual>",\n'
-    '    "diff_after": "<contenido sugerido>",\n'
-    '    "rationale": "<justificacion o null>"\n'
-    "  }\n"
+    '  "change_suggestions": null | [\n'
+    "    {\n"
+    '      "section": "<titulo exacto de seccion>",\n'
+    '      "description": "<descripcion breve>",\n'
+    '      "diff_before": "<fragmento textual exacto actual>",\n'
+    '      "diff_after": "<contenido sugerido>",\n'
+    '      "rationale": "<justificacion o null>"\n'
+    "    }\n"
+    "  ]\n"
     "}\n"
 )
 

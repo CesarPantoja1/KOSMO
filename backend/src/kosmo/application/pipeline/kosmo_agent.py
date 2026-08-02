@@ -149,7 +149,7 @@ class KOSMOAgent:
                 )
 
         if output is None:
-            output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestion=None)
+            output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestions=None)
         elif not isinstance(output, RespuestaChatLLM):
             try:
                 raw = await self._llm_client.complete(
@@ -157,9 +157,9 @@ class KOSMOAgent:
                     temperature=mode.temperature,
                     max_tokens=mode.max_tokens,
                 )
-                output = RespuestaChatLLM(content=raw.text.strip(), change_suggestion=None)
+                output = RespuestaChatLLM(content=raw.text.strip(), change_suggestions=None)
             except Exception:
-                output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestion=None)
+                output = RespuestaChatLLM(content="No se pudo generar una respuesta.", change_suggestions=None)
 
         return _to_assistant_message(output)
 
@@ -203,7 +203,7 @@ class KOSMOAgent:
             message = (
                 _to_assistant_message(result)
                 if isinstance(result, RespuestaChatLLM)
-                else _to_assistant_message(RespuestaChatLLM(content=str(result), change_suggestion=None))
+                else _to_assistant_message(RespuestaChatLLM(content=str(result), change_suggestions=None))
             )
             yield message
             return
@@ -219,7 +219,7 @@ class KOSMOAgent:
             result = await streamed.get_data()
 
         if not isinstance(result, RespuestaChatLLM):
-            result = RespuestaChatLLM(content="", change_suggestion=None)
+            result = RespuestaChatLLM(content="", change_suggestions=None)
 
         message = _to_assistant_message(result)
 
@@ -868,7 +868,7 @@ def _format_chat_history(messages: list[MensajeChat]) -> str:
         recent = list(messages)
     else:
         cut = len(messages) - _MAX_HISTORY_WINDOW
-        decisions = [m for m in messages[:cut] if m.suggested_change is not None]
+        decisions = [m for m in messages[:cut] if m.suggested_changes]
         recent = list(messages[cut:])
 
     header = "## Historial de conversacion\n\n"
@@ -911,22 +911,24 @@ def _to_assistant_message(output: Any) -> MensajeChat:
     if not isinstance(output, RespuestaChatLLM):
         raise ValueError(f"El LLM devolvio un tipo inesperado: {type(output).__name__}. Se esperaba RespuestaChatLLM.")
 
-    suggested_change: SugerenciaCambio | None = None
-    if output.change_suggestion is not None:
-        cs = output.change_suggestion
-        suggested_change = SugerenciaCambio(
-            id=IdGenerator.generate("plan_change"),
-            section=cs.section,
-            description=cs.description,
-            diff=DiffCambio(before=cs.diff_before, after=cs.diff_after),
-            rationale=cs.rationale,
-        )
+    suggested_changes: list[SugerenciaCambio] = []
+    if output.change_suggestions is not None:
+        for cs in output.change_suggestions:
+            suggested_changes.append(
+                SugerenciaCambio(
+                    id=IdGenerator.generate("plan_change"),
+                    section=cs.section,
+                    description=cs.description,
+                    diff=DiffCambio(before=cs.diff_before, after=cs.diff_after),
+                    rationale=cs.rationale,
+                )
+            )
 
     return MensajeChat(
         id=ChatMessageId(IdGenerator.generate("chat_message")),
         role=ChatRole.ASSISTANT,
         content=output.content,
-        suggested_change=suggested_change,
+        suggested_changes=suggested_changes,
     )
 
 

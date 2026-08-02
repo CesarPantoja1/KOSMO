@@ -59,7 +59,7 @@ class MensajeChat:
     role: ChatRole
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    suggested_change: SugerenciaCambio | None = None
+    suggested_changes: list[SugerenciaCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     error: str | None = None
 
 
@@ -162,4 +162,4 @@ class SugerenciaCambioLLM(BaseModel):
 
 class RespuestaChatLLM(BaseModel):
     content: str
-    change_suggestion: SugerenciaCambioLLM | None = None
+    change_suggestions: list[SugerenciaCambioLLM] | None = None

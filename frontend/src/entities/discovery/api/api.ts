@@ -15,7 +15,7 @@ const mockChatResponses: DiscoveryChatResponse[] = [
 		role: 'assistant',
 		content: 'Hola, ¿en qué puedo ayudarte con el descubrimiento?',
 		created_at: new Date().toISOString(),
-		change_suggestion: null,
+		change_suggestions: null,
 	},
 	{
 		id: 'mock-chat-2',
@@ -23,7 +23,7 @@ const mockChatResponses: DiscoveryChatResponse[] = [
 		content:
 			'Aquí tienes una sugerencia de cambio para mejorar la sección de visión del producto.',
 		created_at: new Date().toISOString(),
-		change_suggestion: {
+		change_suggestions: [{
 			id: 'mock-change-1',
 			section: 'Visión del producto',
 			description: 'Refinar la visión del producto para mayor claridad.',
@@ -31,7 +31,7 @@ const mockChatResponses: DiscoveryChatResponse[] = [
 			diff_after:
 				'Este es un descubrimiento refinado con mejoras en la visión del producto.',
 			rationale: 'Se mejoró la claridad y el enfoque de la visión del producto.',
-		},
+		}],
 	},
 ];
 

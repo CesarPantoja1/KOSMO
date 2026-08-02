@@ -9,12 +9,12 @@ export interface DiscoveryChatResponse {
 	role: 'user' | 'assistant';
 	content: string;
 	created_at: string;
-	change_suggestion?: {
+	change_suggestions?: Array<{
 		id: string;
 		section: string;
 		description: string;
 		diff_before: string;
 		diff_after: string;
 		rationale: string;
-	} | null;
+	}> | null;
 }

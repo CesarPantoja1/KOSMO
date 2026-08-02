@@ -572,26 +572,31 @@ class ChatMessage(BaseModel):
     role: str = Field(description="Rol del emisor (user, assistant, system).")
     content: str = Field(description="Contenido del mensaje.")
     created_at: datetime = Field(description="Fecha y hora del mensaje.")
-    change_suggestion: ChangeSuggestion | None = Field(default=None, description="Sugerencia asociada")
+    change_suggestions: list[ChangeSuggestion] | None = Field(
+        default=None, description="Sugerencias de cambio asociadas"
+    )
 
     @classmethod
     def from_domain(cls, msg: MensajeChat) -> "ChatMessage":
-        suggestion = None
-        if msg.suggested_change:
-            suggestion = ChangeSuggestion(
-                id=msg.suggested_change.id,
-                section=msg.suggested_change.section,
-                description=msg.suggested_change.description,
-                diff_before=msg.suggested_change.diff.before,
-                diff_after=msg.suggested_change.diff.after,
-                rationale=msg.suggested_change.rationale,
-            )
+        suggestions = None
+        if msg.suggested_changes:
+            suggestions = [
+                ChangeSuggestion(
+                    id=sc.id,
+                    section=sc.section,
+                    description=sc.description,
+                    diff_before=sc.diff.before,
+                    diff_after=sc.diff.after,
+                    rationale=sc.rationale,
+                )
+                for sc in msg.suggested_changes
+            ]
         return cls(
             id=str(msg.id),
             role=str(msg.role),
             content=msg.content,
             created_at=msg.timestamp,
-            change_suggestion=suggestion,
+            change_suggestions=suggestions,
         )
 
 

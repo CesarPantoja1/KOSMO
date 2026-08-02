@@ -12,15 +12,18 @@ from kosmo.contracts.sdd.ids import ChatMessageId, ProjectId
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 
-def _suggested_change_dict(sc: SugerenciaCambio | None) -> dict[str, Any] | None:
-    if not sc:
+def _suggested_changes_list(scs: list[SugerenciaCambio]) -> list[dict[str, Any]] | None:
+    if not scs:
         return None
-    return {
-        "section": sc.section,
-        "description": sc.description,
-        "diff": {"before": sc.diff.before, "after": sc.diff.after},
-        "rationale": sc.rationale,
-    }
+    return [
+        {
+            "section": sc.section,
+            "description": sc.description,
+            "diff": {"before": sc.diff.before, "after": sc.diff.after},
+            "rationale": sc.rationale,
+        }
+        for sc in scs
+    ]
 
 
 async def sse_chat_response(
@@ -72,7 +75,7 @@ async def sse_chat_response(
                         "id": str(chunk.id),
                         "role": "assistant",
                         "content": chunk.content,
-                        "suggested_change": _suggested_change_dict(chunk.suggested_change),
+                        "suggested_changes": _suggested_changes_list(chunk.suggested_changes),
                         "timestamp": chunk.timestamp.isoformat(),
                     }
                     yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"

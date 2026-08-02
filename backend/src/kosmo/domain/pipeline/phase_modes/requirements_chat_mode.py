@@ -38,11 +38,13 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     "usuario, reformúlala en lenguaje de requisitos de software. Solo si la solicitud es "
     "puramente ajena al nivel de software, indica amablemente que corresponde a otra fase.\n\n"
     "COMPORTAMIENTO:\n"
-    "- Si el usuario pide una modificación al requisito actual, genera una sugerencia de "
-    "cambio en el campo change_suggestion con los siguientes atributos:\n"
+    "- Si el usuario pide una modificación al requisito actual, genera una o varias sugerencias de "
+    "cambio en el campo change_suggestions (lista). Cada sugerencia representa una modificación "
+    "independiente. Si el cambio afecta varios atributos o partes del documento, "
+    "genera una sugerencia por cada uno. Atributos de cada sugerencia:\n"
     "  * section: el atributo afectado. Usa uno de: 'Título', 'Enunciado EARS', "
     "'Criterios de aceptación'. Si el cambio afecta varios atributos, genera un "
-    "change_suggestion por cada uno (el servidor maneja uno a la vez, genera solo uno por respuesta).\n"
+    "change_suggestion por cada uno (el servidor maneja varios a la vez).\n"
     "  * description: explicación breve de lo que cambia.\n"
     "  * diff_before: SOLO el fragmento textual que cambia, NUNCA el documento completo. "
     "Para AGREGAR un requisito, criterio o sección completamente nuevos (sin modificar nada "
@@ -70,13 +72,15 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     "FORMATO DE SALIDA (JSON):\n"
     "{\n"
     '  "content": "<tu respuesta conversacional>",\n'
-    '  "change_suggestion": null | {\n'
-    '    "section": "<Título | Enunciado EARS | Criterios de aceptación>",\n'
-    '    "description": "<descripción breve>",\n'
-    '    "diff_before": "<fragmento textual exacto del markdown actual>",\n'
-    '    "diff_after": "<contenido sugerido con el formato indicado>",\n'
-    '    "rationale": "<justificación o null>"\n'
-    "  }\n"
+    '  "change_suggestions": null | [\n'
+    "    {\n"
+    '      "section": "<Título | Enunciado EARS | Criterios de aceptación>",\n'
+    '      "description": "<descripción breve>",\n'
+    '      "diff_before": "<fragmento textual exacto del markdown actual>",\n'
+    '      "diff_after": "<contenido sugerido con el formato indicado>",\n'
+    '      "rationale": "<justificación o null>"\n'
+    "    }\n"
+    "  ]\n"
     "}\n"
 )
 

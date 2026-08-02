@@ -87,7 +87,7 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 		role: 'assistant',
 		content: 'Hola, ¿en qué puedo ayudarte con la característica?',
 		created_at: new Date().toISOString(),
-		change_suggestion: null,
+		change_suggestions: null,
 	},
 	{
 		id: 'mock-chat-2',
@@ -95,7 +95,7 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 		content:
 			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
 		created_at: new Date().toISOString(),
-		change_suggestion: {
+		change_suggestions: [{
 			id: 'mock-change-1',
 			section: 'Descripción de la característica',
 			description: 'Refinar la descripción para mayor claridad.',
@@ -105,7 +105,7 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
 			rationale:
 				'Se mejoró la claridad y precisión de la descripción de la característica.',
-		},
+		}],
 	},
 	{
 		id: 'mock-chat-3',
@@ -113,7 +113,7 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 		content:
 			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
 		created_at: new Date().toISOString(),
-		change_suggestion: {
+		change_suggestions: [{
 			id: 'mock-change-1',
 			section: 'Descripción de la característica',
 			description: 'Refinar la descripción para mayor claridad.',
@@ -123,7 +123,7 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
 			rationale:
 				'Se mejoró la claridad y precisión de la descripción de la característica.',
-		},
+		}],
 	},
 ];
 

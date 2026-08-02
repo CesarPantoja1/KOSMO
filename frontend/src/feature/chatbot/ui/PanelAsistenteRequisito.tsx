@@ -34,16 +34,7 @@ function toChatMessage(r: RequirementChatResponse): ChatMessage {
 		role: r.role,
 		content: r.content,
 		created_at: r.created_at,
-		change_suggestion: r.change_suggestion
-			? {
-					id: r.change_suggestion.id,
-					section: r.change_suggestion.section,
-					description: r.change_suggestion.description,
-					diff_before: r.change_suggestion.diff_before,
-					diff_after: r.change_suggestion.diff_after,
-					rationale: r.change_suggestion.rationale,
-				}
-			: undefined,
+		change_suggestions: r.change_suggestions ?? undefined,
 	};
 }
 

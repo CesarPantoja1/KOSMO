@@ -220,7 +220,7 @@ const mockSendRequirementChatMessage = async (
 			'  Cuando envía los datos del formulario completos\n' +
 			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n',
 		created_at: new Date().toISOString(),
-		change_suggestion: {
+		change_suggestions: [{
 			id: crypto.randomUUID(),
 			section: 'Criterios de Aceptación',
 			description: isModification
@@ -233,7 +233,7 @@ const mockSendRequirementChatMessage = async (
 				'  Cuando completa la acción\n' +
 				'  Entonces se confirma la operación\n',
 			rationale: 'Mejora la precisión de los criterios de aceptación EARS.',
-		},
+		}],
 	};
 
 	mockChatHistories[requirementId] = [...history, userMessage, response];

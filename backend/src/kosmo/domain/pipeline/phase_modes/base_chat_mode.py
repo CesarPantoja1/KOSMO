@@ -33,16 +33,19 @@ class BaseChatMode:
         if isinstance(output, RespuestaChatLLM):
             if not output.content or not output.content.strip():
                 errors.append("El campo content no puede estar vacío.")
-            if output.change_suggestion is not None:
-                cs = output.change_suggestion
-                if not cs.section or not cs.section.strip():
-                    errors.append("El campo section no puede estar vacío.")
-                if not cs.description or not cs.description.strip():
-                    errors.append("El campo description no puede estar vacío.")
-                if not cs.diff_before or not cs.diff_before.strip():
-                    errors.append("El campo diff_before no puede estar vacío.")
-                if cs.diff_before.strip() == cs.diff_after.strip():
-                    errors.append("diff_before y diff_after son idénticos; la sugerencia no propone cambios reales.")
+            if output.change_suggestions is not None:
+                for idx, cs in enumerate(output.change_suggestions):
+                    prefix = f"change_suggestions[{idx}]."
+                    if not cs.section or not cs.section.strip():
+                        errors.append(f"{prefix}section no puede estar vacío.")
+                    if not cs.description or not cs.description.strip():
+                        errors.append(f"{prefix}description no puede estar vacío.")
+                    if not cs.diff_before or not cs.diff_before.strip():
+                        errors.append(f"{prefix}diff_before no puede estar vacío.")
+                    if cs.diff_before.strip() == cs.diff_after.strip():
+                        errors.append(
+                            f"{prefix}diff_before y diff_after son idénticos; la sugerencia no propone cambios reales."
+                        )
         elif isinstance(output, dict):
             errors.append("Formato de salida no reconocido. Se esperaba RespuestaChatLLM.")
         else:
