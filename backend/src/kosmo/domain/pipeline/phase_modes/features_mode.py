@@ -355,7 +355,7 @@ class FeaturesMode:
         from kosmo.domain.sdd.id_generator import IdGenerator
 
         project_id = ProjectId("")
-        if isinstance(context, FeaturesPhaseContext):
+        if isinstance(context, FeaturesPhaseContext) and context.project_id is not None:
             project_id = context.project_id
 
         if isinstance(raw_output, FeatureSet):

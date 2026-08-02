@@ -160,6 +160,7 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         self,
         *,
         since_session_id: AgentMemoryId | None = None,
+        project_id: ProjectId | None = None,
     ) -> dict[str, int]:
         cutoff: datetime | None = None
         if since_session_id is not None:
@@ -171,6 +172,8 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
             if not s.is_completed:
                 continue
             if cutoff is not None and s.created_at <= cutoff:
+                continue
+            if project_id is not None and s.project_id != project_id:
                 continue
             key = s.phase.value
             counts[key] = counts.get(key, 0) + 1

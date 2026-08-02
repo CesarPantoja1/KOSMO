@@ -270,6 +270,7 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
         self,
         *,
         since_session_id: AgentMemoryId | None = None,
+        project_id: ProjectId | None = None,
     ) -> dict[str, int]:
         from sqlalchemy import func
 
@@ -282,6 +283,8 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
                     .scalar_subquery()
                 )
                 conditions.append(AgentSessionModel.created_at > subq)
+            if project_id is not None:
+                conditions.append(AgentSessionModel.project_id == str(project_id))
             stmt = select(AgentSessionModel.phase, func.count()).where(*conditions).group_by(AgentSessionModel.phase)
             result = await db.execute(stmt)
             return {str(row[0]): int(row[1]) for row in result.fetchall()}
