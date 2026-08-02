@@ -192,7 +192,7 @@ async def test_sin_artefactos_downstream_retorna_lista_vacia() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_evaluator_falla_marca_todos_como_afectados() -> None:
+async def test_evaluator_falla_retorna_sin_afectados_fail_open() -> None:
     # Arrange
     project = _make_project("prj_003")
     project_repo = InMemoryProjectRepository()
@@ -228,9 +228,5 @@ async def test_evaluator_falla_marca_todos_como_afectados() -> None:
         )
     )
 
-    # Assert: evaluator falla, todas las features existentes se marcan como afectadas
-    assert len(result.affected_phases) >= 1
-    phases_by_name = {p.phase: p for p in result.affected_phases}
-    assert "features" in phases_by_name
-    assert phases_by_name["features"].affected_count == 2
-    assert set(phases_by_name["features"].affected_ids) == {"feat_11", "feat_12"}
+    # Assert: evaluator falla → fail-open, sin artefactos afectados
+    assert len(result.affected_phases) == 0

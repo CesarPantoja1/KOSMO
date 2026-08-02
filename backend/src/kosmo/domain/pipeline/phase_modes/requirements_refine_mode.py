@@ -273,10 +273,7 @@ class RequirementsRefineMode:
             result: list[dict[str, Any]] = []
             for item in cast(list[object], content):
                 if isinstance(item, dict):
-                    req_dict: dict[str, Any] = {}
-                    for k, v in cast(dict[object, object], item).items():
-                        if isinstance(k, str):
-                            req_dict[k] = v
+                    req_dict = dict_str_keys(item)
                     result.append(req_dict)
             return result
         return []
