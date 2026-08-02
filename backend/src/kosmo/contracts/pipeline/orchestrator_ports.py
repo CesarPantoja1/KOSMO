@@ -8,11 +8,13 @@ from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseC
 from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryChatContext,
     DiscoveryPhaseContext,
+    DiscoveryRefinePhaseContext,
     EARSPhaseContext,
     FeatureChatContext,
     FeaturesPhaseContext,
     ModeloPhaseContext,
     RequirementChatContext,
+    RequirementsRefinePhaseContext,
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -20,9 +22,25 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import ProjectId
 
 if TYPE_CHECKING:
     from kosmo.contracts.chat import MensajeChat
+
+
+PhaseContext = (
+    ConsistencyPhaseContext
+    | DiscoveryChatContext
+    | DiscoveryPhaseContext
+    | DiscoveryRefinePhaseContext
+    | EARSPhaseContext
+    | FeatureChatContext
+    | FeaturesPhaseContext
+    | ModeloPhaseContext
+    | RequirementChatContext
+    | RequirementsRefinePhaseContext
+    | SuggestFeaturesContext
+)
 
 
 @dataclass(frozen=True)
@@ -102,17 +120,7 @@ class PhaseMode(Protocol):
 
     def build_user_prompt(
         self,
-        context: (
-            ConsistencyPhaseContext
-            | DiscoveryChatContext
-            | DiscoveryPhaseContext
-            | EARSPhaseContext
-            | FeatureChatContext
-            | FeaturesPhaseContext
-            | ModeloPhaseContext
-            | RequirementChatContext
-            | SuggestFeaturesContext
-        ),
+        context: PhaseContext,
     ) -> str: ...
 
     def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult: ...
@@ -140,9 +148,9 @@ class AgentPort(Protocol):
     async def execute_with_skill(
         self,
         skill_name: str,
-        context: Any,
+        context: PhaseContext,
         *,
-        project_id: Any | None = None,
+        project_id: ProjectId | None = None,
         user_instructions: str | None = None,
     ) -> Any: ...
 
@@ -150,7 +158,7 @@ class AgentPort(Protocol):
         self,
         skill_name: str,
         messages: list[MensajeChat],
-        context: Any,
+        context: PhaseContext,
         *,
-        project_id: Any | None = None,
+        project_id: ProjectId | None = None,
     ) -> MensajeChat: ...

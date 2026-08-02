@@ -245,7 +245,7 @@ class KOSMOAgent:
             patterns_task = asyncio.create_task(self._pattern_store.list_patterns(phase=mode.phase_name, limit=5))
 
         if self._embedder is not None and self._memory is not None and project_id is not None:
-            async def _embed_and_search() -> list[object] | None:
+            async def _embed_and_search() -> Any:
                 query_embedding = await self._embedder.embed(base_user_prompt)  # type: ignore[reportOptionalMemberAccess]
                 if query_embedding is None:
                     return None
@@ -260,14 +260,14 @@ class KOSMOAgent:
             embed_task = asyncio.create_task(_embed_and_search())
 
         if memory_task is not None:
-            project_context = await memory_task
-            if project_context is not None and project_context.total_sessions > 0:
+            project_context = await memory_task  # type: ignore[reportUnknownVariableType]
+            if project_context.total_sessions > 0:
                 system_prompt = self._inject_context(system_prompt, project_context)
 
         if embed_task is not None:
-            similar = await embed_task
-            if similar is not None:
-                system_prompt = self._inject_cross_project_context(system_prompt, similar)
+            similar = await embed_task  # type: ignore[reportUnknownVariableType]
+            if similar:
+                system_prompt = self._inject_cross_project_context(system_prompt, similar)  # type: ignore[reportArgumentType]
 
         if patterns_task is not None:
             patterns = await patterns_task

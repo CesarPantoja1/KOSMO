@@ -247,7 +247,12 @@ class InMemoryChatRepository(ChatRepository):
         return message
 
     async def get_history(
-        self, project_id: ProjectId, phase: SpecPhase, context_id: str | None = None, limit: int = 200
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        context_id: str | None = None,
+        limit: int = 200,
+        before: str | None = None,  # noqa: ARG002  # ponytail: implementar cuando se necesite cursor in-memory
     ) -> HistorialChat | None:
         key = self._composite_key(project_id, phase, context_id)
         messages = self._messages.get(key)
