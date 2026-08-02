@@ -114,7 +114,7 @@ async def sse_chat_response(
             yield f"data: {json.dumps({'type': 'error', 'content': 'Error interno'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
-        event_stream(),
+        event_stream(),  # type: ignore[reportArgumentType]
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
