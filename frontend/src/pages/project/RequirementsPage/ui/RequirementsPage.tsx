@@ -212,11 +212,6 @@ const RequirementsPage = () => {
 				currentProject.id,
 				selectedCharacteristic.id,
 			);
-			await saveRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				content.document_markdown,
-			);
 			if (content) {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}

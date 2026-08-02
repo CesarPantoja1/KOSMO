@@ -70,6 +70,9 @@ async def generate_requirements(
     return {
         "project_id": str(output.project_id),
         "feature_id": str(output.feature_id),
+        "feature_number": output.phase_output.feature_number,
+        "document_markdown": output.phase_output.requirements_markdown,
+        "total": len(output.requirements),
         "requirements": [
             {
                 "id": str(r.id),
