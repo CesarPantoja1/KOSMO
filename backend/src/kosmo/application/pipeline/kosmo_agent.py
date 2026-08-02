@@ -49,7 +49,7 @@ class KOSMOAgent:
         self._max_iterations = max_iterations
         self._skill_registry: SkillRegistry | None = skill_registry
         self._memory = memory
-        self._embedder: Any = embedding_generator  # EmbeddingGenerator
+        self._embedder: Any = embedding_generator  # OpenAIEmbedder | FastembedEmbedder
         self._knowledge_tools: KnowledgeToolRegistry | None = knowledge_tools
         self._pattern_store = pattern_store
         self._consolidation_threshold = consolidation_threshold

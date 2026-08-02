@@ -52,4 +52,4 @@ class OpenAIEmbedder:
         return "\n".join(parts)
 
 
-EmbeddingGenerator = OpenAIEmbedder  # ponytail: alias de retrocompatibilidad, eliminar cuando no se referencie
+
