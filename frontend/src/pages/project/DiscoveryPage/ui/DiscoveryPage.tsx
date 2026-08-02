@@ -1,12 +1,6 @@
 'use client';
 
-import { generateCharacteristics } from '@/entities/characteristic';
-import {
-	getDiscovery,
-	saveDiscovery,
-	useDiscoveryStore,
-	type DiscoveryChatResponse,
-} from '@/entities/discovery';
+import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
 import type { PlanChange } from '@/entities/plan';
 import { addPlanChange, deletePlanChange, usePlanStore } from '@/entities/plan';
 import {
@@ -16,7 +10,7 @@ import {
 	type MarkdownEditorHandle,
 } from '@/feature';
 import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
-import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -46,7 +40,8 @@ const DiscoveryPage = () => {
 	const [markdown, setMarkdown] = useState('');
 	const currentProject = useAppStore((s) => s.currentProject);
 	const [isLoading, setIsLoading] = useState(!!currentProject);
-	const [isGenerating, setIsGenerating] = useState(false);
+	const [hasDiscovery, setHasDiscovery] = useState(false);
+	const [isGeneratingDiscovery, setIsGeneratingDiscovery] = useState(false);
 	const savedContentRef = useRef('');
 	const router = useRouter();
 
@@ -59,10 +54,12 @@ const DiscoveryPage = () => {
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [isChatLoading, setIsChatLoading] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
-	const [editorKey, setEditorKey] = useState(0);
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
-	const storeSendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
+	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
+	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
+	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
+	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
 
 	const addToPlan = usePlanStore((s) => s.addToPlan);
 	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
@@ -89,6 +86,7 @@ const DiscoveryPage = () => {
 				const data = await getDiscovery(currentProject.id);
 				setMarkdown(data.content);
 				savedContentRef.current = data.content;
+				setHasDiscovery(true);
 				// Sprint 4 (T9) — Sincronizar e hidratar el plan desde el backend
 				fetchAndHydratePlan(currentProject.id, 'discovery');
 			} catch (err) {
@@ -102,9 +100,8 @@ const DiscoveryPage = () => {
 					errorMessage.includes('404') ||
 					errorMessage.includes('no existe')
 				) {
-					setMarkdown(
-						'## Visión del producto\n\nAún no hay descubrimiento para este proyecto.',
-					);
+					setHasDiscovery(false);
+					setMarkdown('');
 					savedContentRef.current = '';
 				} else {
 					toast.error(errorMessage || 'Error al cargar el descubrimiento');
@@ -142,22 +139,26 @@ const DiscoveryPage = () => {
 			setPendingNavigationPath('caracteristicas');
 			return;
 		}
-		await generateAndNavigate();
+		router.push('caracteristicas');
 	};
 
-	const generateAndNavigate = async () => {
+	const handleGenerateDiscovery = async () => {
 		if (!currentProject) return;
 
-		setIsGenerating(true);
+		setIsGeneratingDiscovery(true);
 		try {
-			await generateCharacteristics(currentProject.id);
-			router.push('caracteristicas');
+			const data = await generateDiscovery(currentProject.id);
+			setMarkdown(data.content);
+			savedContentRef.current = data.content;
+			setHasDiscovery(true);
+			fetchAndHydratePlan(currentProject.id, 'discovery');
+			toast.success('Descubrimiento generado exitosamente');
 		} catch (err) {
 			const message =
-				err instanceof Error ? err.message : 'Error al generar las características';
+				err instanceof Error ? err.message : 'Error al generar el descubrimiento';
 			toast.error(message);
 		} finally {
-			setIsGenerating(false);
+			setIsGeneratingDiscovery(false);
 		}
 	};
 
@@ -169,7 +170,7 @@ const DiscoveryPage = () => {
 			const saved = await doSave();
 			setHasUnsavedChanges(false);
 			if (saved) {
-				await generateAndNavigate();
+				router.push('caracteristicas');
 			}
 		} else {
 			setHasUnsavedChanges(false);
@@ -253,7 +254,7 @@ const DiscoveryPage = () => {
 		if (!currentProject) return;
 		setIsChatLoading(true);
 		try {
-			await storeSendChatMessage(currentProject.id, content);
+			await sendChatMessage(currentProject.id, content);
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
@@ -267,6 +268,13 @@ const DiscoveryPage = () => {
 
 	return (
 		<>
+			{isGeneratingDiscovery && (
+				<Loading
+					title='Generando Descubrimiento'
+					description='La IA está analizando la información del proyecto. Por favor, espera un momento.'
+				/>
+			)}
+
 			{pendingNavigationPath && (
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
@@ -280,7 +288,7 @@ const DiscoveryPage = () => {
 						Identificar y documentar la información estratégica del proyecto para
 						comprender el problema, el contexto y el alcance del negocio.
 					</p>
-					{!isEditorMaximized && (
+					{!isEditorMaximized && hasDiscovery && (
 						<div className='flex justify-end gap-3'>
 							<button
 								onClick={() => setIsChatbotOpen(true)}
@@ -291,18 +299,14 @@ const DiscoveryPage = () => {
 							</button>
 							<button
 								onClick={handleNextLink}
-								disabled={isGenerating}
 								className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
 							>
-								<span className='text-center'>
-									{isGenerating ? 'Generando...' : 'Ir a características'}
-								</span>
+								<span className='text-center'>Ir a características</span>
 								<ArrowRight size={20} color='text-base-50' />
 							</button>
 						</div>
 					)}
 					<div className='flex-1 flex flex-col min-h-0'>
-						{/* TODO: Mejorar el skeleton */}
 						{isLoading && (
 							<div className='w-full min-h-105 relative'>
 								<div className='w-full h-full rounded-xl border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
@@ -327,10 +331,31 @@ const DiscoveryPage = () => {
 							</div>
 						)}
 
-						{!isLoading && (
+						{!isGeneratingDiscovery && !hasDiscovery && (
+							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
+								<div className='flex flex-col items-center gap-4 text-center px-6'>
+									<Ai color='text-ai' size={70} />
+									<h3 className='text-xl font-semibold text-base-800'>
+										Sin Descubrimiento generado
+									</h3>
+									<p className='text-base-600 max-w-md'>
+										Aún no se ha generado el descubrimiento de este proyecto. Haz clic en
+										el botón para que la IA analice la información y genere el documento.
+									</p>
+									<button
+										onClick={handleGenerateDiscovery}
+										className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+									>
+										<Ai size={20} color='text-base-50' />
+										<span className='text-center'>Generar</span>
+									</button>
+								</div>
+							</div>
+						)}
+
+						{!isLoading && hasDiscovery && (
 							<div className='w-full h-full relative'>
 								<MarkdownEditor
-									key={editorKey}
 									ref={editorRef}
 									markdown={markdown}
 									onChange={setMarkdown}

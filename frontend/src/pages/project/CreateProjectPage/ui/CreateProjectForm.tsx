@@ -1,6 +1,5 @@
 'use client';
 
-import { generateDiscovery } from '@/entities/discovery/api/api';
 import { Ai, Loading, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppStore } from 'app/store/app.store';
@@ -62,15 +61,6 @@ const CreateProjectForm = () => {
 			try {
 				const project = await createProject(data);
 				setProjectState(project);
-
-				// Generar el descubrimiento automáticamente con IA
-				try {
-					await generateDiscovery(project.id);
-				} catch (genErr) {
-					console.error('Error generando descubrimiento:', genErr);
-					toast.warning('No se pudo generar el descubrimiento automáticamente');
-				}
-
 				router.replace('/proyecto/descubrimiento');
 			} catch (err) {
 				const message = err instanceof Error ? err.message : 'Error al crear el proyecto';
@@ -85,8 +75,8 @@ const CreateProjectForm = () => {
 		<>
 			{isSubmitting && (
 				<Loading
-					title='Generando Descripción General'
-					description='Optimizando la estructura de la Descripción General. Por favor, espera un momento.'
+					title='Creando Proyecto'
+					description='Creando tu proyecto. Por favor, espera...'
 				/>
 			)}
 			<form
@@ -100,7 +90,7 @@ const CreateProjectForm = () => {
 						className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:bg-base-600'
 					>
 						<Ai size={20} color='' />
-						{isSubmitting ? 'Generando...' : 'Generar Proyecto'}
+						{isSubmitting ? 'Creando...' : 'Crear Proyecto'}
 					</button>
 				</div>
 				<div className='flex-1 min-h-0 px-8 py-3 rounded-lg shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline-1 outline-base-600 flex flex-col gap-3'>
