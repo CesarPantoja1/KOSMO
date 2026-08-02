@@ -41,13 +41,8 @@ function toChatMessage(r: CharacteristicChatResponse): ChatMessage {
 }
 
 const CharacteristicsPage = () => {
-	const {
-		isLoading,
-		hasCharacteristics,
-		searchQuery,
-		setSearchQuery,
-		filtered,
-	} = useCharacteristicsPage();
+	const { isLoading, hasCharacteristics, searchQuery, setSearchQuery, filtered } =
+		useCharacteristicsPage();
 
 	const [activeFeatureId, setActiveFeatureId] = useState<string | null>(null);
 	const [isChatLoading, setIsChatLoading] = useState(false);
@@ -57,7 +52,9 @@ const CharacteristicsPage = () => {
 
 	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
 	const storeSendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
-	const storeGenerateCharacteristics = useCharacteristicStore((s) => s.generateCharacteristics);
+	const storeGenerateCharacteristics = useCharacteristicStore(
+		(s) => s.generateCharacteristics,
+	);
 
 	const addToPlan = usePlanStore((s) => s.addToPlan);
 	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
@@ -206,7 +203,7 @@ const CharacteristicsPage = () => {
 							</div>
 						)}
 
-						{!isGeneratingCharacteristics && !hasCharacteristics && (
+						{!isLoading && !isGeneratingCharacteristics && !hasCharacteristics && (
 							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 								<div className='flex flex-col items-center gap-4 text-center px-6'>
 									<Ai color='text-ai' size={70} />

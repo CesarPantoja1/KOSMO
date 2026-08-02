@@ -331,7 +331,7 @@ const DiscoveryPage = () => {
 							</div>
 						)}
 
-						{!isGeneratingDiscovery && !hasDiscovery && (
+						{!isLoading && !isGeneratingDiscovery && !hasDiscovery && (
 							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 								<div className='flex flex-col items-center gap-4 text-center px-6'>
 									<Ai color='text-ai' size={70} />
