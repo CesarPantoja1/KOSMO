@@ -324,6 +324,7 @@ const ModelingPage = () => {
 								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
 							>
 								Ir a código
+								<ArrowRight color='' size={20} />
 							</Link>
 						</div>
 					)}

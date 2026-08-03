@@ -1,17 +1,10 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
-import {
-	headingsPlugin,
-	listsPlugin,
-	markdownShortcutPlugin,
-	MDXEditor,
-	quotePlugin,
-	thematicBreakPlugin,
-} from '@mdxeditor/editor';
-
-import '@mdxeditor/editor/style.css';
+import { ArrowLeft } from '@/shared/ui';
+import { computeWordDiff } from '../lib/computeWordDiff';
+import { WordDiffView } from './word-diff-view';
 
 interface Props {
 	original: string;
@@ -22,14 +15,6 @@ interface Props {
 	originalLabel?: string;
 	proposalLabel?: string;
 }
-
-const PLUGINS = [
-	headingsPlugin(),
-	listsPlugin(),
-	quotePlugin(),
-	thematicBreakPlugin(),
-	markdownShortcutPlugin(),
-];
 
 export function MarkdownDiff({
 	original,
@@ -44,6 +29,8 @@ export function MarkdownDiff({
 	const rightRef = useRef<HTMLDivElement>(null);
 	const isSyncingLeft = useRef(false);
 	const isSyncingRight = useRef(false);
+
+	const chunks = useMemo(() => computeWordDiff(original, proposal), [original, proposal]);
 
 	const handleLeftScroll = useCallback(() => {
 		if (isSyncingRight.current) return;
@@ -83,8 +70,9 @@ export function MarkdownDiff({
 				<button
 					type='button'
 					onClick={onBack}
-					className='ml-6 cursor-pointer rounded-md border border-base-300 bg-white px-4 py-1.5 text-sm font-medium text-base-950 transition-colors hover:bg-base-100 active:bg-base-200'
+					className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
 				>
+					<ArrowLeft color='' size={20} />
 					Volver
 				</button>
 			</div>
@@ -93,13 +81,7 @@ export function MarkdownDiff({
 			<div className='flex min-h-0 flex-1 overflow-hidden'>
 				{/* Left — Original */}
 				<div ref={leftRef} onScroll={handleLeftScroll} className='flex-1 overflow-y-auto'>
-					<MDXEditor
-						key='original'
-						markdown={original}
-						readOnly
-						contentEditableClassName='prose max-w-none px-10 py-20 bg-base-50 focus:outline-none'
-						plugins={PLUGINS}
-					/>
+					<WordDiffView chunks={chunks} side='left' />
 				</div>
 
 				{/* Divider */}
@@ -111,13 +93,7 @@ export function MarkdownDiff({
 					onScroll={handleRightScroll}
 					className='flex-1 overflow-y-auto'
 				>
-					<MDXEditor
-						key='proposal'
-						markdown={proposal}
-						readOnly
-						contentEditableClassName='prose max-w-none px-10 py-20 bg-base-50 focus:outline-none'
-						plugins={PLUGINS}
-					/>
+					<WordDiffView chunks={chunks} side='right' />
 				</div>
 			</div>
 
