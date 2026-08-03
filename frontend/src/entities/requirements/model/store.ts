@@ -38,13 +38,13 @@ export const useRequirementsStore = create<RequirementsStore>()(
 
 			chatHistories: {},
 			loadChatHistory: async (featureId) => {
-			const response = await getRequirementChatHistory(featureId);
-			const history = Array.isArray(response) ? response : (response as any)?.messages ?? [];
-			set((state) => ({
-				chatHistories: { ...state.chatHistories, [featureId]: history },
-			}));
-			return history;
-		},
+				const response = await getRequirementChatHistory(featureId);
+				const history = Array.isArray(response) ? response : [];
+				set((state) => ({
+					chatHistories: { ...state.chatHistories, [featureId]: history },
+				}));
+				return history;
+			},
 			sendChatMessage: async (featureId, content) => {
 				const userMessage: RequirementChatResponse = {
 					id: crypto.randomUUID(),
@@ -108,4 +108,3 @@ export const useRequirementsStore = create<RequirementsStore>()(
 		},
 	),
 );
-

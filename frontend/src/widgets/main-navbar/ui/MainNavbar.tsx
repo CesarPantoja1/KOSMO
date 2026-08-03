@@ -1,12 +1,12 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { useAppStore } from 'app/store/app.store';
 
 import { Project, getProjects } from '@/entities/project';
-import { WizardNavegacion } from '@/widgets/wizard-navegacion';
+import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
 import { ComputerDesktop, Folder, Sidebar, UserCircle } from './icons';
 
 interface MainNavbarProps {
@@ -20,7 +20,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 	const router = useRouter();
-	const pathname = usePathname();
 
 	useEffect(() => {
 		const fetchProjects = async () => {
@@ -34,7 +33,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		fetchProjects();
 	}, []);
 
-	const isProyectosOpen = useAppStore((s) => s.isProyectosOpen);
 	const currentProject = useAppStore((s) => s.currentProject);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 

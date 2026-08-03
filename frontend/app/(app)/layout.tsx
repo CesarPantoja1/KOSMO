@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthGuard } from '@/shared/ui/AuthGuard';
-import { MainNavbar } from '@/widgets/main-navbar/ui/MainNavbar';
+import { MainNavbar } from '@/widgets';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
 	return (

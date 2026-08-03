@@ -20,6 +20,7 @@ import { useAppStore } from 'app/store/app.store';
 import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { Modeling } from '@/widgets/main-navbar/ui/icons';
+import { AsideCharacteristic } from '@/widgets';
 
 import { generatePlantUmlDiagram, getDiagram } from '@/entities/modeling';
 
@@ -326,71 +327,14 @@ const ModelingPage = () => {
 						</div>
 					)}
 
-					<div className='flex gap-4 flex-1 min-h-0'>
-						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
-							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
-								Lista de Características
-							</h3>
-
-							<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
-								{characteristics.length === 0 && (
-									<p className='text-base-600 text-sm px-3 py-2'>
-										No hay características disponibles.
-									</p>
-								)}
-								{characteristics.map((c) => {
-									const isSelected = c.id === selectedId;
-									const cHasReq = Boolean(hasRequirements[c.id]);
-									const cHasDiag = Boolean(
-										hasDiagram[c.id] ||
-										(c.id === selectedId && plantumlSource.trim() !== ''),
-									);
-
-									return (
-										<button
-											key={c.id}
-											onClick={() => handleSelectCharacteristic(c.id)}
-											className={`w-full p-3 flex justify-start items-center gap-3 text-left cursor-pointer transition-colors ${
-												isSelected
-													? 'bg-primary-100/10 border-l-4 border-primary-100'
-													: 'border-l-4 border-transparent hover:bg-base-200/30'
-											}`}
-										>
-											<span
-												className={`text-base font-bold shrink-0 ${
-													isSelected ? 'text-base-800' : 'text-base-800'
-												}`}
-											>
-												{c.display_id}
-											</span>
-											<p
-												className={`flex-1 text-sm font-medium leading-snug ${
-													isSelected ? 'text-primary-100' : 'text-base-600'
-												}`}
-											>
-												{c.title}
-											</p>
-											{cHasDiag && (
-												<div className='shrink-0' title='Modelo generado'>
-													<Modeling
-														size={20}
-														color={isSelected ? 'text-primary-100' : 'text-base-600'}
-													/>
-												</div>
-											)}
-											{!cHasDiag && cHasReq && (
-												<span
-													className='shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-primary-100/10 text-primary-100'
-													title='Requisitos EARS listos para modelar'
-												>
-													Reqs OK
-												</span>
-											)}
-										</button>
-									);
-								})}
-							</div>
-						</aside>
+					<div className='flex gap-1 flex-1 min-h-0'>
+						<AsideCharacteristic
+							characteristics={characteristics}
+							selectedId={selectedId}
+							onSelectCharacteristic={handleSelectCharacteristic}
+							hasIcon={hasDiagram}
+							icon={Modeling}
+						/>
 
 						<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
 							{!selectedCharacteristic && (

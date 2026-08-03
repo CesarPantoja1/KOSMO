@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { MarkdownText } from './markdown-text';
 
 describe('MarkdownText', () => {
 	it('renderiza texto plano sin cambios', () => {
-		const { container } = render(<MarkdownText content='Hola, ¿en qué puedo ayudarte?' />);
+		const { container } = render(
+			<MarkdownText content='Hola, ¿en qué puedo ayudarte?' />,
+		);
 
 		expect(container.textContent).toContain('Hola, ¿en qué puedo ayudarte?');
 	});
@@ -23,7 +25,9 @@ describe('MarkdownText', () => {
 	});
 
 	it('renderiza código inline sin backticks', () => {
-		const { container } = render(<MarkdownText content='Usa `npm install` para instalar' />);
+		const { container } = render(
+			<MarkdownText content='Usa `npm install` para instalar' />,
+		);
 
 		expect(container.querySelector('code')).toHaveTextContent('npm install');
 		expect(container.textContent).not.toContain('`');
@@ -52,7 +56,9 @@ describe('MarkdownText', () => {
 	});
 
 	it('renderiza listas con viñetas', () => {
-		const { container } = render(<MarkdownText content={'- Viajes LATAM\n- Integración\n- Pagos'} />);
+		const { container } = render(
+			<MarkdownText content={'- Viajes LATAM\n- Integración\n- Pagos'} />,
+		);
 
 		const items = container.querySelectorAll('li');
 		expect(items).toHaveLength(3);

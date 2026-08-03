@@ -1,19 +1,12 @@
 'use client';
 
-import {
-	FloatingPlan,
-	MarkdownEditor,
-	PanelAsistenteRequisito,
-} from '@/feature';
+import { FloatingPlan, MarkdownEditor, PanelAsistenteRequisito } from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import {
-	usePlanActions,
-	usePlanStore,
-} from '@/entities/plan';
+import { usePlanActions, usePlanStore } from '@/entities/plan';
 import {
 	generateRequirements,
 	getRequirements,
@@ -33,6 +26,7 @@ import { useAppStore } from 'app/store/app.store';
 import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
+import { AsideCharacteristic } from '@/widgets';
 
 const generatingRequirementsMessages = [
 	'Analizando característica...',
@@ -47,7 +41,13 @@ const RequirementsPage = () => {
 	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
-	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [selectedId, setSelectedId] = useState<string | null>(() => {
+		const id = useRequirementsStore.getState().selectedFeatureId;
+		if (id) {
+			useRequirementsStore.getState().setSelectedFeatureId(null);
+		}
+		return id;
+	});
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
 
@@ -58,8 +58,6 @@ const RequirementsPage = () => {
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
 	const hasRequirements = useRequirementsStore((s) => s.hasRequirements);
 	const setHasRequirements = useRequirementsStore((s) => s.setHasRequirements);
-	const selectedFeatureId = useRequirementsStore((s) => s.selectedFeatureId);
-	const setSelectedFeatureId = useRequirementsStore((s) => s.setSelectedFeatureId);
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 
@@ -153,15 +151,7 @@ const RequirementsPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedId, currentProject]);
-
-	useEffect(() => {
-		if (selectedFeatureId) {
-			setSelectedId(selectedFeatureId);
-			setSelectedFeatureId(null);
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [selectedId, currentProject, setHasRequirements]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
@@ -388,57 +378,14 @@ const RequirementsPage = () => {
 						</div>
 					)}
 
-					<div className='flex gap-4 flex-1 min-h-0'>
-						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
-							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
-								Lista de Características
-							</h3>
-
-							<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
-								{characteristics.length === 0 && (
-									<p className='text-base-600 text-sm px-3 py-2'>
-										No hay características disponibles.
-									</p>
-								)}
-								{characteristics.map((c) => {
-									const isSelected = c.id === selectedId;
-									return (
-										<button
-											key={c.id}
-											onClick={() => handleSelectCharacteristic(c.id)}
-											className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors ${
-												isSelected
-													? 'bg-primary-100/10 border-l-4 border-primary-100'
-													: 'border-l-4 border-transparent hover:bg-base-200/30'
-											}`}
-										>
-											<span
-												className={`text-base font-bold mt-0.5 shrink-0 ${
-													isSelected ? 'text-base-800' : 'text-base-800'
-												}`}
-											>
-												{c.display_id}
-											</span>
-											<p
-												className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
-													isSelected ? 'text-primary-100' : 'text-base-600'
-												}`}
-											>
-												{c.title}
-											</p>
-											{hasRequirements[c.id] && (
-												<div className='shrink-0 mt-0.5'>
-													<Requirements
-														size={20}
-														color={isSelected ? 'text-primary-100' : 'text-base-600'}
-													/>
-												</div>
-											)}
-										</button>
-									);
-								})}
-							</div>
-						</aside>
+					<div className='flex gap-1 flex-1 min-h-0'>
+						<AsideCharacteristic
+							characteristics={characteristics}
+							selectedId={selectedId}
+							onSelectCharacteristic={handleSelectCharacteristic}
+							hasIcon={hasRequirements}
+							icon={Requirements}
+						/>
 
 						<div className='relative flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
 							{!selectedCharacteristic && (
@@ -544,7 +491,11 @@ const RequirementsPage = () => {
 									</div>
 								)}
 
-							<FloatingPlan phase='requirements' navigateTo='/proyecto/requisitos/plan' contextId={selectedId} />
+							<FloatingPlan
+								phase='requirements'
+								navigateTo='/proyecto/requisitos/plan'
+								contextId={selectedId}
+							/>
 						</div>
 					</div>
 				</div>
