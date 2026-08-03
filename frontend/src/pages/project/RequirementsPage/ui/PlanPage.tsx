@@ -2,13 +2,13 @@
 
 import {
 	getCharacteristics,
+	useCharacteristicStore,
 	type Characteristic,
 } from '@/entities/characteristic';
 import { applyPlanChanges, discardPlan, usePlanStore, type PlanChange } from '@/entities/plan';
 import {
 	getRequirements,
 	saveRequirements,
-	useRequirementsStore,
 } from '@/entities/requirements';
 import { MarkdownDiff } from '@/feature';
 import { toast } from '@/shared/ui';
@@ -41,7 +41,7 @@ export const PlanPage = () => {
 	const planByPhase = usePlanStore((s) => s.planByPhase);
 	const clearPlan = usePlanStore((s) => s.clearPlan);
 	const updatePlanChangeStatus = usePlanStore((s) => s.updatePlanChangeStatus);
-	const setSelectedFeatureId = useRequirementsStore((s) => s.setSelectedFeatureId);
+	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
 
 	const [items, setItems] = useState<CharWithDiff[]>([]);
 	const [currentIndex, setCurrentIndex] = useState(0);
@@ -148,7 +148,7 @@ export const PlanPage = () => {
 				setCurrentIndex(next);
 			} else {
 				clearPlan('requirements');
-				setSelectedFeatureId(currentItem.characteristic.id);
+				setSelectedId(currentItem.characteristic.id);
 				router.push('/proyecto/requisitos');
 			}
 		} catch {

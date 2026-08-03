@@ -41,18 +41,12 @@ const RequirementsPage = () => {
 	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
-	const [selectedId, setSelectedId] = useState<string | null>(() => {
-		const id = useRequirementsStore.getState().selectedFeatureId;
-		if (id) {
-			useRequirementsStore.getState().setSelectedFeatureId(null);
-		}
-		return id;
-	});
-	const [isLoading, setIsLoading] = useState(true);
-	const [isGenerating, setIsGenerating] = useState(false);
-
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
+	const selectedId = useCharacteristicStore((s) => s.selectedId);
+	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
+	const [isLoading, setIsLoading] = useState(true);
+	const [isGenerating, setIsGenerating] = useState(false);
 
 	// Requisitos estado
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
@@ -361,7 +355,7 @@ const RequirementsPage = () => {
 							<button
 								onClick={() => setIsChatbotOpen(true)}
 								disabled={!hasRequirements[selectedId ? selectedId : '']}
-								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50 disabled:cursor-not-allowed'
 							>
 								<Ai size={20} color='text-base-50' />
 								<span className='text-center'>Refinar</span>

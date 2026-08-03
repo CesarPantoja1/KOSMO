@@ -6,9 +6,10 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useModelingStore } from '@/entities/modeling';
 import { useRequirementsStore } from '@/entities/requirements';
-import { Chatbot, PlantUmlViewer } from '@/feature';
+import { PlantUmlViewer } from '@/feature';
 import {
 	Ai,
+	ArrowLeft,
 	ArrowRight,
 	CursorClickFill,
 	Loading,
@@ -19,8 +20,8 @@ import { useAppStore } from 'app/store/app.store';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 
-import { Modeling } from '@/widgets/main-navbar/ui/icons';
 import { AsideCharacteristic } from '@/widgets';
+import { Modeling } from '@/widgets/main-navbar/ui/icons';
 
 import { generatePlantUmlDiagram, getDiagram } from '@/entities/modeling';
 
@@ -34,10 +35,9 @@ const ModelingPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
-	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	// const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [isRefining, setIsRefining] = useState(false);
 
 	const [uml, setUML] = useState('');
@@ -51,6 +51,8 @@ const ModelingPage = () => {
 
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
+	const selectedId = useCharacteristicStore((s) => s.selectedId);
+	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -147,7 +149,7 @@ const ModelingPage = () => {
 		// Cerrar chat si la nueva característica no tiene diagrama
 		const cHasDiag = hasDiagram[id] || false;
 		if (!cHasDiag) {
-			setIsChatbotOpen(false);
+			// setIsChatbotOpen(false);
 		}
 	};
 
@@ -180,7 +182,7 @@ const ModelingPage = () => {
 
 	const handleRefine = async (_instructions: string) => {
 		if (!selectedCharacteristic || !currentProject) return;
-		setIsChatbotOpen(false);
+		// setIsChatbotOpen(false);
 		setIsRefining(true);
 		try {
 			const res = await generatePlantUmlDiagram(
@@ -232,10 +234,10 @@ const ModelingPage = () => {
 						EARS generados.
 					</p>
 					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
+						{/* <button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
 							<Ai color='' size={20} />
 							Refinar
-						</button>
+						</button> */}
 
 						<Link
 							href='codigo'
@@ -307,14 +309,14 @@ const ModelingPage = () => {
 
 					{!isEditorMaximized && !isPlantumlMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button
+							{/* <button
 								onClick={() => setIsChatbotOpen(true)}
 								disabled={!hasDiag}
 								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm'
 							>
 								<Ai color='' size={20} />
 								Refinar
-							</button>
+							</button> */}
 
 							<Link
 								href='codigo'
@@ -322,7 +324,6 @@ const ModelingPage = () => {
 								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
 							>
 								Ir a código
-								<ArrowRight color='' size={20} />
 							</Link>
 						</div>
 					)}
@@ -396,8 +397,8 @@ const ModelingPage = () => {
 											onClick={handleNextLink('/proyecto/requisitos')}
 											className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
 										>
+											<ArrowLeft color='' size={20} />
 											Ir a Requisitos
-											<ArrowRight color='' size={20} />
 										</Link>
 									</section>
 								</div>
@@ -485,7 +486,7 @@ const ModelingPage = () => {
 					</div>
 				</div>
 
-				<div
+				{/* <div
 					className={`chatbot
 						${
 							isChatbotOpen
@@ -499,7 +500,7 @@ const ModelingPage = () => {
 						onClose={() => setIsChatbotOpen(false)}
 						onSendMessage={handleRefine}
 					/>
-				</div>
+				</div> */}
 			</div>
 		</>
 	);
