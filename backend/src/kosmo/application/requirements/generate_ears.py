@@ -168,7 +168,7 @@ class GetRequirementsUseCase:
         self._requirement_repo = requirement_repo
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> GetRequirementsOutput:
-        from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
+        from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError, RequirementsNotFoundError
 
         project = await self._project_repo.by_id(project_id)
         if project is None:
@@ -185,7 +185,13 @@ class GetRequirementsUseCase:
             )
 
         markdown = await self._requirement_repo.by_feature_id(feature_id)
+        if not markdown or not markdown.strip():
+            raise RequirementsNotFoundError(
+                feature_id=str(feature_id),
+                instance=f"/api/v1/projects/{project_id}/features/{feature_id}/requirements",
+            )
+
         from kosmo.domain.sdd.requirements_markdown import count_requirements
 
-        total = count_requirements(markdown) if markdown else 0
+        total = count_requirements(markdown)
         return GetRequirementsOutput(markdown=markdown, total=total)

@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 
 from kosmo.application.requirements.generate_ears import GetRequirementsUseCase
-from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
+from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError, RequirementsNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
@@ -58,7 +58,7 @@ async def test_get_requirements_returns_markdown_when_exists() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_get_requirements_returns_none_when_not_exists() -> None:
+async def test_get_requirements_raises_requirements_not_found() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
     feature_repo: Any = InMemoryFeatureRepository()
@@ -91,12 +91,9 @@ async def test_get_requirements_returns_none_when_not_exists() -> None:
     project_id = ProjectId("prj_getreq02")
     feature_id = FeatureId("feat_getreq02")
 
-    # Act
-    result = await use_case.execute(project_id, feature_id)
-
-    # Assert
-    assert result.markdown is None
-    assert result.total == 0
+    # Act & Assert
+    with pytest.raises(RequirementsNotFoundError):
+        await use_case.execute(project_id, feature_id)
 
 
 @pytest.mark.asyncio

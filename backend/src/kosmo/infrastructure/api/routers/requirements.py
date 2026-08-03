@@ -105,7 +105,7 @@ async def get_requirements(
             project_id=ProjectId(project_id),
             feature_id=fid,
         )
-    except (ProjectNotFoundError, FeatureNotFoundError) as exc:
+    except (ProjectNotFoundError, FeatureNotFoundError, RequirementsNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.problem.detail,
