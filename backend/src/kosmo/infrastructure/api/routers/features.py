@@ -14,6 +14,7 @@ from kosmo.application.features import (
     SuggestFeaturesInput,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.delete_feature import DeleteFeatureUseCase
 from kosmo.application.features.list_features import (
     ListFeaturesInput,
     ListFeaturesUseCase,
@@ -21,8 +22,10 @@ from kosmo.application.features.list_features import (
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
+    FeatureNotFoundError,
+    ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
@@ -273,3 +276,31 @@ def _feature_to_response(f: Any) -> FeatureResponse:
         origin=f.origin,
         display_id=f.display_id,
     )
+
+
+def _delete_feature_uc(request: Request) -> DeleteFeatureUseCase:
+    return request.app.state.delete_feature
+
+
+@router.delete(
+    "/{feature_id}",
+    summary="Eliminar característica",
+    description="Elimina una característica y todos sus artefactos asociados (requisitos, diagrama).",
+    status_code=status.HTTP_200_OK,
+)
+async def delete_feature(
+    project_id: str,
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[DeleteFeatureUseCase, Depends(_delete_feature_uc)],
+) -> dict[str, str]:
+    try:
+        await uc.execute(
+            project_id=ProjectId(project_id),
+            feature_id=FeatureId(feature_id),
+        )
+    except FeatureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    return {"status": "deleted", "feature_id": feature_id}

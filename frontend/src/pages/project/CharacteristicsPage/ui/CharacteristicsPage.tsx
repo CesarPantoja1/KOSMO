@@ -2,6 +2,7 @@
 
 import {
 	useCharacteristicStore,
+	deleteFeature,
 	type CharacteristicChatResponse,
 } from '@/entities/characteristic';
 import {
@@ -10,7 +11,7 @@ import {
 } from '@/entities/plan';
 import { Chatbot, FloatingPlan } from '@/feature';
 import type { ChatMessage } from '@/feature/chatbot';
-import { Ai, Loading, Plus, toast } from '@/shared/ui';
+import { Ai, Loading, ModalConfirmLeave, Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import { useAppStore } from 'app/store/app.store';
 import Link from 'next/link';
@@ -42,6 +43,7 @@ const CharacteristicsPage = () => {
 	const [activeFeatureId, setActiveFeatureId] = useState<string | null>(null);
 	const [isChatLoading, setIsChatLoading] = useState(false);
 	const [isGeneratingCharacteristics, setIsGeneratingCharacteristics] = useState(false);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
 	const currentProject = useAppStore((s) => s.currentProject);
 
@@ -61,6 +63,31 @@ const CharacteristicsPage = () => {
 
 	const handleRefine = (featureId: string) => {
 		setActiveFeatureId(featureId);
+	};
+
+	const handleDelete = async () => {
+		if (!currentProject || !confirmDeleteId) return;
+
+		const featureId = confirmDeleteId;
+		setConfirmDeleteId(null);
+
+		const toastId = toast.info('Eliminando...');
+		try {
+			await deleteFeature(currentProject.id, featureId);
+			useCharacteristicStore.setState((state) => ({
+				currentCharacteristics: state.currentCharacteristics.filter(
+					(c) => c.id !== featureId,
+				),
+			}));
+			if (activeFeatureId === featureId) setActiveFeatureId(null);
+			toast.close(toastId);
+			toast.success('Característica eliminada');
+		} catch (err) {
+			toast.close(toastId);
+			const message =
+				err instanceof Error ? err.message : 'Error al eliminar la característica';
+			toast.error(message);
+		}
 	};
 
 	const handleGenerateCharacteristics = async () => {
@@ -211,6 +238,7 @@ const CharacteristicsPage = () => {
 												searchQuery={searchQuery}
 												isActive={c.id === activeFeatureId}
 												onRefine={handleRefine}
+												onDelete={setConfirmDeleteId}
 											/>
 										))
 									)}
@@ -245,6 +273,17 @@ const CharacteristicsPage = () => {
 					/>
 				</div>
 			</div>
+
+			{confirmDeleteId && (
+				<ModalConfirmLeave
+					title='Eliminar característica'
+					description='¿Estás seguro de eliminar esta característica? Esta acción no se puede deshacer.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setConfirmDeleteId(null)}
+					onConfirm={handleDelete}
+				/>
+			)}
 		</>
 	);
 };

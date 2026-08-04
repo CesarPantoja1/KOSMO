@@ -9,6 +9,7 @@ type Props = {
 	searchQuery?: string;
 	isActive?: boolean;
 	onRefine: (featureId: string) => void;
+	onDelete: (featureId: string) => void;
 };
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -36,6 +37,7 @@ const CardCharacterist = ({
 	searchQuery = '',
 	isActive = false,
 	onRefine,
+	onDelete,
 }: Props) => {
 	return (
 		<div
@@ -67,8 +69,12 @@ const CardCharacterist = ({
 				>
 					<Ai size={16} color={isActive ? 'text-ai' : 'text-current'} />
 				</button>
-				<button className='cursor-pointer'>
-					<Trash color='text-base-600 hover:text-status-error' size={24} />
+				<button
+					onClick={() => onDelete(id)}
+					title='Eliminar'
+					className='p-2 rounded-full border border-transparent cursor-pointer transition-colors inline-flex items-center justify-center text-base-600 hover:text-status-error hover:bg-base-100 active:text-status-error'
+				>
+					<Trash size={16} />
 				</button>
 			</div>
 		</div>

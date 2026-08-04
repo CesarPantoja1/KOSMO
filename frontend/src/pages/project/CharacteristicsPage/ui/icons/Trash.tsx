@@ -1,9 +1,9 @@
 type props = {
 	size?: number;
-	color: string;
+	color?: string;
 };
 
-const Trash = ({ size, color }: props) => {
+const Trash = ({ size, color = 'text-current' }: props) => {
 	return (
 		<svg
 			xmlns='http://www.w3.org/2000/svg'

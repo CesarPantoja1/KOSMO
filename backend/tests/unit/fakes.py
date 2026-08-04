@@ -108,6 +108,9 @@ class InMemoryFeatureRepository:
         project_features = [f for f in self.features.values() if str(f.project_id) == str(project_id)]
         return max((f.number for f in project_features), default=0) + 1
 
+    async def delete(self, feature_id: FeatureId) -> None:
+        self.features.pop(str(feature_id), None)
+
 
 class InMemoryRequirementRepository:
     def __init__(self) -> None:

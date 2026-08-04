@@ -268,3 +268,13 @@ export const sendChatMessage = (
 	USE_MOCKS
 		? mockSendChatMessage(featureId, content)
 		: realSendChatMessage(featureId, content);
+
+const realDeleteFeature = async (projectId: string, featureId: string): Promise<void> => {
+	await apiClient<void>(
+		`/api/v1/projects/${encodeURIComponent(projectId)}/features/${encodeURIComponent(featureId)}`,
+		{ method: 'DELETE' },
+	);
+};
+
+export const deleteFeature = (projectId: string, featureId: string): Promise<void> =>
+	USE_MOCKS ? Promise.resolve() : realDeleteFeature(projectId, featureId);
