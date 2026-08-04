@@ -95,7 +95,7 @@ const mockSendChatMessage = async (
 // --- Real implementations ---
 
 const realGetDiscovery = (projectId: string) => {
-	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery`, {
+	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery?_t=${Date.now()}`, {
 		method: 'GET',
 	});
 };

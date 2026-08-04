@@ -1,7 +1,12 @@
 'use client';
 
 import { getDiscovery } from '@/entities/discovery';
-import { checkConsistency, useConsistencyStore } from '@/entities/consistency';
+import type { ConsistencyReportResponse } from '@/entities/consistency';
+import {
+	ConsistencyProgress,
+	useConsistencyStore,
+	useConsistencyStream,
+} from '@/entities/consistency';
 import type { PlanChange } from '@/entities/plan';
 import {
 	applyPlanChanges,
@@ -9,10 +14,10 @@ import {
 	usePlanStore,
 } from '@/entities/plan';
 import { MarkdownDiff } from '@/feature';
-import { Loading, toast } from '@/shared/ui';
+import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 function buildProposal(original: string, changes: PlanChange[]): string {
 	let result = original;
@@ -30,13 +35,22 @@ export const PlanPage = () => {
 	const router = useRouter();
 	const currentProject = useAppStore((s) => s.currentProject);
 	const planByPhase = usePlanStore((s) => s.planByPhase);
-	const clearPlan = usePlanStore((s) => s.clearPlan);
+	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
+
+	const {
+		phases: streamPhases,
+		isComplete,
+		report: streamReport,
+		error: streamError,
+		start: startStream,
+		phaseLabels,
+	} = useConsistencyStream();
 
 	const [originalMarkdown, setOriginalMarkdown] = useState('');
 	const [isLoading, setIsLoading] = useState(true);
 	const [isApplying, setIsApplying] = useState(false);
 	const [isDiscarding, setIsDiscarding] = useState(false);
-	const [isChecking, setIsChecking] = useState(false);
+	const [isProcessing, setIsProcessing] = useState(false);
 
 	const allChanges = planByPhase['discovery'] ?? [];
 	const changes = allChanges.filter(
@@ -54,6 +68,46 @@ export const PlanPage = () => {
 			.finally(() => setIsLoading(false));
 	}, [currentProject, router]);
 
+	useEffect(() => {
+		if (!isComplete || !streamReport) return;
+
+		const downstream = (streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
+		const hasPending = downstream.some((i) => !i.accepted);
+
+		const finish = async () => {
+			if (currentProject) {
+				await getDiscovery(currentProject.id);
+				await fetchAndHydratePlan(currentProject.id, 'discovery');
+			}
+			setIsProcessing(false);
+			setIsApplying(false);
+
+			if (hasPending) {
+				useConsistencyStore.getState().setReport(
+					streamReport as unknown as ConsistencyReportResponse,
+				);
+				router.push('/proyecto/descubrimiento/consistencia');
+			} else {
+				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
+				router.push('/proyecto/descubrimiento');
+			}
+		};
+
+		finish().catch(() => router.push('/proyecto/descubrimiento'));
+	}, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		if (!streamError) return;
+		setIsProcessing(false);
+		setIsApplying(false);
+		toast.error('Error al verificar la consistencia del proyecto');
+		if (currentProject) {
+			getDiscovery(currentProject.id).catch(() => {});
+			fetchAndHydratePlan(currentProject.id, 'discovery').catch(() => {});
+		}
+		router.push('/proyecto/descubrimiento');
+	}, [streamError]); // eslint-disable-line react-hooks/exhaustive-deps
+
 	const proposalMarkdown = buildProposal(originalMarkdown, changes);
 
 	const handleBack = () => {
@@ -65,7 +119,7 @@ export const PlanPage = () => {
 		setIsDiscarding(true);
 		try {
 			await discardPlan(currentProject.id, 'discovery');
-			clearPlan('discovery');
+			usePlanStore.getState().clearPlan('discovery');
 			router.push('/proyecto/descubrimiento');
 		} catch {
 			toast.error('No se pudo descartar el plan');
@@ -77,17 +131,15 @@ export const PlanPage = () => {
 	const handleApply = async () => {
 		if (!currentProject || changes.length === 0) return;
 		setIsApplying(true);
+		setIsProcessing(true);
+
 		try {
 			const changeIds = changes.map((c) => c.id);
 			const result = await applyPlanChanges(currentProject.id, 'discovery', changeIds);
 
 			if (result.failed_count > 0) {
-				const reasons = result.failed_changes
-					.map((f) => f.reason)
-					.join('. ');
-				toast.error(
-					`${result.failed_count} cambio(s) fallaron: ${reasons}`,
-				);
+				const reasons = result.failed_changes.map((f) => f.reason).join('. ');
+				toast.error(`${result.failed_count} cambio(s) fallaron: ${reasons}`);
 			} else {
 				toast.success(`${result.applied_count} cambio(s) aplicados correctamente`);
 			}
@@ -98,33 +150,14 @@ export const PlanPage = () => {
 				diff_after: c.diff.after,
 			}));
 
-			clearPlan('discovery');
-			setIsApplying(false);
-			setIsChecking(true);
-
-			try {
-				const report = await checkConsistency({
-					project_id: currentProject.id,
-					phase_origin: 'discovery',
-					phase_destination: 'features',
-					changes: changesToSend,
-				});
-
-				const hasPending = report.downstream_impact.some((i) => !i.accepted);
-
-				if (hasPending) {
-					useConsistencyStore.getState().setReport(report);
-					router.push('/proyecto/descubrimiento/consistencia');
-				} else {
-					router.push('/proyecto/descubrimiento');
-				}
-			} catch {
-				router.push('/proyecto/descubrimiento');
-			} finally {
-				setIsChecking(false);
-			}
+			startStream({
+				projectId: currentProject.id,
+				phaseOrigin: 'discovery',
+				changes: changesToSend,
+			});
 		} catch {
 			setIsApplying(false);
+			setIsProcessing(false);
 			toast.error('Error al aplicar los cambios');
 		}
 	};
@@ -137,43 +170,40 @@ export const PlanPage = () => {
 		);
 	}
 
-	if (isChecking) {
-		return (
-			<Loading
-				title='Verificando consistencia'
-				description='La IA está analizando el impacto de los cambios en las demás fases del proyecto.'
-				messages={[
-					'Analizando cambios aplicados en Descubrimiento...',
-					'Revisando impacto en Características...',
-					'Comparando versiones entre fases...',
-					'Generando reporte de consistencia...',
-					'Finalizando verificación...',
-				]}
-			/>
-		);
-	}
-
 	return (
-		<div className='page-container'>
-			<div className='page-header'>
-				<h2 className='text-base-800 text-3xl font-bold'>Descubrimiento del proyecto</h2>
-				<p className='text-base-600 text-lg'>
-					Revisa los cambios propuestos antes de aplicarlos al documento de
-					descubrimiento.
-				</p>
+		<>
+			{isProcessing && (
+				<ConsistencyProgress
+					title='Verificando consistencia'
+					description='La IA está analizando el impacto de los cambios en todas las fases del proyecto.'
+					phases={streamPhases}
+					phaseLabels={phaseLabels}
+					isComplete={isComplete}
+				/>
+			)}
 
-				<div className='flex-1 min-h-0 mb-2'>
-					<MarkdownDiff
-						original={originalMarkdown}
-						proposal={proposalMarkdown}
-						originalLabel='Original'
-						proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
-						onBack={handleBack}
-						onDiscard={isDiscarding ? () => {} : handleDiscard}
-						onApply={isApplying ? () => {} : handleApply}
-					/>
+			<div className='page-container'>
+				<div className='page-header'>
+					<h2 className='text-base-800 text-3xl font-bold'>Descubrimiento del proyecto</h2>
+					<p className='text-base-600 text-lg'>
+						Revisa los cambios propuestos antes de aplicarlos al documento de
+						descubrimiento.
+					</p>
+
+					<div className='flex-1 min-h-0 mb-2'>
+						<MarkdownDiff
+							original={originalMarkdown}
+							proposal={proposalMarkdown}
+							originalLabel='Original'
+							proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
+							onBack={handleBack}
+							onDiscard={isDiscarding ? () => {} : handleDiscard}
+							onApply={isApplying || isDiscarding ? () => {} : handleApply}
+							processing={isApplying}
+						/>
+					</div>
 				</div>
 			</div>
-		</div>
+		</>
 	);
 };

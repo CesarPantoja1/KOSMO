@@ -3,7 +3,7 @@ type Phase = 'discovery' | 'features' | 'requirements' | 'modeling';
 export interface ConsistencyCheck {
 	project_id: string;
 	phase_origin: string;
-	phase_destination: string;
+	phase_destination?: string;
 	changes: {
 		section: string;
 		diff_before: string;
@@ -14,7 +14,7 @@ export interface ConsistencyCheck {
 export interface ConsistencyReportResponse {
 	source_type: Phase;
 	source_id: string;
-	target_type: Phase;
+	target_type?: Phase;
 	your_changes: YourChange[];
 	downstream_impact: DownstreamProposal[];
 }
@@ -29,10 +29,14 @@ export interface YourChange {
 
 export interface DownstreamProposal {
 	id: string;
+	phase: string;
 	targetId: string;
+	artifact_type: string;
 	targetDisplayId: string;
 	targetTitle: string;
-	rationale: string; // 📌 Por qué
-	diff: { field: string; before: string; after: string };
-	accepted: boolean;
+	section: string;
+	rationale: string;
+	action?: string;
+	diff?: { field: string; before: string; after: string };
+	accepted?: boolean;
 }

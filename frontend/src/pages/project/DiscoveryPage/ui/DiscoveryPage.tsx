@@ -64,6 +64,8 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
+	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
+
 	useEffect(() => {
 		if (!currentProject) {
 			router.push('/proyecto');
@@ -72,20 +74,18 @@ const DiscoveryPage = () => {
 
 		setIsLoading(true);
 		try {
-			const currentDiscovery = useDiscoveryStore.getState().currentDiscovery;
 			if (currentDiscovery) {
 				setMarkdown(currentDiscovery.content);
 				savedContentRef.current = currentDiscovery.content;
 				setHasDiscovery(true);
 			} else {
-				setHasDiscovery(false);
 				setMarkdown('');
 				savedContentRef.current = '';
 			}
 		} finally {
 			setIsLoading(false);
 		}
-	}, [currentProject, router]);
+	}, [currentProject, currentDiscovery, router]);
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;

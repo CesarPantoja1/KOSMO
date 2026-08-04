@@ -14,6 +14,7 @@ interface Props {
 	onApply: () => void;
 	originalLabel?: string;
 	proposalLabel?: string;
+	processing?: boolean;
 }
 
 export function MarkdownDiff({
@@ -24,6 +25,7 @@ export function MarkdownDiff({
 	onApply,
 	originalLabel = 'Original',
 	proposalLabel = 'Propuesta',
+	processing = false,
 }: Props) {
 	const leftRef = useRef<HTMLDivElement>(null);
 	const rightRef = useRef<HTMLDivElement>(null);
@@ -109,9 +111,14 @@ export function MarkdownDiff({
 				<button
 					type='button'
 					onClick={onApply}
-					className='cursor-pointer rounded-md bg-primary-100 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-800 active:opacity-80'
+					disabled={processing}
+					className={`rounded-md px-5 py-2 text-sm font-medium text-white transition-colors ${
+						processing
+							? 'cursor-not-allowed bg-primary-100/50'
+							: 'cursor-pointer bg-primary-100 hover:bg-primary-800 active:opacity-80'
+					}`}
 				>
-					Aplicar Cambios
+					{processing ? 'Aplicando...' : 'Aplicar Cambios'}
 				</button>
 			</div>
 		</div>

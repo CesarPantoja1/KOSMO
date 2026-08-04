@@ -1,5 +1,7 @@
 export { useConsistencyStore } from './model/store';
-export { checkConsistency } from './api/api';
+export { checkConsistency, applyConsistencyImpacts } from './api/api';
+export { useConsistencyStream } from './api/useConsistencyStream';
+export { ConsistencyProgress } from './api/ConsistencyProgress';
 export type {
 	ConsistencyCheck,
 	ConsistencyReportResponse,

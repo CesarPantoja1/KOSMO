@@ -133,8 +133,10 @@ const RequirementsPage = () => {
 				}));
 				setMarkdown(content);
 				setSavedContent(content);
-			} catch {
-				if (!cancelled) toast.error('Error al cargar los requisitos');
+			} catch (err) {
+				if (!cancelled && (err as { status?: number }).status !== 404) {
+					toast.error('Error al cargar los requisitos');
+				}
 			} finally {
 				if (!cancelled) setIsLoadingRequirements(false);
 			}
