@@ -1,6 +1,7 @@
 'use client';
 
 import { getDiscovery } from '@/entities/discovery';
+import { checkConsistency, useConsistencyStore } from '@/entities/consistency';
 import type { PlanChange } from '@/entities/plan';
 import {
 	applyPlanChanges,
@@ -90,8 +91,27 @@ export const PlanPage = () => {
 				toast.success(`${result.applied_count} cambio(s) aplicados correctamente`);
 			}
 
+			const changesToSend = changes.map((c) => ({
+				section: c.section,
+				diff_before: c.diff.before,
+				diff_after: c.diff.after,
+			}));
+
 			clearPlan('discovery');
 			router.push('/proyecto/descubrimiento');
+
+			checkConsistency({
+				project_id: currentProject.id,
+				phase_origin: 'discovery',
+				phase_destination: 'features',
+				changes: changesToSend,
+			})
+				.then((report) => {
+					useConsistencyStore.getState().setReport(report);
+				})
+				.catch(() => {
+					toast.error('Error al verificar consistencia');
+				});
 		} catch {
 			toast.error('Error al aplicar los cambios');
 		} finally {

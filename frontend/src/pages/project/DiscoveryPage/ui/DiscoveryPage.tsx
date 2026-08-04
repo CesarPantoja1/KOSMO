@@ -1,7 +1,7 @@
 'use client';
 
 import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
-import { usePlanActions, usePlanStore } from '@/entities/plan';
+import { usePlanActions } from '@/entities/plan';
 import {
 	Chatbot,
 	FloatingPlan,
@@ -53,11 +53,8 @@ const DiscoveryPage = () => {
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
 	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
-	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
 	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
-
-	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
@@ -73,39 +70,22 @@ const DiscoveryPage = () => {
 			return;
 		}
 
-		const fetchDiscovery = async () => {
-			setIsLoading(true);
-			try {
-				const data = await getDiscovery(currentProject.id);
-				setMarkdown(data.content);
-				savedContentRef.current = data.content;
+		setIsLoading(true);
+		try {
+			const currentDiscovery = useDiscoveryStore.getState().currentDiscovery;
+			if (currentDiscovery) {
+				setMarkdown(currentDiscovery.content);
+				savedContentRef.current = currentDiscovery.content;
 				setHasDiscovery(true);
-				// Sprint 4 (T9) — Sincronizar e hidratar el plan desde el backend
-				fetchAndHydratePlan(currentProject.id, 'discovery');
-			} catch (err) {
-				const errorStatus =
-					err && typeof err === 'object' && 'status' in err
-						? (err as { status: unknown }).status
-						: undefined;
-				const errorMessage = err instanceof Error ? err.message : '';
-				if (
-					errorStatus === 404 ||
-					errorMessage.includes('404') ||
-					errorMessage.includes('no existe')
-				) {
-					setHasDiscovery(false);
-					setMarkdown('');
-					savedContentRef.current = '';
-				} else {
-					toast.error(errorMessage || 'Error al cargar el descubrimiento');
-				}
-			} finally {
-				setIsLoading(false);
+			} else {
+				setHasDiscovery(false);
+				setMarkdown('');
+				savedContentRef.current = '';
 			}
-		};
-
-		fetchDiscovery();
-	}, [currentProject, router, fetchAndHydratePlan]);
+		} finally {
+			setIsLoading(false);
+		}
+	}, [currentProject, router]);
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
@@ -144,7 +124,6 @@ const DiscoveryPage = () => {
 			setMarkdown(data.content);
 			savedContentRef.current = data.content;
 			setHasDiscovery(true);
-			fetchAndHydratePlan(currentProject.id, 'discovery');
 			toast.success('Descubrimiento generado exitosamente');
 		} catch (err) {
 			const message =

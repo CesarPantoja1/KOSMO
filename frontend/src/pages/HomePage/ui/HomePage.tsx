@@ -60,8 +60,11 @@ export function HomePage() {
 		fetchProjects();
 	}, [resetProjectState]);
 
+	const initializeProject = useAppStore((s) => s.initializeProject);
+
 	const handleProjectClick = (project: Project) => {
 		setProjectState(project);
+		initializeProject(project.id);
 		router.push('/proyecto/descubrimiento');
 	};
 

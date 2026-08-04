@@ -1,8 +1,13 @@
+import { useConsistencyStore } from '@/entities/consistency';
 import { usePlanStore } from '@/entities/plan';
 import { useDiscoveryStore } from '@/entities/discovery';
+import { getDiscovery } from '@/entities/discovery/api/api';
 import { useCharacteristicStore } from '@/entities/characteristic';
+import { getCharacteristics } from '@/entities/characteristic/api/api';
 import { useModelingStore } from '@/entities/modeling';
+import { getDiagram } from '@/entities/modeling/api/api';
 import { useRequirementsStore } from '@/entities/requirements';
+import { getRequirements } from '@/entities/requirements/api/api';
 import type { Project } from '@/entities/project/model/types';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -23,6 +28,7 @@ interface AppState {
 	setPendingNavigationPath: (v: string | null) => void;
 	isEditorMaximized: boolean;
 	setEditorMaximized: (v: boolean) => void;
+	initializeProject: (projectId: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>()(
@@ -48,6 +54,7 @@ export const useAppStore = create<AppState>()(
 				useCharacteristicStore.getState().clearAllChatHistories();
 				useModelingStore.getState().resetModeling();
 				useRequirementsStore.getState().resetRequirements();
+				useConsistencyStore.getState().resetConsistency();
 			},
 			isProyectosOpen: false,
 			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),
@@ -57,6 +64,41 @@ export const useAppStore = create<AppState>()(
 			setPendingNavigationPath: (v) => set({ pendingNavigationPath: v }),
 			isEditorMaximized: false,
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
+			initializeProject: async (projectId) => {
+				try {
+					const discovery = await getDiscovery(projectId);
+					if (!discovery) return;
+					useDiscoveryStore.getState().setCurrentDiscovery(discovery);
+
+					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'discovery');
+
+					const characteristics = await getCharacteristics(projectId);
+					if (!characteristics || characteristics.length === 0) return;
+					useCharacteristicStore.getState().setCurrentCharacteristics(characteristics);
+
+					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'features');
+
+					await Promise.allSettled(
+						characteristics.map(async (c) => {
+							const [reqResult, diagramResult] = await Promise.allSettled([
+								getRequirements(projectId, c.id),
+								getDiagram(projectId, c.id),
+							]);
+
+							if (reqResult.status === 'fulfilled' && reqResult.value) {
+								useRequirementsStore.getState().setHasRequirements(c.id, true);
+							}
+							if (diagramResult.status === 'fulfilled' && diagramResult.value) {
+								useModelingStore.getState().setHasDiagram(c.id, true);
+							}
+						}),
+					);
+
+					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'requirements');
+				} catch (error) {
+					console.error('[initializeProject] Error:', error);
+				}
+			},
 		}),
 		{
 			name: 'kosmo-app-store',
