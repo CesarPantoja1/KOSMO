@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Protocol
+from typing import Any, Protocol, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
@@ -53,7 +53,7 @@ class PlanCambio:
     context_id: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class MensajeChat:
     id: ChatMessageId
     role: ChatRole
@@ -61,6 +61,33 @@ class MensajeChat:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     suggested_changes: list[SugerenciaCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     error: str | None = None
+
+    def __init__(
+        self,
+        id: ChatMessageId,  # noqa: A002
+        role: ChatRole,
+        content: str,
+        timestamp: datetime | None = None,
+        suggested_changes: list[SugerenciaCambio] | None = None,
+        error: str | None = None,
+        *,
+        suggested_change: SugerenciaCambio | None = None,
+    ) -> None:
+        normalized_changes = list(suggested_changes or [])
+        if suggested_change is not None and not normalized_changes:
+            normalized_changes.append(suggested_change)
+
+        object.__setattr__(self, "id", id)
+        object.__setattr__(self, "role", role)
+        object.__setattr__(self, "content", content)
+        object.__setattr__(self, "timestamp", timestamp or datetime.now(UTC))
+        object.__setattr__(self, "suggested_changes", normalized_changes)
+        object.__setattr__(self, "error", error)
+
+    @property
+    def suggested_change(self) -> SugerenciaCambio | None:
+        """Compatibilidad con consumidores que aún esperan una sola sugerencia."""
+        return self.suggested_changes[0] if self.suggested_changes else None
 
 
 @dataclass(frozen=True)
@@ -163,3 +190,24 @@ class SugerenciaCambioLLM(BaseModel):
 class RespuestaChatLLM(BaseModel):
     content: str
     change_suggestions: list[SugerenciaCambioLLM] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_suggestion(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        raw_data = cast(dict[str, Any], data)
+        if "change_suggestion" not in raw_data:
+            return raw_data
+
+        normalized = dict(raw_data)
+        legacy = normalized.pop("change_suggestion")
+        if "change_suggestions" not in normalized:
+            normalized["change_suggestions"] = None if legacy is None else [legacy]
+        return normalized
+
+    @property
+    def change_suggestion(self) -> SugerenciaCambioLLM | None:
+        """Compatibilidad con el contrato singular anterior."""
+        return self.change_suggestions[0] if self.change_suggestions else None
