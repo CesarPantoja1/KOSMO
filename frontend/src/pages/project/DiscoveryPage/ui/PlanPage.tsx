@@ -9,7 +9,7 @@ import {
 	usePlanStore,
 } from '@/entities/plan';
 import { MarkdownDiff } from '@/feature';
-import { toast } from '@/shared/ui';
+import { Loading, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -36,6 +36,7 @@ export const PlanPage = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isApplying, setIsApplying] = useState(false);
 	const [isDiscarding, setIsDiscarding] = useState(false);
+	const [isChecking, setIsChecking] = useState(false);
 
 	const allChanges = planByPhase['discovery'] ?? [];
 	const changes = allChanges.filter(
@@ -98,24 +99,33 @@ export const PlanPage = () => {
 			}));
 
 			clearPlan('discovery');
-			router.push('/proyecto/descubrimiento');
-
-			checkConsistency({
-				project_id: currentProject.id,
-				phase_origin: 'discovery',
-				phase_destination: 'features',
-				changes: changesToSend,
-			})
-				.then((report) => {
-					useConsistencyStore.getState().setReport(report);
-				})
-				.catch(() => {
-					toast.error('Error al verificar consistencia');
-				});
-		} catch {
-			toast.error('Error al aplicar los cambios');
-		} finally {
 			setIsApplying(false);
+			setIsChecking(true);
+
+			try {
+				const report = await checkConsistency({
+					project_id: currentProject.id,
+					phase_origin: 'discovery',
+					phase_destination: 'features',
+					changes: changesToSend,
+				});
+
+				const hasPending = report.downstream_impact.some((i) => !i.accepted);
+
+				if (hasPending) {
+					useConsistencyStore.getState().setReport(report);
+					router.push('/proyecto/descubrimiento/consistencia');
+				} else {
+					router.push('/proyecto/descubrimiento');
+				}
+			} catch {
+				router.push('/proyecto/descubrimiento');
+			} finally {
+				setIsChecking(false);
+			}
+		} catch {
+			setIsApplying(false);
+			toast.error('Error al aplicar los cambios');
 		}
 	};
 
@@ -124,6 +134,22 @@ export const PlanPage = () => {
 			<div className='flex h-full items-center justify-center'>
 				<div className='h-8 w-8 animate-spin rounded-full border-4 border-base-300 border-t-primary-100' />
 			</div>
+		);
+	}
+
+	if (isChecking) {
+		return (
+			<Loading
+				title='Verificando consistencia'
+				description='La IA está analizando el impacto de los cambios en las demás fases del proyecto.'
+				messages={[
+					'Analizando cambios aplicados en Descubrimiento...',
+					'Revisando impacto en Características...',
+					'Comparando versiones entre fases...',
+					'Generando reporte de consistencia...',
+					'Finalizando verificación...',
+				]}
+			/>
 		);
 	}
 
