@@ -8,6 +8,7 @@ interface ConsistencyStore {
 	rejectChange: (changeId: string) => void;
 	acceptImpact: (impactId: string) => void;
 	rejectImpact: (impactId: string) => void;
+	undoImpact: (impactId: string) => void;
 	acceptAll: () => void;
 	rejectAll: () => void;
 	clearReport: () => void;
@@ -75,6 +76,19 @@ export const useConsistencyStore = create<ConsistencyStore>()((set, get) => ({
 					...state.report,
 					downstream_impact: state.report.downstream_impact.map((i) =>
 						i.id === impactId ? { ...i, accepted: false } : i,
+					),
+				},
+			};
+		}),
+
+	undoImpact: (impactId) =>
+		set((state) => {
+			if (!state.report) return state;
+			return {
+				report: {
+					...state.report,
+					downstream_impact: state.report.downstream_impact.map((i) =>
+						i.id === impactId ? { ...i, accepted: undefined as unknown as boolean } : i,
 					),
 				},
 			};

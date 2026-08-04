@@ -15,6 +15,7 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
+from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
 
 _log = structlog.get_logger(__name__)
 
@@ -167,23 +168,69 @@ class EvaluateProjectConsistencyUseCase:
                 )
             elif target_spec == SpecPhase.REQUISITOS:
                 req_md = await self._requirement_repo.by_feature_id(feature.id)
-                if req_md is not None:
+                if req_md is None:
+                    continue
+
+                current_reqs = parse_requirements_markdown(req_md, feature.id, feature.number)
+
+                if action and action.suggested_before and action.suggested_after:
+                    before_reqs = parse_requirements_markdown(
+                        action.suggested_before, feature.id, feature.number
+                    )
+                    after_reqs = parse_requirements_markdown(
+                        action.suggested_after, feature.id, feature.number
+                    )
+                    before_by_id = {r.display_id: r for r in before_reqs}
+                    after_by_id = {r.display_id: r for r in after_reqs}
+                    all_ids = sorted(set(before_by_id.keys()) | set(after_by_id.keys()))
+                else:
+                    before_by_id = {r.display_id: r for r in current_reqs}
+                    after_by_id = {}
+                    all_ids = sorted(before_by_id.keys())
+
+                for req_display_id in all_ids:
+                    before_req = before_by_id.get(req_display_id)
+                    after_req = after_by_id.get(req_display_id)
+
+                    if before_req and after_req and before_req.statement != after_req.statement:
+                        per_diff: dict[str, object] | None = {
+                            "field": "statement",
+                            "before": before_req.statement,
+                            "after": after_req.statement,
+                        }
+                        per_action = "update"
+                    elif before_req and not after_req:
+                        per_diff = None
+                        per_action = "delete" if per_action == "delete" else "update"
+                    elif not before_req and after_req:
+                        per_diff = {
+                            "field": "statement",
+                            "before": "",
+                            "after": after_req.statement,
+                        }
+                        per_action = "create"
+                    else:
+                        per_diff = None
+                        per_action = per_action
+
+                    target_req = before_req or after_req
+                    req_title = target_req.title if target_req else req_display_id
                     items.append(
                         ImpactItem(
                             id=f"imp_{ULID().hex}",
                             phase=api_phase,
                             target_id=fid_str,
                             artifact_type="EARSRequirement",
-                            target_display_id=f"REQ-{feature.display_id}",
-                            target_title=f"Requisitos de {feature.title}",
-                            section=action.suggested_field if action else "estructura EARS",
+                            target_display_id=req_display_id,
+                            target_title=req_title,
+                            section="statement",
                             rationale=per_rationale
                             or (
-                                "Esta característica ya no aplica al descubrimiento actual."
+                                "Se eliminará en cascada al eliminar la característica."
                                 if per_action == "delete"
-                                else "El cambio en Descubrimiento afecta los requisitos de esta característica."
+                                else "El cambio en Descubrimiento afecta este requisito."
                             ),
-                            diff=diff,
+                            diff=per_diff,
                             action=per_action,
                         )
                     )

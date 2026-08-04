@@ -4,8 +4,10 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 from ulid import ULID
 
+from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
 from kosmo.application.consistency.evaluate_project_consistency import (
     EvaluateProjectConsistencyInput,
@@ -39,6 +41,10 @@ def _consistency_uc(request: Request) -> EvaluateProjectConsistencyUseCase:
 
 def _cascade_uc(request: Request) -> CascadingConsistencyUseCase:
     return request.app.state.cascade_consistency
+
+
+def _apply_uc(request: Request) -> ApplyConsistencyImpactsUseCase:
+    return request.app.state.apply_consistency_impacts
 
 
 _SPEC_TO_API: dict[SpecPhase, str] = {
@@ -174,4 +180,33 @@ def _impact_dict(i: Any) -> dict[str, Any]:
         "rationale": i.rationale,
         "diff": i.diff,
         "action": getattr(i, "action", "update"),
+    }
+
+
+class ApplyImpactsRequestView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    impacts: list[dict[str, object]] = Field(description="Impactos a aplicar")
+
+
+@router.post(
+    "/apply",
+    summary="Aplicar impactos de consistencia",
+    description="Aplica las acciones sugeridas sobre requisitos, caracteristicas y diagramas.",
+    status_code=status.HTTP_200_OK,
+)
+async def apply_consistency_impacts(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Annotated[ApplyImpactsRequestView, Body(...)],
+    uc: Annotated[ApplyConsistencyImpactsUseCase, Depends(_apply_uc)],
+) -> dict[str, Any]:
+    output = await uc.execute(project_id=ProjectId(project_id), impacts=request.impacts)
+    return {
+        "applied": [
+            {"target_id": a.target_id, "artifact_type": a.artifact_type} for a in output.applied
+        ],
+        "failed": [
+            {"target_id": f.target_id, "artifact_type": f.artifact_type, "reason": f.reason}
+            for f in output.failed
+        ],
     }

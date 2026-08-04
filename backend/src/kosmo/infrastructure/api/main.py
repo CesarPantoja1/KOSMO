@@ -306,6 +306,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         traceability_repo=app.state.traceability_repo,
     )
 
+    from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
+
+    app.state.apply_consistency_impacts = ApplyConsistencyImpactsUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        traceability_repo=app.state.traceability_repo,
+    )
+
     app.state.generate_features = features_components.generate_features
     app.state.suggest_features = features_components.suggest_features
     app.state.save_selected_features = features_components.save_selected_features
