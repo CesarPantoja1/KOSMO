@@ -41,6 +41,16 @@ async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) ->
     return fid
 
 
+def _diagram_response(output: Any) -> dict[str, Any]:
+    return {
+        "id": str(output.diagram.id),
+        "feature_id": str(output.diagram.feature_id),
+        "diagram_syntax": output.diagram.diagram_syntax,
+        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
+        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
+    }
+
+
 @router.post(
     "/generate",
     summary="Generar diagrama de actividad",
@@ -57,13 +67,30 @@ async def generate_diagram(
     uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
 
     output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
-    return {
-        "id": str(output.diagram.id),
-        "feature_id": str(output.diagram.feature_id),
-        "diagram_syntax": output.diagram.diagram_syntax,
-        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
-        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
-    }
+    return _diagram_response(output)
+
+
+@router.post(
+    "/propagate",
+    summary="Propagar cambios al modelo",
+    description=(
+        "Regenera el diagrama de actividad PlantUML de una característica "
+        "cuando cambios en fases upstream lo dejaron desactualizado."
+    ),
+    status_code=status.HTTP_200_OK,
+    operation_id="propagate_changes_to_model",
+)
+async def propagate_to_model(
+    feature_id: str,
+    body: GenerateDiagramRequest,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> dict[str, Any]:
+    fid = await _get_feature_id(request, body.project_id, feature_id)
+    uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
+
+    output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
+    return _diagram_response(output)
 
 
 @router.get(
