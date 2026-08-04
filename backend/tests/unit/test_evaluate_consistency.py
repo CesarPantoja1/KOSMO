@@ -40,7 +40,20 @@ class StubConsistencyAgent:
     ) -> object:
         if self._should_fail:
             raise RuntimeError("Stub agent failure")
-        return {"affected_artifact_ids": list(self._affected_ids), "rationale": "Stub evaluation"}
+        return {
+            "actions": [
+                {
+                    "artifact_id": aid,
+                    "action": "update",
+                    "rationale": f"Stub rationale for {aid}",
+                    "suggested_field": "description",
+                    "suggested_before": "before",
+                    "suggested_after": "after",
+                }
+                for aid in self._affected_ids
+            ],
+            "overall_rationale": "Stub evaluation",
+        }
 
     async def execute_conversation(
         self,

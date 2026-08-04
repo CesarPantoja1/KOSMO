@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from ulid import ULID
 
+from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
 from kosmo.application.consistency.evaluate_project_consistency import (
     EvaluateProjectConsistencyInput,
     EvaluateProjectConsistencyUseCase,
@@ -13,6 +15,7 @@ from kosmo.contracts import DiffCambio, PlanCambio
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.infrastructure.api.async_generation import sse_consistency_response
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
@@ -32,6 +35,41 @@ router = APIRouter(
 
 def _consistency_uc(request: Request) -> EvaluateProjectConsistencyUseCase:
     return request.app.state.evaluate_project_consistency
+
+
+def _cascade_uc(request: Request) -> CascadingConsistencyUseCase:
+    return request.app.state.cascade_consistency
+
+
+_SPEC_TO_API: dict[SpecPhase, str] = {
+    SpecPhase.DESCUBRIMIENTO: "discovery",
+    SpecPhase.CARACTERISTICAS: "features",
+    SpecPhase.REQUISITOS: "requirements",
+    SpecPhase.MODELO: "model",
+}
+
+
+@router.post(
+    "/evaluate/stream",
+    summary="Evaluar consistencia entre fases (SSE streaming)",
+    description="Evalúa el impacto de cambios en cascada (features → requirements → model) con progreso SSE.",
+    status_code=status.HTTP_200_OK,
+)
+async def evaluate_consistency_stream(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Annotated[EvaluateConsistencyRequestView, Body(...)],
+    uc: Annotated[CascadingConsistencyUseCase, Depends(_cascade_uc)],
+) -> StreamingResponse:
+    source_phase = _resolve_origin_phase(request.phase_origin)
+    changes = _changes_to_plan(request.changes)
+
+    generator = uc.execute_stream(
+        project_id=ProjectId(project_id),
+        source_phase=source_phase,
+        applied_changes=changes,
+    )
+    return await sse_consistency_response(generator)
 
 
 @router.post(
@@ -59,9 +97,21 @@ async def evaluate_consistency(
             applied_changes=changes,
         )
     )
+    source_api_phase = _SPEC_TO_API.get(source_phase, source_phase.value)
     return {
         "report_id": output.report_id,
-        "source_phase": output.source_phase,
+        "source_type": source_api_phase,
+        "source_id": project_id,
+        "your_changes": [
+            {
+                "change_id": str(c.id),
+                "section": c.section,
+                "description": c.description,
+                "diff": {"before": c.diff.before, "after": c.diff.after},
+                "accepted": True,
+            }
+            for c in changes
+        ],
         "upstream_impact": [_impact_dict(i) for i in output.upstream_impact],
         "downstream_impact": [_impact_dict(i) for i in output.downstream_impact],
     }
@@ -84,7 +134,7 @@ def _resolve_origin_phase(phase_name: str) -> SpecPhase:
 def _resolve_targets(phase_destination: str | None) -> list[str]:
     if phase_destination:
         return [phase_destination]
-    return ["caracteristicas", "requisitos", "modelo"]
+    return ["features", "requirements", "model"]
 
 
 def _to_spec_phase(api_phase: str) -> SpecPhase:
@@ -112,12 +162,16 @@ def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
     return result
 
 
-def _impact_dict(i: Any) -> dict[str, str]:
+def _impact_dict(i: Any) -> dict[str, Any]:
     return {
+        "id": i.id,
         "phase": i.phase,
-        "artifact_id": i.artifact_id,
+        "targetId": i.target_id,
         "artifact_type": i.artifact_type,
-        "artifact_label": i.artifact_label,
+        "targetDisplayId": i.target_display_id,
+        "targetTitle": i.target_title,
         "section": i.section,
         "rationale": i.rationale,
+        "diff": i.diff,
+        "action": getattr(i, "action", "update"),
     }

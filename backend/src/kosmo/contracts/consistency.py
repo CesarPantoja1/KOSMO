@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Protocol
 
 from kosmo.contracts.chat import DiffCambio, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
+
+
+class ConsistencyStatus(StrEnum):
+    ANALIZADO_SIN_IMPACTO = "analizado_sin_impacto"
+    ANALIZADO_CON_IMPACTO = "analizado_con_impacto"
+    ANALISIS_FALLIDO = "analisis_fallido"
 
 
 @dataclass(frozen=True)
@@ -30,9 +37,23 @@ class ReporteConsistencia:
 
 
 @dataclass(frozen=True)
+class ArtifactAction:
+    artifact_id: str
+    action: str  # "update", "delete", "keep"
+    rationale: str
+    suggested_field: str = ""
+    suggested_before: str = ""
+    suggested_after: str = ""
+
+
+@dataclass(frozen=True)
 class ConsistencyEvaluationOutput:
     report_id: str
+    status: ConsistencyStatus = ConsistencyStatus.ANALIZADO_SIN_IMPACTO
     affected_artifact_ids: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    rationale: str = ""
+    failure_reason: str = ""
+    actions: list[ArtifactAction] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
 
 class ConsistencyEvaluator(Protocol):

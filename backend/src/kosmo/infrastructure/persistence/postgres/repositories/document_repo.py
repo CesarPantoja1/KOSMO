@@ -111,3 +111,19 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             return model.markdown if model else None
+
+    async def get_latest_version(self, project_id: ProjectId, phase: object) -> str | None:  # type: ignore[override]
+        phase_value = phase.value if hasattr(phase, "value") else str(phase)  # type: ignore[reportUnknownVariableType, reportUnknownMemberType]  # noqa: E501
+        async with self._session_factory() as session:
+            stmt = (
+                select(DocumentVersionModel)
+                .where(
+                    DocumentVersionModel.project_id == str(project_id),
+                    DocumentVersionModel.phase == phase_value,  # type: ignore[reportUnknownArgumentType]
+                )
+                .order_by(DocumentVersionModel.created_at.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            model = result.scalar_one_or_none()
+            return model.markdown if model else None

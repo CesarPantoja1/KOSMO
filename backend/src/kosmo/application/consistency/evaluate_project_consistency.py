@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import structlog
 
-from kosmo.contracts import ConsistencyEvaluator
+from kosmo.contracts import ArtifactAction, ConsistencyEvaluationOutput, ConsistencyEvaluator
 from kosmo.contracts.chat import PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
@@ -21,12 +21,16 @@ _log = structlog.get_logger(__name__)
 
 @dataclass(frozen=True)
 class ImpactItem:
+    id: str
     phase: str
-    artifact_id: str
+    target_id: str
     artifact_type: str
-    artifact_label: str
+    target_display_id: str
+    target_title: str
     section: str
     rationale: str
+    diff: dict[str, object] | None = None
+    action: str = "update"
 
 
 @dataclass(frozen=True)
@@ -94,7 +98,7 @@ class EvaluateProjectConsistencyUseCase:
                 )
                 continue
 
-            items = await self._enrich_affected(result.affected_artifact_ids, api_phase, target_spec)
+            items = await self._enrich_affected(result, api_phase, target_spec)
 
             if _is_upstream(api_phase, input_data.source_phase.value):
                 upstream.extend(items)
@@ -109,27 +113,56 @@ class EvaluateProjectConsistencyUseCase:
         )
 
     async def _enrich_affected(
-        self, artifact_ids: list[str], api_phase: str, target_spec: SpecPhase
+        self, result: ConsistencyEvaluationOutput, api_phase: str, target_spec: SpecPhase
     ) -> list[ImpactItem]:
+        from ulid import ULID
+
         items: list[ImpactItem] = []
 
         if target_spec not in {SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO}:
             return items
+
+        action_by_id: dict[str, ArtifactAction] = {}
+        for a in result.actions:
+            action_by_id[a.artifact_id] = a
+
+        artifact_ids = result.affected_artifact_ids
 
         for fid_str in artifact_ids:
             feature = await self._feature_repo.by_id(FeatureId(fid_str))
             if feature is None:
                 continue
 
+            action = action_by_id.get(fid_str)
+            per_rationale = action.rationale if action else result.rationale
+            per_action = action.action if action else "update"
+
+            diff: dict[str, object] | None = None
+            if action and action.suggested_before and action.suggested_after:
+                diff = {
+                    "field": action.suggested_field or "description",
+                    "before": action.suggested_before,
+                    "after": action.suggested_after,
+                }
+
             if target_spec == SpecPhase.CARACTERISTICAS:
                 items.append(
                     ImpactItem(
+                        id=f"imp_{ULID().hex}",
                         phase=api_phase,
-                        artifact_id=fid_str,
+                        target_id=fid_str,
                         artifact_type="Feature",
-                        artifact_label=feature.display_id,
-                        section="title",
-                        rationale="El cambio en Descubrimiento afecta esta característica.",
+                        target_display_id=feature.display_id,
+                        target_title=feature.title,
+                        section=action.suggested_field if action else "title",
+                        rationale=per_rationale
+                        or (
+                            "Esta característica ya no aplica al descubrimiento actual."
+                            if per_action == "delete"
+                            else "El cambio en Descubrimiento afecta esta característica."
+                        ),
+                        diff=diff,
+                        action=per_action,
                     )
                 )
             elif target_spec == SpecPhase.REQUISITOS:
@@ -137,12 +170,21 @@ class EvaluateProjectConsistencyUseCase:
                 if req_md is not None:
                     items.append(
                         ImpactItem(
+                            id=f"imp_{ULID().hex}",
                             phase=api_phase,
-                            artifact_id=fid_str,
+                            target_id=fid_str,
                             artifact_type="EARSRequirement",
-                            artifact_label=f"REQ-{feature.display_id}",
-                            section="estructura EARS",
-                            rationale="El cambio en Descubrimiento afecta los requisitos de esta característica.",
+                            target_display_id=f"REQ-{feature.display_id}",
+                            target_title=f"Requisitos de {feature.title}",
+                            section=action.suggested_field if action else "estructura EARS",
+                            rationale=per_rationale
+                            or (
+                                "Esta característica ya no aplica al descubrimiento actual."
+                                if per_action == "delete"
+                                else "El cambio en Descubrimiento afecta los requisitos de esta característica."
+                            ),
+                            diff=diff,
+                            action=per_action,
                         )
                     )
             elif target_spec == SpecPhase.MODELO:
@@ -150,12 +192,16 @@ class EvaluateProjectConsistencyUseCase:
                 if exists:
                     items.append(
                         ImpactItem(
+                            id=f"imp_{ULID().hex}",
                             phase=api_phase,
-                            artifact_id=fid_str,
+                            target_id=fid_str,
                             artifact_type="ActivityDiagram",
-                            artifact_label=feature.display_id,
-                            section="estructura UML",
-                            rationale="El cambio podría requerir actualizar el diagrama de actividad.",
+                            target_display_id=feature.display_id,
+                            target_title=f"Diagrama de {feature.title}",
+                            section=action.suggested_field if action else "estructura UML",
+                            rationale=per_rationale or "El cambio podría requerir actualizar el diagrama de actividad.",
+                            diff=diff,
+                            action=per_action,
                         )
                     )
 

@@ -75,3 +75,18 @@ class SqlAlchemyTraceabilityRepository:
                     )
                 )
             await session.commit()
+
+    async def delete_by_entity_id(self, entity_id: str) -> None:
+        async with self._session_factory() as session:
+            from sqlalchemy import or_
+
+            stmt = select(TraceabilityEdgeModel).where(
+                or_(
+                    TraceabilityEdgeModel.source_id == entity_id,
+                    TraceabilityEdgeModel.target_id == entity_id,
+                )
+            )
+            result = await session.execute(stmt)
+            for edge in result.scalars().all():
+                await session.delete(edge)
+            await session.commit()

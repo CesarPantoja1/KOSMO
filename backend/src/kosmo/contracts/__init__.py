@@ -12,13 +12,16 @@ from kosmo.contracts.chat import (
 )
 from kosmo.contracts.consistency import (
     ArtefactoAfectado,
+    ArtifactAction,
     ConsistencyEvaluationOutput,
     ConsistencyEvaluator,
+    ConsistencyStatus,
     ReporteConsistencia,
 )
 from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId
 
 __all__ = [
+    "ArtifactAction",
     "ArtefactoAfectado",
     "ChatHistoryId",
     "ChatMessageId",
@@ -26,6 +29,7 @@ __all__ = [
     "ChatRole",
     "ConsistencyEvaluationOutput",
     "ConsistencyEvaluator",
+    "ConsistencyStatus",
     "DiffCambio",
     "EstadoPlanCambio",
     "HistorialChat",

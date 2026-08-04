@@ -2,31 +2,64 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_outputs import (
+    ConsistencyReport,
     GenerationMetadata,
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
 
 _CONSISTENCY_SYSTEM_PROMPT = (
-    "Eres un analista de trazabilidad entre fases de un proceso de desarrollo de producto. "
-    "Tu tarea es evaluar si los CAMBIOS APLICADOS en una fase origen afectan (dejan desactualizados) "
-    "a los ARTEFACTOS de una fase destino.\n\n"
-    "REGLAS:\n"
-    "- Responde siempre unicamente con el JSON especificado.\n"
-    "- Analiza cada artefacto downstream contra cada cambio aplicado.\n"
-    "- Un artefacto esta afectado si el cambio modifica un concepto del que el artefacto depende "
-    "o hereda. Por ejemplo: un cambio en la Vision del producto afecta caracteristicas que la implementan; "
-    "un cambio en una caracteristica afecta requisitos que la detallan.\n"
-    "- Si no hay relacion entre el cambio y el artefacto, NO lo incluyas como afectado.\n"
-    "- Si el cambio no tiene impacto detectable en ningun artefacto, devuelve lista vacia.\n\n"
-    "FORMATO DE SALIDA (JSON):\n"
+    "Eres un analista experto en trazabilidad de requisitos de software. "
+    "Tu tarea es analizar CAMBIOS aplicados a un documento de Descubrimiento de producto "
+    "y determinar el impacto sobre artefactos de fases posteriores (Caracteristicas, Requisitos, Modelo).\n\n"
+    "## REGLAS DE ANALISIS\n\n"
+    "1. LEE el documento fuente COMPLETO (seccion 'Documento fuente actual') y cada artefacto downstream.\n"
+    "2. Para cada artefacto, determina una UNICA accion:\n"
+    '   - "update": el cambio afecta el contenido del artefacto (ej: unidad de medida, alcance, '
+    "terminologia, regla de negocio). DEBES sugerir el texto corregido.\n"
+    '   - "delete": el concepto del que depende el artefacto fue ELIMINADO del documento fuente. '
+    "El artefacto ya no tiene razon de existir.\n"
+    '   - "keep": el artefacto NO esta relacionado con ningun cambio. NO lo incluyas en la respuesta.\n\n'
+    "3. ANALISIS SEMANTICO: no busques coincidencia literal de palabras. "
+    "Si el descubrimiento cambia 'kilogramos' por 'libras', una caracteristica que menciona 'peso' o 'masa' "
+    "SI esta afectada aunque no use la palabra exacta.\n"
+    "4. Si un cambio es cosmetico (ortografia, formato) y no altera el significado, el artefacto NO esta afectado.\n"
+    "5. Si el cambio modifica una regla de negocio o un alcance funcional, TODOS los artefactos que "
+    "implementan esa regla estan afectados.\n\n"
+    "## EJEMPLOS\n\n"
+    "Ejemplo 1 — Cambio de unidad:\n"
+    '  Cambio: "peso en kilogramos" → "peso en libras"\n'
+    '  Feature "Calculo de peso total" → accion: "update", '
+    'razon: "La unidad de medida cambio de kg a lb, la feature debe reflejar libras."\n\n'
+    "Ejemplo 2 — Eliminacion de concepto:\n"
+    '  Cambio: se elimina la seccion "Gestion de Inventario" del documento fuente\n'
+    '  Feature "Control de stock" → accion: "delete", '
+    'razon: "El concepto de inventario ya no existe en el descubrimiento."\n\n'
+    "Ejemplo 3 — Cambio cosmetico:\n"
+    '  Cambio: se corrige una tilde en "Visión"\n'
+    '  Feature "Dashboard de metricas" → NO incluir (accion "keep" implicita).\n\n'
+    "## FORMATO DE SALIDA (JSON estricto)\n\n"
+    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
     "{\n"
-    '  "affected_artifact_ids": ["<id1>", "<id2>", ...],\n'
-    '  "rationale": "<explicacion breve de por que los artefactos estan afectados>"\n'
-    "}\n"
+    '  "actions": [\n'
+    "    {\n"
+    '      "artifact_id": "<id del artefacto>",\n'
+    '      "action": "update" | "delete",\n'
+    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
+    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
+    '      "suggested_before": "<texto actual que debe cambiar>",\n'
+    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
+    "    }\n"
+    "  ],\n"
+    '  "overall_rationale": "<resumen general del analisis en español>"\n'
+    "}\n\n"
+    "Si ningun artefacto esta afectado, devuelve: "
+    '{"actions": [], "overall_rationale": "Ningun artefacto requiere cambios."}'
 )
 
 
@@ -37,15 +70,15 @@ class ConsistencyEvaluationMode:
 
     @property
     def temperature(self) -> float:
-        return 0.3
+        return 0.5
 
     @property
     def max_tokens(self) -> int:
-        return 2048
+        return 16384
 
     @property
-    def output_type(self) -> type[Any]:
-        return dict
+    def output_type(self) -> type[BaseModel]:
+        return ConsistencyReport
 
     @property
     def system_prompt(self) -> str:
@@ -57,31 +90,41 @@ class ConsistencyEvaluationMode:
 
     def build_user_prompt(self, context: ConsistencyPhaseContext) -> str:
         changes_text = "\n".join(
-            f"- [{c.section}] {c.description}\n  Antes: {c.diff.before[:200]}\n  Despues: {c.diff.after[:200]}"
+            f"### Cambio en '{c.section}'\n"
+            f"**Descripcion:** {c.description}\n"
+            f"**Antes:**\n{c.diff.before[:15000]}\n"
+            f"**Despues:**\n{c.diff.after[:15000]}\n"
             for c in context.applied_changes
         )
         artifacts_text = "\n".join(
-            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", descripcion="{a.description[:200]}"'
+            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", descripcion="{a.description[:12000]}"'
             for a in context.downstream_artifacts
         )
+        source_doc = context.source_content[:30000] if context.source_content else "(no disponible)"
+
         return (
             f"## Fase origen: {context.source_phase.value}\n"
             f"## Fase destino: {context.target_phase.value}\n\n"
-            f"### Cambios aplicados en la fase origen:\n{changes_text}\n\n"
+            f"### Documento fuente actual:\n{source_doc}\n\n"
+            f"### Cambios aplicados:\n{changes_text}\n\n"
             f"### Artefactos actuales en la fase destino:\n{artifacts_text}\n\n"
-            "Determina cuales de estos artefactos quedan desactualizados por los cambios. "
-            "Responde en el formato JSON especificado."
+            "Analiza cada artefacto contra los cambios aplicados y el documento fuente actual. "
+            "Determina que accion requiere cada uno (update, delete, o keep). "
+            "Para acciones 'update', incluye el texto sugerido. "
+            "Responde UNICAMENTE en el formato JSON especificado."
         )
 
     def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
         errors: list[str] = []
-        if not isinstance(output, dict):
-            errors.append("El output debe ser un dict (JSON).")
+        if not isinstance(output, ConsistencyReport):
+            errors.append("El output debe ser un ConsistencyReport.")
             return ValidationResult(is_valid=False, errors=errors)
-        if "affected_artifact_ids" not in output:
-            errors.append("Falta el campo 'affected_artifact_ids' en la respuesta.")
-        elif not isinstance(output["affected_artifact_ids"], list):
-            errors.append("El campo 'affected_artifact_ids' debe ser una lista.")
+        if output.actions:
+            for idx, action in enumerate(output.actions):
+                if not action.artifact_id:
+                    errors.append(f"actions[{idx}] falta 'artifact_id'.")
+                if not action.rationale:
+                    errors.append(f"actions[{idx}] falta 'rationale'.")
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def build_validation_feedback(self, errors: list[str]) -> str:

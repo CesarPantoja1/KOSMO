@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -83,6 +84,20 @@ async def sse_chat_response(
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
         except Exception:
             yield f"data: {json.dumps({'type': 'error', 'content': 'Error interno'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),  # type: ignore[reportArgumentType]
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
+async def sse_consistency_response(
+    generator: AsyncGenerator[str],
+) -> StreamingResponse:
+    async def event_stream() -> AsyncGenerator[str]:
+        async for chunk in generator:
+            yield chunk
 
     return StreamingResponse(
         event_stream(),  # type: ignore[reportArgumentType]

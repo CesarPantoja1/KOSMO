@@ -22,3 +22,4 @@ class ConsistencyPhaseContext:
     applied_changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     downstream_artifacts: list[DownstreamArtifact] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    source_content: str = ""

@@ -100,9 +100,11 @@ class ApplyPlanChangesUseCase:
                 matched.append(change)
 
         if input_data.phase == SpecPhase.DESCUBRIMIENTO:
-            applied, phase_failed, final_markdown = await self._apply_discovery_changes(input_data.project_id, matched)
+            applied, phase_failed, final_markdown, markdown_before = await self._apply_discovery_changes(
+                input_data.project_id, matched
+            )
             if applied and self._session_factory is not None:
-                await self._persist_with_uow(input_data.project_id, applied, final_markdown)
+                await self._persist_with_uow(input_data.project_id, applied, final_markdown, markdown_before)
         elif input_data.phase == SpecPhase.REQUISITOS:
             applied, phase_failed = await self._apply_requirement_changes(matched)
             if applied and self._session_factory is not None:
@@ -127,7 +129,7 @@ class ApplyPlanChangesUseCase:
                 await self._document_repo.save_version(  # type: ignore[call-arg]
                     project_id=input_data.project_id,
                     phase=input_data.phase,
-                    markdown=final_markdown,  # type: ignore[reportPossiblyUnboundVariable]
+                    markdown=markdown_before,  # type: ignore[reportPossiblyUnboundVariable]
                     change_ids=[c.id for c in applied],
                 )
 
@@ -141,7 +143,9 @@ class ApplyPlanChangesUseCase:
             propagation=propagation,
         )
 
-    async def _persist_with_uow(self, project_id: ProjectId, applied: list[PlanCambio], markdown: str) -> None:
+    async def _persist_with_uow(
+        self, project_id: ProjectId, applied: list[PlanCambio], markdown: str, markdown_before: str
+    ) -> None:
         async with self._session_factory() as session:  # type: ignore[reportOptionalMemberAccess]
             await self._document_repo.save_discovery(
                 project_id=project_id,
@@ -158,7 +162,7 @@ class ApplyPlanChangesUseCase:
             await self._document_repo.save_version(  # type: ignore[call-arg]
                 project_id=project_id,
                 phase=SpecPhase.DESCUBRIMIENTO,
-                markdown=markdown,
+                markdown=markdown_before,
                 change_ids=[c.id for c in applied],
                 _session=session,  # type: ignore[call-arg]
             )
@@ -205,7 +209,7 @@ class ApplyPlanChangesUseCase:
 
     async def _apply_discovery_changes(
         self, project_id: ProjectId, changes: list[PlanCambio]
-    ) -> tuple[list[PlanCambio], list[FailedChange], str]:
+    ) -> tuple[list[PlanCambio], list[FailedChange], str, str]:
         document = await self._document_repo.get_discovery(project_id)
         if document is None:
             raise DocumentNotFoundError(
@@ -213,7 +217,8 @@ class ApplyPlanChangesUseCase:
                 instance=f"/api/v1/projects/{project_id}/plan/apply",
             )
 
-        markdown = document_to_markdown(document)
+        markdown_before = document_to_markdown(document)
+        markdown = markdown_before
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
         for change in changes:
@@ -230,7 +235,7 @@ class ApplyPlanChangesUseCase:
                 markdown = result
                 applied.append(change)
 
-        return applied, failed, markdown
+        return applied, failed, markdown, markdown_before
 
     async def _apply_feature_changes(
         self, project_id: ProjectId, changes: list[PlanCambio]

@@ -51,6 +51,7 @@ class InMemoryDocumentRepository:
     def __init__(self) -> None:
         self.discovery_docs: dict[str, RichTextDocument] = {}
         self.versions: dict[str, str] = {}
+        self._latest_version: dict[tuple[str, str], str] = {}
         self._version_counter = 0
 
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
@@ -76,10 +77,16 @@ class InMemoryDocumentRepository:
         self._version_counter += 1
         version_id = f"ver_{self._version_counter}"
         self.versions[version_id] = markdown
+        phase_value = phase.value if hasattr(phase, "value") else str(phase)
+        self._latest_version[(str(project_id), phase_value)] = markdown
         return version_id
 
     async def get_version(self, version_id: str) -> str | None:
         return self.versions.get(version_id)
+
+    async def get_latest_version(self, project_id: ProjectId, phase: object) -> str | None:
+        phase_value = phase.value if hasattr(phase, "value") else str(phase)
+        return self._latest_version.get((str(project_id), phase_value))
 
 
 class InMemoryFeatureRepository:
@@ -400,4 +407,7 @@ class FakeConsistencyEvaluator:
         phase_key = target_phase.value if hasattr(target_phase, "value") else str(target_phase)
         result = self._results.get(phase_key, {"artifact_ids": []})
         affected = result.get("artifact_ids", [])
-        return ConsistencyEvaluationOutput(report_id="rpt_fake", affected_artifact_ids=affected)
+        from kosmo.contracts.consistency import ConsistencyStatus
+
+        status = ConsistencyStatus.ANALIZADO_CON_IMPACTO if affected else ConsistencyStatus.ANALIZADO_SIN_IMPACTO
+        return ConsistencyEvaluationOutput(report_id="rpt_fake", status=status, affected_artifact_ids=affected)

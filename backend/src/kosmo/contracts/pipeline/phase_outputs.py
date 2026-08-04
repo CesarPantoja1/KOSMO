@@ -123,3 +123,17 @@ class RequirementsDocument(BaseModel):
 
 class DiagramSpec(BaseModel):
     diagram_syntax: str = Field(description="Codigo fuente PlantUML del diagrama de actividad")
+
+
+class ConsistencyAction(BaseModel):
+    artifact_id: str
+    action: str = "update"
+    rationale: str = ""
+    suggested_field: str = ""
+    suggested_before: str = ""
+    suggested_after: str = ""
+
+
+class ConsistencyReport(BaseModel):
+    actions: list[ConsistencyAction] = Field(default_factory=list[ConsistencyAction])
+    overall_rationale: str = ""

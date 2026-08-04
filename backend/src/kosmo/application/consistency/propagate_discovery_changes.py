@@ -211,8 +211,8 @@ class PropagateDiscoveryChangesUseCase:
             )
             return PhasePropagationInfo(
                 phase=_PHASE_TO_API[SpecPhase.MODELO],
-                affected_count=1,
-                affected_ids=[feature_id_str],
+                affected_count=0,
+                affected_ids=[],
             )
 
         return PhasePropagationInfo(

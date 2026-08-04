@@ -109,7 +109,7 @@ async def test_evaluate_consistency_returns_report_with_affected_features() -> N
     )
     assert result["report_id"].startswith("cnr_")
     assert len(result["downstream_impact"]) == 1
-    assert result["downstream_impact"][0]["artifact_id"] == "feat_01"
+    assert result["downstream_impact"][0]["targetId"] == "feat_01"
 
 
 @pytest.mark.unit
