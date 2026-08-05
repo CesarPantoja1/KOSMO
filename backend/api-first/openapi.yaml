@@ -838,32 +838,53 @@ components:
       type: object
       description: Resultado de la aplicación de un lote de cambios
       properties:
+        applied_count:
+          type: integer
+          description: Número de cambios aplicados exitosamente
+          example: 2
+        failed_count:
+          type: integer
+          description: Número de cambios que fallaron
+          example: 1
         applied:
           type: array
           items:
-            type: object
-            properties:
-              change_id:
-                type: string
-              section:
-                type: string
+            $ref: "#/components/schemas/AppliedChangeItem"
           description: Cambios aplicados exitosamente
         failed:
           type: array
           items:
-            type: object
-            properties:
-              change_id:
-                type: string
-              section:
-                type: string
-              error:
-                type: string
+            $ref: "#/components/schemas/FailedChangeItem"
           description: Cambios que fallaron, con el motivo
         propagation:
           $ref: "#/components/schemas/PhaseNotification"
           description: Fases notificadas tras la aplicación (si el cambio requiere propagación)
           nullable: true
+
+    AppliedChangeItem:
+      type: object
+      description: Cambio aplicado exitosamente en el lote
+      properties:
+        change_id:
+          type: string
+          description: ID del cambio aplicado
+        section:
+          type: string
+          description: Sección del documento o atributo afectado
+
+    FailedChangeItem:
+      type: object
+      description: Cambio que falló al aplicarse en el lote
+      properties:
+        change_id:
+          type: string
+          description: ID del cambio que falló
+        section:
+          type: string
+          description: Sección del documento o atributo afectado
+        error:
+          type: string
+          description: Motivo del fallo
 
     PhaseNotification:
       type: object
@@ -872,20 +893,40 @@ components:
         affected_phases:
           type: array
           items:
-            type: object
-            properties:
-              phase:
-                type: string
-                enum: [discovery, features, requirements, model]
-              affected_count:
-                type: integer
-                description: Cantidad de artefactos afectados en esta fase
-              affected_ids:
-                type: array
-                items:
-                  type: string
-                description: IDs de los artefactos afectados
+            $ref: "#/components/schemas/PhaseNotificationItem"
           description: Fases notificadas con sus artefactos desactualizados
+
+    PhaseNotificationItem:
+      type: object
+      description: Detalle de una fase afectada por propagación
+      properties:
+        phase:
+          type: string
+          enum: [discovery, features, requirements, model]
+          description: Fase afectada
+        affected_count:
+          type: integer
+          description: Cantidad de artefactos afectados en esta fase
+          example: 3
+        affected_ids:
+          type: array
+          items:
+            type: string
+          description: IDs de los artefactos afectados
+          example: ["feat_01HXYAZA...", "feat_01HXYAZB..."]
+
+    # ═══ Propagación bidireccional (Sprint 4 - HU18) ═══
+
+    PropagateFeatureChangesRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        applied_change_ids:
+          type: array
+          items:
+            type: string
+          description: IDs de los cambios aplicados en la característica
+          example: ["chg_01HXYAZABCDEFGHIJKLMNOP", "chg_01HXYAZQQQQQQQQQQQQQ"]
 
     # ═══ Consistencia (Sprint 4) ═══
 
@@ -1651,7 +1692,9 @@ paths:
       description: >-
         Regenera el documento de Descubrimiento vía IA a partir del estado actual
         de las características, requisitos y modelos. Útil cuando cambios en fases
-        posteriores dejan el documento desactualizado.
+        posteriores dejan el documento desactualizado (propagación entrante).
+
+        API-first — pendiente de implementación (HU17).
       operationId: regenerate_discovery
       responses:
         "200":
@@ -1949,9 +1992,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Consistencia desde Características (Sprint 4 - HU18) ═══
-
-  /api/v1/features/{feature_id}/consistency/evaluate:
+  /api/v1/features/{feature_id}/chat/stream:
     parameters:
       - name: feature_id
         in: path
@@ -1961,25 +2002,25 @@ paths:
         description: ID de la característica
         example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
-      tags: [consistency]
-      summary: Evaluar consistencia desde Características (bidireccional)
+      tags: [features]
+      summary: Enviar mensaje al chat de Características (SSE streaming)
       description: >-
-        Evalúa el impacto de cambios en una característica en tres direcciones:
-        upstream hacia Descubrimiento, downstream hacia Requisitos y Modelo.
-      operationId: evaluate_feature_consistency
+        Variante del chat de características que transmite la respuesta del
+        agente token por token mediante Server-Sent Events.
+      operationId: stream_feature_chat
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EvaluateConsistencyRequest"
+              $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Reporte de consistencia bidireccional
+          description: Stream SSE de la respuesta del agente
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/ConsistencyReport"
+                $ref: "#/components/schemas/ChatStreamEvent"
         "401":
           description: Token ausente, inválido o expirado
           content:
@@ -1992,15 +2033,75 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al invocar la IA
+
+  # ═══ Consistencia y Propagación desde Características (Sprint 4 - HU18) ═══
+  # NOTA: La evaluación de consistencia completa se realiza a nivel proyecto
+  #       en POST /api/v1/projects/{project_id}/consistency/evaluate
+  #       pasando phase_origin=features. Estas rutas cubren operaciones
+  #       específicas de la fase de Características.
+
+  /api/v1/projects/{project_id}/features/{feature_id}/propagate:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+      - name: feature_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID de la característica
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+    post:
+      tags: [consistency]
+      summary: Propagar cambios desde Características (bidireccional)
+      description: >-
+        Evalúa el impacto de los cambios aplicados en una característica en
+        tres direcciones: upstream hacia Descubrimiento, downstream hacia
+        Requisitos y Modelo. Retorna las fases afectadas para que el wizard
+        actualice sus insignias de advertencia.
+
+        Implementado. Usa PropagateFeatureChangesUseCase.
+      operationId: propagate_feature_changes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropagateFeatureChangesRequest"
+      responses:
+        "200":
+          description: Fases afectadas por la propagación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhaseNotification"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto o característica no encontrada
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  /api/v1/features/{feature_id}/consistency/check:
+  /api/v1/projects/{project_id}/features/{feature_id}/consistency/check:
     parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
       - name: feature_id
         in: path
         required: true
@@ -2013,8 +2114,11 @@ paths:
       summary: Verificar consistencia antes de guardado manual
       description: >-
         Verifica que el contenido editado manualmente no contradiga
-        flagrantemente el documento de Descubrimiento. Si hay inconsistencia,
-        el guardado debe rechazarse.
+        flagrantemente el documento de Descubrimiento. Invoca al agente IA
+        con el nuevo contenido y el documento fuente. Si hay inconsistencia,
+        el guardado debe rechazarse mostrando un modal explicativo.
+
+        API-first — pendiente de implementación (HU18/T7).
       operationId: check_feature_consistency
       requestBody:
         required: true
@@ -2036,16 +2140,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Característica no encontrada
+          description: Proyecto o característica no encontrada
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Regeneración de Característica (Sprint 4 - HU18) ═══
-
-  /api/v1/features/{feature_id}/regenerate:
+  /api/v1/projects/{project_id}/features/{feature_id}/regenerate:
     parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
       - name: feature_id
         in: path
         required: true
@@ -2060,6 +2169,8 @@ paths:
         Regenera el contenido de la característica vía IA a partir del estado
         actual del documento de Descubrimiento. Útil cuando el Descubrimiento
         fue modificado y la característica quedó desactualizada.
+
+        API-first — pendiente de implementación (HU18).
       operationId: regenerate_feature
       responses:
         "200":
@@ -2075,13 +2186,65 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Característica no encontrada
+          description: Proyecto o característica no encontrada
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "502":
           description: Error al invocar la IA
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ═══ Delete característica ═══
+
+  /api/v1/projects/{project_id}/features/{feature_id}:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+      - name: feature_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID de la característica a eliminar
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+    delete:
+      tags: [features]
+      summary: Eliminar característica
+      description: >-
+        Elimina una característica y todos sus artefactos asociados
+        (requisitos, diagrama de actividad). La operación es irreversible.
+      operationId: delete_feature
+      responses:
+        "200":
+          description: Característica eliminada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "deleted"
+                  feature_id:
+                    type: string
+                    example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto o característica no encontrada
           content:
             application/problem+json:
               schema:
@@ -2254,22 +2417,23 @@ paths:
 
   # ═══ Chat de Requisitos (Sprint 4 - HU16) ═══
 
-  /api/v1/requirements/{requirement_id}/chat:
+  /api/v1/features/{feature_id}/requirements/chat:
     parameters:
-      - name: requirement_id
+      - name: feature_id
         in: path
         required: true
         schema:
           type: string
-        description: ID del requisito (req_ + ULID)
-        example: "req_01HXYAZABCDEFGHIJKLMNOP"
+        description: ID de la característica propietaria del chat (feat_ + ULID)
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
       tags: [requirements]
       summary: Enviar mensaje al chat de Requisitos
       description: >-
-        Envía un mensaje al asistente IA en el contexto de un requisito EARS
-        específico. La IA valida el ámbito de la fase y responde con
-        sugerencias en formato Gherkin (Dado-Cuando-Entonces).
+        Envía un mensaje al asistente IA en el contexto de los requisitos
+        de una característica específica. La IA valida el ámbito de la fase
+        y responde con sugerencias formateadas en sintaxis Gherkin
+        (Dado-Cuando-Entonces). Soporta streaming vía SSE (Accept: text/event-stream).
       operationId: send_requirement_chat
       requestBody:
         required: true
@@ -2296,7 +2460,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Requisito no encontrado
+          description: Característica no encontrada
           content:
             application/problem+json:
               schema:
@@ -2314,18 +2478,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChatErrorResponse"
 
-  /api/v1/requirements/{requirement_id}/chat/history:
+  /api/v1/features/{feature_id}/requirements/chat/history:
     parameters:
-      - name: requirement_id
+      - name: feature_id
         in: path
         required: true
         schema:
           type: string
-        description: ID del requisito
-        example: "req_01HXYAZABCDEFGHIJKLMNOP"
+        description: ID de la característica
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     get:
       tags: [requirements]
-      summary: Obtener historial del chat del requisito
+      summary: Obtener historial del chat de requisitos
+      description: >-
+        Devuelve el historial de mensajes del chat de requisitos para una
+        característica específica, ordenado cronológicamente.
       operationId: get_requirement_chat_history
       responses:
         "200":
@@ -2341,43 +2508,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Requisito no encontrado
+          description: Característica no encontrada
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Consistencia desde Requisitos (Sprint 4 - HU19) ═══
-
-  /api/v1/requirements/{requirement_id}/consistency/evaluate:
+  /api/v1/features/{feature_id}/requirements/chat/stream:
     parameters:
-      - name: requirement_id
+      - name: feature_id
         in: path
         required: true
         schema:
           type: string
-        description: ID del requisito
-        example: "req_01HXYAZABCDEFGHIJKLMNOP"
+        description: ID de la característica
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
-      tags: [consistency]
-      summary: Evaluar consistencia desde Requisitos
+      tags: [requirements]
+      summary: Enviar mensaje al chat de Requisitos (SSE streaming)
       description: >-
-        Evalúa el impacto de cambios en un requisito sobre Características
-        (upstream) y Modelo (downstream).
-      operationId: evaluate_requirement_consistency
+        Variante del chat de requisitos que transmite la respuesta del agente
+        token por token mediante Server-Sent Events.
+      operationId: stream_requirement_chat
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EvaluateConsistencyRequest"
+              $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Reporte de consistencia
+          description: Stream SSE de la respuesta del agente
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/ConsistencyReport"
+                $ref: "#/components/schemas/ChatStreamEvent"
         "401":
           description: Token ausente, inválido o expirado
           content:
@@ -2385,40 +2550,86 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Requisito no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al invocar la IA
+          description: Característica no encontrada
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Regeneración de Requisito (Sprint 4 - HU19) ═══
+  # ═══ Consistencia y Propagación desde Requisitos (Sprint 4 - HU19) ═══
+  # NOTA: La evaluación de consistencia completa se realiza a nivel proyecto
+  #       en POST /api/v1/projects/{project_id}/consistency/evaluate
+  #       pasando phase_origin=requirements. Estas rutas cubren operaciones
+  #       específicas de la fase de Requisitos.
 
-  /api/v1/requirements/{requirement_id}/regenerate:
+  /api/v1/features/{feature_id}/requirements/propagate:
     parameters:
-      - name: requirement_id
+      - name: feature_id
         in: path
         required: true
         schema:
           type: string
-        description: ID del requisito
-        example: "req_01HXYAZABCDEFGHIJKLMNOP"
+        description: ID de la característica propietaria de los requisitos
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
       tags: [consistency]
-      summary: Regenerar requisito desde característica padre actualizada
+      summary: Propagar cambios desde Requisitos (bidireccional)
       description: >-
-        Regenera un requisito individual vía IA a partir del estado actual
-        de la característica padre. Útil cuando la característica fue
-        modificada y el requisito quedó desactualizado.
-      operationId: regenerate_requirement
+        Evalúa el impacto de los cambios aplicados en los requisitos de una
+        característica en ambas direcciones: upstream hacia Características y
+        Descubrimiento, downstream hacia Modelo. Retorna las fases afectadas
+        para que el wizard actualice sus insignias de advertencia.
+
+        API-first — pendiente de implementación (HU19).
+      operationId: propagate_requirement_changes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropagateFeatureChangesRequest"
       responses:
         "200":
-          description: Requisito regenerado
+          description: Fases afectadas por la propagación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhaseNotification"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Característica no encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/features/{feature_id}/requirements/regenerate:
+    parameters:
+      - name: feature_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID de la característica propietaria de los requisitos
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+    post:
+      tags: [consistency]
+      summary: Regenerar requisitos desde característica padre actualizada
+      description: >-
+        Regenera los requisitos vía IA a partir del estado actual de la
+        característica padre. Útil cuando la característica fue modificada
+        y los requisitos quedaron desactualizados.
+
+        API-first — pendiente de implementación (HU19).
+      operationId: regenerate_requirements
+      responses:
+        "200":
+          description: Requisitos regenerados
           content:
             application/json:
               schema:
@@ -2430,7 +2641,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Requisito no encontrado
+          description: Característica no encontrada
           content:
             application/problem+json:
               schema:
@@ -2659,12 +2870,14 @@ paths:
         example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [plan]
-      summary: Aplicar lote de cambios
+      summary: Aplicar lote de cambios (todas las fases)
       description: >-
         Aplica atómicamente un batch de cambios aceptados sobre los documentos
-        y artefactos. Al finalizar, propaga notificaciones a fases adyacentes
-        si corresponde. Soporta error parcial: cambios fallidos se reportan
-        individualmente.
+        y artefactos del proyecto. Soporta las fases Descubrimiento (modifica
+        documento Markdown), Características (modifica atributos: título,
+        descripción, origen) y Requisitos. Al finalizar, propaga notificaciones
+        a fases adyacentes según la fase de origen. Soporta error parcial:
+        cambios fallidos se reportan individualmente con sección y motivo.
       operationId: apply_batch
       requestBody:
         required: true
@@ -2698,7 +2911,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Consistencia de proyecto (Sprint 4 - HU17) ═══
+  # ═══ Consistencia de proyecto (Sprint 4 - HU17, HU18, HU19) ═══
+  # NOTA: El endpoint evaluate soporta cualquier par origen→destino
+  #       pasando phase_origin y phase_destination.
+  #       - HU17: phase_origin=discovery → evalúa downstream (features, requirements, model)
+  #       - HU18: phase_origin=features → bidireccional (discovery upstream, requirements+model downstream)
+  #       - HU19: phase_origin=requirements → bidireccional (features+discovery upstream, model downstream)
 
   /api/v1/projects/{project_id}/consistency/evaluate:
     parameters:
@@ -2711,11 +2929,14 @@ paths:
         example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [consistency]
-      summary: Evaluar consistencia desde Descubrimiento
+      summary: Evaluar consistencia entre fases (bidireccional)
       description: >-
-        Evalúa el impacto de cambios en Descubrimiento sobre Características,
-        Requisitos y Modelo (downstream). El agente analiza qué artefactos
-        heredan conceptos modificados y genera sugerencias de actualización.
+        Evalúa el impacto de cambios entre cualquier par de fases del proyecto.
+        Soporta análisis upstream y downstream según el phase_origin indicado.
+        El agente analiza qué artefactos heredan conceptos modificados y genera
+        sugerencias de actualización con trazabilidad explícita.
+
+        Implementado. Usa EvaluateProjectConsistencyUseCase.
       operationId: evaluate_consistency
       requestBody:
         required: true
@@ -2744,6 +2965,134 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "502":
           description: Error al invocar la IA
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/consistency/evaluate/stream:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+    post:
+      tags: [consistency]
+      summary: Evaluar consistencia con progreso en cascada (SSE streaming)
+      description: >-
+        Variante streaming de la evaluación de consistencia. Transmite el
+        progreso del análisis por cada fase destino mediante Server-Sent Events.
+        Útil para mostrar indicadores de progreso en el frontend cuando hay
+        múltiples fases destino a evaluar.
+
+        Implementado. Usa CascadingConsistencyUseCase.
+      operationId: evaluate_consistency_stream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluateConsistencyRequest"
+      responses:
+        "200":
+          description: Stream SSE del progreso de evaluación
+          content:
+            text/event-stream:
+              schema:
+                type: object
+                properties:
+                  phase:
+                    type: string
+                    description: Fase que se está evaluando
+                  status:
+                    type: string
+                    enum: [evaluating, completed, failed]
+                  report:
+                    $ref: "#/components/schemas/ConsistencyReport"
+                    description: Reporte parcial (solo en evento completed)
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/consistency/apply:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+    post:
+      tags: [consistency]
+      summary: Aplicar impactos de consistencia
+      description: >-
+        Aplica las acciones sugeridas por el análisis de consistencia sobre
+        requisitos, características y diagramas. Permite aceptar o rechazar
+        cambios individuales tras la revisión en el PanelEvaluacionImpacto.
+
+        Implementado. Usa ApplyConsistencyImpactsUseCase.
+      operationId: apply_consistency_impacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                impacts:
+                  type: array
+                  items:
+                    type: object
+                  description: Lista de impactos a aplicar
+      responses:
+        "200":
+          description: Impactos aplicados (con detalle de éxitos y fallos)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applied:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        target_id:
+                          type: string
+                        artifact_type:
+                          type: string
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        target_id:
+                          type: string
+                        artifact_type:
+                          type: string
+                        reason:
+                          type: string
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto no encontrado
           content:
             application/problem+json:
               schema:
