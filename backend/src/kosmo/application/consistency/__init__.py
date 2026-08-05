@@ -6,6 +6,11 @@ from kosmo.application.consistency.propagate_discovery_changes import (
     PropagateDiscoveryChangesOutput,
     PropagateDiscoveryChangesUseCase,
 )
+from kosmo.application.consistency.propagate_feature_changes import (
+    PropagateFeatureChangesInput,
+    PropagateFeatureChangesOutput,
+    PropagateFeatureChangesUseCase,
+)
 
 __all__ = [
     "ApplyConsistencyImpactsUseCase",
@@ -14,4 +19,7 @@ __all__ = [
     "PropagateDiscoveryChangesInput",
     "PropagateDiscoveryChangesOutput",
     "PropagateDiscoveryChangesUseCase",
+    "PropagateFeatureChangesInput",
+    "PropagateFeatureChangesOutput",
+    "PropagateFeatureChangesUseCase",
 ]

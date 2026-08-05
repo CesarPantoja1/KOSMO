@@ -51,6 +51,7 @@ def _make_uc(
     document_repo: DocumentRepository,
     feature_repo: FeatureRepository | None = None,
     propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
+    propagate_feature_uc: object | None = None,
 ) -> ApplyPlanChangesUseCase:
     return ApplyPlanChangesUseCase(
         project_repo=project_repo,
@@ -58,6 +59,7 @@ def _make_uc(
         document_repo=document_repo,
         feature_repo=feature_repo,
         propagate_uc=propagate_uc,
+        propagate_feature_uc=propagate_feature_uc,  # type: ignore[arg-type]
     )
 
 
@@ -638,6 +640,190 @@ async def test_apply_features_does_not_trigger_propagation() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_apply_features_triggers_propagation_and_includes_result_in_output() -> None:
+    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
+
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Feature test",
+        slug="feature-test",
+        description="Desc original.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_feat_01",
+        "Desc original.",
+        "Desc modificada.",
+        section="Descripción",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
+    evaluator = FakeConsistencyEvaluator()
+    evaluator.set_affected_ids("descubrimiento", ["sec_01"])
+
+    propagate_feature_uc = PropagateFeatureChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=evaluator,
+    )
+    uc = _make_uc(
+        project_repo,
+        chat_repo,
+        document_repo,
+        feature_repo,
+        propagate_feature_uc=propagate_feature_uc,
+    )
+
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.CARACTERISTICAS,
+            change_ids=[PlanChangeId("chg_feat_01")],
+        )
+    )
+
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    assert result.propagation is not None
+    assert len(result.propagation.affected_phases) > 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_feature_propagation_failure_does_not_revert_applied_changes() -> None:
+    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
+
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Feature test",
+        slug="feature-test",
+        description="Desc original.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_feat_01",
+        "Desc original.",
+        "Desc modificada.",
+        section="Descripción",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
+    evaluator = FakeConsistencyEvaluator()
+    evaluator.set_should_fail(True)
+
+    propagate_feature_uc = PropagateFeatureChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=evaluator,
+    )
+    uc = _make_uc(
+        project_repo,
+        chat_repo,
+        document_repo,
+        feature_repo,
+        propagate_feature_uc=propagate_feature_uc,
+    )
+
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.CARACTERISTICAS,
+            change_ids=[PlanChangeId("chg_feat_01")],
+        )
+    )
+
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    assert result.propagation is not None
+    assert result.propagation.affected_phases == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_feature_propagation_exception_in_uc_returns_none_propagation() -> None:
+    from unittest.mock import AsyncMock
+
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Feature test",
+        slug="feature-test",
+        description="Desc original.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_feat_01",
+        "Desc original.",
+        "Desc modificada.",
+        section="Descripción",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
+    failing_uc = AsyncMock()
+    failing_uc.execute.side_effect = RuntimeError("UC failure")
+
+    uc = _make_uc(
+        project_repo,
+        chat_repo,
+        document_repo,
+        feature_repo,
+        propagate_feature_uc=failing_uc,
+    )
+
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.CARACTERISTICAS,
+            change_ids=[PlanChangeId("chg_feat_01")],
+        )
+    )
+
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    assert result.propagation is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_propagation_failure_does_not_revert_applied_changes() -> None:
     # Arrange
     project = _make_project()
@@ -679,3 +865,218 @@ async def test_propagation_failure_does_not_revert_applied_changes() -> None:
     doc = await document_repo.get_discovery(project.id)
     assert doc is not None
     assert "Contenido modificado." in document_to_markdown(doc)
+
+
+# ── feature batch update ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_updates_title_and_slug() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Título original",
+        slug="titulo-original",
+        description="Descripción original.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_title_01",
+        "Título original",
+        "Nuevo título de característica",
+        section="Título",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+    uc = _make_uc(project_repo, chat_repo, document_repo, feature_repo)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_title_01")])
+    )
+
+    # Assert
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    saved = await feature_repo.by_id(FeatureId("feat_01"))
+    assert saved is not None
+    assert saved.title == "Nuevo título de característica"
+    assert saved.slug == "nuevo-título-de-característica"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_updates_origin_metadata() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Feature de prueba",
+        slug="feature-de-prueba",
+        description="Descripción.",
+        origin="Origen anterior.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_origin_01",
+        "Origen anterior.",
+        "Se deriva de la meta de negocio Gestión de turnos.",
+        section="Origen",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+    uc = _make_uc(project_repo, chat_repo, document_repo, feature_repo)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_origin_01")])
+    )
+
+    # Assert
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    saved = await feature_repo.by_id(FeatureId("feat_01"))
+    assert saved is not None
+    assert saved.origin == "Se deriva de la meta de negocio Gestión de turnos."
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_rejects_unknown_attribute() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Feature test",
+        slug="feature-test",
+        description="Descripción.",
+    )
+    await feature_repo.save(feature)
+    change = _plan_change(
+        "chg_bad_attr",
+        "antes",
+        "después",
+        section="Prioridad",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+    uc = _make_uc(project_repo, chat_repo, document_repo, feature_repo)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_bad_attr")])
+    )
+
+    # Assert
+    assert result.applied_count == 0
+    assert result.failed_count == 1
+    assert "no es modificable" in result.failed_changes[0].reason
+    assert result.failed_changes[0].section == "Prioridad"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_when_feature_not_found_and_not_resolvable() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    change = _plan_change(
+        "chg_missing_feat",
+        "Texto que no coincide con ninguna feature.",
+        "Texto propuesto.",
+        section="Descripción",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+    uc = _make_uc(project_repo, chat_repo, document_repo, feature_repo)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(project.id, SpecPhase.CARACTERISTICAS, [PlanChangeId("chg_missing_feat")])
+    )
+
+    # Assert
+    assert result.applied_count == 0
+    assert result.failed_count == 1
+    assert "no identifica" in result.failed_changes[0].reason.lower()
+    assert result.failed_changes[0].section == "Descripción"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_feature_change_partial_failure_preserves_section_info() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        project_id=project.id,
+        number=1,
+        title="Feature test",
+        slug="feature-test",
+        description="Descripción original.",
+    )
+    await feature_repo.save(feature)
+    good = _plan_change(
+        "chg_good",
+        "Descripción original.",
+        "Descripción actualizada.",
+        section="Descripción",
+        context_id="feat_01",
+    )
+    bad = _plan_change(
+        "chg_bad",
+        "antes",
+        "después",
+        section="Prioridad",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, good)
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, bad)
+    uc = _make_uc(project_repo, chat_repo, document_repo, feature_repo)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project.id,
+            SpecPhase.CARACTERISTICAS,
+            [PlanChangeId("chg_good"), PlanChangeId("chg_bad")],
+        )
+    )
+
+    # Assert
+    assert result.applied_count == 1
+    assert result.failed_count == 1
+    assert result.applied_changes[0].section == "Descripción"
+    assert result.failed_changes[0].section == "Prioridad"
+    assert "no es modificable" in result.failed_changes[0].reason

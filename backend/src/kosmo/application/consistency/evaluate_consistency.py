@@ -73,9 +73,12 @@ class EvaluateConsistencyUseCase:
             source_content=source_content,
         )
 
+        skill_name = (
+            "consistency_evaluate_upstream" if target_phase == SpecPhase.DESCUBRIMIENTO else "consistency_evaluate"
+        )
         try:
             raw_output = await self._agent.execute_with_skill(
-                skill_name="consistency_evaluate",
+                skill_name=skill_name,
                 context=context,
                 project_id=project_id,
             )
@@ -206,6 +209,16 @@ class EvaluateConsistencyUseCase:
             doc = await self._document_repo.get_discovery(project_id)
             if doc is not None:
                 return document_to_markdown(doc)
+        elif source_phase == SpecPhase.CARACTERISTICAS:
+            features = await self._feature_repo.list_by_project(project_id)
+            if features:
+                items: list[str] = []
+                for f in features:
+                    item_str = f"### Feature: {f.title} (ID: {f.id})\n- Descripción: {f.description}"
+                    if f.origin:
+                        item_str += f"\n- Origen: {f.origin}"
+                    items.append(item_str)
+                return "\n\n".join(items)
         return ""
 
     async def _resolve_changes(
@@ -275,6 +288,18 @@ class EvaluateConsistencyUseCase:
     async def _fetch_downstream_artifacts(
         self, target_phase: SpecPhase, project_id: ProjectId
     ) -> list[DownstreamArtifact]:
+        if target_phase == SpecPhase.DESCUBRIMIENTO:
+            doc = await self._document_repo.get_discovery(project_id)
+            if doc is not None:
+                return [
+                    DownstreamArtifact(
+                        artifact_id=str(project_id),
+                        artifact_type="DiscoveryDocument",
+                        title="Documento de Descubrimiento",
+                        description=document_to_markdown(doc)[:8000],
+                    )
+                ]
+            return []
         if target_phase == SpecPhase.CARACTERISTICAS:
             return await self._fetch_features(project_id)
         if target_phase == SpecPhase.REQUISITOS:

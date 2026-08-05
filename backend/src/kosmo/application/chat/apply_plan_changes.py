@@ -25,6 +25,10 @@ if TYPE_CHECKING:
         PropagateDiscoveryChangesOutput,
         PropagateDiscoveryChangesUseCase,
     )
+    from kosmo.application.consistency.propagate_feature_changes import (
+        PropagateFeatureChangesOutput,
+        PropagateFeatureChangesUseCase,
+    )
 
 _log = structlog.get_logger(__name__)
 
@@ -40,6 +44,7 @@ class ApplyPlanChangesInput:
 class FailedChange:
     id: PlanChangeId
     reason: str
+    section: str = ""
 
 
 @dataclass(frozen=True)
@@ -48,7 +53,7 @@ class ApplyPlanChangesOutput:
     failed_count: int
     applied_changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     failed_changes: list[FailedChange] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
-    propagation: PropagateDiscoveryChangesOutput | None = None
+    propagation: PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | None = None
 
     @property
     def applied_ids(self) -> list[str]:
@@ -65,6 +70,7 @@ class ApplyPlanChangesUseCase:
         requirement_repo: RequirementRepository | None = None,
         propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
+        propagate_feature_uc: PropagateFeatureChangesUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._chat_repo = chat_repo
@@ -73,6 +79,7 @@ class ApplyPlanChangesUseCase:
         self._requirement_repo = requirement_repo
         self._propagate_uc = propagate_uc
         self._session_factory = session_factory
+        self._propagate_feature_uc = propagate_feature_uc
 
     async def execute(self, input_data: ApplyPlanChangesInput) -> ApplyPlanChangesOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -95,7 +102,13 @@ class ApplyPlanChangesUseCase:
         for cid in input_data.change_ids:
             change = by_id.get(cid)
             if change is None:
-                failed.append(FailedChange(id=cid, reason=f"El cambio {cid} no pertenece al plan de esta fase"))
+                failed.append(
+                    FailedChange(
+                        id=cid,
+                        reason=f"El cambio {cid} no pertenece al plan de esta fase",
+                        section="",
+                    )
+                )
             else:
                 matched.append(change)
 
@@ -183,29 +196,53 @@ class ApplyPlanChangesUseCase:
         self,
         input_data: ApplyPlanChangesInput,
         applied: list[PlanCambio],
-    ) -> PropagateDiscoveryChangesOutput | None:
-        if self._propagate_uc is None:
-            return None
-        if input_data.phase != SpecPhase.DESCUBRIMIENTO:
-            return None
+    ) -> PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | None:
         if not applied:
             return None
 
-        try:
-            from kosmo.application.consistency.propagate_discovery_changes import (
-                PropagateDiscoveryChangesInput,
-            )
-
-            return await self._propagate_uc.execute(
-                PropagateDiscoveryChangesInput(
-                    project_id=input_data.project_id,
-                    phase=input_data.phase,
-                    applied_change_ids=[c.id for c in applied],
+        if input_data.phase == SpecPhase.DESCUBRIMIENTO:
+            if self._propagate_uc is None:
+                return None
+            try:
+                from kosmo.application.consistency.propagate_discovery_changes import (
+                    PropagateDiscoveryChangesInput,
                 )
-            )
-        except Exception:
-            _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
-            return None
+
+                return await self._propagate_uc.execute(
+                    PropagateDiscoveryChangesInput(
+                        project_id=input_data.project_id,
+                        phase=input_data.phase,
+                        applied_change_ids=[c.id for c in applied],
+                    )
+                )
+            except Exception:
+                _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
+                return None
+
+        if input_data.phase == SpecPhase.CARACTERISTICAS:
+            if self._propagate_feature_uc is None:
+                return None
+            try:
+                from kosmo.application.consistency.propagate_feature_changes import (
+                    PropagateFeatureChangesInput,
+                )
+                from kosmo.contracts.sdd.ids import FeatureId
+
+                context_id = next((c.context_id for c in applied if c.context_id), "")
+                feature_id = FeatureId(context_id)
+
+                return await self._propagate_feature_uc.execute(
+                    PropagateFeatureChangesInput(
+                        project_id=input_data.project_id,
+                        feature_id=feature_id,
+                        applied_change_ids=[c.id for c in applied],
+                    )
+                )
+            except Exception:
+                _log.warning("apply.feature_propagation_failed", project_id=str(input_data.project_id), exc_info=True)
+                return None
+
+        return None
 
     async def _apply_discovery_changes(
         self, project_id: ProjectId, changes: list[PlanCambio]
@@ -227,7 +264,11 @@ class ApplyPlanChangesUseCase:
             )
             if result is None:
                 failed.append(
-                    FailedChange(id=change.id, reason="El fragmento original ya no se encuentra en el documento")
+                    FailedChange(
+                        id=change.id,
+                        reason="El fragmento original ya no se encuentra en el documento",
+                        section=change.section,
+                    )
                 )
             elif result == markdown:
                 applied.append(change)
@@ -248,7 +289,13 @@ class ApplyPlanChangesUseCase:
         for change in changes:
             attribute = _feature_attribute(change.section)
             if attribute is None:
-                failed.append(FailedChange(id=change.id, reason=f"El atributo '{change.section}' no es modificable"))
+                failed.append(
+                    FailedChange(
+                        id=change.id,
+                        reason=f"El atributo '{change.section}' no es modificable",
+                        section=change.section,
+                    )
+                )
                 continue
             feature = await self._feature_repo.by_id(FeatureId(change.context_id)) if change.context_id else None
             if feature is None and not change.context_id:
@@ -264,7 +311,7 @@ class ApplyPlanChangesUseCase:
                     if not change.context_id
                     else "La característica asociada al cambio ya no existe"
                 )
-                failed.append(FailedChange(id=change.id, reason=reason))
+                failed.append(FailedChange(id=change.id, reason=reason, section=change.section))
                 continue
             current = getattr(feature, attribute)
             replacement = apply_change_diff(current, before=change.diff.before, after=change.diff.after)
@@ -273,6 +320,7 @@ class ApplyPlanChangesUseCase:
                     FailedChange(
                         id=change.id,
                         reason="El fragmento original ya no se encuentra en la característica",
+                        section=change.section,
                     )
                 )
                 continue
@@ -307,7 +355,13 @@ class ApplyPlanChangesUseCase:
             markdown = await self._requirement_repo.by_feature_id(fid_typed)
             if markdown is None:
                 for c in f_changes:
-                    failed.append(FailedChange(id=c.id, reason=f"No hay requisitos para la característica {fid}"))
+                    failed.append(
+                        FailedChange(
+                            id=c.id,
+                            reason=f"No hay requisitos para la característica {fid}",
+                            section=c.section,
+                        )
+                    )
                 continue
 
             for change in f_changes:
@@ -317,6 +371,7 @@ class ApplyPlanChangesUseCase:
                         FailedChange(
                             id=change.id,
                             reason="El fragmento original ya no se encuentra en los requisitos",
+                            section=change.section,
                         )
                     )
                 elif result == markdown:

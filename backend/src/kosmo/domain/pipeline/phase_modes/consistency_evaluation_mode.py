@@ -61,12 +61,61 @@ _CONSISTENCY_SYSTEM_PROMPT = (
     "Si ningun artefacto esta afectado, devuelve: "
     '{"actions": [], "overall_rationale": "Ningun artefacto requiere cambios."}'
 )
+CONSISTENCY_UPSTREAM_SYSTEM_PROMPT = (
+    "Eres un analista experto en trazabilidad de requisitos de software. "
+    "Tu tarea es analizar CAMBIOS aplicados a las Características de un producto "
+    "y determinar si dichos cambios entran en conflicto o contradicen la Visión, "
+    "Alcance o reglas del documento de Descubrimiento (fase upstream).\n\n"
+    "## REGLAS DE ANALISIS\n\n"
+    "1. LEE el documento fuente COMPLETO (seccion 'Documento fuente actual') correspondiente "
+    "al Descubrimiento, y evalúa los cambios introducidos en las Características.\n"
+    "2. Para el documento de Descubrimiento, determina una UNICA accion:\n"
+    '   - "update": el cambio en las características obliga a actualizar el descubrimiento '
+    "(ej: se agregó una característica fuera del alcance original, "
+    "y el negocio decide aceptarla ampliando el alcance, o cambia una regla fundamental). "
+    "DEBES sugerir el texto corregido.\n"
+    '   - "keep": los cambios en las características son consistentes con la Visión y Alcance '
+    "actuales, o son detalles de bajo nivel que NO requieren modificar el Descubrimiento "
+    "de alto nivel. NO lo incluyas en la respuesta.\n"
+    '   - "delete": el concepto del que depende el artefacto fue ELIMINADO. '
+    "(Rara vez aplica hacia upstream a menos que todo el proyecto cambie de rumbo radicalmente).\n\n"
+    "3. ANALISIS SEMANTICO: Concéntrate en el impacto a nivel de negocio y alcance. "
+    "Si una característica agrega un módulo de 'Pagos con Criptomonedas' pero el Descubrimiento "
+    "excluía explícitamente esto en el Alcance, esto es una contradicción y requeriría "
+    "un 'update' al alcance si se acepta el cambio.\n"
+    "4. NO documentes detalles técnicos o de UI en el Descubrimiento.\n\n"
+    "## FORMATO DE SALIDA (JSON estricto)\n\n"
+    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
+    "{\n"
+    '  "actions": [\n'
+    "    {\n"
+    '      "artifact_id": "<id del documento de descubrimiento>",\n'
+    '      "action": "update" | "delete",\n'
+    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
+    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
+    '      "suggested_before": "<texto actual que debe cambiar>",\n'
+    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
+    "    }\n"
+    "  ],\n"
+    '  "overall_rationale": "<resumen general del analisis en español>"\n'
+    "}\n\n"
+    "Si el descubrimiento NO requiere cambios, devuelve: "
+    '{"actions": [], "overall_rationale": "Los cambios son consistentes con la visión y alcance actual."}'
+)
 
 
 class ConsistencyEvaluationMode:
+    def __init__(
+        self,
+        phase_name: SpecPhase = SpecPhase.DESCUBRIMIENTO,
+        system_prompt: str | None = None,
+    ) -> None:
+        self._phase_name = phase_name
+        self._system_prompt = system_prompt or _CONSISTENCY_SYSTEM_PROMPT
+
     @property
     def phase_name(self) -> SpecPhase:
-        return SpecPhase.DESCUBRIMIENTO
+        return self._phase_name
 
     @property
     def temperature(self) -> float:
@@ -82,7 +131,7 @@ class ConsistencyEvaluationMode:
 
     @property
     def system_prompt(self) -> str:
-        return _CONSISTENCY_SYSTEM_PROMPT
+        return self._system_prompt
 
     @property
     def available_tools(self) -> list[ToolDefinition]:

@@ -267,7 +267,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.chat_repo = pipeline_components.chat_repo
     app.state.traceability_repo = pipeline_components.traceability_repo
     discovery_components = build_discovery_components(session_factory, pipeline_components)
-    features_components = build_features_components(session_factory, pipeline_components)
+    features_components = build_features_components(
+        session_factory,
+        pipeline_components,
+        discovery_components.consistency_evaluator,
+    )
     app.state.generate_discovery = discovery_components.generate_discovery
     app.state.get_discovery = discovery_components.get_discovery
     app.state.save_discovery = discovery_components.save_discovery
@@ -323,6 +327,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.feature_repo = features_components.feature_repo
     app.state.get_feature_chat_history = features_components.get_feature_chat_history
     app.state.list_features = features_components.list_features
+    app.state.propagate_feature_changes = features_components.propagate_feature_changes
+    app.state.edit_feature = features_components.edit_feature
+    app.state.check_feature_consistency = features_components.check_feature_consistency
+
+    from kosmo.application.consistency.propagate_feature_changes import (
+        PropagateFeatureChangesUseCase,
+    )
+
+    app.state.propagate_feature_changes = PropagateFeatureChangesUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        chat_repo=app.state.chat_repo,
+        consistency_evaluator=app.state.consistency_evaluator,
+    )
 
     from kosmo.application.features.delete_feature import DeleteFeatureUseCase
 

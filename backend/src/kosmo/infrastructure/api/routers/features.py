@@ -5,8 +5,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from kosmo.application.features import (
+    CheckFeatureConsistencyInput,
+    CheckFeatureConsistencyUseCase,
     CreateCharacteristicInput,
     CreateCharacteristicUseCase,
+    EditFeatureInput,
+    EditFeatureUseCase,
     GenerateFeaturesInput,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesInput,
@@ -29,9 +33,15 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
+    CheckConsistencyRequestView,
     CreateCharacteristicRequest,
+    EditFeatureManualRequest,
     FeatureResponse,
     FeatureSuggestionResponse,
+    InconsistencyResultView,
+    PhaseNotificationList,
+    PhaseNotificationView,
+    PropagateFeatureChangesRequest,
     SaveSelectedFeaturesRequest,
 )
 
@@ -57,6 +67,10 @@ def _save_selected_features(request: Request) -> SaveSelectedFeaturesUseCase:
 
 def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
     return request.app.state.create_characteristic
+
+
+def _edit_feature(request: Request) -> EditFeatureUseCase:
+    return request.app.state.edit_feature
 
 
 def _list_features(request: Request) -> ListFeaturesUseCase:
@@ -224,6 +238,60 @@ async def create_characteristic_manual(
     return _feature_to_response(output.characteristic)
 
 
+@router.put(
+    "/{feature_id}/manual",
+    summary="Editar característica manualmente",
+    description=(
+        "Edita una característica de forma manual. "
+        "Si los cambios contradicen flagrantemente el documento de Descubrimiento, "
+        "el guardado es rechazado por consistencia."
+    ),
+    response_model=FeatureResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Característica editada exitosamente.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Contradicción detectada. No se guardaron los cambios.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Característica no encontrada.",
+        },
+    },
+)
+async def edit_characteristic_manual(
+    project_id: str,
+    feature_id: str,
+    payload: Annotated[EditFeatureManualRequest, Body(...)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[EditFeatureUseCase, Depends(_edit_feature)],
+) -> FeatureResponse:
+    try:
+        output = await use_case.execute(
+            EditFeatureInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+                title=payload.title,
+                description=payload.description,
+            )
+        )
+    except FeatureNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+
+    if not output.is_saved:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=output.inconsistency_reason or "Inconsistencia detectada en el documento.",
+        )
+
+    assert output.feature is not None
+    return _feature_to_response(output.feature)
+
+
 @router.post(
     "/save",
     summary="Guardar características seleccionadas",
@@ -278,8 +346,62 @@ def _feature_to_response(f: Any) -> FeatureResponse:
     )
 
 
+def _propagate_feature_changes(request: Request):
+    return request.app.state.propagate_feature_changes
+
+
+@router.post(
+    "/{feature_id}/propagate",
+    summary="Propagar cambios desde característica",
+    description=(
+        "Evalúa el impacto bidireccional de los cambios aplicados en una característica. "
+        "Notifica fases afectadas upstream (Descubrimiento) y downstream (Requisitos, Modelo) "
+        "para la actualización de insignias en el wizard."
+    ),
+    response_model=PhaseNotificationList,
+    status_code=status.HTTP_200_OK,
+)
+async def propagate_feature_changes(
+    project_id: str,
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Annotated[PropagateFeatureChangesRequest, Body(...)],
+    uc: Annotated[Any, Depends(_propagate_feature_changes)],
+) -> PhaseNotificationList:
+    from kosmo.application.consistency.propagate_feature_changes import (
+        PropagateFeatureChangesInput,
+    )
+    from kosmo.contracts.sdd.ids import PlanChangeId
+
+    try:
+        output = await uc.execute(
+            PropagateFeatureChangesInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+                applied_change_ids=[PlanChangeId(cid) for cid in request.applied_change_ids],
+            )
+        )
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+
+    return PhaseNotificationList(
+        affected_phases=[
+            PhaseNotificationView(
+                phase=p.phase,
+                affected_count=p.affected_count,
+                affected_ids=p.affected_ids,
+            )
+            for p in output.affected_phases
+        ]
+    )
+
+
 def _delete_feature_uc(request: Request) -> DeleteFeatureUseCase:
     return request.app.state.delete_feature
+
+
+def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCase:
+    return request.app.state.check_feature_consistency
 
 
 @router.delete(
@@ -304,3 +426,50 @@ async def delete_feature(
     except ProjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     return {"status": "deleted", "feature_id": feature_id}
+
+
+@router.post(
+    "/{feature_id}/consistency/check",
+    summary="Verificar consistencia antes de guardado manual",
+    description=(
+        "Verifica que el contenido editado manualmente no contradiga "
+        "flagrantemente el documento de Descubrimiento. Invoca al agente IA "
+        "con el nuevo contenido y el documento fuente. Si hay inconsistencia, "
+        "el guardado debe rechazarse mostrando un modal explicativo."
+    ),
+    response_model=InconsistencyResultView,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {"description": "Resultado de la verificación."},
+        status.HTTP_404_NOT_FOUND: {"description": "Proyecto o característica no encontrada."},
+    },
+)
+async def check_feature_consistency(
+    project_id: str,
+    feature_id: str,
+    payload: Annotated[CheckConsistencyRequestView, Body(...)],
+    use_case: Annotated[CheckFeatureConsistencyUseCase, Depends(_check_feature_consistency)],
+) -> InconsistencyResultView:
+    title = str(payload.content.get("title", ""))
+    description = str(payload.content.get("description", ""))
+
+    try:
+        output = await use_case.execute(
+            CheckFeatureConsistencyInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+                title=title,
+                description=description,
+            )
+        )
+    except FeatureNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+
+    return InconsistencyResultView(
+        is_consistent=output.is_consistent,
+        reason=output.reason,
+        conflicting_section=output.conflicting_section,
+    )
