@@ -9,6 +9,11 @@ from kosmo.contracts import ChatRepository, ConsistencyEvaluationOutput, Consist
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts import ChatRepository, ConsistencyEvaluator
+from kosmo.contracts.chat import PlanCambio
+from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.errors import ProjectNotFoundError
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     FeatureRepository,
@@ -30,6 +35,7 @@ _PHASE_TO_API: dict[SpecPhase, str] = {
 class PropagateFeatureChangesInput:
     project_id: ProjectId
     phase: SpecPhase
+    feature_id: FeatureId
     applied_change_ids: list[PlanChangeId]
 
 
@@ -67,6 +73,7 @@ class PropagateFeatureChangesUseCase:
 
         applied_changes = await self._load_applied_changes(
             input_data.project_id, input_data.phase, input_data.applied_change_ids
+            input_data.project_id, input_data.applied_change_ids
         )
 
         affected_phases: list[PhasePropagationInfo] = []
@@ -85,6 +92,17 @@ class PropagateFeatureChangesUseCase:
         model_info = await self._evaluate_model(input_data.project_id, applied_changes)
         if model_info.affected_count > 0:
             affected_phases.append(model_info)
+        upstream = await self._evaluate_upstream(input_data.project_id, applied_changes)
+        if upstream.affected_count > 0:
+            affected_phases.append(upstream)
+
+        downstream_req = await self._evaluate_requirements(input_data.feature_id)
+        if downstream_req.affected_count > 0:
+            affected_phases.append(downstream_req)
+
+        downstream_model = await self._evaluate_model(input_data.feature_id)
+        if downstream_model.affected_count > 0:
+            affected_phases.append(downstream_model)
 
         return PropagateFeatureChangesOutput(affected_phases=affected_phases)
 
@@ -100,6 +118,21 @@ class PropagateFeatureChangesUseCase:
     ) -> PhasePropagationInfo:
         try:
             result: ConsistencyEvaluationOutput = await self._consistency_evaluator.evaluate(
+        self, project_id: ProjectId, change_ids: list[PlanChangeId]
+    ) -> list[PlanCambio]:
+        from kosmo.contracts.chat import PlanCambio as _PC
+
+        if not change_ids:
+            return []
+        all_changes = await self._chat_repo.list_plan_changes(project_id, SpecPhase.CARACTERISTICAS)
+        by_id: dict[PlanChangeId, _PC] = {c.id: c for c in all_changes}
+        return [by_id[cid] for cid in change_ids if cid in by_id]
+
+    async def _evaluate_upstream(
+        self, project_id: ProjectId, applied_changes: list[PlanCambio]
+    ) -> PhasePropagationInfo:
+        try:
+            result = await self._consistency_evaluator.evaluate(
                 source_phase=SpecPhase.CARACTERISTICAS,
                 target_phase=SpecPhase.DESCUBRIMIENTO,
                 project_id=project_id,
@@ -109,6 +142,9 @@ class PropagateFeatureChangesUseCase:
             _log.warning(
                 "propagate_feature.evaluate_discovery_failed",
                 project_id=str(project_id),
+                "propagate.evaluate_upstream_failed",
+                project_id=str(project_id),
+                phase="descubrimiento",
                 exc_info=True,
             )
             return PhasePropagationInfo(
@@ -139,6 +175,9 @@ class PropagateFeatureChangesUseCase:
                 project_id=str(project_id),
                 exc_info=True,
             )
+    async def _evaluate_requirements(self, feature_id: FeatureId) -> PhasePropagationInfo:
+        requirements = await self._requirement_repo.by_feature_id(feature_id)
+        if requirements is None:
             return PhasePropagationInfo(
                 phase=_PHASE_TO_API[SpecPhase.REQUISITOS],
                 affected_count=0,
@@ -165,6 +204,15 @@ class PropagateFeatureChangesUseCase:
                 project_id=str(project_id),
                 exc_info=True,
             )
+        return PhasePropagationInfo(
+            phase=_PHASE_TO_API[SpecPhase.REQUISITOS],
+            affected_count=1,
+            affected_ids=[str(feature_id)],
+        )
+
+    async def _evaluate_model(self, feature_id: FeatureId) -> PhasePropagationInfo:
+        diagram_exists = await self._diagram_repo.exists(feature_id)
+        if not diagram_exists:
             return PhasePropagationInfo(
                 phase=_PHASE_TO_API[SpecPhase.MODELO],
                 affected_count=0,
@@ -175,4 +223,8 @@ class PropagateFeatureChangesUseCase:
             phase=_PHASE_TO_API[SpecPhase.MODELO],
             affected_count=len(result.affected_artifact_ids),
             affected_ids=result.affected_artifact_ids,
+        return PhasePropagationInfo(
+            phase=_PHASE_TO_API[SpecPhase.MODELO],
+            affected_count=1,
+            affected_ids=[str(feature_id)],
         )
