@@ -24,6 +24,7 @@ from kosmo.application.features.list_features import (
     ListFeaturesUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     FeatureNotFoundError,
@@ -368,17 +369,18 @@ async def propagate_feature_changes(
     request: Annotated[PropagateFeatureChangesRequest, Body(...)],
     uc: Annotated[Any, Depends(_propagate_feature_changes)],
 ) -> PhaseNotificationList:
-    from kosmo.application.consistency.propagate_feature_changes import (
-        PropagateFeatureChangesInput,
+    from kosmo.application.consistency.propagate_changes import (
+        PropagateChangesInput,
     )
     from kosmo.contracts.sdd.ids import PlanChangeId
 
     try:
         output = await uc.execute(
-            PropagateFeatureChangesInput(
+            PropagateChangesInput(
                 project_id=ProjectId(project_id),
-                feature_id=FeatureId(feature_id),
+                source_phase=SpecPhase.CARACTERISTICAS,
                 applied_change_ids=[PlanChangeId(cid) for cid in request.applied_change_ids],
+                feature_id=FeatureId(feature_id),
             )
         )
     except ProjectNotFoundError as e:
