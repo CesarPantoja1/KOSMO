@@ -7,6 +7,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from kosmo.application.features import (
     CreateCharacteristicInput,
     CreateCharacteristicUseCase,
+    EditFeatureInput,
+    EditFeatureUseCase,
     GenerateFeaturesInput,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesInput,
@@ -30,6 +32,7 @@ from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     CreateCharacteristicRequest,
+    EditFeatureManualRequest,
     FeatureResponse,
     FeatureSuggestionResponse,
     PhaseNotificationList,
@@ -60,6 +63,10 @@ def _save_selected_features(request: Request) -> SaveSelectedFeaturesUseCase:
 
 def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
     return request.app.state.create_characteristic
+
+
+def _edit_feature(request: Request) -> EditFeatureUseCase:
+    return request.app.state.edit_feature
 
 
 def _list_features(request: Request) -> ListFeaturesUseCase:
@@ -225,6 +232,60 @@ async def create_characteristic_manual(
             detail=str(exc),
         ) from exc
     return _feature_to_response(output.characteristic)
+
+
+@router.put(
+    "/{feature_id}/manual",
+    summary="Editar característica manualmente",
+    description=(
+        "Edita una característica de forma manual. "
+        "Si los cambios contradicen flagrantemente el documento de Descubrimiento, "
+        "el guardado es rechazado por consistencia."
+    ),
+    response_model=FeatureResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Característica editada exitosamente.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Contradicción detectada. No se guardaron los cambios.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Característica no encontrada.",
+        },
+    },
+)
+async def edit_characteristic_manual(
+    project_id: str,
+    feature_id: str,
+    payload: Annotated[EditFeatureManualRequest, Body(...)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[EditFeatureUseCase, Depends(_edit_feature)],
+) -> FeatureResponse:
+    try:
+        output = await use_case.execute(
+            EditFeatureInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+                title=payload.title,
+                description=payload.description,
+            )
+        )
+    except FeatureNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+
+    if not output.is_saved:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=output.inconsistency_reason or "Inconsistencia detectada en el documento.",
+        )
+
+    assert output.feature is not None
+    return _feature_to_response(output.feature)
 
 
 @router.post(

@@ -267,7 +267,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.chat_repo = pipeline_components.chat_repo
     app.state.traceability_repo = pipeline_components.traceability_repo
     discovery_components = build_discovery_components(session_factory, pipeline_components)
-    features_components = build_features_components(session_factory, pipeline_components)
+    features_components = build_features_components(
+        session_factory,
+        pipeline_components,
+        discovery_components.consistency_evaluator,
+    )
     app.state.generate_discovery = discovery_components.generate_discovery
     app.state.get_discovery = discovery_components.get_discovery
     app.state.save_discovery = discovery_components.save_discovery
@@ -323,6 +327,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.feature_repo = features_components.feature_repo
     app.state.get_feature_chat_history = features_components.get_feature_chat_history
     app.state.list_features = features_components.list_features
+    app.state.propagate_feature_changes = features_components.propagate_feature_changes
+    app.state.edit_feature = features_components.edit_feature
 
     from kosmo.application.consistency.propagate_feature_changes import (
         PropagateFeatureChangesUseCase,

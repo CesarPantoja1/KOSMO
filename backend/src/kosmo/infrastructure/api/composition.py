@@ -27,6 +27,7 @@ from kosmo.application.discovery import (
 )
 from kosmo.application.features import (
     CreateCharacteristicUseCase,
+    EditFeatureUseCase,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
@@ -52,6 +53,7 @@ from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
+from kosmo.contracts.consistency import ConsistencyEvaluator
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.sdd.document import SpecPhase
@@ -595,11 +597,13 @@ class FeaturesComponents:
     get_feature_chat_history: Any
     list_features: Any
     propagate_feature_changes: Any
+    edit_feature: EditFeatureUseCase
 
 
 def build_features_components(
     session_factory: async_sessionmaker[AsyncSession],
     pipeline: PipelineComponents,
+    consistency_evaluator: ConsistencyEvaluator,
 ) -> FeaturesComponents:
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
@@ -639,6 +643,10 @@ def build_features_components(
         get_feature_chat_history=get_feature_chat_history,
         list_features=ListFeaturesUseCase(feature_repo=feature_repo),
         propagate_feature_changes=None,
+        edit_feature=EditFeatureUseCase(
+            feature_repo=feature_repo,
+            consistency_evaluator=consistency_evaluator,
+        ),
     )
 
 

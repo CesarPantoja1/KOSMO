@@ -547,6 +547,23 @@ class CreateCharacteristicRequest(BaseModel):
     )
 
 
+class EditFeatureManualRequest(BaseModel):
+    """Payload para editar una característica de forma manual."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Nuevo título de la característica (máximo 50 caracteres).",
+    )
+    description: str = Field(
+        min_length=0,
+        max_length=500,
+        description="Nueva descripción de la característica (máximo 500 caracteres).",
+    )
+
+
 class ChangeSuggestion(BaseModel):
     """Sugerencia de cambio generada por la IA."""
 
