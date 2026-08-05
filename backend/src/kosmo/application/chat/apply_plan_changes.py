@@ -29,6 +29,10 @@ if TYPE_CHECKING:
         PropagateFeatureChangesOutput,
         PropagateFeatureChangesUseCase,
     )
+    from kosmo.application.consistency.propagate_requirement_changes import (
+        PropagateRequirementChangesOutput,
+        PropagateRequirementChangesUseCase,
+    )
 
 _log = structlog.get_logger(__name__)
 
@@ -53,7 +57,9 @@ class ApplyPlanChangesOutput:
     failed_count: int
     applied_changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     failed_changes: list[FailedChange] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
-    propagation: PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | None = None
+    propagation: (
+        PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | PropagateRequirementChangesOutput | None
+    ) = None
 
     @property
     def applied_ids(self) -> list[str]:
@@ -71,6 +77,7 @@ class ApplyPlanChangesUseCase:
         propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
         propagate_feature_uc: PropagateFeatureChangesUseCase | None = None,
+        propagate_requirement_uc: PropagateRequirementChangesUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._chat_repo = chat_repo
@@ -80,6 +87,7 @@ class ApplyPlanChangesUseCase:
         self._propagate_uc = propagate_uc
         self._session_factory = session_factory
         self._propagate_feature_uc = propagate_feature_uc
+        self._propagate_requirement_uc = propagate_requirement_uc
 
     async def execute(self, input_data: ApplyPlanChangesInput) -> ApplyPlanChangesOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -196,7 +204,7 @@ class ApplyPlanChangesUseCase:
         self,
         input_data: ApplyPlanChangesInput,
         applied: list[PlanCambio],
-    ) -> PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | None:
+    ) -> PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | PropagateRequirementChangesOutput | None:
         if not applied:
             return None
 
@@ -240,6 +248,31 @@ class ApplyPlanChangesUseCase:
                 )
             except Exception:
                 _log.warning("apply.feature_propagation_failed", project_id=str(input_data.project_id), exc_info=True)
+                return None
+
+        if input_data.phase == SpecPhase.REQUISITOS:
+            if self._propagate_requirement_uc is None:
+                return None
+            try:
+                from kosmo.application.consistency.propagate_requirement_changes import (
+                    PropagateRequirementChangesInput,
+                )
+                from kosmo.contracts.sdd.ids import FeatureId
+
+                context_id = next((c.context_id for c in applied if c.context_id), "")
+                feature_id = FeatureId(context_id)
+
+                return await self._propagate_requirement_uc.execute(
+                    PropagateRequirementChangesInput(
+                        project_id=input_data.project_id,
+                        feature_id=feature_id,
+                        applied_change_ids=[c.id for c in applied],
+                    )
+                )
+            except Exception:
+                _log.warning(
+                    "apply.requirement_propagation_failed", project_id=str(input_data.project_id), exc_info=True
+                )
                 return None
 
         return None

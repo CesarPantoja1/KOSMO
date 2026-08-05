@@ -11,6 +11,11 @@ from kosmo.application.consistency.propagate_feature_changes import (
     PropagateFeatureChangesOutput,
     PropagateFeatureChangesUseCase,
 )
+from kosmo.application.consistency.propagate_requirement_changes import (
+    PropagateRequirementChangesInput,
+    PropagateRequirementChangesOutput,
+    PropagateRequirementChangesUseCase,
+)
 
 __all__ = [
     "ApplyConsistencyImpactsUseCase",
@@ -22,4 +27,7 @@ __all__ = [
     "PropagateFeatureChangesInput",
     "PropagateFeatureChangesOutput",
     "PropagateFeatureChangesUseCase",
+    "PropagateRequirementChangesInput",
+    "PropagateRequirementChangesOutput",
+    "PropagateRequirementChangesUseCase",
 ]

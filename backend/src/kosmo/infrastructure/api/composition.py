@@ -550,6 +550,16 @@ def build_discovery_components(
         consistency_evaluator=consistency_evaluator,
     )
 
+    from kosmo.application.consistency.propagate_requirement_changes import PropagateRequirementChangesUseCase
+
+    propagate_requirement_uc = PropagateRequirementChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=consistency_evaluator,
+    )
+
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
@@ -581,6 +591,7 @@ def build_discovery_components(
             propagate_uc=propagate_uc,
             session_factory=session_factory,
             propagate_feature_uc=propagate_feature_uc,
+            propagate_requirement_uc=propagate_requirement_uc,
         ),
         propagate_discovery_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,

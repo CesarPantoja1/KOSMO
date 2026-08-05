@@ -52,6 +52,7 @@ def _make_uc(
     feature_repo: FeatureRepository | None = None,
     propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
     propagate_feature_uc: object | None = None,
+    propagate_requirement_uc: object | None = None,
 ) -> ApplyPlanChangesUseCase:
     return ApplyPlanChangesUseCase(
         project_repo=project_repo,
@@ -60,6 +61,7 @@ def _make_uc(
         feature_repo=feature_repo,
         propagate_uc=propagate_uc,
         propagate_feature_uc=propagate_feature_uc,  # type: ignore[arg-type]
+        propagate_requirement_uc=propagate_requirement_uc,  # type: ignore[arg-type]
     )
 
 
@@ -1080,3 +1082,68 @@ async def test_apply_feature_change_partial_failure_preserves_section_info() -> 
     assert result.applied_changes[0].section == "Descripción"
     assert result.failed_changes[0].section == "Prioridad"
     assert "no es modificable" in result.failed_changes[0].reason
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_requirement_change_invokes_propagation() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+
+    class FakeRequirementPropagation:
+        def __init__(self) -> None:
+            self.executed = False
+            self.input = None
+
+        async def execute(self, in_data: object) -> object:
+            self.executed = True
+            self.input = in_data
+            return "FakeOutput"
+
+    propagate_uc = FakeRequirementPropagation()
+
+    change = _plan_change(
+        "chg_req_1",
+        "old req",
+        "new req",
+        section="Contenido",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.REQUISITOS, change)
+
+    uc = _make_uc(
+        project_repo,
+        chat_repo,
+        document_repo,
+        feature_repo,
+        propagate_requirement_uc=propagate_uc,
+    )
+
+    # We mock _apply_requirement_changes to pretend it applied the change
+    # because that use case is implemented in another file.
+    async def mock_apply(changes):
+        return ([changes[0]], [])
+
+    uc._apply_requirement_changes = mock_apply  # type: ignore
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.REQUISITOS,
+            change_ids=[PlanChangeId("chg_req_1")],
+        )
+    )
+
+    # Assert
+    assert result.applied_count == 1
+    assert propagate_uc.executed is True
+    assert propagate_uc.input.project_id == project.id
+    assert str(propagate_uc.input.feature_id) == "feat_01"
+    assert propagate_uc.input.applied_change_ids == [PlanChangeId("chg_req_1")]
+    assert result.propagation == "FakeOutput"
