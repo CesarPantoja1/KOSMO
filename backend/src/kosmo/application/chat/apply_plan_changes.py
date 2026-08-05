@@ -44,6 +44,7 @@ class ApplyPlanChangesInput:
 class FailedChange:
     id: PlanChangeId
     reason: str
+    section: str = ""
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,13 @@ class ApplyPlanChangesUseCase:
         for cid in input_data.change_ids:
             change = by_id.get(cid)
             if change is None:
-                failed.append(FailedChange(id=cid, reason=f"El cambio {cid} no pertenece al plan de esta fase"))
+                failed.append(
+                    FailedChange(
+                        id=cid,
+                        reason=f"El cambio {cid} no pertenece al plan de esta fase",
+                        section="",
+                    )
+                )
             else:
                 matched.append(change)
 
@@ -253,7 +260,11 @@ class ApplyPlanChangesUseCase:
             )
             if result is None:
                 failed.append(
-                    FailedChange(id=change.id, reason="El fragmento original ya no se encuentra en el documento")
+                    FailedChange(
+                        id=change.id,
+                        reason="El fragmento original ya no se encuentra en el documento",
+                        section=change.section,
+                    )
                 )
             elif result == markdown:
                 applied.append(change)
@@ -274,7 +285,13 @@ class ApplyPlanChangesUseCase:
         for change in changes:
             attribute = _feature_attribute(change.section)
             if attribute is None:
-                failed.append(FailedChange(id=change.id, reason=f"El atributo '{change.section}' no es modificable"))
+                failed.append(
+                    FailedChange(
+                        id=change.id,
+                        reason=f"El atributo '{change.section}' no es modificable",
+                        section=change.section,
+                    )
+                )
                 continue
             feature = await self._feature_repo.by_id(FeatureId(change.context_id)) if change.context_id else None
             if feature is None and not change.context_id:
@@ -290,7 +307,7 @@ class ApplyPlanChangesUseCase:
                     if not change.context_id
                     else "La característica asociada al cambio ya no existe"
                 )
-                failed.append(FailedChange(id=change.id, reason=reason))
+                failed.append(FailedChange(id=change.id, reason=reason, section=change.section))
                 continue
             current = getattr(feature, attribute)
             replacement = apply_change_diff(current, before=change.diff.before, after=change.diff.after)
@@ -299,6 +316,7 @@ class ApplyPlanChangesUseCase:
                     FailedChange(
                         id=change.id,
                         reason="El fragmento original ya no se encuentra en la característica",
+                        section=change.section,
                     )
                 )
                 continue
@@ -333,7 +351,13 @@ class ApplyPlanChangesUseCase:
             markdown = await self._requirement_repo.by_feature_id(fid_typed)
             if markdown is None:
                 for c in f_changes:
-                    failed.append(FailedChange(id=c.id, reason=f"No hay requisitos para la característica {fid}"))
+                    failed.append(
+                        FailedChange(
+                            id=c.id,
+                            reason=f"No hay requisitos para la característica {fid}",
+                            section=c.section,
+                        )
+                    )
                 continue
 
             for change in f_changes:
@@ -343,6 +367,7 @@ class ApplyPlanChangesUseCase:
                         FailedChange(
                             id=change.id,
                             reason="El fragmento original ya no se encuentra en los requisitos",
+                            section=change.section,
                         )
                     )
                 elif result == markdown:
