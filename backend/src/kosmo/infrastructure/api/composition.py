@@ -393,8 +393,7 @@ def build_pipeline_components(
             description="Evalua consistencia desde características hacia el documento de descubrimiento (upstream)",
             phase=SpecPhase.CARACTERISTICAS,
             mode=ConsistencyEvaluationMode(
-                phase_name=SpecPhase.CARACTERISTICAS,
-                system_prompt=_CONSISTENCY_UPSTREAM_SYSTEM_PROMPT
+                phase_name=SpecPhase.CARACTERISTICAS, system_prompt=_CONSISTENCY_UPSTREAM_SYSTEM_PROMPT
             ),  # type: ignore[reportArgumentType]
         )
     )
