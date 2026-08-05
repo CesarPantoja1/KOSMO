@@ -7,7 +7,23 @@ from typing import Protocol
 
 from kosmo.contracts.chat import DiffCambio, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId
+
+
+class TraceabilityRepository(Protocol):
+    async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]: ...
+    async def add_edge(
+        self,
+        source_type: str,
+        source_id: str,
+        target_type: str,
+        target_id: str,
+        origin: str = "llm",
+    ) -> None: ...
+    async def add_feature_requirement_edges(
+        self, feature_id: FeatureId, requirement_ids: list[RequirementId]
+    ) -> None: ...
+    async def delete_by_entity_id(self, entity_id: str) -> None: ...
 
 
 class ConsistencyStatus(StrEnum):
@@ -81,3 +97,10 @@ class ConsistencyEvaluator(Protocol):
         project_id: ProjectId,
         applied_changes: list[PlanCambio],
     ) -> ConsistencyEvaluationOutput: ...
+
+
+@dataclass(frozen=True)
+class PhasePropagationInfo:
+    phase: str
+    affected_count: int
+    affected_ids: list[str]

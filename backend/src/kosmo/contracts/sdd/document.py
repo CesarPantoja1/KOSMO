@@ -104,6 +104,15 @@ class SpecPhase(StrEnum):
     IMPLEMENTACION = "implementacion"
 
 
+SPEC_TO_API_PHASE: dict[SpecPhase, str] = {
+    SpecPhase.DESCUBRIMIENTO: "discovery",
+    SpecPhase.CARACTERISTICAS: "features",
+    SpecPhase.REQUISITOS: "requirements",
+    SpecPhase.MODELO: "model",
+    SpecPhase.IMPLEMENTACION: "implementation",
+}
+
+
 class EARSPatternLabel(StrEnum):
     ubiquitous = "Requisitos Ubicuos"
     event_driven = "Requisitos Basados en Eventos"

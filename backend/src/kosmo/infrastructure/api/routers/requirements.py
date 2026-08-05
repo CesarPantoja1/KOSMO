@@ -16,6 +16,7 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
@@ -220,19 +221,19 @@ async def propagate_requirement_changes(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> PhaseNotificationList:
-    from kosmo.application.consistency.propagate_requirement_changes import (
-        PropagateRequirementChangesInput,
-        PropagateRequirementChangesUseCase,
+    from kosmo.application.consistency.propagate_changes import (
+        PropagateChangesInput,
     )
 
-    uc = cast("PropagateRequirementChangesUseCase", request.app.state.propagate_requirement_changes)
+    uc = request.app.state.propagate_requirement_changes
 
     try:
         output = await uc.execute(
-            PropagateRequirementChangesInput(
+            PropagateChangesInput(
                 project_id=ProjectId(body.project_id),
-                feature_id=FeatureId(feature_id),
+                source_phase=SpecPhase.REQUISITOS,
                 applied_change_ids=[PlanChangeId(cid) for cid in body.applied_change_ids],
+                feature_id=FeatureId(feature_id),
             )
         )
     except ProjectNotFoundError as e:

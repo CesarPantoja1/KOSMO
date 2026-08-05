@@ -62,7 +62,9 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT,
     CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
+    CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
     CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT,
     CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
     ConsistencyEvaluationMode,
@@ -425,6 +427,28 @@ def build_pipeline_components(
             ),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_features_downstream",
+            description="Evalua consistencia desde características hacia requisitos y modelo (downstream)",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.CARACTERISTICAS,
+                system_prompt=CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_requirements_model",
+            description="Evalua consistencia desde requisitos EARS hacia el diagrama de actividad (downstream)",
+            phase=SpecPhase.REQUISITOS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.REQUISITOS,
+                system_prompt=CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -521,7 +545,7 @@ class DiscoveryComponents:
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
     manage_plan_changes: Any
     apply_plan_changes: Any
-    propagate_discovery_changes: Any
+    propagate_changes: Any
     consistency_evaluator: Any
     document_repo: Any
 
@@ -535,7 +559,6 @@ def build_discovery_components(
     from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
     from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
-    from kosmo.application.consistency.propagate_discovery_changes import PropagateDiscoveryChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.contracts.consistency import ConsistencyEvaluator
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
@@ -554,32 +577,12 @@ def build_discovery_components(
         document_repo=document_repo,
     )
 
-    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
+    from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 
-    propagate_uc = PropagateDiscoveryChangesUseCase(
+    propagate_uc = PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,
-        diagram_repo=diagram_repo,
-        chat_repo=chat_repo,
-        consistency_evaluator=consistency_evaluator,
-        traceability_repo=pipeline.traceability_repo,
-    )
-
-    propagate_feature_uc = PropagateFeatureChangesUseCase(
-        project_repo=project_repo,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        diagram_repo=diagram_repo,
-        chat_repo=chat_repo,
-        consistency_evaluator=consistency_evaluator,
-    )
-
-    from kosmo.application.consistency.propagate_requirement_changes import PropagateRequirementChangesUseCase
-
-    propagate_requirement_uc = PropagateRequirementChangesUseCase(
-        project_repo=project_repo,
-        feature_repo=feature_repo,
         diagram_repo=diagram_repo,
         chat_repo=chat_repo,
         consistency_evaluator=consistency_evaluator,
@@ -615,10 +618,8 @@ def build_discovery_components(
             requirement_repo=requirement_repo,
             propagate_uc=propagate_uc,
             session_factory=session_factory,
-            propagate_feature_uc=propagate_feature_uc,
-            propagate_requirement_uc=propagate_requirement_uc,
         ),
-        propagate_discovery_changes=propagate_uc,
+        propagate_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
         document_repo=document_repo,
     )
@@ -633,7 +634,6 @@ class FeaturesComponents:
     feature_repo: SqlAlchemyFeatureRepository
     get_feature_chat_history: Any
     list_features: Any
-    propagate_feature_changes: Any
     edit_feature: EditFeatureUseCase
     check_feature_consistency: CheckFeatureConsistencyUseCase
 
@@ -680,7 +680,6 @@ def build_features_components(
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,
         list_features=ListFeaturesUseCase(feature_repo=feature_repo),
-        propagate_feature_changes=None,
         edit_feature=EditFeatureUseCase(
             feature_repo=feature_repo,
             consistency_evaluator=consistency_evaluator,

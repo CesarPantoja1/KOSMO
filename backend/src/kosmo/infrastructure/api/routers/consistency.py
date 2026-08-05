@@ -15,7 +15,7 @@ from kosmo.application.consistency.evaluate_project_consistency import (
 )
 from kosmo.contracts import DiffCambio, PlanCambio
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
 from kosmo.infrastructure.api.async_generation import sse_consistency_response
 from kosmo.infrastructure.api.dependencies.auth import get_principal
@@ -45,14 +45,6 @@ def _cascade_uc(request: Request) -> CascadingConsistencyUseCase:
 
 def _apply_uc(request: Request) -> ApplyConsistencyImpactsUseCase:
     return request.app.state.apply_consistency_impacts
-
-
-_SPEC_TO_API: dict[SpecPhase, str] = {
-    SpecPhase.DESCUBRIMIENTO: "discovery",
-    SpecPhase.CARACTERISTICAS: "features",
-    SpecPhase.REQUISITOS: "requirements",
-    SpecPhase.MODELO: "model",
-}
 
 
 @router.post(
@@ -103,7 +95,7 @@ async def evaluate_consistency(
             applied_changes=changes,
         )
     )
-    source_api_phase = _SPEC_TO_API.get(source_phase, source_phase.value)
+    source_api_phase = SPEC_TO_API_PHASE.get(source_phase, source_phase.value)
     return {
         "report_id": output.report_id,
         "source_type": source_api_phase,
