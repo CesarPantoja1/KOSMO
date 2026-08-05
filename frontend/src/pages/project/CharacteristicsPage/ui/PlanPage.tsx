@@ -53,12 +53,10 @@ function CharacteristicDiffCard({
 	displayId,
 	title,
 	description,
-	origin,
 }: {
 	displayId: string;
 	title: string;
 	description: string;
-	origin: string;
 }) {
 	return (
 		<div
@@ -72,7 +70,6 @@ function CharacteristicDiffCard({
 			<div className='flex-1 inline-flex flex-col justify-center gap-2.5'>
 				<h3 className='text-primary-100 text-xl font-semibold'>{title}</h3>
 				<p className='feature-description-scroll text-base-800'>{description}</p>
-				{origin && <p className='text-base-600 text-sm text-ellipsis overflow-hidden'>Origen: {origin}</p>}
 			</div>
 		</div>
 	);
@@ -306,7 +303,6 @@ export const PlanPage = () => {
 										displayId={c.display_id}
 										title={c.title}
 										description={c.description}
-										origin={c.origin}
 									/>
 								))}
 							</div>
@@ -314,7 +310,7 @@ export const PlanPage = () => {
 							{/* Divider */}
 							<div className='w-px shrink-0 bg-base-300' />
 
-							{/* Right — Proposal */}
+							{/* Right */}
 							<div
 								ref={rightRef}
 								onScroll={handleRightScroll}
@@ -326,7 +322,6 @@ export const PlanPage = () => {
 										displayId={c.display_id}
 										title={c.title}
 										description={c.description}
-										origin={c.origin}
 									/>
 								))}
 							</div>
