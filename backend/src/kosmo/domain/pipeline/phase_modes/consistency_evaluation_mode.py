@@ -32,15 +32,15 @@ _CONSISTENCY_SYSTEM_PROMPT = (
     "5. Si el cambio modifica una regla de negocio o un alcance funcional, TODOS los artefactos que "
     "implementan esa regla estan afectados.\n\n"
     "## EJEMPLOS\n\n"
-    "Ejemplo 1 — Cambio de unidad:\n"
+    "Ejemplo 1 : Cambio de unidad:\n"
     '  Cambio: "peso en kilogramos" → "peso en libras"\n'
     '  Feature "Calculo de peso total" → accion: "update", '
     'razon: "La unidad de medida cambio de kg a lb, la feature debe reflejar libras."\n\n'
-    "Ejemplo 2 — Eliminacion de concepto:\n"
+    "Ejemplo 2 : Eliminacion de concepto:\n"
     '  Cambio: se elimina la seccion "Gestion de Inventario" del documento fuente\n'
     '  Feature "Control de stock" → accion: "delete", '
     'razon: "El concepto de inventario ya no existe en el descubrimiento."\n\n'
-    "Ejemplo 3 — Cambio cosmetico:\n"
+    "Ejemplo 3 : Cambio cosmetico:\n"
     '  Cambio: se corrige una tilde en "Visión"\n'
     '  Feature "Dashboard de metricas" → NO incluir (accion "keep" implicita).\n\n'
     "## FORMATO DE SALIDA (JSON estricto)\n\n"

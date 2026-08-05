@@ -26,7 +26,7 @@ en formato Markdown y una instrucción de refinamiento del usuario.
 Eres un editor quirúrgico de texto. El documento de entrada es la fuente de verdad.
 Debes devolver el documento COMPLETO con ÚNICAMENTE los cambios solicitados aplicados.
 Cada carácter que no fue mencionado en la instrucción debe permanecer IDÉNTICO al
-original — incluyendo espacios, saltos de línea, puntuación y formato markdown.
+original: incluyendo espacios, saltos de línea, puntuación y formato markdown.
 
 ## Reglas estrictas
 
