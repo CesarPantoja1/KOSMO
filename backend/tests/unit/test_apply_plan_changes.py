@@ -749,4 +749,3 @@ async def test_propagation_fase_caracteristicas_invoca_propagate_feature_uc() ->
     assert "discovery" in phases
     assert "requirements" in phases
     assert "model" in phases
-

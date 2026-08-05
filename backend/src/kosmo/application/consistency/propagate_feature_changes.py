@@ -151,9 +151,7 @@ class PropagateFeatureChangesUseCase:
             affected_ids=result.affected_artifact_ids,
         )
 
-    async def _evaluate_model(
-        self, project_id: ProjectId, applied_changes: list[PlanCambio]
-    ) -> PhasePropagationInfo:
+    async def _evaluate_model(self, project_id: ProjectId, applied_changes: list[PlanCambio]) -> PhasePropagationInfo:
         try:
             result: ConsistencyEvaluationOutput = await self._consistency_evaluator.evaluate(
                 source_phase=SpecPhase.CARACTERISTICAS,
