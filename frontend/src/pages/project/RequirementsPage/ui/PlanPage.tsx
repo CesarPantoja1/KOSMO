@@ -175,7 +175,10 @@ export const PlanPage = () => {
 
 	const handleApply = async () => {
 		if (!currentProject || !currentItem) return;
+		const next = currentIndex + 1;
+		const isLastItem = next >= items.length;
 		setIsApplying(true);
+		if (isLastItem) setIsProcessing(true);
 		try {
 			await saveRequirements(
 				currentProject.id,
@@ -203,11 +206,7 @@ export const PlanPage = () => {
 				diff_after: c.diff.after,
 			}));
 
-			const next = currentIndex + 1;
-			const isLastItem = next >= items.length;
-
 			if (isLastItem) {
-				setIsProcessing(true);
 				const allChanges = [...pendingChangesForConsistency, ...itemChangesToSend];
 				startStream({
 					projectId: currentProject.id,
