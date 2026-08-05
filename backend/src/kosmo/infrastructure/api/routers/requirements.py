@@ -11,6 +11,8 @@ from kosmo.application.requirements import (
     GetRequirementsUseCase,
     RefineRequirementsInput,
     RefineRequirementsUseCase,
+    RegenerateRequirementsInput,
+    RegenerateRequirementsUseCase,
     SaveRequirementsUseCase,
 )
 from kosmo.contracts.auth import Principal
@@ -245,4 +247,50 @@ async def propagate_requirement_changes(
             )
             for p in output.affected_phases
         ]
+    )
+
+
+class RegenerateRequirementsResponse(BaseModel):
+    artifact_id: str
+    content: str
+    phase: str
+
+
+@router.post(
+    "/regenerate",
+    summary="Regenerar requisitos EARS con IA",
+    description=(
+        "Regenera los requisitos de una característica a partir del estado "
+        "actual de la característica padre, manteniendo la estructura EARS y "
+        "los criterios de aceptación en formato Dado-Cuando-Entonces."
+    ),
+    response_model=RegenerateRequirementsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def regenerate_requirements(
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+    project_id: str = Query(...),
+) -> RegenerateRequirementsResponse:
+    uc = cast("RegenerateRequirementsUseCase", request.app.state.regenerate_requirements)
+
+    try:
+        output = await uc.execute(
+            RegenerateRequirementsInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+            )
+        )
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except FeatureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except LLMInvocationError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.problem.detail) from e
+
+    return RegenerateRequirementsResponse(
+        artifact_id=output.artifact_id,
+        content=output.content,
+        phase=output.phase,
     )

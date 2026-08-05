@@ -359,6 +359,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.refine_requirements = requirements_components.refine_requirements
     app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
     app.state.requirement_repo = requirements_components.requirement_repo
+    app.state.regenerate_requirements = requirements_components.regenerate_requirements
 
     from kosmo.application.consistency.propagate_requirement_changes import PropagateRequirementChangesUseCase
     from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyProjectRepository
