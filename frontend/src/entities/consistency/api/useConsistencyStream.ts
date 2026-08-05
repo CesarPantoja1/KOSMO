@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import type React from 'react';
 
 interface PhaseProgress {
 	phase: string;
@@ -27,6 +28,56 @@ const PHASE_LABELS: Record<string, string> = {
 	requirements: 'Requisitos',
 	model: 'Modelo',
 };
+
+function handleEvent(
+	event: Record<string, unknown>,
+	setState: React.Dispatch<React.SetStateAction<ConsistencyStreamState>>,
+) {
+	const eventType = event.type as string;
+
+	if (eventType === 'progress') {
+		const phase = (event.phase as string) || '';
+		setState((prev) => ({
+			...prev,
+			phases: [
+				...prev.phases.filter((p) => p.phase !== phase),
+				{
+					phase,
+					status: event.status === 'error' ? 'error' : 'evaluating',
+					message: (event.message as string) || '',
+					affectedCount: 0,
+				},
+			],
+		}));
+	} else if (eventType === 'phase_result') {
+		const phase = (event.phase as string) || '';
+		const affectedCount = (event.affected_count as number) || 0;
+		setState((prev) => ({
+			...prev,
+			phases: [
+				...prev.phases.filter((p) => p.phase !== phase),
+				{
+					phase,
+					status: 'done',
+					message: (event.message as string) || '',
+					affectedCount,
+				},
+			],
+		}));
+	} else if (eventType === 'complete') {
+		setState((prev) => ({
+			...prev,
+			isComplete: true,
+			report: (event.report as Record<string, unknown>) || null,
+		}));
+	} else if (eventType === 'error') {
+		setState((prev) => ({
+			...prev,
+			error: (event.message as string) || 'Error desconocido',
+			isComplete: true,
+		}));
+	}
+}
 
 export function useConsistencyStream() {
 	const [state, setState] = useState<ConsistencyStreamState>({
@@ -84,7 +135,7 @@ export function useConsistencyStream() {
 						const data = line.slice(6);
 						try {
 							const event = JSON.parse(data);
-							handleEvent(event);
+							handleEvent(event, setState);
 						} catch {
 							// ignore malformed lines
 						}
@@ -100,53 +151,6 @@ export function useConsistencyStream() {
 				}));
 			});
 	}, []);
-
-	function handleEvent(event: Record<string, unknown>) {
-		const eventType = event.type as string;
-
-		if (eventType === 'progress') {
-			const phase = (event.phase as string) || '';
-			setState((prev) => ({
-				...prev,
-				phases: [
-					...prev.phases.filter((p) => p.phase !== phase),
-					{
-						phase,
-						status: event.status === 'error' ? 'error' : 'evaluating',
-						message: (event.message as string) || '',
-						affectedCount: 0,
-					},
-				],
-			}));
-		} else if (eventType === 'phase_result') {
-			const phase = (event.phase as string) || '';
-			const affectedCount = (event.affected_count as number) || 0;
-			setState((prev) => ({
-				...prev,
-				phases: [
-					...prev.phases.filter((p) => p.phase !== phase),
-					{
-						phase,
-						status: 'done',
-						message: (event.message as string) || '',
-						affectedCount,
-					},
-				],
-			}));
-		} else if (eventType === 'complete') {
-			setState((prev) => ({
-				...prev,
-				isComplete: true,
-				report: (event.report as Record<string, unknown>) || null,
-			}));
-		} else if (eventType === 'error') {
-			setState((prev) => ({
-				...prev,
-				error: (event.message as string) || 'Error desconocido',
-				isComplete: true,
-			}));
-		}
-	}
 
 	const abort = useCallback(() => {
 		abortRef.current?.abort();

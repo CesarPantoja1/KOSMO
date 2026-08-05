@@ -35,7 +35,7 @@ const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
 	const [markdown, setMarkdown] = useState('');
 	const currentProject = useAppStore((s) => s.currentProject);
-	const [isLoading, setIsLoading] = useState(!!currentProject);
+	const [isLoading, _setIsLoading] = useState(!!currentProject);
 	const [hasDiscovery, setHasDiscovery] = useState(false);
 	const [isGeneratingDiscovery, setIsGeneratingDiscovery] = useState(false);
 	const savedContentRef = useRef('');
@@ -72,8 +72,7 @@ const DiscoveryPage = () => {
 			return;
 		}
 
-		setIsLoading(true);
-		try {
+		void (async () => {
 			if (currentDiscovery) {
 				setMarkdown(currentDiscovery.content);
 				savedContentRef.current = currentDiscovery.content;
@@ -82,9 +81,8 @@ const DiscoveryPage = () => {
 				setMarkdown('');
 				savedContentRef.current = '';
 			}
-		} finally {
-			setIsLoading(false);
-		}
+			_setIsLoading(false);
+		})();
 	}, [currentProject, currentDiscovery, router]);
 
 	const doSave = async (): Promise<boolean> => {

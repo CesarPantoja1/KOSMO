@@ -98,8 +98,10 @@ export const PlanPage = () => {
 
 	useEffect(() => {
 		if (!streamError) return;
-		setIsProcessing(false);
-		setIsApplying(false);
+		void (async () => {
+			setIsProcessing(false);
+			setIsApplying(false);
+		})();
 		toast.error('Error al verificar la consistencia del proyecto');
 		if (currentProject) {
 			getDiscovery(currentProject.id).catch(() => {});
