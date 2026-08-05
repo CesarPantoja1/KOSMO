@@ -1,14 +1,12 @@
+from __future__ import annotations
+
 import pytest
 
-from kosmo.application.consistency.propagate_requirement_changes import (
-    PropagateRequirementChangesInput,
-    PropagateRequirementChangesUseCase,
+from kosmo.application.consistency.propagate_changes import (
+    PropagateChangesInput,
+    PropagateChangesUseCase,
 )
-from kosmo.contracts import (
-    DiffCambio,
-    EstadoPlanCambio,
-    PlanCambio,
-)
+from kosmo.contracts import DiffCambio, EstadoPlanCambio, PlanCambio
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
@@ -35,29 +33,35 @@ def fakes() -> dict[str, object]:
 
 
 @pytest.fixture
-def use_case(fakes: dict[str, object]) -> PropagateRequirementChangesUseCase:
-    return PropagateRequirementChangesUseCase(
+def use_case(fakes: dict[str, object]) -> PropagateChangesUseCase:
+    return PropagateChangesUseCase(
         project_repo=fakes["project_repo"],  # type: ignore[arg-type]
         feature_repo=fakes["feature_repo"],  # type: ignore[arg-type]
+        requirement_repo=fakes["diagram_repo"],  # type: ignore[arg-type]
         diagram_repo=fakes["diagram_repo"],  # type: ignore[arg-type]
         chat_repo=fakes["chat_repo"],  # type: ignore[arg-type]
         consistency_evaluator=fakes["consistency_evaluator"],  # type: ignore[arg-type]
     )
 
 
-async def test_project_not_found(use_case: PropagateRequirementChangesUseCase) -> None:
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_project_not_found(use_case: PropagateChangesUseCase) -> None:
     with pytest.raises(ProjectNotFoundError):
         await use_case.execute(
-            PropagateRequirementChangesInput(
+            PropagateChangesInput(
                 project_id=ProjectId("no-existe"),
-                feature_id=FeatureId("feat-1"),
+                source_phase=SpecPhase.REQUISITOS,
                 applied_change_ids=[],
+                feature_id=FeatureId("feat-1"),
             )
         )
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_successful_propagation_with_impacts(
-    use_case: PropagateRequirementChangesUseCase,
+    use_case: PropagateChangesUseCase,
     fakes: dict[str, object],
 ) -> None:
     project_repo: InMemoryProjectRepository = fakes["project_repo"]  # type: ignore
@@ -100,15 +104,16 @@ async def test_successful_propagation_with_impacts(
         ),
     )
 
-    evaluator.set_affected_ids(SpecPhase.CARACTERISTICAS.value, ["some-id", "some-other-id"])
-    evaluator.set_affected_ids(SpecPhase.DESCUBRIMIENTO.value, ["doc-id-1", "doc-id-2"])
-    evaluator.set_affected_ids(SpecPhase.MODELO.value, [str(feature_id)])
+    evaluator.set_affected_ids("caracteristicas", ["some-id", "some-other-id"])
+    evaluator.set_affected_ids("descubrimiento", ["doc-id-1", "doc-id-2"])
+    evaluator.set_affected_ids("modelo", [str(feature_id)])
 
     output = await use_case.execute(
-        PropagateRequirementChangesInput(
+        PropagateChangesInput(
             project_id=project_id,
-            feature_id=feature_id,
+            source_phase=SpecPhase.REQUISITOS,
             applied_change_ids=[change_id_1, change_id_2],
+            feature_id=feature_id,
         )
     )
 
@@ -125,8 +130,10 @@ async def test_successful_propagation_with_impacts(
     assert mod.affected_ids == [str(feature_id)]
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_no_model_exists(
-    use_case: PropagateRequirementChangesUseCase,
+    use_case: PropagateChangesUseCase,
     fakes: dict[str, object],
 ) -> None:
     project_repo: InMemoryProjectRepository = fakes["project_repo"]  # type: ignore
@@ -136,15 +143,16 @@ async def test_no_model_exists(
     feature_id = FeatureId("feat-1")
     await project_repo.save(Project(id=project_id, name="Test", slug="test", owner_id=UserId("u1"), description="test"))
 
-    evaluator.set_affected_ids(SpecPhase.CARACTERISTICAS.value, [])
-    evaluator.set_affected_ids(SpecPhase.DESCUBRIMIENTO.value, [])
-    evaluator.set_affected_ids(SpecPhase.MODELO.value, [])
+    evaluator.set_affected_ids("caracteristicas", [])
+    evaluator.set_affected_ids("descubrimiento", [])
+    evaluator.set_affected_ids("modelo", [])
 
     output = await use_case.execute(
-        PropagateRequirementChangesInput(
+        PropagateChangesInput(
             project_id=project_id,
-            feature_id=feature_id,
+            source_phase=SpecPhase.REQUISITOS,
             applied_change_ids=[],
+            feature_id=feature_id,
         )
     )
 

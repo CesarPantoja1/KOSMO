@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import structlog
 
+from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
@@ -46,7 +47,7 @@ class ApplyConsistencyImpactsUseCase:
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
         diagram_repo: ActivityDiagramRepository,
-        traceability_repo: object | None = None,
+        traceability_repo: TraceabilityRepository | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
@@ -171,9 +172,9 @@ class ApplyConsistencyImpactsUseCase:
                 await self._requirement_repo.save_items(feature_id, items)  # type: ignore[reportArgumentType]
 
                 if self._traceability_repo is not None:
-                    await self._traceability_repo.delete_by_entity_id(str(feature_id))  # type: ignore[reportAttributeAccessIssue]
+                    await self._traceability_repo.delete_by_entity_id(str(feature_id))
                     for r in parsed:
-                        await self._traceability_repo.add_edge(  # type: ignore[reportAttributeAccessIssue]
+                        await self._traceability_repo.add_edge(
                             source_type="feature",
                             source_id=str(feature_id),
                             target_type="requirement",

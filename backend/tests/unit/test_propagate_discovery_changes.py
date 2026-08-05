@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.application.consistency.propagate_discovery_changes import (
-    PropagateDiscoveryChangesInput,
-    PropagateDiscoveryChangesUseCase,
+from kosmo.application.consistency.propagate_changes import (
+    PropagateChangesInput,
+    PropagateChangesUseCase,
 )
 from kosmo.contracts import ChatRepository, DiffCambio, EstadoPlanCambio, PlanCambio
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import ActivityDiagramId, FeatureId, PlanChangeId, ProjectId, UserId
+from kosmo.contracts.sdd.ids import (
+    ActivityDiagramId,
+    FeatureId,
+    PlanChangeId,
+    ProjectId,
+    UserId,
+)
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -78,8 +84,8 @@ def _make_uc(
     diagram_repo: ActivityDiagramRepository,
     chat_repo: ChatRepository,
     evaluator: FakeConsistencyEvaluator,
-) -> PropagateDiscoveryChangesUseCase:
-    return PropagateDiscoveryChangesUseCase(
+) -> PropagateChangesUseCase:
+    return PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,
@@ -120,9 +126,9 @@ async def test_propaga_features_requirements_y_modelos_afectados() -> None:
 
     # Act
     result = await uc.execute(
-        PropagateDiscoveryChangesInput(
+        PropagateChangesInput(
             project_id=ProjectId("prj_001"),
-            phase=SpecPhase.DESCUBRIMIENTO,
+            source_phase=SpecPhase.DESCUBRIMIENTO,
             applied_change_ids=[PlanChangeId("chg_01")],
         )
     )
@@ -154,9 +160,9 @@ async def test_proyecto_no_encontrado_lanza_error() -> None:
     # Act & Assert
     with pytest.raises(ProjectNotFoundError):
         await uc.execute(
-            PropagateDiscoveryChangesInput(
+            PropagateChangesInput(
                 project_id=ProjectId("prj_nonexistent"),
-                phase=SpecPhase.DESCUBRIMIENTO,
+                source_phase=SpecPhase.DESCUBRIMIENTO,
                 applied_change_ids=[],
             )
         )
@@ -179,9 +185,9 @@ async def test_sin_artefactos_downstream_retorna_lista_vacia() -> None:
 
     # Act
     result = await uc.execute(
-        PropagateDiscoveryChangesInput(
+        PropagateChangesInput(
             project_id=ProjectId("prj_002"),
-            phase=SpecPhase.DESCUBRIMIENTO,
+            source_phase=SpecPhase.DESCUBRIMIENTO,
             applied_change_ids=[],
         )
     )
@@ -221,9 +227,9 @@ async def test_evaluator_falla_retorna_sin_afectados_fail_open() -> None:
 
     # Act
     result = await uc.execute(
-        PropagateDiscoveryChangesInput(
+        PropagateChangesInput(
             project_id=ProjectId("prj_003"),
-            phase=SpecPhase.DESCUBRIMIENTO,
+            source_phase=SpecPhase.DESCUBRIMIENTO,
             applied_change_ids=[PlanChangeId("chg_fail")],
         )
     )

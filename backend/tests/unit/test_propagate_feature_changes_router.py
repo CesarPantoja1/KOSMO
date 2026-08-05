@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.application.consistency.propagate_feature_changes import (
-    PropagateFeatureChangesUseCase,
+from kosmo.application.consistency.propagate_changes import (
+    PropagateChangesUseCase,
 )
+from kosmo.contracts import DiffCambio, EstadoPlanCambio, PlanCambio
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, UserId
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.infrastructure.api.routers.features import propagate_feature_changes
 from kosmo.infrastructure.api.schemas import (
@@ -57,10 +59,21 @@ async def test_propagate_feature_changes_endpoint_returns_affected_phases() -> N
     await feature_repo.save(feature)
     await requirement_repo.save(FeatureId("feat_01"), "# Requisitos\ntest")
 
+    change = PlanCambio(
+        id=PlanChangeId("chg_01"),
+        section="Titulo",
+        description="Cambio",
+        diff=DiffCambio(before="Antes", after="Despues"),
+        status=EstadoPlanCambio.APPLIED,
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
+
     evaluator = FakeConsistencyEvaluator()
     evaluator.set_affected_ids("descubrimiento", ["prj_test"])
+    evaluator.set_affected_ids("requisitos", ["feat_01"])
 
-    uc = PropagateFeatureChangesUseCase(
+    uc = PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,
@@ -69,7 +82,7 @@ async def test_propagate_feature_changes_endpoint_returns_affected_phases() -> N
         consistency_evaluator=evaluator,
     )
 
-    request = PropagateFeatureChangesRequest(applied_change_ids=[])
+    request = PropagateFeatureChangesRequest(applied_change_ids=["chg_01"])
 
     # Act
     result = await propagate_feature_changes(
@@ -100,7 +113,7 @@ async def test_propagate_feature_changes_endpoint_raises_404_when_project_not_fo
     diagram_repo = InMemoryActivityDiagramRepository()
     chat_repo = InMemoryChatRepository()
 
-    uc = PropagateFeatureChangesUseCase(
+    uc = PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,

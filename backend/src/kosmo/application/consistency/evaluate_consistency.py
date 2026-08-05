@@ -73,13 +73,17 @@ class EvaluateConsistencyUseCase:
             source_content=source_content,
         )
 
-        skill_name = (
-            "consistency_evaluate_upstream" if target_phase == SpecPhase.DESCUBRIMIENTO else "consistency_evaluate"
-        )
+        skill_name = "consistency_evaluate"
+        if target_phase == SpecPhase.DESCUBRIMIENTO:
+            skill_name = "consistency_evaluate_upstream"
         if source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.CARACTERISTICAS:
             skill_name = "consistency_evaluate_requirements"
         elif source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.DESCUBRIMIENTO:
             skill_name = "consistency_evaluate_requirements_upstream"
+        elif source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.MODELO:
+            skill_name = "consistency_evaluate_requirements_model"
+        elif source_phase == SpecPhase.CARACTERISTICAS and target_phase in (SpecPhase.REQUISITOS, SpecPhase.MODELO):
+            skill_name = "consistency_evaluate_features_downstream"
         try:
             raw_output = await self._agent.execute_with_skill(
                 skill_name=skill_name,

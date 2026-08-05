@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from kosmo.application.consistency.propagate_requirement_changes import (
-    PropagateRequirementChangesInput,
-    PropagateRequirementChangesUseCase,
-)
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId, UserId
+from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
+from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
+from kosmo.infrastructure.api.routers.requirements import (
+    PropagateRequirementsRequest,
+    propagate_requirement_changes,
+)
+from kosmo.infrastructure.api.schemas import PhaseNotificationList
 from tests.unit.fakes import (
     FakeConsistencyEvaluator,
     InMemoryActivityDiagramRepository,
@@ -27,7 +32,6 @@ async def test_propagate_requirement_changes_router_returns_affected_phases() ->
     chat_repo = InMemoryChatRepository()
 
     project_id = ProjectId("prj_test")
-    feature_id = FeatureId("feat_01")
     await project_repo.save(
         Project(
             id=project_id,
@@ -42,26 +46,33 @@ async def test_propagate_requirement_changes_router_returns_affected_phases() ->
     evaluator.set_affected_ids("caracteristicas", ["feat_01"])
     evaluator.set_affected_ids("descubrimiento", ["prj_test"])
 
-    uc = PropagateRequirementChangesUseCase(
+    uc = PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
+        requirement_repo=diagram_repo,  # type: ignore[arg-type]
         diagram_repo=diagram_repo,
         chat_repo=chat_repo,
         consistency_evaluator=evaluator,
     )
 
-    input_data = PropagateRequirementChangesInput(
-        project_id=project_id,
-        feature_id=feature_id,
-        applied_change_ids=[],
-    )
+    body = PropagateRequirementsRequest(project_id="prj_test", applied_change_ids=[])
+
+    principal = Principal(subject="usr_test", scopes=frozenset({"*"}))
+
+    mock_req = MagicMock()
+    mock_req.app.state.propagate_requirement_changes = uc
 
     # Act
-    output = await uc.execute(input_data)
+    result = await propagate_requirement_changes(
+        feature_id="feat_01",
+        body=body,
+        _principal=principal,
+        request=mock_req,
+    )
 
     # Assert
-    assert isinstance(output.affected_phases, list)
-    phases_by_name = {p.phase: p for p in output.affected_phases}
+    assert isinstance(result, PhaseNotificationList)
+    phases_by_name = {p.phase: p for p in result.affected_phases}
     assert "features" in phases_by_name
     assert "discovery" in phases_by_name
     assert phases_by_name["features"].affected_count == 1
@@ -77,22 +88,29 @@ async def test_propagate_requirement_changes_raises_on_project_not_found() -> No
     diagram_repo = InMemoryActivityDiagramRepository()
     chat_repo = InMemoryChatRepository()
 
-    uc = PropagateRequirementChangesUseCase(
+    uc = PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
+        requirement_repo=diagram_repo,  # type: ignore[arg-type]
         diagram_repo=diagram_repo,
         chat_repo=chat_repo,
         consistency_evaluator=FakeConsistencyEvaluator(),
     )
 
-    # Act & Assert
-    from kosmo.contracts.sdd.errors import ProjectNotFoundError
+    body = PropagateRequirementsRequest(project_id="prj_missing", applied_change_ids=[])
 
-    with pytest.raises(ProjectNotFoundError):
-        await uc.execute(
-            PropagateRequirementChangesInput(
-                project_id=ProjectId("prj_missing"),
-                feature_id=FeatureId("feat_01"),
-                applied_change_ids=[],
-            )
+    principal = Principal(subject="usr_test", scopes=frozenset({"*"}))
+
+    mock_req = MagicMock()
+    mock_req.app.state.propagate_requirement_changes = uc
+
+    from fastapi import HTTPException
+
+    # Act & Assert
+    with pytest.raises(HTTPException):
+        await propagate_requirement_changes(
+            feature_id="feat_01",
+            body=body,
+            _principal=principal,
+            request=mock_req,
         )

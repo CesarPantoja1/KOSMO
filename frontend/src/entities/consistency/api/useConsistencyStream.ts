@@ -24,6 +24,7 @@ interface UseConsistencyStreamOptions {
 }
 
 const PHASE_LABELS: Record<string, string> = {
+	discovery: 'Descubrimiento',
 	features: 'Características',
 	requirements: 'Requisitos',
 	model: 'Modelo',

@@ -316,6 +316,7 @@ async def test_evaluate_requirements_to_features_uses_correct_skill() -> None:
 
     # Assert
     assert result.affected_artifact_ids == ["feat_r2f"]
+    assert agent.last_skill_name == "consistency_evaluate_requirements"
 
 
 @pytest.mark.unit
