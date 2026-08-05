@@ -73,9 +73,14 @@ class EvaluateConsistencyUseCase:
             source_content=source_content,
         )
 
+        skill_name = (
+            "consistency_evaluate_upstream"
+            if target_phase == SpecPhase.DESCUBRIMIENTO
+            else "consistency_evaluate"
+        )
         try:
             raw_output = await self._agent.execute_with_skill(
-                skill_name="consistency_evaluate",
+                skill_name=skill_name,
                 context=context,
                 project_id=project_id,
             )
