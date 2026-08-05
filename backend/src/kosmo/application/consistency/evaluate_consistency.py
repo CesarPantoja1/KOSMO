@@ -76,6 +76,8 @@ class EvaluateConsistencyUseCase:
         skill_name = (
             "consistency_evaluate_upstream" if target_phase == SpecPhase.DESCUBRIMIENTO else "consistency_evaluate"
         )
+        if source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.CARACTERISTICAS:
+            skill_name = "consistency_evaluate_requirements"
         try:
             raw_output = await self._agent.execute_with_skill(
                 skill_name=skill_name,
@@ -219,6 +221,14 @@ class EvaluateConsistencyUseCase:
                         item_str += f"\n- Origen: {f.origin}"
                     items.append(item_str)
                 return "\n\n".join(items)
+        elif source_phase == SpecPhase.REQUISITOS:
+            features = await self._feature_repo.list_by_project(project_id)
+            parts: list[str] = []
+            for f in features:
+                req_md = await self._requirement_repo.by_feature_id(f.id)
+                if req_md:
+                    parts.append(f"## Requisitos de '{f.title}' (Feature {f.id})\n\n{req_md[:15000]}")
+            return "\n\n".join(parts)
         return ""
 
     async def _resolve_changes(

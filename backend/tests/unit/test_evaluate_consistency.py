@@ -280,3 +280,129 @@ async def test_evaluate_fetch_source_content_for_features() -> None:
     assert isinstance(agent.last_context, ConsistencyPhaseContext)
     assert "Gestión de inventario" in agent.last_context.source_content
     assert "feat_05" in agent.last_context.source_content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_requirements_to_features_uses_correct_skill() -> None:
+    """REQUISITOS → CARACTERISTICAS debe usar el skill consistency_evaluate_requirements."""
+    # Arrange
+    project = _make_project("prj_r2f")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_r2f", "prj_r2f", "Gestión de pagos", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = StubConsistencyAgent(affected_ids=["feat_r2f"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _plan_change("chg_r2f", before="procesar pagos con tarjeta", after="procesar pagos con cualquier método")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.REQUISITOS,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_r2f"),
+        applied_changes=[change],
+    )
+
+    # Assert
+    assert result.affected_artifact_ids == ["feat_r2f"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_fetch_source_content_for_requirements() -> None:
+    """Verifica que _fetch_source_content devuelva los requisitos para la fase REQUISITOS."""
+    from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
+
+    project = _make_project("prj_srcr")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_srcr", "prj_srcr", "Gestión de inventario", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(
+        FeatureId("feat_srcr"),
+        "### REQ-1.1\n\nEl sistema shall procesar inventario en tiempo real.\n",
+    )
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = StubConsistencyAgent(affected_ids=["feat_srcr"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _plan_change("chg_srcr", before="procesar inventario", after="procesar inventario en tiempo real")
+
+    # Act
+    _result = await uc.evaluate(
+        source_phase=SpecPhase.REQUISITOS,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_srcr"),
+        applied_changes=[change],
+    )
+
+    # Assert
+    assert isinstance(agent.last_context, ConsistencyPhaseContext)
+    assert "REQ-1.1" in agent.last_context.source_content
+    assert "procesar inventario" in agent.last_context.source_content
+    assert agent.last_context.source_phase == SpecPhase.REQUISITOS
+    assert agent.last_context.target_phase == SpecPhase.CARACTERISTICAS
+
+
+@pytest.mark.unit
+def test_consistency_requirements_downstream_prompt_exists() -> None:
+    """Verifica que el nuevo prompt para requisitos→features esté definido y exportado."""
+    from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+        CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
+    )
+
+    assert isinstance(CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT, str)
+    assert "Requisitos EARS" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT
+    assert "CARACTERÍSTICA PADRE" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT
+    assert "JSON" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_requirements_to_discovery_uses_upstream_skill() -> None:
+    """REQUISITOS → DESCUBRIMIENTO debe seguir usando consistency_evaluate_upstream."""
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    project = _make_project("prj_r2d")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_r2d", "prj_r2d", "Gestión de usuarios", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+    document_repo.discovery_docs["prj_r2d"] = markdown_to_document("## Visión\n\nVisión original.")
+
+    agent = StubConsistencyAgent(affected_ids=["prj_r2d"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _plan_change("chg_r2d")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.REQUISITOS,
+        target_phase=SpecPhase.DESCUBRIMIENTO,
+        project_id=ProjectId("prj_r2d"),
+        applied_changes=[change],
+    )
+
+    # Assert: no debe romperse — el routing existente (upstream) se mantiene
+    assert result.affected_artifact_ids == ["prj_r2d"]

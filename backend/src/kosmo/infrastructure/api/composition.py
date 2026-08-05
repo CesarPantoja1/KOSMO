@@ -62,6 +62,7 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
     CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
     ConsistencyEvaluationMode,
 )
@@ -398,6 +399,17 @@ def build_pipeline_components(
             phase=SpecPhase.CARACTERISTICAS,
             mode=ConsistencyEvaluationMode(
                 phase_name=SpecPhase.CARACTERISTICAS, system_prompt=CONSISTENCY_UPSTREAM_SYSTEM_PROMPT
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_requirements",
+            description="Evalua consistencia desde requisitos EARS hacia la característica padre (downstream)",
+            phase=SpecPhase.REQUISITOS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.REQUISITOS,
+                system_prompt=CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
             ),  # type: ignore[reportArgumentType]
         )
     )
