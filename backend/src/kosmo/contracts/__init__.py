@@ -16,6 +16,7 @@ from kosmo.contracts.consistency import (
     ConsistencyEvaluationOutput,
     ConsistencyEvaluator,
     ConsistencyStatus,
+    ImpactItem,
     ReporteConsistencia,
 )
 from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId
@@ -33,6 +34,7 @@ __all__ = [
     "DiffCambio",
     "EstadoPlanCambio",
     "HistorialChat",
+    "ImpactItem",
     "MensajeChat",
     "PlanCambio",
     "PlanChangeId",

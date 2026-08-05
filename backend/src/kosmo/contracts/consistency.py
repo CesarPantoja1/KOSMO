@@ -47,6 +47,20 @@ class ArtifactAction:
 
 
 @dataclass(frozen=True)
+class ImpactItem:
+    id: str
+    phase: str
+    target_id: str
+    artifact_type: str
+    target_display_id: str
+    target_title: str
+    section: str
+    rationale: str
+    diff: dict[str, object] | None = None
+    action: str = "update"
+
+
+@dataclass(frozen=True)
 class ConsistencyEvaluationOutput:
     report_id: str
     status: ConsistencyStatus = ConsistencyStatus.ANALIZADO_SIN_IMPACTO
@@ -54,6 +68,8 @@ class ConsistencyEvaluationOutput:
     rationale: str = ""
     failure_reason: str = ""
     actions: list[ArtifactAction] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    upstream_impact: list[ImpactItem] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    downstream_impact: list[ImpactItem] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
 
 class ConsistencyEvaluator(Protocol):

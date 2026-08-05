@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts import ArtefactoAfectado, DiffCambio, EstadoPlanCambio, PlanCambio, ReporteConsistencia
+from kosmo.contracts import (
+    ArtefactoAfectado,
+    ConsistencyEvaluationOutput,
+    ConsistencyStatus,
+    DiffCambio,
+    EstadoPlanCambio,
+    ImpactItem,
+    PlanCambio,
+    ReporteConsistencia,
+)
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import PlanChangeId
 
@@ -73,3 +82,105 @@ def test_reporte_consistencia_creation_with_multiple_affected_artifacts() -> Non
     assert reporte.affected_artifacts[0].artifact_type == "Feature"
     assert reporte.affected_artifacts[1].artifact_type == "EARSRequirement"
     assert reporte.created_at is not None
+
+
+@pytest.mark.unit
+def test_impact_item_creation() -> None:
+    # Arrange & Act
+    item = ImpactItem(
+        id="imp_01",
+        phase="features",
+        target_id="feat_01",
+        artifact_type="Feature",
+        target_display_id="C01",
+        target_title="Gestión de usuarios",
+        section="title",
+        rationale="El cambio en Descubrimiento afecta esta característica.",
+        diff={"field": "title", "before": "Gestión básica", "after": "Gestión avanzada"},
+        action="update",
+    )
+
+    # Assert
+    assert item.id == "imp_01"
+    assert item.phase == "features"
+    assert item.target_id == "feat_01"
+    assert item.artifact_type == "Feature"
+    assert item.target_display_id == "C01"
+    assert item.target_title == "Gestión de usuarios"
+    assert item.section == "title"
+    assert item.rationale == "El cambio en Descubrimiento afecta esta característica."
+    assert item.diff == {"field": "title", "before": "Gestión básica", "after": "Gestión avanzada"}
+    assert item.action == "update"
+
+
+@pytest.mark.unit
+def test_impact_item_minimal_creation() -> None:
+    # Arrange & Act
+    item = ImpactItem(
+        id="imp_min",
+        phase="model",
+        target_id="feat_02",
+        artifact_type="ActivityDiagram",
+        target_display_id="C02",
+        target_title="Diagrama de inventario",
+        section="estructura UML",
+        rationale="El cambio podría requerir actualizar el diagrama.",
+    )
+
+    # Assert
+    assert item.diff is None
+    assert item.action == "update"  # default
+
+
+@pytest.mark.unit
+def test_consistency_output_default_impacts_are_empty() -> None:
+    # Arrange & Act
+    output = ConsistencyEvaluationOutput(report_id="rep_01")
+
+    # Assert
+    assert output.upstream_impact == []
+    assert output.downstream_impact == []
+
+
+@pytest.mark.unit
+def test_consistency_output_with_impact_items() -> None:
+    # Arrange
+    upstream_item = ImpactItem(
+        id="imp_up",
+        phase="discovery",
+        target_id="doc_01",
+        artifact_type="Document",
+        target_display_id="D01",
+        target_title="Visión del producto",
+        section="Visión",
+        rationale="La característica contradice la Visión del Descubrimiento.",
+    )
+    downstream_item = ImpactItem(
+        id="imp_down",
+        phase="requirements",
+        target_id="feat_01",
+        artifact_type="EARSRequirement",
+        target_display_id="REQ-1.1",
+        target_title="Validación de timeout",
+        section="statement",
+        rationale="El cambio en características afecta este requisito.",
+    )
+
+    # Act
+    output = ConsistencyEvaluationOutput(
+        report_id="rep_01",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["doc_01", "feat_01"],
+        upstream_impact=[upstream_item],
+        downstream_impact=[downstream_item],
+    )
+
+    # Assert
+    assert output.status == ConsistencyStatus.ANALIZADO_CON_IMPACTO
+    assert output.affected_artifact_ids == ["doc_01", "feat_01"]
+    assert len(output.upstream_impact) == 1
+    assert output.upstream_impact[0].phase == "discovery"
+    assert output.upstream_impact[0].target_id == "doc_01"
+    assert len(output.downstream_impact) == 1
+    assert output.downstream_impact[0].phase == "requirements"
+    assert output.downstream_impact[0].target_title == "Validación de timeout"

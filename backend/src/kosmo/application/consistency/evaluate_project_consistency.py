@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 import structlog
 
-from kosmo.contracts import ArtifactAction, ConsistencyEvaluationOutput, ConsistencyEvaluator
+from kosmo.contracts import ArtifactAction, ConsistencyEvaluationOutput, ConsistencyEvaluator, ImpactItem
 from kosmo.contracts.chat import PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
@@ -18,20 +18,6 @@ from kosmo.contracts.sdd.repositories import (
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
 
 _log = structlog.get_logger(__name__)
-
-
-@dataclass(frozen=True)
-class ImpactItem:
-    id: str
-    phase: str
-    target_id: str
-    artifact_type: str
-    target_display_id: str
-    target_title: str
-    section: str
-    rationale: str
-    diff: dict[str, object] | None = None
-    action: str = "update"
 
 
 @dataclass(frozen=True)
