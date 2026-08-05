@@ -65,6 +65,7 @@ const DiscoveryPage = () => {
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
 	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
+	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -72,18 +73,26 @@ const DiscoveryPage = () => {
 			return;
 		}
 
-		void (async () => {
-			if (currentDiscovery) {
-				setMarkdown(currentDiscovery.content);
-				savedContentRef.current = currentDiscovery.content;
+		if (currentDiscovery) {
+			setMarkdown(currentDiscovery.content);
+			savedContentRef.current = currentDiscovery.content;
+			setHasDiscovery(true);
+			_setIsLoading(false);
+			return;
+		}
+
+		getDiscovery(currentProject.id)
+			.then((data) => {
+				setMarkdown(data.content);
+				savedContentRef.current = data.content;
 				setHasDiscovery(true);
-			} else {
+			})
+			.catch(() => {
 				setMarkdown('');
 				savedContentRef.current = '';
-			}
-			_setIsLoading(false);
-		})();
-	}, [currentProject, currentDiscovery, router]);
+			})
+			.finally(() => _setIsLoading(false));
+	}, [currentProject, router]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
