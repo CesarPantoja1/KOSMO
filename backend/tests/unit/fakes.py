@@ -50,6 +50,9 @@ class InMemoryProjectRepository:
 class InMemoryDocumentRepository:
     def __init__(self) -> None:
         self.discovery_docs: dict[str, RichTextDocument] = {}
+        self.versions: dict[str, str] = {}
+        self._latest_version: dict[tuple[str, str], str] = {}
+        self._version_counter = 0
 
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
         return self.discovery_docs.get(str(project_id))
@@ -67,6 +70,23 @@ class InMemoryDocumentRepository:
         document: RichTextDocument,  # noqa: ARG002
     ) -> RichTextDocument:
         return document
+
+    async def save_version(  # type: ignore[override]
+        self, project_id: ProjectId, phase: object, markdown: str, change_ids: list[object]
+    ) -> str:
+        self._version_counter += 1
+        version_id = f"ver_{self._version_counter}"
+        self.versions[version_id] = markdown
+        phase_value = phase.value if hasattr(phase, "value") else str(phase)
+        self._latest_version[(str(project_id), phase_value)] = markdown
+        return version_id
+
+    async def get_version(self, version_id: str) -> str | None:
+        return self.versions.get(version_id)
+
+    async def get_latest_version(self, project_id: ProjectId, phase: object) -> str | None:
+        phase_value = phase.value if hasattr(phase, "value") else str(phase)
+        return self._latest_version.get((str(project_id), phase_value))
 
 
 class InMemoryFeatureRepository:
@@ -95,16 +115,29 @@ class InMemoryFeatureRepository:
         project_features = [f for f in self.features.values() if str(f.project_id) == str(project_id)]
         return max((f.number for f in project_features), default=0) + 1
 
+    async def delete(self, feature_id: FeatureId) -> None:
+        self.features.pop(str(feature_id), None)
+
 
 class InMemoryRequirementRepository:
     def __init__(self) -> None:
         self._requirements: dict[str, str] = {}
+        self._items: dict[str, list[dict]] = {}
 
     async def save(self, feature_id: FeatureId, markdown: str) -> None:
         self._requirements[str(feature_id)] = markdown
 
     async def by_feature_id(self, feature_id: FeatureId) -> str | None:
         return self._requirements.get(str(feature_id))
+
+    async def save_items(self, feature_id: FeatureId, items: list[object]) -> None:  # type: ignore[override]
+        self._items[str(feature_id)] = [
+            dict(item) if isinstance(item, dict) else item.__dict__  # type: ignore[reportUnknownVariableType]
+            for item in items
+        ]  # type: ignore[reportUnknownVariableType]
+
+    async def list_items(self, feature_id: FeatureId) -> list[object]:  # type: ignore[override]
+        return self._items.get(str(feature_id), [])
 
 
 class InMemoryActivityDiagramRepository:
@@ -117,6 +150,9 @@ class InMemoryActivityDiagramRepository:
 
     async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
         return self._diagrams.get(str(feature_id))
+
+    async def exists(self, feature_id: FeatureId) -> bool:
+        return str(feature_id) in self._diagrams
 
 
 class StubEmbedder:
@@ -342,3 +378,36 @@ class InMemoryChatRepository:
         phase: SpecPhase | None = None,  # noqa: ARG002
     ) -> None:
         self.plans.clear()
+
+
+class FakeConsistencyEvaluator:
+    def __init__(self) -> None:
+        self._results: dict[str, dict[str, list[str]]] = {}
+        self._should_fail: bool = False
+
+    def set_affected_ids(self, target_phase: str, artifact_ids: list[str]) -> None:
+        self._results[target_phase] = {"artifact_ids": artifact_ids}
+
+    def set_should_fail(self, value: bool = True) -> None:
+        self._should_fail = value
+
+    async def evaluate(
+        self,
+        *,
+        source_phase: SpecPhase,  # noqa: ARG002
+        target_phase: SpecPhase,
+        project_id: ProjectId,  # noqa: ARG002
+        applied_changes: list[PlanCambio],  # noqa: ARG002
+    ) -> Any:
+        from kosmo.contracts.consistency import ConsistencyEvaluationOutput
+
+        if self._should_fail:
+            raise RuntimeError("Fake evaluator failure")
+
+        phase_key = target_phase.value if hasattr(target_phase, "value") else str(target_phase)
+        result = self._results.get(phase_key, {"artifact_ids": []})
+        affected = result.get("artifact_ids", [])
+        from kosmo.contracts.consistency import ConsistencyStatus
+
+        status = ConsistencyStatus.ANALIZADO_CON_IMPACTO if affected else ConsistencyStatus.ANALIZADO_SIN_IMPACTO
+        return ConsistencyEvaluationOutput(report_id="rpt_fake", status=status, affected_artifact_ids=affected)

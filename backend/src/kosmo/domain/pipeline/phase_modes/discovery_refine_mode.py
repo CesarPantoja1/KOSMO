@@ -14,7 +14,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 from kosmo.contracts.sdd.document import SpecPhase
 
 _DISCOVERY_REFINE_SYSTEM_PROMPT = (
-    "Eres un analista de negocio sénior. Recibís un documento de descubrimiento de "
+    "Eres un analista de negocio sénior. Recibes un documento de descubrimiento de "
     "producto YA EXISTENTE y una instrucción de refinamiento del usuario.\n"
     "Tu tarea es reescribir el documento aplicando EXACTAMENTE lo que pide la "
     "instrucción: puede agregar, modificar o eliminar contenido o secciones.\n\n"

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, select
@@ -15,8 +16,7 @@ from kosmo.contracts.chat import (
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
-from kosmo.domain.sdd.id_generator import IdGenerator
-from kosmo.infrastructure.persistence.postgres.models import ChatHistoryModel, PlanChangeModel
+from kosmo.infrastructure.persistence.postgres.models import ChatMessageModel, PlanChangeModel
 
 
 class SqlAlchemyChatRepository(ChatRepository):
@@ -30,16 +30,32 @@ class SqlAlchemyChatRepository(ChatRepository):
         message: MensajeChat,
         context_id: str | None = None,
     ) -> MensajeChat:
-        history = await self.get_history(project_id, phase, context_id)
-        if history is None:
-            history = HistorialChat(
-                id=ChatHistoryId(IdGenerator.generate("chat_history")),
-                project_id=project_id,
-                phase=phase,
-                context_id=context_id,
-            )
-        history = history.add_message(message)
-        await self.save_history(history)
+        suggested_changes: list[dict[str, Any]] | None = None
+        if message.suggested_changes:
+            suggested_changes = [
+                {
+                    "id": sc.id,
+                    "section": sc.section,
+                    "description": sc.description,
+                    "diff": {"before": sc.diff.before, "after": sc.diff.after},
+                    "rationale": sc.rationale,
+                }
+                for sc in message.suggested_changes
+            ]
+
+        model = ChatMessageModel(
+            id=str(message.id),
+            project_id=str(project_id),
+            phase=phase.value,
+            context_id=context_id,
+            role=message.role.value,
+            content=message.content,
+            suggested_change=suggested_changes,
+            error=message.error,
+        )
+        async with self._session_factory() as session:
+            session.add(model)
+            await session.commit()
         return message
 
     async def get_history(
@@ -47,110 +63,63 @@ class SqlAlchemyChatRepository(ChatRepository):
         project_id: ProjectId,
         phase: SpecPhase,
         context_id: str | None = None,
+        limit: int = 200,
+        before: str | None = None,
     ) -> HistorialChat | None:
-        stmt = select(ChatHistoryModel).where(
-            ChatHistoryModel.project_id == str(project_id),
-            ChatHistoryModel.phase == phase.value,
+        stmt = select(ChatMessageModel).where(
+            ChatMessageModel.project_id == str(project_id),
+            ChatMessageModel.phase == phase.value,
         )
         if context_id:
-            stmt = stmt.where(ChatHistoryModel.context_id == context_id)
+            stmt = stmt.where(ChatMessageModel.context_id == context_id)
         else:
-            stmt = stmt.where(ChatHistoryModel.context_id.is_(None))
+            stmt = stmt.where(ChatMessageModel.context_id.is_(None))
+
+        if before:
+            from datetime import datetime as _datetime
+
+            cursor_dt = _datetime.fromisoformat(before)
+            stmt = stmt.where(ChatMessageModel.created_at < cursor_dt)
+
+        stmt = stmt.order_by(ChatMessageModel.created_at.desc()).limit(limit)
 
         async with self._session_factory() as session:
             result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            models = list(result.scalars().all())
 
-            if model is None:
-                return None
+        if not models:
+            return None
 
-            # Parse messages
-            messages: list[MensajeChat] = []
-            for msg_dict in model.messages:
-                sugg_dict = msg_dict.get("suggested_change")
-                sugg = None
-                if sugg_dict:
-                    diff_dict = sugg_dict.get("diff", {})
-                    sugg = SugerenciaCambio(
-                        id=sugg_dict["id"],
-                        section=sugg_dict["section"],
-                        description=sugg_dict["description"],
-                        diff=DiffCambio(before=diff_dict.get("before", ""), after=diff_dict.get("after", "")),
-                        rationale=sugg_dict.get("rationale"),
-                    )
-                import datetime
+        models.reverse()
+        messages = tuple(_model_to_message(m) for m in models)
 
-                ts_str = msg_dict["timestamp"]
-                ts = (
-                    datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    if isinstance(ts_str, str)
-                    else msg_dict["timestamp"]
-                )
+        history_id = self._compose_history_id(project_id, phase, context_id)
 
-                messages.append(
-                    MensajeChat(
-                        id=ChatMessageId(msg_dict["id"]),
-                        role=ChatRole(msg_dict["role"]),
-                        content=msg_dict["content"],
-                        timestamp=ts,
-                        suggested_change=sugg,
-                        error=msg_dict.get("error"),
-                    )
-                )
+        has_more = len(models) == limit
+        next_cursor = models[0].created_at.isoformat() if has_more else None
 
-            return HistorialChat(
-                id=ChatHistoryId(model.id),
-                project_id=ProjectId(model.project_id),
-                phase=SpecPhase(model.phase),
-                context_id=model.context_id,
-                messages=tuple(messages),
-            )
+        return HistorialChat(
+            id=ChatHistoryId(history_id),
+            project_id=project_id,
+            phase=phase,
+            context_id=context_id,
+            messages=messages,
+            has_more=has_more,
+            next_cursor=next_cursor,
+        )
 
+    @staticmethod
+    def _compose_history_id(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:
+        return f"{project_id}:{phase.value}:{context_id or ''}"
+
+    # ponytail: no-op — el historial se persiste como mensajes individuales (save_message).
+    # save_history existe por el contrato ChatRepository Protocol; eliminar cuando el
+    # contrato migre a append-only.
     async def save_history(
         self,
         history: HistorialChat,
     ) -> HistorialChat:
-        stmt = select(ChatHistoryModel).where(ChatHistoryModel.id == str(history.id))
-        async with self._session_factory() as session:
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
-
-            serialized_messages: list[dict[str, Any]] = []
-            for m in history.messages:
-                msg_dict: dict[str, Any] = {
-                    "id": str(m.id),
-                    "role": m.role.value,
-                    "content": m.content,
-                    "timestamp": m.timestamp.isoformat(),
-                    "error": m.error,
-                }
-                if m.suggested_change:
-                    msg_dict["suggested_change"] = {
-                        "id": m.suggested_change.id,
-                        "section": m.suggested_change.section,
-                        "description": m.suggested_change.description,
-                        "diff": {
-                            "before": m.suggested_change.diff.before,
-                            "after": m.suggested_change.diff.after,
-                        },
-                        "rationale": m.suggested_change.rationale,
-                    }
-                serialized_messages.append(msg_dict)
-
-            if model is None:
-                model = ChatHistoryModel(
-                    id=str(history.id),
-                    project_id=str(history.project_id),
-                    phase=history.phase.value,
-                    context_id=history.context_id,
-                    messages=serialized_messages,
-                )
-                session.add(model)
-            else:
-                model.messages = serialized_messages
-
-            await session.commit()
-            return history
+        return history
 
     async def add_plan_change(
         self,
@@ -185,6 +154,7 @@ class SqlAlchemyChatRepository(ChatRepository):
         stmt = select(PlanChangeModel).where(PlanChangeModel.project_id == str(project_id))
         if phase:
             stmt = stmt.where(PlanChangeModel.phase == phase.value)
+        stmt = stmt.order_by(PlanChangeModel.created_at, PlanChangeModel.id)
 
         async with self._session_factory() as session:
             result = await session.execute(stmt)
@@ -211,10 +181,33 @@ class SqlAlchemyChatRepository(ChatRepository):
         change_id: PlanChangeId,
         status: EstadoPlanCambio,
         user_version: str | None = None,
+        *,
+        _session: AsyncSession | None = None,
     ) -> PlanCambio | None:
         stmt = select(PlanChangeModel).where(
             PlanChangeModel.project_id == str(project_id), PlanChangeModel.id == str(change_id)
         )
+
+        if _session is not None:
+            result = await _session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if not model:
+                return None
+            model.status = status.value
+            if user_version is not None:
+                model.user_version = user_version
+            return PlanCambio(
+                id=PlanChangeId(model.id),
+                section=model.section,
+                description=model.description,
+                diff=DiffCambio(before=model.diff_before, after=model.diff_after),
+                status=EstadoPlanCambio(model.status),
+                origin=model.origin,
+                rationale=model.rationale,
+                user_version=model.user_version,
+                context_id=model.context_id,
+            )
+
         async with self._session_factory() as session:
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
@@ -263,3 +256,35 @@ class SqlAlchemyChatRepository(ChatRepository):
         async with self._session_factory() as session:
             await session.execute(stmt)
             await session.commit()
+
+
+def _model_to_message(model: ChatMessageModel) -> MensajeChat:
+    from typing import Any as TypingAny
+
+    suggested_changes: list[SugerenciaCambio] = []
+    raw: TypingAny = model.suggested_change
+    if raw is not None:
+        items: list[TypingAny] = raw if isinstance(raw, list) else [raw]  # type: ignore[reportUnknownVariableType]
+        for item in items:
+            diff_dict: dict[str, str] = item.get("diff", {})
+            suggested_changes.append(
+                SugerenciaCambio(
+                    id=item["id"],
+                    section=item.get("section", ""),
+                    description=item.get("description", ""),
+                    diff=DiffCambio(
+                        before=diff_dict.get("before", ""),
+                        after=diff_dict.get("after", ""),
+                    ),
+                    rationale=item.get("rationale"),
+                )
+            )
+
+    return MensajeChat(
+        id=ChatMessageId(model.id),
+        role=ChatRole(model.role),
+        content=model.content,
+        timestamp=model.created_at if model.created_at else datetime.now(UTC),
+        suggested_changes=suggested_changes,
+        error=model.error,
+    )

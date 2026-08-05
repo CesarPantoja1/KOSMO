@@ -67,7 +67,15 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             max_number = result.scalar_one_or_none()
             return (max_number or 0) + 1
 
-    def _to_entity(self, model: FeatureModel) -> Feature:
+    async def delete(self, feature_id: FeatureId) -> None:
+        async with self._session_factory() as session:
+            model = await session.get(FeatureModel, str(feature_id))
+            if model is not None:
+                await session.delete(model)
+                await session.commit()
+
+    @staticmethod
+    def _to_entity(model: FeatureModel) -> Feature:
         return Feature(
             id=FeatureId(model.id),
             project_id=ProjectId(model.project_id),

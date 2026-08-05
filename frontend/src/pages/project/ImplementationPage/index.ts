@@ -1,1 +1,1 @@
-export { ImplementationPage, metadata } from './ui/ImplementationPage';
+export { ImplementationPage } from './ui/ImplementationPage';

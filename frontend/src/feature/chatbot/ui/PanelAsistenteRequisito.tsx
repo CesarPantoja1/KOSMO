@@ -10,8 +10,8 @@ import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
 import { Chatbot } from './Chatbot';
 
 interface PanelAsistenteRequisitoProps {
-	/** ID del requisito seleccionado actualmente (contexto activo) */
-	requirementId: string | null;
+	/** ID de la característica para el chat (contexto activo) */
+	featureId: string | null;
 	/** Callback para cerrar el panel */
 	onClose?: () => void;
 	/** Callback para cuando el usuario interactúa con una sugerencia del plan */
@@ -34,26 +34,17 @@ function toChatMessage(r: RequirementChatResponse): ChatMessage {
 		role: r.role,
 		content: r.content,
 		created_at: r.created_at,
-		change_suggestion: r.change_suggestion
-			? {
-					id: r.change_suggestion.id,
-					section: r.change_suggestion.section,
-					description: r.change_suggestion.description,
-					diff_before: r.change_suggestion.diff_before,
-					diff_after: r.change_suggestion.diff_after,
-					rationale: r.change_suggestion.rationale,
-				}
-			: undefined,
+		change_suggestions: r.change_suggestions ?? undefined,
 	};
 }
 
 export const PanelAsistenteRequisito = ({
-	requirementId,
+	featureId,
 	onClose,
 	onPlanAction,
 	title = 'Asistente de Requisitos EARS',
-	subtitle = 'Refinamiento y criterios de aceptación Gherkin',
-	placeholder = 'Ej., Agregar escenarios alternativos en formato Gherkin...',
+	subtitle = 'Refinamiento y criterios de aceptación',
+	placeholder = 'Ej., Agregar escenarios alternativos...',
 }: PanelAsistenteRequisitoProps) => {
 	const [isLoading, setIsLoading] = useState(false);
 
@@ -63,17 +54,17 @@ export const PanelAsistenteRequisito = ({
 
 	// T5: Limpieza y recarga del historial al cambiar de requisito seleccionado
 	useEffect(() => {
-		if (!requirementId) return;
+		if (!featureId) return;
 
 		let isMounted = true;
 
 		const fetchHistory = async () => {
-			const hasHistory = Boolean(useRequirementsStore.getState().chatHistories[requirementId]);
+			const hasHistory = Boolean(useRequirementsStore.getState().chatHistories[featureId]);
 			if (!hasHistory) {
 				setIsLoading(true);
 			}
 			try {
-				await loadChatHistory(requirementId);
+				await loadChatHistory(featureId);
 			} catch (err) {
 				console.warn('[PanelAsistenteRequisito] Error al cargar historial:', err);
 			} finally {
@@ -88,15 +79,15 @@ export const PanelAsistenteRequisito = ({
 		return () => {
 			isMounted = false;
 		};
-	}, [requirementId, loadChatHistory]);
+	}, [featureId, loadChatHistory]);
 
 	// T5: Manejo del envío de mensajes y captura de errores de formato del agente
 	const handleSendMessage = async (content: string) => {
-		if (!requirementId) return;
+		if (!featureId) return;
 
 		setIsLoading(true);
 		try {
-			await sendChatMessage(requirementId, content);
+			await sendChatMessage(featureId, content);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : '';
 			if (message.includes('inválido') || message.includes('format')) {
@@ -111,16 +102,15 @@ export const PanelAsistenteRequisito = ({
 		}
 	};
 
-	const messages: ChatMessage[] = requirementId
-		? (chatHistories[requirementId] ?? []).map(toChatMessage)
-		: [];
+	const raw = featureId ? (chatHistories[featureId] ?? []) : [];
+	const messages: ChatMessage[] = Array.isArray(raw) ? raw.map(toChatMessage) : [];
 
 	return (
 		<Chatbot
-			key={requirementId || 'empty'}
+			key={featureId || 'empty'}
 			title={title}
 			subtitle={subtitle}
-			greeting='Hola 👋. Soy tu asistente de Requisitos EARS. Puedo ayudarte a refinar los requisitos y generar sus criterios de aceptación en formato Gherkin (Dado-Cuando-Entonces).'
+			greeting='Hola 👋. Soy tu asistente de Requisitos EARS. Puedo ayudarte a refinar los requisitos y generar sus criterios de aceptación (Dado-Cuando-Entonces).'
 			placeholder={placeholder}
 			onClose={onClose}
 			messages={messages}

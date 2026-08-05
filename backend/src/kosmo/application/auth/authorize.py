@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -55,12 +56,12 @@ class AuthorizeWithPkce:
             user = await self.user_repository.by_email(normalized_email)
             if user is None or not user.is_active:
                 raise InvalidCredentialsError("Credenciales inválidas")
-            if not self.password_hasher.verify(user.hashed_password, password):
+            if not await asyncio.to_thread(self.password_hasher.verify, user.hashed_password, password):
                 raise InvalidCredentialsError("Credenciales inválidas")
-            if self.password_hasher.needs_rehash(user.hashed_password):
+            if await asyncio.to_thread(self.password_hasher.needs_rehash, user.hashed_password):
                 await self.user_repository.update_password(
                     user_id=user.id,
-                    hashed_password=self.password_hasher.hash(password),
+                    hashed_password=await asyncio.to_thread(self.password_hasher.hash, password),
                 )
 
             entry = AuthorizationCode(

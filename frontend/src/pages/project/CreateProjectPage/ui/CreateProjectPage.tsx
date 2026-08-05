@@ -2,8 +2,8 @@ import { CreateProjectForm } from './CreateProjectForm';
 
 const CreateProjectPage = () => {
 	return (
-		<div className='page-container'>
-			<div className='page-header mb-4'>
+		<div className='page-container mt-6'>
+			<div className='page-header pb-4'>
 				<h1 className='text-base-800 text-3xl font-bold'>Crear Proyecto</h1>
 				<p className='text-base-600 text-lg'>
 					Define la idea central y los objetivos de tu aplicación. Una descripción clara y

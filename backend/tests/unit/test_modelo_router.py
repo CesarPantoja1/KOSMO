@@ -28,7 +28,9 @@ from kosmo.infrastructure.api.routers.modelo import (
     GenerateDiagramRequest,
     generate_diagram,
     get_diagram,
+    propagate_to_model,
 )
+from tests.unit.fakes import InMemoryFeatureRepository
 
 
 def _principal() -> Principal:
@@ -39,6 +41,7 @@ def _make_mock_request(generate_uc: Any = None, get_uc: Any = None) -> MagicMock
     req = MagicMock()
     req.app.state.generate_diagram = generate_uc
     req.app.state.get_diagram = get_uc
+    req.app.state.feature_repo = InMemoryFeatureRepository()
     return req
 
 
@@ -75,7 +78,7 @@ async def test_generate_diagram_endpoint_success() -> None:
 
     assert res["id"] == "diag_01"
     assert res["feature_id"] == "feat_01"
-    assert "@startuml" in res["diagram_syntax"]
+    assert res["diagram_syntax"] == "@startuml\nstart\nstop\n@enduml"
 
 
 @pytest.mark.asyncio
@@ -87,10 +90,8 @@ async def test_generate_diagram_endpoint_feature_not_found() -> None:
     req = _make_mock_request(generate_uc=mock_uc)
     body = GenerateDiagramRequest(project_id="prj_01")
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(FeatureNotFoundError):
         await generate_diagram("feat_missing", body, _principal(), req)
-
-    assert exc_info.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -102,10 +103,39 @@ async def test_generate_diagram_endpoint_llm_error() -> None:
     req = _make_mock_request(generate_uc=mock_uc)
     body = GenerateDiagramRequest(project_id="prj_01")
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(LLMInvocationError):
         await generate_diagram("feat_01", body, _principal(), req)
 
-    assert exc_info.value.status_code == 502
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_propagate_to_model_endpoint_regenerates_diagram() -> None:
+    now = datetime.now(UTC)
+    diagram = DiagramaActividad(
+        id=ActivityDiagramId("diag_01"),
+        feature_id=FeatureId("feat_01"),
+        diagram_syntax="@startuml\nstart\n:Regenerated;\nstop\n@enduml",
+        created_at=now,
+        updated_at=now,
+    )
+    phase_output = ModeloPhaseOutput(
+        feature_id=FeatureId("feat_01"),
+        diagram_syntax=diagram.diagram_syntax,
+        validation_result=ValidationResult(is_valid=True),
+        generation_metadata=GenerationMetadata(),
+    )
+
+    mock_uc = MagicMock()
+    mock_uc.execute = AsyncMock(return_value=GenerateDiagramOutput(diagram=diagram, phase_output=phase_output))
+
+    req = _make_mock_request(generate_uc=mock_uc)
+    body = GenerateDiagramRequest(project_id="prj_01")
+
+    res = await propagate_to_model("feat_01", body, _principal(), req)
+
+    mock_uc.execute.assert_awaited_once()
+    assert res["feature_id"] == "feat_01"
+    assert res["diagram_syntax"] == diagram.diagram_syntax
 
 
 @pytest.mark.asyncio

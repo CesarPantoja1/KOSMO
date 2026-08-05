@@ -108,7 +108,6 @@ El proyecto utiliza `docker-compose.yml` para levantar la pila completa localmen
 - **Frontend:** Next.js + Bun en puerto `3000` (con opción `NEXT_PUBLIC_USE_MOCKS: "true"` para modo mock).
 - **Backend:** FastAPI + Uvicorn en puerto `8000`.
 - **PostgreSQL:** Puerto `5432` con extensión `pgvector`.
-- **MongoDB:** Puerto `27017` para memoria de agentes.
 - **Redis:** Puerto `6379` para caché y rate limiting.
 
 ### Comandos de Ejecución Local:

@@ -12,11 +12,6 @@ from kosmo.application.requirements.get_requirement_chat_history import (
     GetRequirementChatHistoryOutput,
     GetRequirementChatHistoryUseCase,
 )
-from kosmo.application.requirements.process_requirement_chat_message import (
-    ProcessRequirementChatMessageInput,
-    ProcessRequirementChatMessageOutput,
-    ProcessRequirementChatMessageUseCase,
-)
 from kosmo.application.requirements.refine_requirements import (
     RefineRequirementsInput,
     RefineRequirementsOutput,
@@ -33,9 +28,6 @@ __all__ = [
     "GetRequirementChatHistoryInput",
     "GetRequirementChatHistoryOutput",
     "GetRequirementChatHistoryUseCase",
-    "ProcessRequirementChatMessageInput",
-    "ProcessRequirementChatMessageOutput",
-    "ProcessRequirementChatMessageUseCase",
     "RefineRequirementsInput",
     "RefineRequirementsOutput",
     "RefineRequirementsUseCase",

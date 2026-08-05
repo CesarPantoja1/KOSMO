@@ -56,6 +56,9 @@ class GenerateDiscoveryUseCase:
                 project_id=input_data.project_id,
             )
         except Exception as exc:
+            import structlog
+
+            structlog.get_logger(__name__).error("discovery.generate_failed", exc_info=True)
             raise LLMInvocationError(
                 detail=f"Error al generar el documento de descubrimiento: {exc}",
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery",
@@ -67,11 +70,9 @@ class GenerateDiscoveryUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery",
             )
 
-        validation = phase_output.validation_result
-        if not validation.is_valid or phase_output.discovery_document.section_count == 0:
-            detail = "; ".join(validation.errors) or "El documento generado está vacío."
+        if phase_output.discovery_document.section_count == 0:
             raise LLMInvocationError(
-                detail=f"El descubrimiento generado no cumple la estructura de negocio: {detail}",
+                detail="El documento de descubrimiento generado está vacío.",
                 instance=f"/api/v1/projects/{input_data.project_id}/discovery",
             )
 

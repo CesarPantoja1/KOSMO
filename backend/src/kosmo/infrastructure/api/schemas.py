@@ -572,35 +572,42 @@ class ChatMessage(BaseModel):
     role: str = Field(description="Rol del emisor (user, assistant, system).")
     content: str = Field(description="Contenido del mensaje.")
     created_at: datetime = Field(description="Fecha y hora del mensaje.")
-    change_suggestion: ChangeSuggestion | None = Field(default=None, description="Sugerencia asociada")
+    change_suggestions: list[ChangeSuggestion] | None = Field(
+        default=None, description="Sugerencias de cambio asociadas"
+    )
 
     @classmethod
     def from_domain(cls, msg: MensajeChat) -> "ChatMessage":
-        suggestion = None
-        if msg.suggested_change:
-            suggestion = ChangeSuggestion(
-                id=msg.suggested_change.id,
-                section=msg.suggested_change.section,
-                description=msg.suggested_change.description,
-                diff_before=msg.suggested_change.diff.before,
-                diff_after=msg.suggested_change.diff.after,
-                rationale=msg.suggested_change.rationale,
-            )
+        suggestions = None
+        if msg.suggested_changes:
+            suggestions = [
+                ChangeSuggestion(
+                    id=sc.id,
+                    section=sc.section,
+                    description=sc.description,
+                    diff_before=sc.diff.before,
+                    diff_after=sc.diff.after,
+                    rationale=sc.rationale,
+                )
+                for sc in msg.suggested_changes
+            ]
         return cls(
             id=str(msg.id),
             role=str(msg.role),
             content=msg.content,
             created_at=msg.timestamp,
-            change_suggestion=suggestion,
+            change_suggestions=suggestions,
         )
 
 
 class ChatHistoryResponse(BaseModel):
-    """Respuesta con el historial completo de un chat."""
+    """Respuesta con el historial paginado de un chat."""
 
     phase: str = Field(description="Fase a la que pertenece el historial")
     context: str = Field(description="Contexto específico (ej. project_id)")
     messages: list[ChatMessage] = Field(description="Lista de mensajes.")
+    has_more: bool = Field(default=False, description="Indica si hay más mensajes anteriores")
+    next_cursor: str | None = Field(default=None, description="Cursor para la siguiente página (ISO-8601)")
 
     @classmethod
     def from_domain(cls, history: HistorialChat) -> "ChatHistoryResponse":
@@ -608,6 +615,8 @@ class ChatHistoryResponse(BaseModel):
             phase=str(history.phase.value if hasattr(history.phase, "value") else history.phase),
             context=str(history.project_id),
             messages=[ChatMessage.from_domain(msg) for msg in history.messages],
+            has_more=history.has_more,
+            next_cursor=history.next_cursor,
         )
 
 
@@ -706,19 +715,32 @@ class PhaseNotificationList(BaseModel):
     )
 
 
-class FailedChangeView(BaseModel):
-    """Representa un cambio que falló al aplicarse."""
+class AppliedChangeItemView(BaseModel):
+    """Cambio aplicado exitosamente."""
 
-    id: str = Field(description="ID del cambio que falló")
-    reason: str = Field(description="Motivo del fallo")
+    change_id: str = Field(description="ID del cambio aplicado")
+    section: str = Field(description="Sección del documento o atributo afectado")
+
+
+class FailedChangeItemView(BaseModel):
+    """Cambio que falló al aplicarse."""
+
+    change_id: str = Field(description="ID del cambio que falló")
+    section: str = Field(description="Sección del documento o atributo afectado")
+    error: str = Field(description="Motivo del fallo")
 
 
 class BatchResultView(BaseModel):
     """Resultado de aplicar un lote de cambios."""
 
-    applied_count: int = Field(description="Número de cambios aplicados con éxito")
-    failed_count: int = Field(description="Número de cambios que fallaron al aplicarse")
-    failed_changes: list[FailedChangeView] = Field(default=[], description="Cambios que fallaron, con el motivo")
+    applied_count: int = Field(default=0, description="Número de cambios aplicados")
+    failed_count: int = Field(default=0, description="Número de cambios que fallaron")
+    applied: list[AppliedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
+        default_factory=list, description="Cambios aplicados exitosamente"
+    )
+    failed: list[FailedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
+        default_factory=list, description="Cambios que fallaron, con el motivo"
+    )
     propagation: PhaseNotificationList | None = Field(
         default=None, description="Fases notificadas tras la aplicación (si corresponde)"
     )
@@ -731,3 +753,52 @@ class ApplyBatchRequest(BaseModel):
     phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
     context: str | None = Field(default=None, description="Contexto específico de los cambios")
     changes: list[str] = Field(description="IDs de los cambios a aplicar")
+
+
+# ═══ Consistencia (Sprint 4 - HU17) ═══
+
+
+class ChangeInputView(BaseModel):
+    """Cambio individual dentro de la solicitud de evaluacion de consistencia."""
+
+    section: str = Field(description="Sección del documento afectada")
+    diff_before: str = Field(description="Contenido antes del cambio")
+    diff_after: str = Field(description="Contenido después del cambio")
+
+
+class EvaluateConsistencyRequestView(BaseModel):
+    """Payload para solicitar analisis de consistencia entre fases."""
+
+    model_config = ConfigDict(extra="forbid")
+    phase_origin: str = Field(description="Fase de origen de los cambios")
+    phase_destination: str | None = Field(
+        default=None, description="Fase destino a evaluar (opcional, si se omite evalúa todas las adyacentes)"
+    )
+    changes: list[ChangeInputView] = Field(description="Cambios a evaluar para consistencia")
+
+
+class ImpactItemView(BaseModel):
+    """Artefacto afectado por propagación de cambios."""
+
+    phase: str = Field(description="Fase del artefacto afectado")
+    artifact_id: str = Field(description="ID del artefacto afectado")
+    artifact_type: str = Field(description="Tipo de artefacto")
+    artifact_label: str = Field(description="Etiqueta visible del artefacto")
+    section: str = Field(default="", description="Sección o atributo afectado")
+    rationale: str = Field(default="", description="Justificación de por qué está desactualizado")
+    diff_suggestion: dict[str, object] | None = Field(
+        default=None, description="Diff sugerido para actualizar el artefacto"
+    )
+
+
+class ConsistencyReportView(BaseModel):
+    """Reporte de analisis de consistencia entre fases."""
+
+    id: str = Field(description="ID del reporte (cnr_ + ULID)")
+    phase_origin: str = Field(description="Fase donde se originaron los cambios")
+    own_changes: list[ChangeInputView] = Field(  # type: ignore[reportUnknownVariableType]
+        default_factory=list, description="Cambios propios evaluados"
+    )
+    upstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases anteriores")
+    downstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases posteriores")
+    created_at: str = Field(description="Timestamp ISO-8601 UTC")

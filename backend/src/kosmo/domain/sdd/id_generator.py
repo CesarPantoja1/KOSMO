@@ -18,6 +18,10 @@ _PREFIX_MAP: dict[str, str] = {
     "chat_history": "chh_",
     "chat_message": "msg_",
     "plan_change": "chg_",
+    "outbox": "out_",
+    "doc_version": "dver_",
+    "trace_edge": "ted_",
+    "user_pref": "upf_",
 }
 
 

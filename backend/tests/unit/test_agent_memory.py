@@ -247,7 +247,6 @@ async def test_agent_session_stores_validation_error_messages() -> None:
     # Arrange
     from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
     from kosmo.contracts.pipeline.orchestrator_ports import Skill
-    from kosmo.domain.pipeline.guard_registry import GuardRegistry
     from kosmo.domain.pipeline.skill_registry import SkillRegistry
     from tests.factories import a_project_id
     from tests.unit.conftest import (
@@ -261,7 +260,6 @@ async def test_agent_session_stores_validation_error_messages() -> None:
     store = InMemoryAgentSessionStore()
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=GuardRegistry(),
         max_iterations=2,
         skill_registry=SkillRegistry(),
         memory=store,  # type: ignore[reportArgumentType]

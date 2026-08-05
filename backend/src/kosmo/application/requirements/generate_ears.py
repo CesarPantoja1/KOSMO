@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
@@ -8,6 +7,7 @@ from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     EARSPhaseOutput,
 )
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
@@ -17,6 +17,15 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
+
+
+async def _advance_phase(project_repo: ProjectRepository, project_id: ProjectId, phase: SpecPhase) -> None:
+    project = await project_repo.by_id(project_id)
+    if project is not None and project.current_phase != phase.value:
+        import dataclasses
+
+        updated = dataclasses.replace(project, current_phase=phase.value)
+        await project_repo.save(updated)
 
 
 @dataclass(frozen=True)
@@ -47,12 +56,14 @@ class GenerateEARSUseCase:
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
         agent: AgentPort,
+        traceability_repo: object | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._document_repo = document_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._agent = agent
+        self._traceability_repo = traceability_repo
 
     async def execute(self, input_data: GenerateEARSInput) -> GenerateEARSOutput:
         from kosmo.contracts.sdd.errors import (
@@ -106,15 +117,36 @@ class GenerateEARSUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
             )
 
-        validation = phase_output.validation_result
-        if not validation.is_valid or not phase_output.requirements:
-            detail = "; ".join(validation.errors) or "No se generaron requisitos."
-            raise LLMInvocationError(
-                detail=f"Los requisitos EARS generados no cumplen la estructura válida: {detail}",
-                instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
-            )
-
         await self._requirement_repo.save(input_data.feature_id, phase_output.requirements_markdown)
+
+        items = [
+            {
+                "id": str(r.id),
+                "requirement_number": r.requirement_number,
+                "display_id": r.display_id,
+                "title": r.title,
+                "pattern": r.pattern.value,
+                "statement": r.statement,
+                "origin": r.origin,
+                "acceptance_criteria": [
+                    {"scenario": ac.scenario, "given": ac.given, "when": ac.when, "then": ac.then}
+                    for ac in r.acceptance_criteria
+                ],
+            }
+            for r in phase_output.requirements
+        ]
+        await self._requirement_repo.save_items(input_data.feature_id, items)  # type: ignore[reportAttributeAccessIssue]
+
+        if self._traceability_repo is not None:
+            for r in phase_output.requirements:
+                await self._traceability_repo.add_edge(  # type: ignore[reportAttributeAccessIssue]
+                    source_type="feature",
+                    source_id=str(input_data.feature_id),
+                    target_type="requirement",
+                    target_id=str(r.id),
+                )
+
+        await _advance_phase(self._project_repo, input_data.project_id, SpecPhase.REQUISITOS)
 
         return GenerateEARSOutput(
             project_id=input_data.project_id,
@@ -136,7 +168,7 @@ class GetRequirementsUseCase:
         self._requirement_repo = requirement_repo
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> GetRequirementsOutput:
-        from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
+        from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError, RequirementsNotFoundError
 
         project = await self._project_repo.by_id(project_id)
         if project is None:
@@ -153,9 +185,13 @@ class GetRequirementsUseCase:
             )
 
         markdown = await self._requirement_repo.by_feature_id(feature_id)
-        total = self._count_requirements(markdown) if markdown else 0
-        return GetRequirementsOutput(markdown=markdown, total=total)
+        if not markdown or not markdown.strip():
+            raise RequirementsNotFoundError(
+                feature_id=str(feature_id),
+                instance=f"/api/v1/projects/{project_id}/features/{feature_id}/requirements",
+            )
 
-    @staticmethod
-    def _count_requirements(markdown: str) -> int:
-        return len(re.findall(r"^###\s+REQ-\d+\.\d+", markdown, re.MULTILINE))
+        from kosmo.domain.sdd.requirements_markdown import count_requirements
+
+        total = count_requirements(markdown)
+        return GetRequirementsOutput(markdown=markdown, total=total)

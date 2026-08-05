@@ -11,4 +11,5 @@ export {
 	generateCharacteristics,
 	getSuggestCharacteristics,
 	addCharacteristic,
+	deleteFeature,
 } from './api/api';

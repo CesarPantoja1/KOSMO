@@ -55,7 +55,6 @@ Definidas en `backend/.env` o `docker-compose.yml`:
 ```plaintext
 # Database
 DATABASE_URL=postgresql://user:password@postgres:5432/kosmo
-MONGO_URL=mongodb://mongo:27017/kosmo
 REDIS_URL=redis://redis:6379
 
 # LLM Integration

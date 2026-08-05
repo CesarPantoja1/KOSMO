@@ -10,6 +10,7 @@ const BACKEND_PHASE: Record<string, string> = {
 	discovery: 'descubrimiento',
 	features: 'caracteristicas',
 	requirements: 'requisitos',
+	modeling: 'modelo',
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -285,7 +286,7 @@ const realDeletePlanChange = async (
 interface BackendApplyResponse {
 	applied_count: number;
 	failed_count: number;
-	failed_changes: Array<{ id: string; reason: string }>;
+	failed: Array<{ change_id: string; section: string; error: string }>;
 	propagation: { affected_phases: Array<{ phase: string; affected_count: number; affected_ids: string[] }> } | null;
 }
 
@@ -308,7 +309,7 @@ const realApplyChanges = async (
 	return {
 		applied_count: data.applied_count,
 		failed_count: data.failed_count,
-		failed_changes: data.failed_changes ?? [],
+		failed_changes: (data.failed ?? []).map((f) => ({ id: f.change_id, reason: f.error })),
 		propagation: data.propagation ?? null,
 	};
 };

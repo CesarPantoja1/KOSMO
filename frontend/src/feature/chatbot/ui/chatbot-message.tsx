@@ -41,19 +41,19 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				</div>
 			</div>
 
-			{message.change_suggestion &&
-				(message.change_suggestion.diff_before ||
-					message.change_suggestion.diff_after) && (
-					<div className='w-full'>
+			{message.change_suggestions &&
+				message.change_suggestions.length > 0 &&
+				message.change_suggestions.map((suggestion) => (
+					<div className='w-full' key={suggestion.id}>
 						<TarjetaRecepcionPlan
 							messageId={message.id}
-							suggestion={message.change_suggestion}
+							suggestion={suggestion}
 							onAction={(action) =>
-								onPlanAction?.(action, message.change_suggestion!, message.id)
+								onPlanAction?.(action, suggestion, message.id)
 							}
 						/>
 					</div>
-				)}
+				))}
 		</div>
 	);
 };

@@ -33,6 +33,9 @@ interface CharacteristicStore {
 		featureId: string,
 		content: string,
 	) => Promise<CharacteristicChatResponse>;
+
+	selectedId: string | null;
+	setSelectedId: (id: string | null) => void;
 }
 
 export const useCharacteristicStore = create<CharacteristicStore>()((set, get) => ({
@@ -41,7 +44,8 @@ export const useCharacteristicStore = create<CharacteristicStore>()((set, get) =
 		set({ currentCharacteristics: characteristics }),
 	currentSuggestions: [],
 	setCurrentSuggestions: (suggestions) => set({ currentSuggestions: suggestions }),
-	clearCharacteristics: () => set({ currentCharacteristics: [], currentSuggestions: [] }),
+	clearCharacteristics: () =>
+		set({ currentCharacteristics: [], currentSuggestions: [], selectedId: null }),
 
 	chatHistories: {},
 	clearChatHistory: (featureId) => {
@@ -94,4 +98,7 @@ export const useCharacteristicStore = create<CharacteristicStore>()((set, get) =
 
 		return response;
 	},
+
+	selectedId: null,
+	setSelectedId: (id) => set({ selectedId: id }),
 }));

@@ -12,6 +12,9 @@ export type {
 // STORE
 export { isUsingMocks, usePlanStore } from './model/store';
 
+// HOOKS
+export { usePlanActions } from './model/usePlanActions';
+
 // API
 export {
 	addPlanChange,

@@ -6,6 +6,7 @@ from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import ModeloPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import ModeloPhaseOutput
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
@@ -15,9 +16,19 @@ from kosmo.contracts.sdd.ids import ActivityDiagramId, FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     FeatureRepository,
+    ProjectRepository,
     RequirementRepository,
 )
 from kosmo.domain.sdd.id_generator import IdGenerator
+
+
+async def _advance_phase(project_repo: ProjectRepository, project_id: ProjectId, phase: SpecPhase) -> None:
+    project = await project_repo.by_id(project_id)
+    if project is not None and project.current_phase != phase.value:
+        import dataclasses
+
+        updated = dataclasses.replace(project, current_phase=phase.value)
+        await project_repo.save(updated)
 
 
 @dataclass(frozen=True)
@@ -39,11 +50,13 @@ class GenerateActivityDiagramUseCase:
         requirement_repo: RequirementRepository,
         diagram_repo: ActivityDiagramRepository,
         agent: AgentPort,
+        project_repo: ProjectRepository | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._diagram_repo = diagram_repo
         self._agent = agent
+        self._project_repo = project_repo
 
     async def execute(self, input_data: GenerateDiagramInput) -> GenerateDiagramOutput:
         feature = await self._feature_repo.by_id(input_data.feature_id)
@@ -83,11 +96,9 @@ class GenerateActivityDiagramUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/diagram",
             )
 
-        validation = phase_output.validation_result
-        if not validation.is_valid or not phase_output.diagram_syntax.strip():
-            detail = "; ".join(validation.errors) or "El diagrama generado está vacío."
+        if not phase_output.diagram_syntax.strip():
             raise LLMInvocationError(
-                detail=f"El diagrama de actividad generado no cumple la estructura válida: {detail}",
+                detail="El diagrama de actividad generado está vacío.",
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/diagram",
             )
 
@@ -99,6 +110,9 @@ class GenerateActivityDiagramUseCase:
         )
 
         await self._diagram_repo.save(diagram)
+
+        if self._project_repo is not None:
+            await _advance_phase(self._project_repo, input_data.project_id, SpecPhase.MODELO)
 
         return GenerateDiagramOutput(
             diagram=diagram,

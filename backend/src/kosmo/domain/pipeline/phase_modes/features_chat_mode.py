@@ -1,16 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
-
-from kosmo.contracts import RespuestaChatLLM
-from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import FeatureChatContext
-from kosmo.contracts.pipeline.phase_outputs import (
-    GenerationMetadata,
-    ValidationResult,
-)
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS, FEATURE_LEVEL_PROHIBITED_TERMS, PROHIBITED_TERMS
+from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 
 
 def _build_chat_system_prompt() -> str:
@@ -28,6 +21,10 @@ def _build_chat_system_prompt() -> str:
         f"- Secciones validas del Descubrimiento para trazabilidad:\n{sections_list}\n\n"
         "REGLAS:\n"
         "- Responde siempre en espanol con tildes correctas.\n"
+        "- Separa las ideas en parrafos cortos. Usa saltos de linea entre parrafos.\n"
+        "- Usa listas con guiones (-) o numeradas (1.) para enumerar elementos.\n"
+        "- Usa **negritas** para nombres de atributos y conceptos clave.\n"
+        "- NO escribas toda la respuesta en un solo bloque de texto.\n"
         "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
         "incluye el change_suggestion junto con tu respuesta conversacional. No preguntes "
         "'¿quieres que lo agregue?' ni esperes confirmacion. No fragmentes la respuesta.\n"
@@ -79,30 +76,14 @@ def _build_chat_system_prompt() -> str:
     )
 
 
-class FeaturesChatMode:
+class FeaturesChatMode(BaseChatMode):
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.CARACTERISTICAS
 
     @property
-    def temperature(self) -> float:
-        return 0.4
-
-    @property
-    def max_tokens(self) -> int:
-        return 4096
-
-    @property
-    def output_type(self) -> type[RespuestaChatLLM]:
-        return RespuestaChatLLM
-
-    @property
     def system_prompt(self) -> str:
         return _build_chat_system_prompt()
-
-    @property
-    def available_tools(self) -> list[ToolDefinition]:
-        return []
 
     def build_user_prompt(self, context: FeatureChatContext) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
@@ -124,63 +105,3 @@ class FeaturesChatMode:
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
 
         return "\n".join(parts)
-
-    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
-        errors: list[str] = []
-
-        if isinstance(output, RespuestaChatLLM):
-            if not output.content or not output.content.strip():
-                errors.append("El campo content no puede estar vacío.")
-            if output.change_suggestion is not None:
-                cs = output.change_suggestion
-                if not cs.section or not cs.section.strip():
-                    errors.append("El campo section no puede estar vacío.")
-                if not cs.description or not cs.description.strip():
-                    errors.append("El campo description no puede estar vacío.")
-                if not cs.diff_before or not cs.diff_before.strip():
-                    errors.append("El campo diff_before no puede estar vacío.")
-                if not cs.diff_after or not cs.diff_after.strip():
-                    errors.append("El campo diff_after no puede estar vacío.")
-                if cs.diff_before.strip() == cs.diff_after.strip():
-                    errors.append("diff_before y diff_after son idénticos; la sugerencia no propone cambios reales.")
-        elif isinstance(output, dict):
-            errors.append("Formato de salida no reconocido. Se esperaba RespuestaChatLLM.")
-        else:
-            errors.append("Formato de salida no reconocido.")
-
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-        )
-
-    def build_validation_feedback(self, errors: list[str]) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            "## Feedback de validación\n\n"
-            f"La respuesta tiene los siguientes errores:\n\n{error_list}\n\n"
-            "Corrige los problemas indicados y genera una nueva respuesta en el formato JSON esperado."
-        )
-
-    def build_retry_prompt(
-        self,
-        original_prompt: str,
-        errors: list[str],
-        retry_count: int,
-    ) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            f"{original_prompt}\n\n"
-            f"## Correcciones necesarias (intento {retry_count})\n\n"
-            f"Errores detectados:\n{error_list}\n\n"
-            "Genera una nueva respuesta corrigiendo exclusivamente estos errores."
-        )
-
-    def build_output(
-        self,
-        raw_output: Any,
-        validation_result: ValidationResult,  # noqa: ARG002
-        metadata: GenerationMetadata,  # noqa: ARG002
-        *,
-        context: Any = None,  # noqa: ARG002
-    ) -> Any:
-        return raw_output

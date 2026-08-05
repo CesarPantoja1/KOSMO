@@ -33,6 +33,8 @@ class FeatureRepository(Protocol):
 
     async def next_number(self, project_id: ProjectId) -> int: ...
 
+    async def delete(self, feature_id: FeatureId) -> None: ...
+
 
 class DocumentRepository(Protocol):
     async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None: ...
@@ -43,11 +45,27 @@ class DocumentRepository(Protocol):
 
     async def save_requirements(self, feature_id: FeatureId, document: RichTextDocument) -> RichTextDocument: ...
 
+    async def save_version(
+        self,
+        project_id: ProjectId,
+        phase: object,
+        markdown: str,
+        change_ids: list[object],
+    ) -> str: ...
+
+    async def get_version(self, version_id: str) -> str | None: ...
+
+    async def get_latest_version(self, project_id: ProjectId, phase: object) -> str | None: ...
+
 
 class RequirementRepository(Protocol):
     async def by_feature_id(self, feature_id: FeatureId) -> str | None: ...
 
     async def save(self, feature_id: FeatureId, markdown: str) -> None: ...
+
+    async def save_items(self, feature_id: FeatureId, items: list[object]) -> None: ...
+
+    async def list_items(self, feature_id: FeatureId) -> list[object]: ...
 
 
 class ActivityDiagramRepository(Protocol):

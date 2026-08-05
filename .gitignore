@@ -71,3 +71,6 @@ backend/.opencode/skills/tdd/SKILL.md
 docs/
 opencode.json
 .opencode/
+
+# CodeGraph
+.codegraph/

@@ -9,7 +9,6 @@ from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolDef, KnowledgeToolRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.infrastructure.persistence.memory.in_memory_store import (
@@ -25,7 +24,6 @@ from tests.unit.conftest import (
 
 
 def _make_agent(llm, max_iterations=3, memory=None):
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -37,7 +35,6 @@ def _make_agent(llm, max_iterations=3, memory=None):
     )
     return KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         max_iterations=max_iterations,
         skill_registry=skill_reg,
         memory=memory,  # type: ignore[reportArgumentType]
@@ -249,7 +246,6 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
 
     llm = StubToolCallLLMClient()
     store = InMemoryAgentSessionStore()
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -270,7 +266,6 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
     )
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         max_iterations=3,
         skill_registry=skill_reg,
         memory=store,  # type: ignore[reportArgumentType]

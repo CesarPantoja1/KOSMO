@@ -4,7 +4,7 @@ import { useState } from 'react';
 import clsx from 'clsx';
 
 import { HeadingItem } from '../types/heading';
-import { CloseMarkdownContent, OpenMarkdownContent } from './icons';
+import { CloseMarkdownContent, OpenMarkdownContent } from '@/shared/ui';
 
 interface Props {
 	headings: HeadingItem[];
@@ -44,23 +44,23 @@ export function TocSidebar({ headings, activeId }: Props) {
 							<p className='text-sm text-neutral-500'>Sin secciones</p>
 						) : (
 							headings.map((heading, index) => (
-							<button
-								key={index}
-								onClick={() => handleScroll(heading.id)}
-								className={clsx(
-									'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors cursor-pointer',
-									'hover:bg-neutral-800',
-									activeId === heading.id
-										? 'bg-neutral-800 text-white'
-										: 'text-neutral-400',
-								)}
-								style={{
-									paddingLeft: `${heading.depth * 12}px`,
-								}}
-							>
-								{heading.text}
-							</button>
-						))
+								<button
+									key={index}
+									onClick={() => handleScroll(heading.id)}
+									className={clsx(
+										'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors cursor-pointer',
+										'hover:bg-neutral-800',
+										activeId === heading.id
+											? 'bg-neutral-800 text-white'
+											: 'text-neutral-400',
+									)}
+									style={{
+										paddingLeft: `${heading.depth * 12}px`,
+									}}
+								>
+									{heading.text}
+								</button>
+							))
 						)}
 					</nav>
 				</>

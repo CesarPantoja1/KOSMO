@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
+
 from kosmo.contracts.agent_memory import (
     AgentMemoryPort,
     KnowledgePattern,
@@ -11,6 +13,8 @@ from kosmo.contracts.agent_memory import (
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.sdd.id_generator import IdGenerator
+
+_log = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -83,4 +87,5 @@ class ConsolidateKnowledgePatterns:
                 if isinstance(p, dict) and p.get("pattern")  # type: ignore[reportUnknownMemberType]
             ]
         except Exception:
+            _log.warning("knowledge.consolidate_synthesize_failed", phase=phase.value, exc_info=True)
             return []

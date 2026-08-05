@@ -6,7 +6,6 @@ This stack runs the full local development environment:
 - Backend: http://localhost:8000
 - Backend docs: http://localhost:8000/docs
 - Postgres: localhost:5432
-- MongoDB: localhost:27017
 - Redis: localhost:6379
 
 ## Start

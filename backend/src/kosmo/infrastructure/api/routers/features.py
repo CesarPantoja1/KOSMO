@@ -14,14 +14,18 @@ from kosmo.application.features import (
     SuggestFeaturesInput,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.delete_feature import DeleteFeatureUseCase
+from kosmo.application.features.list_features import (
+    ListFeaturesInput,
+    ListFeaturesUseCase,
+)
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
-    LLMInvocationError,
+    FeatureNotFoundError,
     ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import ProjectId
-from kosmo.contracts.sdd.repositories import FeatureRepository
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
@@ -55,33 +59,22 @@ def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
     return request.app.state.create_characteristic
 
 
-def _feature_repo(request: Request) -> FeatureRepository:
-    return request.app.state.feature_repo
+def _list_features(request: Request) -> ListFeaturesUseCase:
+    return request.app.state.list_features
 
 
 @router.post(
     "",
-    summary="Generar características con IA",
+    summary="Generar características del producto con IA",
     description=(
-        "Genera las características del producto software a partir del "
-        "documento de descubrimiento utilizando inteligencia artificial. "
-        "Requiere autenticación mediante Bearer token."
+        "Genera características de alto nivel evaluando el documento de "
+        "descubrimiento del proyecto. Las características representan capacidades "
+        "funcionales del producto software a construir."
     ),
-    response_model=list[FeatureResponse],
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_201_CREATED: {
-            "description": "Características generadas exitosamente.",
-        },
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Token de acceso inválido o ausente.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Proyecto o documento de descubrimiento no encontrado.",
-        },
-        status.HTTP_502_BAD_GATEWAY: {
-            "description": "Error al invocar el servicio de IA.",
-        },
+        status.HTTP_200_OK: {"description": "Características generadas exitosamente."},
+        status.HTTP_401_UNAUTHORIZED: {"description": "Token de acceso inválido o ausente."},
     },
 )
 async def generate_features(
@@ -89,20 +82,22 @@ async def generate_features(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
-) -> list[FeatureResponse]:
-    try:
-        output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
-    except (ProjectNotFoundError, DocumentNotFoundError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=exc.problem.detail,
-        ) from exc
-    except LLMInvocationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.problem.detail,
-        ) from exc
-    return [_feature_to_response(f) for f in output.features]
+) -> dict[str, Any]:
+    output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
+    return {
+        "project_id": str(output.project_id),
+        "features": [
+            {
+                "id": str(f.id),
+                "title": f.title,
+                "description": f.description,
+                "origin": f.origin,
+                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
+                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
+            }
+            for f in output.features
+        ],
+    }
 
 
 @router.get(
@@ -124,10 +119,10 @@ async def generate_features(
 async def list_features(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
-    repo: Annotated[FeatureRepository, Depends(_feature_repo)],
+    uc: Annotated[ListFeaturesUseCase, Depends(_list_features)],
 ) -> list[FeatureResponse]:
-    features = await repo.list_by_project(ProjectId(project_id))
-    return [_feature_to_response(f) for f in features]
+    output = await uc.execute(ListFeaturesInput(project_id=ProjectId(project_id)))
+    return [_feature_to_response(f) for f in output.features]
 
 
 @router.post(
@@ -281,3 +276,31 @@ def _feature_to_response(f: Any) -> FeatureResponse:
         origin=f.origin,
         display_id=f.display_id,
     )
+
+
+def _delete_feature_uc(request: Request) -> DeleteFeatureUseCase:
+    return request.app.state.delete_feature
+
+
+@router.delete(
+    "/{feature_id}",
+    summary="Eliminar característica",
+    description="Elimina una característica y todos sus artefactos asociados (requisitos, diagrama).",
+    status_code=status.HTTP_200_OK,
+)
+async def delete_feature(
+    project_id: str,
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[DeleteFeatureUseCase, Depends(_delete_feature_uc)],
+) -> dict[str, str]:
+    try:
+        await uc.execute(
+            project_id=ProjectId(project_id),
+            feature_id=FeatureId(feature_id),
+        )
+    except FeatureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    return {"status": "deleted", "feature_id": feature_id}

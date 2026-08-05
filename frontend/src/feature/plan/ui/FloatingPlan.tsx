@@ -46,9 +46,10 @@ function ArrowRightIcon() {
 interface Props {
 	phase: string;
 	navigateTo: string;
+	contextId?: string | null;
 }
 
-export function FloatingPlan({ phase, navigateTo }: Props) {
+export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
 
@@ -58,7 +59,9 @@ export function FloatingPlan({ phase, navigateTo }: Props) {
 
 	const allItems = planByPhase[phase] ?? [];
 	const items = allItems.filter(
-		(c) => c.status === 'pending' || c.status === 'added' || c.status === 'conflict',
+		(c) =>
+			(c.status === 'pending' || c.status === 'added' || c.status === 'conflict') &&
+			(!contextId || c.context === contextId),
 	);
 
 	if (items.length === 0) return null;

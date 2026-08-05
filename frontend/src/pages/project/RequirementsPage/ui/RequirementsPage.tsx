@@ -1,22 +1,12 @@
 'use client';
 
-import {
-	FloatingPlan,
-	MarkdownEditor,
-	PanelAsistenteRequisito,
-	type ChangeSuggestion,
-} from '@/feature';
+import { FloatingPlan, MarkdownEditor, PanelAsistenteRequisito } from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import {
-	addPlanChange,
-	deletePlanChange,
-	usePlanStore,
-	type PlanChange,
-} from '@/entities/plan';
+import { usePlanActions, usePlanStore } from '@/entities/plan';
 import {
 	generateRequirements,
 	getRequirements,
@@ -33,21 +23,28 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
-import { getCharacteristics, type Characteristic } from '@/entities/characteristic';
+import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { Requirements } from '@/widgets/main-navbar/ui/icons';
+import { AsideCharacteristic } from '@/widgets';
+
+const generatingRequirementsMessages = [
+	'Analizando característica...',
+	'Generando requisitos EARS...',
+	'Finalizando generación de requisitos...',
+];
 
 const RequirementsPage = () => {
 	const router = useRouter();
 
 	// Plan store
-	const addToPlan = usePlanStore((s) => s.addToPlan);
-	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
 	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
-	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
-	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
+	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
+	const selectedId = useCharacteristicStore((s) => s.selectedId);
+	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
 
@@ -67,7 +64,7 @@ const RequirementsPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 
 	// Otros estados
-	const [isChatbotOpen, setIsChatbotOpen] = useState(true);
+	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
@@ -79,42 +76,11 @@ const RequirementsPage = () => {
 		}
 	}, [currentProject, fetchAndHydratePlan]);
 
-	const handlePlanAction = (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => {
-		if (!currentProject || !selectedId) return;
-
-		if (action === 'add') {
-			const change: PlanChange = {
-				id: messageId,
-				section: suggestion.section,
-				description: suggestion.description ?? suggestion.section,
-				diff: {
-					before: suggestion.diff_before,
-					after: suggestion.diff_after,
-				},
-				status: 'pending',
-				origin: 'chat',
-				phase: 'requirements',
-				context: selectedId,
-				rationale: suggestion.rationale ?? undefined,
-				created_at: new Date().toISOString(),
-			};
-			addToPlan('requirements', change);
-			addPlanChange(currentProject.id, 'requirements', change).catch((err) => {
-				console.warn('[RequirementsPage] Error al persistir cambio en backend:', err);
-			});
-		}
-
-		if (action === 'remove') {
-			removeFromPlan('requirements', messageId);
-			deletePlanChange(currentProject.id, 'requirements', messageId).catch((err) => {
-				console.warn('[RequirementsPage] Error al eliminar cambio en backend:', err);
-			});
-		}
-	};
+	const handlePlanAction = usePlanActions(
+		currentProject?.id ?? null,
+		'requirements',
+		selectedId,
+	);
 
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
@@ -129,8 +95,7 @@ const RequirementsPage = () => {
 		const fetch = async () => {
 			setIsLoading(true);
 			try {
-				const data = await getCharacteristics(currentProject.id);
-				setCharacteristics(data);
+				await storeGetCharacteristics(currentProject.id);
 			} catch (err) {
 				const message =
 					err instanceof Error ? err.message : 'Error al cargar las características';
@@ -141,7 +106,7 @@ const RequirementsPage = () => {
 		};
 
 		fetch();
-	}, [currentProject, router]);
+	}, [currentProject, router, storeGetCharacteristics]);
 
 	useEffect(() => {
 		if (!selectedId || !currentProject) return;
@@ -156,20 +121,22 @@ const RequirementsPage = () => {
 			setSavedContent('');
 			try {
 				const content = (await getRequirements(projectId, characteristicId))
-					.requirements_markdown;
+					.document_markdown;
 				if (cancelled) return;
 				if (content) {
 					setHasRequirements(characteristicId, true);
 				}
-				setCharacteristics((prev) =>
-					prev.map((c) =>
+				useCharacteristicStore.setState((state) => ({
+					currentCharacteristics: state.currentCharacteristics.map((c) =>
 						c.id === characteristicId ? { ...c, requirements: content } : c,
 					),
-				);
+				}));
 				setMarkdown(content);
 				setSavedContent(content);
-			} catch {
-				if (!cancelled) toast.error('Error al cargar los requisitos');
+			} catch (err) {
+				if (!cancelled && (err as { status?: number }).status !== 404) {
+					toast.error('Error al cargar los requisitos');
+				}
 			} finally {
 				if (!cancelled) setIsLoadingRequirements(false);
 			}
@@ -180,7 +147,7 @@ const RequirementsPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedId, currentProject]);
+	}, [selectedId, currentProject, setHasRequirements]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
@@ -194,6 +161,10 @@ const RequirementsPage = () => {
 	const applySelected = (id: string) => {
 		setSelectedId(id);
 		setPendingCharSwitch(null);
+		// Cerrar chat si la nueva característica no tiene requisitos
+		if (!hasRequirements[id]) {
+			setIsChatbotOpen(false);
+		}
 	};
 
 	const handleConfirmSwitch = () => {
@@ -212,23 +183,18 @@ const RequirementsPage = () => {
 				currentProject.id,
 				selectedCharacteristic.id,
 			);
-			await saveRequirements(
-				currentProject.id,
-				selectedCharacteristic.id,
-				content.requirements_markdown,
-			);
 			if (content) {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}
-			setCharacteristics((prev) =>
-				prev.map((c) =>
+			useCharacteristicStore.setState((state) => ({
+				currentCharacteristics: state.currentCharacteristics.map((c) =>
 					c.id === selectedCharacteristic.id
-						? { ...c, requirements: content.requirements_markdown }
+						? { ...c, requirements: content.document_markdown }
 						: c,
 				),
-			);
-			setMarkdown(content.requirements_markdown);
-			setSavedContent(content.requirements_markdown);
+			}));
+			setMarkdown(content.document_markdown);
+			setSavedContent(content.document_markdown);
 			setEditorKey((prev) => prev + 1);
 		} catch (_err) {
 			toast.error('Error al generar los requisitos');
@@ -249,11 +215,11 @@ const RequirementsPage = () => {
 				setHasRequirements(selectedCharacteristic.id, true);
 			}
 			setSavedContent(markdown);
-			setCharacteristics((prev) =>
-				prev.map((c) =>
+			useCharacteristicStore.setState((state) => ({
+				currentCharacteristics: state.currentCharacteristics.map((c) =>
 					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
 				),
-			);
+			}));
 			toast.close(savingToast);
 			toast.success('Guardado');
 			return true;
@@ -342,9 +308,7 @@ const RequirementsPage = () => {
 							<ArrowRight color='' size={20} />
 						</Link>
 					</div>
-				</div>
 
-				<div className='page-row'>
 					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
 						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
 							<div className='h-7 bg-base-200 rounded w-48' />
@@ -376,6 +340,7 @@ const RequirementsPage = () => {
 				<Loading
 					title='Generando requisitos EARS'
 					description='Estructurando la característica seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
+					messages={generatingRequirementsMessages}
 				/>
 			)}
 
@@ -389,6 +354,15 @@ const RequirementsPage = () => {
 
 					{!isEditorMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
+							<button
+								onClick={() => setIsChatbotOpen(true)}
+								disabled={!hasRequirements[selectedId ? selectedId : '']}
+								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50 disabled:cursor-not-allowed'
+							>
+								<Ai size={20} color='text-base-50' />
+								<span className='text-center'>Refinar</span>
+							</button>
+
 							<Link
 								href='modelo'
 								onClick={handleNextLink('modelo')}
@@ -400,57 +374,14 @@ const RequirementsPage = () => {
 						</div>
 					)}
 
-					<div className='flex gap-4 flex-1 min-h-0'>
-						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
-							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
-								Lista de Características
-							</h3>
-
-							<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
-								{characteristics.length === 0 && (
-									<p className='text-base-600 text-sm px-3 py-2'>
-										No hay características disponibles.
-									</p>
-								)}
-								{characteristics.map((c) => {
-									const isSelected = c.id === selectedId;
-									return (
-										<button
-											key={c.id}
-											onClick={() => handleSelectCharacteristic(c.id)}
-											className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors ${
-												isSelected
-													? 'bg-primary-100/10 border-l-4 border-primary-100'
-													: 'border-l-4 border-transparent hover:bg-base-200/30'
-											}`}
-										>
-											<span
-												className={`text-base font-bold mt-0.5 shrink-0 ${
-													isSelected ? 'text-base-800' : 'text-base-800'
-												}`}
-											>
-												{c.display_id}
-											</span>
-											<p
-												className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
-													isSelected ? 'text-primary-100' : 'text-base-600'
-												}`}
-											>
-												{c.title}
-											</p>
-											{hasRequirements[c.id] && (
-												<div className='shrink-0 mt-0.5'>
-													<Requirements
-														size={20}
-														color={isSelected ? 'text-primary-100' : 'text-base-600'}
-													/>
-												</div>
-											)}
-										</button>
-									);
-								})}
-							</div>
-						</aside>
+					<div className='flex gap-1 flex-1 min-h-0'>
+						<AsideCharacteristic
+							characteristics={characteristics}
+							selectedId={selectedId}
+							onSelectCharacteristic={handleSelectCharacteristic}
+							hasIcon={hasRequirements}
+							icon={Requirements}
+						/>
 
 						<div className='relative flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
 							{!selectedCharacteristic && (
@@ -531,7 +462,7 @@ const RequirementsPage = () => {
 											</p>
 										</div>
 
-										<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
+										<section className='flex flex-col my-auto items-center gap-5 px-20'>
 											<Ai color='text-ai' size={70} />
 
 											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
@@ -559,6 +490,7 @@ const RequirementsPage = () => {
 							<FloatingPlan
 								phase='requirements'
 								navigateTo='/proyecto/requisitos/plan'
+								contextId={selectedId}
 							/>
 						</div>
 					</div>
@@ -574,7 +506,7 @@ const RequirementsPage = () => {
 				`}
 				>
 					<PanelAsistenteRequisito
-						requirementId={selectedId}
+						featureId={selectedId}
 						onClose={() => setIsChatbotOpen(false)}
 						onPlanAction={handlePlanAction}
 					/>

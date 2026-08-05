@@ -12,7 +12,7 @@ const mockStore: RequirementsResponse[] = [
 	{
 		feature_id: '1',
 		feature_number: 1,
-		requirements_markdown: '## EARS Mock Requirements\n\n',
+		document_markdown: '## EARS Mock Requirements\n\n',
 		total: 5,
 	},
 ];
@@ -28,7 +28,7 @@ const mockGetRequirements = async (
 	return {
 		feature_id: characteristicId,
 		feature_number: found?.feature_number ?? 0,
-		requirements_markdown: found?.requirements_markdown ?? '',
+		document_markdown: found?.document_markdown ?? '',
 		total: 0,
 	};
 };
@@ -41,7 +41,7 @@ const mockSaveRequirements = async (
 	await delay(500);
 	const idx = mockStore.findIndex((c) => c.feature_id === characteristicId);
 	if (idx !== -1) {
-		mockStore[idx] = { ...mockStore[idx], requirements_markdown: content };
+		mockStore[idx] = { ...mockStore[idx], document_markdown: content };
 	}
 };
 
@@ -64,13 +64,13 @@ const mockGenerateRequirements = async (
 
 	const idx = mockStore.findIndex((c) => c.feature_id === characteristicId);
 	if (idx !== -1) {
-		mockStore[idx] = { ...mockStore[idx], requirements_markdown: generated };
+		mockStore[idx] = { ...mockStore[idx], document_markdown: generated };
 	}
 
 	return {
 		feature_id: characteristicId,
 		feature_number: mockStore[idx]?.feature_number ?? 0,
-		requirements_markdown: generated,
+		document_markdown: generated,
 		total: 4,
 	};
 };
@@ -146,44 +146,34 @@ export const generateRequirements = (
 const mockChatHistories: Record<string, RequirementChatResponse[]> = {};
 
 export const getRequirementChatHistory = async (
-	requirementId: string,
+	featureId: string,
 ): Promise<RequirementChatResponse[]> => {
 	if (USE_MOCKS) {
 		await delay(300);
-		return mockChatHistories[requirementId] ?? [];
+		return mockChatHistories[featureId] ?? [];
 	}
-	try {
-		return await apiClient<RequirementChatResponse[]>(
-			`/api/v1/requirements/${requirementId}/chat/history`,
-			{ method: 'GET' },
-		);
-	} catch (err) {
-		console.warn('[requirements/api] Backend endpoint no disponible, usando mock:', err);
-		return mockChatHistories[requirementId] ?? [];
-	}
+	return await apiClient<RequirementChatResponse[]>(
+		`/api/v1/features/${featureId}/requirements/chat/history`,
+		{ method: 'GET' },
+	);
 };
 
 export const sendRequirementChatMessage = async (
-	requirementId: string,
+	featureId: string,
 	content: string,
 ): Promise<RequirementChatResponse> => {
 	if (USE_MOCKS) {
-		return mockSendRequirementChatMessage(requirementId, content);
+		return mockSendRequirementChatMessage(featureId, content);
 	}
 
-	try {
-		return await apiClient<RequirementChatResponse>(
-			`/api/v1/requirements/${requirementId}/chat`,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content }),
-			},
-		);
-	} catch (err) {
-		console.warn('[requirements/api] Backend endpoint no disponible, usando mock:', err);
-		return mockSendRequirementChatMessage(requirementId, content);
-	}
+	return await apiClient<RequirementChatResponse>(
+		`/api/v1/features/${featureId}/requirements/chat`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ content }),
+		},
+	);
 };
 
 const mockSendRequirementChatMessage = async (
@@ -214,42 +204,36 @@ const mockSendRequirementChatMessage = async (
 		content.toLowerCase().includes('diff');
 
 	const diff_before = isModification
-		? '```gherkin\n' +
-		  'Escenario: Validación antigua de datos\n' +
+		? 'Escenario: Validación antigua de datos\n' +
 		  '  Dado que el usuario no tiene verificación\n' +
 		  '  Cuando envía los datos incompletos\n' +
-		  '  Entonces el sistema genera un error genérico\n' +
-		  '```'
+		  '  Entonces el sistema genera un error genérico\n'
 		: 'No especificado';
 
 	const response: RequirementChatResponse = {
 		id: crypto.randomUUID(),
 		role: 'assistant',
 		content:
-			'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación en formato Gherkin:\n\n' +
-			'```gherkin\n' +
+			'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación:\n\n' +
 			'Escenario: Validación exitosa de datos\n' +
 			'  Dado que el usuario tiene permisos de edición\n' +
 			'  Cuando envía los datos del formulario completos\n' +
-			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n' +
-			'```',
+			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n',
 		created_at: new Date().toISOString(),
-		change_suggestion: {
+		change_suggestions: [{
 			id: crypto.randomUUID(),
 			section: 'Criterios de Aceptación',
 			description: isModification
-				? 'Actualizar escenario Gherkin para validación'
-				: 'Agregar escenario Gherkin para validación de datos',
+				? 'Actualizar escenario de validación'
+				: 'Agregar escenario de validación de datos',
 			diff_before,
 			diff_after:
-				'```gherkin\n' +
 				'Escenario: Validación exitosa\n' +
 				'  Dado que el usuario está autenticado\n' +
 				'  Cuando completa la acción\n' +
-				'  Entonces se confirma la operación\n' +
-				'```',
+				'  Entonces se confirma la operación\n',
 			rationale: 'Mejora la precisión de los criterios de aceptación EARS.',
-		},
+		}],
 	};
 
 	mockChatHistories[requirementId] = [...history, userMessage, response];

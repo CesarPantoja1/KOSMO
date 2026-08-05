@@ -13,11 +13,6 @@ from kosmo.application.features.get_feature_chat_history import (
     GetFeatureChatHistoryOutput,
     GetFeatureChatHistoryUseCase,
 )
-from kosmo.application.features.process_feature_chat_message import (
-    ProcessFeatureChatMessageInput,
-    ProcessFeatureChatMessageOutput,
-    ProcessFeatureChatMessageUseCase,
-)
 from kosmo.application.features.save_features import (
     SaveSelectedFeaturesInput,
     SaveSelectedFeaturesOutput,
@@ -37,9 +32,6 @@ __all__ = [
     "GetFeatureChatHistoryInput",
     "GetFeatureChatHistoryOutput",
     "GetFeatureChatHistoryUseCase",
-    "ProcessFeatureChatMessageInput",
-    "ProcessFeatureChatMessageOutput",
-    "ProcessFeatureChatMessageUseCase",
     "SaveSelectedFeaturesInput",
     "SaveSelectedFeaturesOutput",
     "SaveSelectedFeaturesUseCase",

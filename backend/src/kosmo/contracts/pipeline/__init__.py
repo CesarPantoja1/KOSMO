@@ -1,10 +1,7 @@
 from kosmo.contracts.pipeline.orchestrator_ports import (
     AgentPort,
-    AgentStep,
-    AgentTrace,
     PhaseMode,
     ToolDefinition,
-    ToolResult,
 )
 from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryPhaseContext,
@@ -31,8 +28,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
 
 __all__ = [
     "AgentPort",
-    "AgentStep",
-    "AgentTrace",
     "DiscoveryPhaseContext",
     "DiscoveryRefinePhaseContext",
     "DiscoveryPhaseOutput",
@@ -50,6 +45,5 @@ __all__ = [
     "SuggestedFeature",
     "SuggestFeaturesOutput",
     "ToolDefinition",
-    "ToolResult",
     "ValidationResult",
 ]

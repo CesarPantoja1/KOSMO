@@ -65,10 +65,18 @@ export const useDiscoveryStore = create<DiscoveryStore>()((set, get) => ({
 			content,
 			created_at: new Date().toISOString(),
 		};
-		set({ chatHistory: [...get().chatHistory, userMessage] });
+		set((state) => ({ chatHistory: [...state.chatHistory, userMessage] }));
 
-		const response = await sendChatMessageApi(projectId, content);
-		set({ chatHistory: [...get().chatHistory, response] });
+		const raw = await sendChatMessageApi(projectId, content) as unknown as Record<string, unknown>;
+		const response: DiscoveryChatResponse = raw.message !== undefined
+			? {
+					id: crypto.randomUUID(),
+					role: 'assistant',
+					content: String(raw.message),
+					created_at: new Date().toISOString(),
+				}
+			: raw as unknown as DiscoveryChatResponse;
+		set((state) => ({ chatHistory: [...state.chatHistory, response] }));
 		return response;
 	},
 }));
