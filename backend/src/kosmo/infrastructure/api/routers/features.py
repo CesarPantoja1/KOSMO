@@ -5,6 +5,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from kosmo.application.features import (
+    CheckFeatureConsistencyInput,
+    CheckFeatureConsistencyUseCase,
     CreateCharacteristicInput,
     CreateCharacteristicUseCase,
     EditFeatureInput,
@@ -31,10 +33,12 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
+    CheckConsistencyRequestView,
     CreateCharacteristicRequest,
     EditFeatureManualRequest,
     FeatureResponse,
     FeatureSuggestionResponse,
+    InconsistencyResultView,
     PhaseNotificationList,
     PhaseNotificationView,
     PropagateFeatureChangesRequest,
@@ -396,6 +400,10 @@ def _delete_feature_uc(request: Request) -> DeleteFeatureUseCase:
     return request.app.state.delete_feature
 
 
+def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCase:
+    return request.app.state.check_feature_consistency
+
+
 @router.delete(
     "/{feature_id}",
     summary="Eliminar característica",
@@ -418,3 +426,50 @@ async def delete_feature(
     except ProjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     return {"status": "deleted", "feature_id": feature_id}
+
+
+@router.post(
+    "/{feature_id}/consistency/check",
+    summary="Verificar consistencia antes de guardado manual",
+    description=(
+        "Verifica que el contenido editado manualmente no contradiga "
+        "flagrantemente el documento de Descubrimiento. Invoca al agente IA "
+        "con el nuevo contenido y el documento fuente. Si hay inconsistencia, "
+        "el guardado debe rechazarse mostrando un modal explicativo."
+    ),
+    response_model=InconsistencyResultView,
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {"description": "Resultado de la verificación."},
+        status.HTTP_404_NOT_FOUND: {"description": "Proyecto o característica no encontrada."},
+    },
+)
+async def check_feature_consistency(
+    project_id: str,
+    feature_id: str,
+    payload: Annotated[CheckConsistencyRequestView, Body(...)],
+    use_case: Annotated[CheckFeatureConsistencyUseCase, Depends(_check_feature_consistency)],
+) -> InconsistencyResultView:
+    title = str(payload.content.get("title", ""))
+    description = str(payload.content.get("description", ""))
+
+    try:
+        output = await use_case.execute(
+            CheckFeatureConsistencyInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+                title=title,
+                description=description,
+            )
+        )
+    except FeatureNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+
+    return InconsistencyResultView(
+        is_consistent=output.is_consistent,
+        reason=output.reason,
+        conflicting_section=output.conflicting_section,
+    )

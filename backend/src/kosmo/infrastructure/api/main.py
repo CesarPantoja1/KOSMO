@@ -329,6 +329,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.list_features = features_components.list_features
     app.state.propagate_feature_changes = features_components.propagate_feature_changes
     app.state.edit_feature = features_components.edit_feature
+    app.state.check_feature_consistency = features_components.check_feature_consistency
 
     from kosmo.application.consistency.propagate_feature_changes import (
         PropagateFeatureChangesUseCase,

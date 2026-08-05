@@ -772,6 +772,26 @@ class ApplyBatchRequest(BaseModel):
     changes: list[str] = Field(description="IDs de los cambios a aplicar")
 
 
+# ═══ Verificación de consistencia en guardado manual (Sprint 4 - HU18/T7) ═══
+
+
+class CheckConsistencyRequestView(BaseModel):
+    """Payload para verificar consistencia antes de guardado manual de feature."""
+
+    model_config = ConfigDict(extra="forbid")
+    content: dict[str, object] = Field(description="Contenido nuevo a validar contra el documento fuente")
+
+
+class InconsistencyResultView(BaseModel):
+    """Resultado de verificación de consistencia en guardado manual."""
+
+    is_consistent: bool = Field(description="False si se detectó contradicción flagrante")
+    reason: str | None = Field(default=None, description="Motivo de la inconsistencia (solo si is_consistent = false)")
+    conflicting_section: str | None = Field(
+        default=None, description="Sección del documento fuente con la que hay conflicto"
+    )
+
+
 # ═══ Propagación bidireccional (Sprint 4 - HU18) ═══
 
 

@@ -1,3 +1,8 @@
+from kosmo.application.features.check_feature_consistency import (
+    CheckFeatureConsistencyInput,
+    CheckFeatureConsistencyOutput,
+    CheckFeatureConsistencyUseCase,
+)
 from kosmo.application.features.create_characteristic import (
     CreateCharacteristicInput,
     CreateCharacteristicOutput,
@@ -28,6 +33,9 @@ from kosmo.application.features.save_features import (
 )
 
 __all__ = [
+    "CheckFeatureConsistencyInput",
+    "CheckFeatureConsistencyOutput",
+    "CheckFeatureConsistencyUseCase",
     "CreateCharacteristicInput",
     "CreateCharacteristicOutput",
     "CreateCharacteristicUseCase",

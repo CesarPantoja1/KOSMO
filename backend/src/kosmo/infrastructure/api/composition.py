@@ -32,6 +32,7 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.check_feature_consistency import CheckFeatureConsistencyUseCase
 from kosmo.application.features.list_features import ListFeaturesUseCase
 from kosmo.application.modelo import (
     GenerateActivityDiagramUseCase,
@@ -598,6 +599,7 @@ class FeaturesComponents:
     list_features: Any
     propagate_feature_changes: Any
     edit_feature: EditFeatureUseCase
+    check_feature_consistency: CheckFeatureConsistencyUseCase
 
 
 def build_features_components(
@@ -644,6 +646,10 @@ def build_features_components(
         list_features=ListFeaturesUseCase(feature_repo=feature_repo),
         propagate_feature_changes=None,
         edit_feature=EditFeatureUseCase(
+            feature_repo=feature_repo,
+            consistency_evaluator=consistency_evaluator,
+        ),
+        check_feature_consistency=CheckFeatureConsistencyUseCase(
             feature_repo=feature_repo,
             consistency_evaluator=consistency_evaluator,
         ),
