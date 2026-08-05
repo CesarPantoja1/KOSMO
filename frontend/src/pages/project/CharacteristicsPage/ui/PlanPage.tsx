@@ -4,6 +4,12 @@ import {
 	getCharacteristics,
 	type CharacteristicResponse,
 } from '@/entities/characteristic';
+import type { ConsistencyReportResponse } from '@/entities/consistency';
+import {
+	ConsistencyProgress,
+	useConsistencyStore,
+	useConsistencyStream,
+} from '@/entities/consistency';
 import type { PlanChange } from '@/entities/plan';
 import { applyPlanChanges, discardPlan, usePlanStore } from '@/entities/plan';
 import { toast } from '@/shared/ui';
@@ -84,6 +90,16 @@ export const PlanPage = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isApplying, setIsApplying] = useState(false);
 	const [isDiscarding, setIsDiscarding] = useState(false);
+	const [isProcessing, setIsProcessing] = useState(false);
+
+	const {
+		phases: streamPhases,
+		isComplete,
+		report: streamReport,
+		error: streamError,
+		start: startStream,
+		phaseLabels,
+	} = useConsistencyStream();
 
 	const allChanges = planByPhase['features'] ?? [];
 	const changes = allChanges.filter(
@@ -100,6 +116,40 @@ export const PlanPage = () => {
 			.catch(() => toast.error('Error al cargar las características'))
 			.finally(() => setIsLoading(false));
 	}, [currentProject, router]);
+
+	useEffect(() => {
+		if (!isComplete || !streamReport) return;
+
+		const downstream = (streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
+		const hasPending = downstream.some((i) => !i.accepted);
+
+		const finish = async () => {
+			setIsProcessing(false);
+			setIsApplying(false);
+
+			if (hasPending) {
+				useConsistencyStore.getState().setReport(
+					streamReport as unknown as ConsistencyReportResponse,
+				);
+				toast.info(`${downstream.length} artefacto(s) en otras fases requieren revisión`);
+			} else {
+				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
+			}
+			clearPlan('features');
+			router.push('/proyecto/caracteristicas');
+		};
+
+		finish().catch(() => router.push('/proyecto/caracteristicas'));
+	}, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		if (!streamError) return;
+		setIsProcessing(false);
+		setIsApplying(false);
+		toast.error('Error al verificar la consistencia del proyecto');
+		clearPlan('features');
+		router.push('/proyecto/caracteristicas');
+	}, [streamError]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const changedCharacteristics = originalCharacteristics.filter((c) =>
 		changes.some(
@@ -161,6 +211,7 @@ export const PlanPage = () => {
 	const handleApply = async () => {
 		if (!currentProject || changes.length === 0) return;
 		setIsApplying(true);
+		setIsProcessing(true);
 		try {
 			const changeIds = changes.map((c) => c.id);
 			const result = await applyPlanChanges(currentProject.id, 'features', changeIds);
@@ -172,12 +223,21 @@ export const PlanPage = () => {
 				toast.success(`${result.applied_count} cambio(s) aplicados correctamente`);
 			}
 
-			clearPlan('features');
-			router.push('/proyecto/caracteristicas');
+			const changesToSend = changes.map((c) => ({
+				section: c.section,
+				diff_before: c.diff.before,
+				diff_after: c.diff.after,
+			}));
+
+			startStream({
+				projectId: currentProject.id,
+				phaseOrigin: 'features',
+				changes: changesToSend,
+			});
 		} catch {
-			toast.error('Error al aplicar los cambios');
-		} finally {
 			setIsApplying(false);
+			setIsProcessing(false);
+			toast.error('Error al aplicar los cambios');
 		}
 	};
 
@@ -190,7 +250,18 @@ export const PlanPage = () => {
 	}
 
 	return (
-		<div className='page-container'>
+		<>
+			{isProcessing && (
+				<ConsistencyProgress
+					title='Verificando consistencia'
+					description='La IA está analizando el impacto de los cambios en todas las fases del proyecto.'
+					phases={streamPhases}
+					phaseLabels={phaseLabels}
+					isComplete={isComplete}
+				/>
+			)}
+
+			<div className='page-container'>
 			<div className='page-header'>
 				<h2 className='text-base-800 text-3xl font-bold'>Características</h2>
 				<p className='text-base-600 text-lg'>
@@ -284,5 +355,6 @@ export const PlanPage = () => {
 				</div>
 			</div>
 		</div>
+		</>
 	);
 };

@@ -5,6 +5,12 @@ import {
 	useCharacteristicStore,
 	type Characteristic,
 } from '@/entities/characteristic';
+import type { ConsistencyReportResponse } from '@/entities/consistency';
+import {
+	ConsistencyProgress,
+	useConsistencyStore,
+	useConsistencyStream,
+} from '@/entities/consistency';
 import { applyPlanChanges, discardPlan, usePlanStore, type PlanChange } from '@/entities/plan';
 import {
 	getRequirements,
@@ -48,6 +54,17 @@ export const PlanPage = () => {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isApplying, setIsApplying] = useState(false);
 	const [isDiscarding, setIsDiscarding] = useState(false);
+	const [isProcessing, setIsProcessing] = useState(false);
+	const [pendingChangesForConsistency, setPendingChangesForConsistency] = useState<Array<{ section: string; diff_before: string; diff_after: string }>>([]);
+
+	const {
+		phases: streamPhases,
+		isComplete,
+		report: streamReport,
+		error: streamError,
+		start: startStream,
+		phaseLabels,
+	} = useConsistencyStream();
 
 	const allChanges = planByPhase['requirements'] ?? [];
 	const changes = allChanges.filter(
@@ -99,6 +116,43 @@ export const PlanPage = () => {
 		loadData();
 	}, [currentProject, router]);
 
+	useEffect(() => {
+		if (!isComplete || !streamReport) return;
+
+		const downstream = (streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
+		const hasPending = downstream.some((i) => !i.accepted);
+
+		const finish = async () => {
+			setIsProcessing(false);
+			setIsApplying(false);
+
+			if (hasPending) {
+				useConsistencyStore.getState().setReport(
+					streamReport as unknown as ConsistencyReportResponse,
+				);
+				toast.info(`${downstream.length} artefacto(s) en otras fases requieren revisión`);
+			} else {
+				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
+			}
+			clearPlan('requirements');
+			if (currentItem) {
+				setSelectedId(currentItem.characteristic.id);
+			}
+			router.push('/proyecto/requisitos');
+		};
+
+		finish().catch(() => router.push('/proyecto/requisitos'));
+	}, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		if (!streamError) return;
+		setIsProcessing(false);
+		setIsApplying(false);
+		toast.error('Error al verificar la consistencia del proyecto');
+		clearPlan('requirements');
+		router.push('/proyecto/requisitos');
+	}, [streamError]); // eslint-disable-line react-hooks/exhaustive-deps
+
 	const currentItem = items[currentIndex] ?? null;
 
 	const handleBack = () => {
@@ -143,18 +197,33 @@ export const PlanPage = () => {
 				updatePlanChangeStatus('requirements', cid, 'applied');
 			}
 
+			const itemChangesToSend = currentItem.charChanges.map((c) => ({
+				section: c.section,
+				diff_before: c.diff.before,
+				diff_after: c.diff.after,
+			}));
+
 			const next = currentIndex + 1;
-			if (next < items.length) {
-				setCurrentIndex(next);
+			const isLastItem = next >= items.length;
+
+			if (isLastItem) {
+				setIsProcessing(true);
+				const allChanges = [...pendingChangesForConsistency, ...itemChangesToSend];
+				startStream({
+					projectId: currentProject.id,
+					phaseOrigin: 'requirements',
+					changes: allChanges,
+				});
+				setPendingChangesForConsistency([]);
 			} else {
-				clearPlan('requirements');
-				setSelectedId(currentItem.characteristic.id);
-				router.push('/proyecto/requisitos');
+				setPendingChangesForConsistency((prev) => [...prev, ...itemChangesToSend]);
+				setCurrentIndex(next);
+				setIsApplying(false);
 			}
 		} catch {
-			toast.error('Error al aplicar los cambios');
-		} finally {
 			setIsApplying(false);
+			setIsProcessing(false);
+			toast.error('Error al aplicar los cambios');
 		}
 	};
 
@@ -184,7 +253,18 @@ export const PlanPage = () => {
 		: currentItem.characteristic.title;
 
 	return (
-		<div className='page-container'>
+		<>
+			{isProcessing && (
+				<ConsistencyProgress
+					title='Verificando consistencia'
+					description='La IA está analizando el impacto de los cambios en todas las fases del proyecto.'
+					phases={streamPhases}
+					phaseLabels={phaseLabels}
+					isComplete={isComplete}
+				/>
+			)}
+
+			<div className='page-container'>
 			<div className='page-header'>
 				<h2 className='text-base-800 text-3xl font-bold'>Requisitos EARS</h2>
 				<p className='text-base-600 text-lg'>
@@ -203,6 +283,7 @@ export const PlanPage = () => {
 					/>
 				</div>
 			</div>
-		</div>
+			</div>
+		</>
 	);
 };

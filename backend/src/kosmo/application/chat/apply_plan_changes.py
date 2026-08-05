@@ -8,6 +8,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts import ChatRepository, EstadoPlanCambio, PlanCambio
+from kosmo.contracts.consistency import PhasePropagationInfo
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
@@ -21,17 +22,9 @@ from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 
 if TYPE_CHECKING:
-    from kosmo.application.consistency.propagate_discovery_changes import (
-        PropagateDiscoveryChangesOutput,
-        PropagateDiscoveryChangesUseCase,
-    )
-    from kosmo.application.consistency.propagate_feature_changes import (
-        PropagateFeatureChangesOutput,
-        PropagateFeatureChangesUseCase,
-    )
-    from kosmo.application.consistency.propagate_requirement_changes import (
-        PropagateRequirementChangesOutput,
-        PropagateRequirementChangesUseCase,
+    from kosmo.application.consistency.propagate_changes import (
+        PropagateChangesOutput,
+        PropagateChangesUseCase,
     )
 
 _log = structlog.get_logger(__name__)
@@ -57,9 +50,7 @@ class ApplyPlanChangesOutput:
     failed_count: int
     applied_changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     failed_changes: list[FailedChange] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
-    propagation: (
-        PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | PropagateRequirementChangesOutput | None
-    ) = None
+    propagation: PropagateChangesOutput | None = None
 
     @property
     def applied_ids(self) -> list[str]:
@@ -74,10 +65,8 @@ class ApplyPlanChangesUseCase:
         document_repo: DocumentRepository,
         feature_repo: FeatureRepository | None = None,
         requirement_repo: RequirementRepository | None = None,
-        propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
+        propagate_uc: PropagateChangesUseCase | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
-        propagate_feature_uc: PropagateFeatureChangesUseCase | None = None,
-        propagate_requirement_uc: PropagateRequirementChangesUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._chat_repo = chat_repo
@@ -86,8 +75,6 @@ class ApplyPlanChangesUseCase:
         self._requirement_repo = requirement_repo
         self._propagate_uc = propagate_uc
         self._session_factory = session_factory
-        self._propagate_feature_uc = propagate_feature_uc
-        self._propagate_requirement_uc = propagate_requirement_uc
 
     async def execute(self, input_data: ApplyPlanChangesInput) -> ApplyPlanChangesOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -204,22 +191,21 @@ class ApplyPlanChangesUseCase:
         self,
         input_data: ApplyPlanChangesInput,
         applied: list[PlanCambio],
-    ) -> PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | PropagateRequirementChangesOutput | None:
+    ) -> PropagateChangesOutput | None:
         if not applied:
             return None
 
+        if self._propagate_uc is None:
+            return None
+
         if input_data.phase == SpecPhase.DESCUBRIMIENTO:
-            if self._propagate_uc is None:
-                return None
             try:
-                from kosmo.application.consistency.propagate_discovery_changes import (
-                    PropagateDiscoveryChangesInput,
-                )
+                from kosmo.application.consistency.propagate_changes import PropagateChangesInput
 
                 return await self._propagate_uc.execute(
-                    PropagateDiscoveryChangesInput(
+                    PropagateChangesInput(
                         project_id=input_data.project_id,
-                        phase=input_data.phase,
+                        source_phase=input_data.phase,
                         applied_change_ids=[c.id for c in applied],
                     )
                 )
@@ -227,52 +213,34 @@ class ApplyPlanChangesUseCase:
                 _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
                 return None
 
-        if input_data.phase == SpecPhase.CARACTERISTICAS:
-            if self._propagate_feature_uc is None:
-                return None
+        if input_data.phase in (SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS):
             try:
-                from kosmo.application.consistency.propagate_feature_changes import (
-                    PropagateFeatureChangesInput,
-                )
+                from kosmo.application.consistency.propagate_changes import PropagateChangesInput
                 from kosmo.contracts.sdd.ids import FeatureId
 
-                context_id = next((c.context_id for c in applied if c.context_id), "")
-                feature_id = FeatureId(context_id)
+                unique_fids = list({c.context_id for c in applied if c.context_id})
+                all_phases: list[PhasePropagationInfo] = []
+                seen_phases: set[str] = set()
 
-                return await self._propagate_feature_uc.execute(
-                    PropagateFeatureChangesInput(
-                        project_id=input_data.project_id,
-                        feature_id=feature_id,
-                        applied_change_ids=[c.id for c in applied],
+                for context_id in unique_fids:
+                    result = await self._propagate_uc.execute(
+                        PropagateChangesInput(
+                            project_id=input_data.project_id,
+                            source_phase=input_data.phase,
+                            applied_change_ids=[c.id for c in applied],
+                            feature_id=FeatureId(context_id),
+                        )
                     )
-                )
+                    for info in result.affected_phases:
+                        if info.phase not in seen_phases:
+                            seen_phases.add(info.phase)
+                            all_phases.append(info)
+
+                from kosmo.application.consistency.propagate_changes import PropagateChangesOutput
+
+                return PropagateChangesOutput(affected_phases=all_phases)
             except Exception:
-                _log.warning("apply.feature_propagation_failed", project_id=str(input_data.project_id), exc_info=True)
-                return None
-
-        if input_data.phase == SpecPhase.REQUISITOS:
-            if self._propagate_requirement_uc is None:
-                return None
-            try:
-                from kosmo.application.consistency.propagate_requirement_changes import (
-                    PropagateRequirementChangesInput,
-                )
-                from kosmo.contracts.sdd.ids import FeatureId
-
-                context_id = next((c.context_id for c in applied if c.context_id), "")
-                feature_id = FeatureId(context_id)
-
-                return await self._propagate_requirement_uc.execute(
-                    PropagateRequirementChangesInput(
-                        project_id=input_data.project_id,
-                        feature_id=feature_id,
-                        applied_change_ids=[c.id for c in applied],
-                    )
-                )
-            except Exception:
-                _log.warning(
-                    "apply.requirement_propagation_failed", project_id=str(input_data.project_id), exc_info=True
-                )
+                _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
                 return None
 
         return None
