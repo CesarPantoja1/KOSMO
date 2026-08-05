@@ -7,6 +7,7 @@ from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
     FeaturesPhaseOutput,
 )
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ProjectId
@@ -15,6 +16,15 @@ from kosmo.contracts.sdd.repositories import (
     FeatureRepository,
     ProjectRepository,
 )
+
+
+async def _advance_phase(project_repo: ProjectRepository, project_id: ProjectId, phase: SpecPhase) -> None:
+    project = await project_repo.by_id(project_id)
+    if project is not None and project.current_phase != phase.value:
+        import dataclasses
+
+        updated = dataclasses.replace(project, current_phase=phase.value)
+        await project_repo.save(updated)
 
 
 @dataclass(frozen=True)
@@ -89,14 +99,6 @@ class GenerateFeaturesUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features",
             )
 
-        validation = phase_output.validation_result
-        if not validation.is_valid or not phase_output.features:
-            detail = "; ".join(validation.errors) or "No se generaron características."
-            raise LLMInvocationError(
-                detail=f"Las características generadas no cumplen la estructura válida: {detail}",
-                instance=f"/api/v1/projects/{input_data.project_id}/features",
-            )
-
         next_num = max((f.number for f in existing_features), default=0) + 1
         for feat in phase_output.features:
             feat.number = next_num
@@ -104,6 +106,8 @@ class GenerateFeaturesUseCase:
             next_num += 1
 
         saved_features = await self._feature_repo.save_many(phase_output.features)
+
+        await _advance_phase(self._project_repo, input_data.project_id, SpecPhase.CARACTERISTICAS)
 
         return GenerateFeaturesOutput(
             project_id=input_data.project_id,

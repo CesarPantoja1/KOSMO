@@ -90,17 +90,13 @@ class ManagePlanChangesUseCase:
     ) -> PlanStateOutput:
         await self._verify_project(project_id)
 
-        existing_changes = await self._chat_repo.list_plan_changes(project_id, phase)
-        if any(
-            c.section == section and c.diff.after == diff_after and c.status in _ACTIVE_STATUSES
-            for c in existing_changes
-        ):
-            return self._build_state(project_id, phase, context_id, existing_changes)
+        changes = await self._chat_repo.list_plan_changes(project_id, phase)
+        if any(c.section == section and c.diff.after == diff_after and c.status in _ACTIVE_STATUSES for c in changes):
+            return self._build_state(project_id, phase, context_id, changes)
 
-        existing_by_id = next((c for c in existing_changes if str(c.id) == change_id), None)
+        existing_by_id = next((c for c in changes if str(c.id) == change_id), None)
         if existing_by_id is not None:
             await self._chat_repo.update_plan_change_status(project_id, PlanChangeId(change_id), EstadoPlanCambio.ADDED)
-            changes = await self._chat_repo.list_plan_changes(project_id, phase)
             return self._build_state(project_id, phase, context_id, changes)
 
         plan_change = PlanCambio(

@@ -15,11 +15,10 @@ from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import (
     DiagramNotFoundError,
     FeatureNotFoundError,
-    LLMInvocationError,
     ProjectNotFoundError,
-    RequirementsNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 
 router = APIRouter(
@@ -32,25 +31,30 @@ class GenerateDiagramRequest(BaseModel):
     project_id: str
 
 
-async def _resolve_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    if id_or_slug.startswith("feat_"):
-        return FeatureId(id_or_slug)
-
-    feature_repo = request.app.state.feature_repo
-    features = await feature_repo.list_by_project(ProjectId(project_id))
-    match = next((f for f in features if f.slug == id_or_slug), None)
-    if match is None:
+async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
+    fid = await resolve_feature_id(request.app.state.feature_repo, ProjectId(project_id), id_or_slug)
+    if fid is None:
         raise FeatureNotFoundError(
             feature_id=id_or_slug,
             instance=f"/api/v1/features/{id_or_slug}/diagram",
         )
-    return match.id
+    return fid
+
+
+def _diagram_response(output: Any) -> dict[str, Any]:
+    return {
+        "id": str(output.diagram.id),
+        "feature_id": str(output.diagram.feature_id),
+        "diagram_syntax": output.diagram.diagram_syntax,
+        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
+        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
+    }
 
 
 @router.post(
     "/generate",
     summary="Generar diagrama de actividad",
-    description="Genera un diagrama de actividad PlantUML para la característica especificada.",
+    description="Genera un diagrama PlantUML para la característica indicada.",
     status_code=status.HTTP_200_OK,
 )
 async def generate_diagram(
@@ -59,34 +63,34 @@ async def generate_diagram(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id)
     uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
 
-    try:
-        output = await uc.execute(
-            GenerateDiagramInput(
-                project_id=ProjectId(body.project_id),
-                feature_id=fid,
-            )
-        )
-    except (ProjectNotFoundError, FeatureNotFoundError, RequirementsNotFoundError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=exc.problem.detail,
-        ) from exc
-    except LLMInvocationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.problem.detail,
-        ) from exc
+    output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
+    return _diagram_response(output)
 
-    return {
-        "id": str(output.diagram.id),
-        "feature_id": str(output.diagram.feature_id),
-        "diagram_syntax": output.diagram.diagram_syntax,
-        "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
-        "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
-    }
+
+@router.post(
+    "/propagate",
+    summary="Propagar cambios al modelo",
+    description=(
+        "Regenera el diagrama de actividad PlantUML de una característica "
+        "cuando cambios en fases upstream lo dejaron desactualizado."
+    ),
+    status_code=status.HTTP_200_OK,
+    operation_id="propagate_changes_to_model",
+)
+async def propagate_to_model(
+    feature_id: str,
+    body: GenerateDiagramRequest,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> dict[str, Any]:
+    fid = await _get_feature_id(request, body.project_id, feature_id)
+    uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
+
+    output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
+    return _diagram_response(output)
 
 
 @router.get(
@@ -100,7 +104,7 @@ async def get_diagram(
     request: Request,
     project_id: str = Query(...),
 ) -> dict[str, Any]:
-    fid = await _resolve_feature_id(request, project_id, feature_id)
+    fid = await _get_feature_id(request, project_id, feature_id)
     uc = cast("GetActivityDiagramUseCase", request.app.state.get_diagram)
 
     try:

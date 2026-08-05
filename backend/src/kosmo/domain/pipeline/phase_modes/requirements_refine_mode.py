@@ -13,6 +13,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 )
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.domain.pipeline._dict_utils import extract_requirements_list, requirements_to_markdown
 from kosmo.domain.pipeline.phase_validators.requirements_refine_validator import (
     validate_refine_input_exists,
 )
@@ -207,7 +208,7 @@ class RequirementsRefineMode:
         from kosmo.contracts.sdd.ids import RequirementId
         from kosmo.domain.sdd.id_generator import IdGenerator
 
-        reqs_data = self._extract_requirements_list(raw_output)
+        reqs_data = extract_requirements_list(raw_output)
         requirements: list[EARSRequirement] = []
 
         for i, item in enumerate(reqs_data, start=1):
@@ -246,7 +247,7 @@ class RequirementsRefineMode:
                 )
             )
 
-        markdown_str = self._requirements_to_markdown(requirements)
+        markdown_str = requirements_to_markdown(requirements)
 
         return EARSPhaseOutput(
             feature_id=feature_id,
@@ -256,62 +257,3 @@ class RequirementsRefineMode:
             validation_result=validation_result,
             generation_metadata=metadata,
         )
-
-    @staticmethod
-    def _extract_requirements_list(content: Any) -> list[dict[str, Any]]:
-        if isinstance(content, dict):
-            raw: object = content.get("requirements", [])  # type: ignore[reportUnknownMemberType, reportUnknownVariableType]
-            if isinstance(raw, list):
-                result: list[dict[str, Any]] = []
-                for item in cast(list[object], raw):
-                    if isinstance(item, dict):
-                        req_dict: dict[str, Any] = {}
-                        for k, v in cast(dict[object, object], item).items():
-                            if isinstance(k, str):
-                                req_dict[k] = v
-                        result.append(req_dict)
-                return result
-        if isinstance(content, list):
-            result: list[dict[str, Any]] = []
-            for item in cast(list[object], content):
-                if isinstance(item, dict):
-                    req_dict: dict[str, Any] = {}
-                    for k, v in cast(dict[object, object], item).items():
-                        if isinstance(k, str):
-                            req_dict[k] = v
-                    result.append(req_dict)
-            return result
-        return []
-
-    @staticmethod
-    def _requirements_to_markdown(reqs: list[Any]) -> str:
-        blocks: list[str] = []
-        for r in reqs:
-            if not (hasattr(r, "display_id") and hasattr(r, "statement")):
-                continue
-
-            title = getattr(r, "title", "")
-            pattern_display = str(r.pattern) if hasattr(r, "pattern") else ""
-            statement = r.statement.strip()
-            display_id = r.display_id
-
-            block = f"### {display_id} {title}\n\n"
-            block += f"**{pattern_display}**\n\n"
-            block += f"{statement}\n"
-
-            if hasattr(r, "acceptance_criteria") and r.acceptance_criteria:
-                block += "\n**Criterios de Aceptación**\n\n"
-                for ac in r.acceptance_criteria:
-                    scenario = getattr(ac, "scenario", "")
-                    given = getattr(ac, "given", "")
-                    when = getattr(ac, "when", "")
-                    then = getattr(ac, "then", "")
-
-                    block += f"**Escenario: {scenario}**\n\n"
-                    block += f"- **Dado** que {given}\n"
-                    block += f"- **Cuando** {when}\n"
-                    block += f"- **Entonces** {then}\n\n"
-
-            blocks.append(block.strip())
-
-        return "\n\n---\n\n".join(blocks).strip()

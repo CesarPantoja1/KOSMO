@@ -7,6 +7,11 @@ from kosmo.application.chat.manage_plan_changes import (
     ManagePlanChangesUseCase,
     PlanStateOutput,
 )
+from kosmo.application.chat.process_chat_message import (
+    ProcessChatMessageInput,
+    ProcessChatMessageOutput,
+    ProcessChatMessageUseCase,
+)
 from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextInput,
     ValidatePhaseContextOutput,
@@ -19,6 +24,9 @@ __all__ = [
     "DetectEditCollisionUseCase",
     "ManagePlanChangesUseCase",
     "PlanStateOutput",
+    "ProcessChatMessageInput",
+    "ProcessChatMessageOutput",
+    "ProcessChatMessageUseCase",
     "ValidatePhaseContextInput",
     "ValidatePhaseContextOutput",
     "ValidatePhaseContextUseCase",

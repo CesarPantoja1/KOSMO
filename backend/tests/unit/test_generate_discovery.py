@@ -150,7 +150,7 @@ async def test_generate_discovery_raises_when_llm_fails() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> None:
+async def test_generate_discovery_succeeds_despite_validation_failure() -> None:
     # Arrange
     project_repo: Any = InMemoryProjectRepository()
     doc_repo: Any = InMemoryDocumentRepository()
@@ -184,12 +184,12 @@ async def test_generate_discovery_raises_and_does_not_persist_when_invalid() -> 
         agent=agent,
     )
 
-    # Act & Assert
-    with pytest.raises(LLMInvocationError) as exc_info:
-        await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId("prj_invalid")))
+    # Act
+    output = await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId("prj_invalid")))
 
-    assert "Metas del producto" in exc_info.value.problem.detail
-    assert await doc_repo.get_discovery(ProjectId("prj_invalid")) is None
+    # Assert
+    assert output.phase_output.validation_result.is_valid is False
+    assert await doc_repo.get_discovery(ProjectId("prj_invalid")) is not None
 
 
 @pytest.mark.asyncio

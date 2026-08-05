@@ -39,7 +39,6 @@ class Settings(BaseSettings):
 
     # DSN de persistencia
     database_url: SecretStr
-    mongo_url: SecretStr | None = None
     redis_url: SecretStr | None = None
 
     # LLM BYOK

@@ -7,7 +7,6 @@ from kosmo.contracts.pipeline.phase_outputs import (
     DiscoveryPhaseOutput,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from tests.unit.conftest import (
     DISCOVERY_VALID,
@@ -18,7 +17,6 @@ from tests.unit.conftest import (
 
 
 def _make_agent(llm, max_iterations=3, memory=None):
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -30,7 +28,6 @@ def _make_agent(llm, max_iterations=3, memory=None):
     )
     return KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         max_iterations=max_iterations,
         skill_registry=skill_reg,
         memory=memory,  # type: ignore[reportArgumentType]
@@ -118,10 +115,8 @@ async def test_kosmo_agent_raises_when_skill_not_found() -> None:
 async def test_kosmo_agent_raises_when_no_skill_registry() -> None:
     # Arrange
     llm = StubStructuredLLMClient()
-    guard_registry = GuardRegistry()
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
     )
 
     # Act & Assert
@@ -267,7 +262,6 @@ async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> N
     valid = make_discovery_document(DISCOVERY_VALID)
     llm = StubToolLLM([invalid, valid])
     store = InMemoryAgentSessionStore()
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -288,7 +282,6 @@ async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> N
     )
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         max_iterations=3,
         skill_registry=skill_reg,
         memory=store,  # type: ignore[reportArgumentType]

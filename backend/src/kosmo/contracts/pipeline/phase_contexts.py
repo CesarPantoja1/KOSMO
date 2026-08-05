@@ -27,7 +27,7 @@ class DiscoveryRefinePhaseContext:
 class FeaturesPhaseContext:
     discovery_document: RichTextDocument
     existing_feature_titles: list[str] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
-    project_id: ProjectId = ProjectId("")
+    project_id: ProjectId | None = None
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
 
@@ -81,4 +81,5 @@ class RequirementChatContext:
     requirement: EARSRequirement
     feature: Feature
     discovery_document: RichTextDocument
+    requirements_markdown: str = ""
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]

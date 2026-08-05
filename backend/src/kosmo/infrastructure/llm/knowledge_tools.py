@@ -218,3 +218,46 @@ def build_get_diagram_for_feature(
         return diagram.diagram_syntax[:4000]
 
     return tool_def, handler
+
+
+def build_get_impact(
+    traceability_repo: Any,
+) -> tuple[KnowledgeToolDef, KnowledgeToolHandler]:
+    tool_def = KnowledgeToolDef(
+        name="get_impact",
+        description=(
+            "Consulta que artefactos dependen de uno dado (features de un requisito, diagramas de un requisito, etc.)"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "artifact_id": {
+                    "type": "string",
+                    "description": "ID del artefacto a consultar (ej. feat_01, req_01, dia_01)",
+                },
+            },
+            "required": ["artifact_id"],
+        },
+    )
+
+    async def handler(input_data: dict[str, Any]) -> str:
+        artifact_id = input_data.get("artifact_id", "")
+        if not artifact_id:
+            return "Error: parametro 'artifact_id' requerido"
+
+        impact = await traceability_repo.get_impact(artifact_id)
+
+        lines: list[str] = [f"Impacto de {artifact_id}:"]
+        if impact["upstream"]:
+            lines.append("\nArtefactos upstream (de los que depende):")
+            for u in impact["upstream"]:
+                lines.append(f"- {u['type']}: {u['id']}")
+        if impact["downstream"]:
+            lines.append("\nArtefactos downstream (que dependen de el):")
+            for d in impact["downstream"]:
+                lines.append(f"- {d['type']}: {d['id']}")
+        if not impact["upstream"] and not impact["downstream"]:
+            lines.append("No se encontraron dependencias registradas.")
+        return "\n".join(lines)
+
+    return tool_def, handler

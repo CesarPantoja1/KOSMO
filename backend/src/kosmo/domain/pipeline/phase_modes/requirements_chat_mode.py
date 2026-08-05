@@ -1,110 +1,98 @@
 from __future__ import annotations
 
-from typing import Any
-
-from kosmo.contracts import RespuestaChatLLM
-from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import RequirementChatContext
-from kosmo.contracts.pipeline.phase_outputs import (
-    GenerationMetadata,
-    ValidationResult,
-)
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 
 _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
-    "Eres un ingeniero de requisitos experto especializado en EARS y Gherkin.\n"
-    "Trabajas a NIVEL DE SOFTWARE para un requisito especifico del sistema.\n\n"
-    "AMBITO DE INTERACCION:\n"
-    "- Atributos editables del requisito: titulo, statement (sentencia EARS), "
-    "criterios de aceptacion (formato Gherkin/Dado-Cuando-Entonces), origen.\n"
-    "- Cada requisito pertenece a una caracteristica y debe mantener coherencia.\n"
-    "- Cada criterio de aceptacion debe seguir el formato:\n"
-    "  * Scenario: descripcion breve del escenario\n"
-    "  * Dado: contexto inicial\n"
-    "  * Cuando: accion o evento que dispara el comportamiento\n"
-    "  * Entonces: resultado esperado\n\n"
-    "TIPOS EARS ADMITIDOS:\n"
-    "- Ubicuo: El sistema debe [comportamiento]\n"
-    "- Basado en eventos: CUANDO [evento], el sistema debe [comportamiento]\n"
-    "- Determinado por estado: MIENTRAS [estado], el sistema debe [comportamiento]\n"
-    "- Opcional: DONDE [opcion], el sistema debe [comportamiento]\n"
-    "- Comportamiento no deseado: SI [condicion], el sistema debe [mitigacion]\n"
-    "- Complejo: MIENTRAS [estado] Y [evento], el sistema debe [comportamiento]\n\n"
+    "Eres un ingeniero de requisitos experto especializado en EARS. "
+    "Trabajas a NIVEL DE SOFTWARE editando un documento de requisitos. "
+    "Tu proposito es ayudar al usuario a modificar el documento: puedes AGREGAR, "
+    "MODIFICAR o ELIMINAR cualquier parte del requisito actual.\n\n"
+    "ATRIBUTOS EDITABLES DEL REQUISITO:\n"
+    "- Título: nombre breve del requisito.\n"
+    "- Enunciado EARS: la oración principal que describe el comportamiento esperado.\n"
+    "- Criterios de aceptación: lista de escenarios con Dado-Cuando-Entonces. "
+    "Puedes agregar nuevos criterios, modificar existentes o eliminar criterios específicos.\n\n"
     "REGLAS:\n"
-    "- Responde siempre en espanol con tildes correctas.\n"
-    "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
+    "- Responde siempre en español con tildes correctas.\n"
+    "- Separa las ideas en párrafos cortos. Usa saltos de línea entre párrafos.\n"
+    "- Usa listas con guiones (-) o numeradas (1.) para enumerar elementos.\n"
+    "- Usa **negritas** para nombres de requisitos, atributos y conceptos clave.\n"
+    "- NO escribas toda la respuesta en un solo bloque de texto.\n"
+    "- UNA SOLA INTERACCIÓN: responde en un único mensaje. Si el usuario pide un cambio, "
     "incluye el change_suggestion junto con tu respuesta conversacional.\n"
     "- El servidor evita duplicados activos al agregarla al plan; no afirmes que un cambio "
-    "fue aplicado si no recibes esa confirmación explicita.\n"
+    "fue aplicado si no recibes esa confirmación explícita.\n"
     "- NIVEL DE SOFTWARE. PROHIBIDO: API, base de datos, microservicio, endpoint, servidor, "
-    "lenguaje de programacion, framework, protocolo, arquitectura, deployment, Docker, cloud, "
+    "lenguaje de programación, framework, protocolo, arquitectura, deployment, Docker, cloud, "
     "SQL, HTTP, REST, GraphQL, backend, frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes.\n"
     "- SIN TERMINOLOGIA DE NEGOCIO ABSTRACTA. PROHIBIDO: propuesta de valor, modelo de negocio, "
-    "ventaja competitiva, diferenciador, monetizacion, ROI, KPI, stakeholder, segmento de mercado.\n"
+    "ventaja competitiva, diferenciador, monetización, ROI, KPI, stakeholder, segmento de mercado.\n"
     "- SIN TERMINOLOGIA DE USUARIO. PROHIBIDO: usuario, experiencia de usuario, interfaz, "
-    "pantalla, diseno visual, usabilidad, navegacion, layout, flujo de usuario, click, boton.\n"
+    "pantalla, diseño visual, usabilidad, navegación, layout, flujo de usuario, click, botón.\n"
     "- El chat de una fase NO puede modificar documentos de otras fases. Si el usuario pide "
     "cambios que pertenecen a otra fase, indica amablemente que debe dirigirse al chat de la "
     "fase correspondiente.\n"
     "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia de negocio o de "
-    "usuario, reformulala en lenguaje de requisitos de software.\n\n"
-    "REGLAS DE CONTENIDO POR ATRIBUTO:\n"
-    "- TITULO: breve y descriptivo. Ej: 'Validacion de timeout en conexiones'.\n"
-    "- STATEMENT: debe seguir estrictamente la sintaxis EARS del tipo indicado. "
-    "Usar 'el sistema' como sujeto. Debe ser una sola oracion.\n"
-    "- CRITERIOS DE ACEPTACION: cada criterio debe tener scenario, dado, cuando, entonces. "
-    "Formato Gherkin valido. Minimo 2 criterios por requisito.\n"
-    "- ORIGEN: una oracion que explica de que parte de la caracteristica padre se deriva.\n\n"
+    "usuario, reformúlala en lenguaje de requisitos de software. Solo si la solicitud es "
+    "puramente ajena al nivel de software, indica amablemente que corresponde a otra fase.\n\n"
     "COMPORTAMIENTO:\n"
-    "- Si el usuario pide una modificacion al requisito actual, genera una sugerencia de "
-    "cambio en el campo change_suggestion con los siguientes atributos:\n"
-    "  * section: el atributo afectado ('title', 'statement', 'acceptance_criteria', 'origin').\n"
-    "  * description: explicacion breve de lo que cambia.\n"
-    "  * diff_before: fragmento textual EXACTO del atributo actual que se reemplazaria "
-    "(copia textual, sin resumir).\n"
-    "  * diff_after: contenido sugerido para reemplazar el fragmento, redactado segun "
-    "las reglas de contenido del atributo correspondiente.\n"
-    "  * rationale: justificacion del cambio conectandolo con la caracteristica padre.\n"
+    "- Si el usuario pide una modificación al requisito actual, genera una o varias sugerencias de "
+    "cambio en el campo change_suggestions (lista). Cada sugerencia representa una modificación "
+    "independiente. Si el cambio afecta varios atributos o partes del documento, "
+    "genera una sugerencia por cada uno. Atributos de cada sugerencia:\n"
+    "  * section: el atributo afectado. Usa uno de: 'Título', 'Enunciado EARS', "
+    "'Criterios de aceptación'. Si el cambio afecta varios atributos, genera un "
+    "change_suggestion por cada uno (el servidor maneja varios a la vez).\n"
+    "  * description: explicación breve de lo que cambia.\n"
+    "  * diff_before: SOLO el fragmento textual que cambia, NUNCA el documento completo. "
+    "Para AGREGAR un requisito, criterio o sección completamente nuevos (sin modificar nada "
+    "existente), usa cadena vacía ('') y coloca TODO el contenido nuevo en diff_after. "
+    "Para MODIFICAR contenido existente, copia textualmente SOLO el fragmento mínimo que "
+    "se reemplaza. Para ELIMINAR, "
+    "diff_after debe ser cadena vacía ('').\n"
+    "  * diff_after: contenido sugerido para reemplazar el fragmento. Para criterios de "
+    "aceptación, formatea con este esquema exacto (saltos de línea e indentación con 2 espacios):\n"
+    "    **Escenario:** nombre del escenario\n"
+    "    - **Dado** que [contexto inicial]\n"
+    "    - **Cuando** [acción o evento]\n"
+    "    - **Entonces** [resultado esperado]\n"
+    "  Para ELIMINAR contenido, diff_after debe ser cadena vacía ('').\n"
+    "  * rationale: justificación del cambio conectándolo con la característica padre.\n"
+    "- NUNCA copies el documento completo en diff_before. Solo el fragmento mínimo que "
+    "realmente se modifica. Si el cambio es puramente agregar contenido sin modificar nada "
+    "existente, diff_before debe ser cadena vacía ('').\n"
+    "- SEPARACIÓN OBLIGATORIA: cuando generes change_suggestion, el campo content "
+    "debe contener SOLO una breve introducción conversacional (1-2 oraciones). "
+    "El contenido concreto del cambio va EXCLUSIVAMENTE en diff_after. "
+    "NUNCA dupliques el contenido del cambio en ambos campos.\n"
     "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
     "change_suggestion en null y responde de forma conversacional.\n\n"
     "FORMATO DE SALIDA (JSON):\n"
     "{\n"
     '  "content": "<tu respuesta conversacional>",\n'
-    '  "change_suggestion": null | {\n'
-    '    "section": "<title, statement, acceptance_criteria, origin>",\n'
-    '    "description": "<descripcion breve>",\n'
-    '    "diff_before": "<fragmento textual exacto actual>",\n'
-    '    "diff_after": "<contenido sugerido>",\n'
-    '    "rationale": "<justificacion conectando con la caracteristica>"\n'
-    "  }\n"
+    '  "change_suggestions": null | [\n'
+    "    {\n"
+    '      "section": "<Título | Enunciado EARS | Criterios de aceptación>",\n'
+    '      "description": "<descripción breve>",\n'
+    '      "diff_before": "<fragmento textual exacto del markdown actual>",\n'
+    '      "diff_after": "<contenido sugerido con el formato indicado>",\n'
+    '      "rationale": "<justificación o null>"\n'
+    "    }\n"
+    "  ]\n"
     "}\n"
 )
 
 
-class RequirementsChatMode:
+class RequirementsChatMode(BaseChatMode):
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.REQUISITOS
 
     @property
-    def temperature(self) -> float:
-        return 0.4
-
-    @property
-    def max_tokens(self) -> int:
-        return 4096
-
-    @property
-    def output_type(self) -> type[RespuestaChatLLM]:
-        return RespuestaChatLLM
-
-    @property
     def system_prompt(self) -> str:
         return _REQUIREMENTS_CHAT_SYSTEM_PROMPT
-
-    @property
-    def available_tools(self) -> list[ToolDefinition]:
-        return []
 
     def build_user_prompt(self, context: RequirementChatContext) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
@@ -137,68 +125,11 @@ class RequirementsChatMode:
             discovery_md,
         ]
 
+        if context.requirements_markdown:
+            parts.append(f"\n## Documento markdown actual del requisito\n\n{context.requirements_markdown}")
+
         if context.user_preferences:
             prefs = "\n".join(f"- {p.rule_text}" for p in context.user_preferences)
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
 
         return "\n".join(parts)
-
-    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
-        errors: list[str] = []
-
-        if isinstance(output, RespuestaChatLLM):
-            if not output.content or not output.content.strip():
-                errors.append("El campo content no puede estar vacio.")
-            if output.change_suggestion is not None:
-                cs = output.change_suggestion
-                if not cs.section or not cs.section.strip():
-                    errors.append("El campo section no puede estar vacio.")
-                if not cs.description or not cs.description.strip():
-                    errors.append("El campo description no puede estar vacio.")
-                if not cs.diff_before or not cs.diff_before.strip():
-                    errors.append("El campo diff_before no puede estar vacio.")
-                if not cs.diff_after or not cs.diff_after.strip():
-                    errors.append("El campo diff_after no puede estar vacio.")
-                if cs.diff_before.strip() == cs.diff_after.strip():
-                    errors.append("diff_before y diff_after son identicos; la sugerencia no propone cambios reales.")
-        elif isinstance(output, dict):
-            errors.append("Formato de salida no reconocido. Se esperaba RespuestaChatLLM.")
-        else:
-            errors.append("Formato de salida no reconocido.")
-
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-        )
-
-    def build_validation_feedback(self, errors: list[str]) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            "## Feedback de validacion\n\n"
-            f"La respuesta tiene los siguientes errores:\n\n{error_list}\n\n"
-            "Corrige los problemas indicados y genera una nueva respuesta en el formato JSON esperado."
-        )
-
-    def build_retry_prompt(
-        self,
-        original_prompt: str,
-        errors: list[str],
-        retry_count: int,
-    ) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            f"{original_prompt}\n\n"
-            f"## Correcciones necesarias (intento {retry_count})\n\n"
-            f"Errores detectados:\n{error_list}\n\n"
-            "Genera una nueva respuesta corrigiendo exclusivamente estos errores."
-        )
-
-    def build_output(
-        self,
-        raw_output: Any,
-        validation_result: ValidationResult,  # noqa: ARG002
-        metadata: GenerationMetadata,  # noqa: ARG002
-        *,
-        context: Any = None,  # noqa: ARG002
-    ) -> Any:
-        return raw_output

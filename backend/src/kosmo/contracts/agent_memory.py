@@ -116,6 +116,7 @@ class AgentMemoryPort(Protocol):
         self,
         *,
         since_session_id: AgentMemoryId | None = None,
+        project_id: ProjectId | None = None,
     ) -> dict[str, int]: ...
 
 

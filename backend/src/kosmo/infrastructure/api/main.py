@@ -1,13 +1,17 @@
+import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from kosmo.config import settings
+from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import (
     build_auth_components,
     build_discovery_components,
@@ -19,6 +23,7 @@ from kosmo.infrastructure.api.composition import (
 )
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
+from kosmo.infrastructure.api.routers.consistency import router as consistency_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
@@ -188,6 +193,38 @@ _GLOBAL_RESPONSES = {
 # Ciclo de vida y aplicación
 
 
+def _make_outbox_handler(pipeline: Any) -> Any:
+    async def handler(job_type: str, payload: dict[str, Any]) -> None:
+        import structlog
+
+        _log = structlog.get_logger("kosmo.outbox")
+        agent = pipeline.agent
+        if job_type == "reflect_and_consolidate":
+            from kosmo.contracts.agent_memory import AgentMemoryId
+            from kosmo.contracts.pipeline.phase_outputs import ValidationResult
+            from kosmo.contracts.sdd.document import SpecPhase
+
+            try:
+                await agent._reflect_and_consolidate(  # type: ignore[reportPrivateUsage]
+                    session_id=AgentMemoryId(payload["session_id"]),
+                    phase=SpecPhase(payload["phase"]),
+                    session_type=payload["session_type"],
+                    is_completed=payload.get("is_completed", True),
+                    current_iteration=payload.get("current_iteration", 1),
+                    validation=ValidationResult(
+                        is_valid=payload.get("validation_is_valid", True),
+                        errors=payload.get("validation_errors", "").split("; "),
+                    ),
+                )
+            except Exception:
+                _log.warning("outbox.handler_failed", job_type=job_type, exc_info=True)
+                raise
+        else:
+            _log.warning("outbox.unknown_job_type", job_type=job_type)
+
+    return handler
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
@@ -224,35 +261,89 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     pipeline_components = build_pipeline_components(settings, session_factory)
     app.state.validate_phase_context = pipeline_components.validate_phase_context
+    app.state.process_chat_message = pipeline_components.process_chat_message
+    app.state.context_builder = pipeline_components.context_builder
+    app.state.agent = pipeline_components.agent
+    app.state.chat_repo = pipeline_components.chat_repo
+    app.state.traceability_repo = pipeline_components.traceability_repo
     discovery_components = build_discovery_components(session_factory, pipeline_components)
     features_components = build_features_components(session_factory, pipeline_components)
     app.state.generate_discovery = discovery_components.generate_discovery
     app.state.get_discovery = discovery_components.get_discovery
     app.state.save_discovery = discovery_components.save_discovery
     app.state.refine_discovery = discovery_components.refine_discovery
-    app.state.process_discovery_chat_message = discovery_components.process_discovery_chat_message
     app.state.get_discovery_chat_history = discovery_components.get_discovery_chat_history
     app.state.manage_plan_changes = discovery_components.manage_plan_changes
     app.state.apply_plan_changes = discovery_components.apply_plan_changes
+    app.state.document_repo = discovery_components.document_repo
+    app.state.propagate_discovery_changes = discovery_components.propagate_discovery_changes
+    app.state.consistency_evaluator = discovery_components.consistency_evaluator
+
+    from kosmo.application.consistency.evaluate_project_consistency import EvaluateProjectConsistencyUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyProjectRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
+        SqlAlchemyActivityDiagramRepository,
+    )
+    from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import SqlAlchemyFeatureRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import SqlAlchemyRequirementRepository
+
+    app.state.evaluate_project_consistency = EvaluateProjectConsistencyUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        evaluator=discovery_components.consistency_evaluator,
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+    )
+
+    from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
+
+    app.state.cascade_consistency = CascadingConsistencyUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        evaluator=discovery_components.consistency_evaluator,
+        traceability_repo=app.state.traceability_repo,
+    )
+
+    from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
+
+    app.state.apply_consistency_impacts = ApplyConsistencyImpactsUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        traceability_repo=app.state.traceability_repo,
+    )
+
     app.state.generate_features = features_components.generate_features
     app.state.suggest_features = features_components.suggest_features
     app.state.save_selected_features = features_components.save_selected_features
     app.state.create_characteristic = features_components.create_characteristic
     app.state.feature_repo = features_components.feature_repo
-    app.state.process_feature_chat_message = features_components.process_feature_chat_message
     app.state.get_feature_chat_history = features_components.get_feature_chat_history
+    app.state.list_features = features_components.list_features
+
+    from kosmo.application.features.delete_feature import DeleteFeatureUseCase
+
+    app.state.delete_feature = DeleteFeatureUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        traceability_repo=app.state.traceability_repo,
+    )
 
     requirements_components = build_requirements_components(session_factory, pipeline_components)
     app.state.generate_ears = requirements_components.generate_ears
     app.state.get_requirements = requirements_components.get_requirements
     app.state.save_requirements = requirements_components.save_requirements
     app.state.refine_requirements = requirements_components.refine_requirements
-    app.state.process_requirement_chat_message = requirements_components.process_requirement_chat_message
     app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
+    app.state.requirement_repo = requirements_components.requirement_repo
 
     modelo_components = build_modelo_components(session_factory, pipeline_components)
     app.state.generate_diagram = modelo_components.generate_diagram
     app.state.get_diagram = modelo_components.get_diagram
+    app.state.diagram_repo = modelo_components.diagram_repo
 
     from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 
@@ -263,10 +354,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
     app.state.consolidate_patterns = consolidate_uc
 
+    from kosmo.infrastructure.persistence.postgres.outbox import run_outbox_worker
+
+    outbox_store = pipeline_components.outbox
+    app.state.outbox = outbox_store
+
+    outbox_task = asyncio.create_task(run_outbox_worker(outbox_store, _make_outbox_handler(pipeline_components)))
+
     instrument_app(settings, app=app, db_engine=db_engine)
     try:
         yield
     finally:
+        outbox_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await outbox_task
         if auth_components is not None:
             await auth_components.redis.aclose()
         await db_engine.dispose()
@@ -288,6 +389,25 @@ app = FastAPI(
 
 instrument_prometheus(app)
 
+
+@app.exception_handler(SpecError)
+async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
+    problem = exc.problem
+    return JSONResponse(
+        status_code=problem.status,
+        content={
+            "type": problem.type,
+            "title": problem.title,
+            "status": problem.status,
+            "detail": problem.detail,
+            "instance": problem.instance,
+            "trace_id": problem.trace_id,
+            "violations": [{"loc": v.loc, "msg": v.msg, "input": v.input} for v in problem.violations],
+        },
+        media_type="application/problem+json",
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],
@@ -307,6 +427,7 @@ app.include_router(feature_chat_router)
 app.include_router(requirements_router)
 app.include_router(requirement_chat_router)
 app.include_router(modelo_router)
+app.include_router(consistency_router)
 app.include_router(schemas_router)
 app.include_router(knowledge_router)
 

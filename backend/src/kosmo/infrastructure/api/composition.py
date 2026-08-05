@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import (
@@ -22,7 +22,6 @@ from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
     GetDiscoveryChatHistoryUseCase,
     GetDiscoveryUseCase,
-    ProcessDiscoveryChatMessageUseCase,
     RefineDiscoveryUseCase,
     SaveDiscoveryUseCase,
 )
@@ -32,6 +31,7 @@ from kosmo.application.features import (
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.list_features import ListFeaturesUseCase
 from kosmo.application.modelo import (
     GenerateActivityDiagramUseCase,
     GetActivityDiagramUseCase,
@@ -54,13 +54,12 @@ from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
-from kosmo.contracts.pipeline.phase_outputs import (
-    ValidationResult,
-)
-from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
+from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    ConsistencyEvaluationMode,
+)
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
@@ -74,26 +73,7 @@ from kosmo.domain.pipeline.phase_modes.requirements_chat_mode import Requirement
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
 )
-from kosmo.domain.pipeline.phase_validators.discovery_refine_validator import (
-    validate_business_level,
-)
-from kosmo.domain.pipeline.phase_validators.discovery_validator import (
-    validate_discovery_quality,
-    validate_discovery_structure,
-)
-from kosmo.domain.pipeline.phase_validators.features_validator import (
-    validate_feature_structure,
-    validate_feature_uniqueness,
-)
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
-from kosmo.domain.sdd.validators.activity_diagram_validator import (
-    validate_activity_diagram_syntax,
-)
-from kosmo.domain.sdd.validators.ears_validator import (
-    validate_ears_quality,
-    validate_ears_software_level,
-    validate_ears_syntax,
-)
 from kosmo.infrastructure.llm.embedder import OpenAIEmbedder
 from kosmo.infrastructure.llm.knowledge_tools import (
     build_find_similar_sessions,
@@ -266,11 +246,14 @@ class PipelineComponents:
     llm_client: LLMClient
     context_builder: ContextBuilder
     agent: AgentPort
-    guard_registry: GuardRegistry
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
     pattern_store: KnowledgePatternStore
     validate_phase_context: Any
+    process_chat_message: Any
+    chat_repo: Any
+    traceability_repo: Any
+    outbox: Any
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -317,51 +300,11 @@ def build_pipeline_components(
         document_repo=document_repo,
         project_repo=project_repo,
         feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
     )
 
-    # 4. Configurar el registro de guardrails con los validadores existentes
-    guard_registry = GuardRegistry()
-    guard_registry.register(
-        "validate_discovery_structure",
-        lambda inp: _adapt_validation_result(validate_discovery_structure(_markdown_input(inp))),
-    )
-    guard_registry.register(
-        "validate_discovery_quality",
-        lambda inp: _adapt_validation_result(validate_discovery_quality(_markdown_input(inp))),
-    )
-    guard_registry.register(
-        "validate_business_level",
-        lambda inp: _adapt_validation_result(validate_business_level(_markdown_input(inp))),
-    )
-    guard_registry.register(
-        "validate_feature_structure",
-        lambda inp: _adapt_validation_result(_validate_features_input(inp)),
-    )
-    guard_registry.register(
-        "validate_feature_uniqueness",
-        lambda inp: _adapt_validation_result(validate_feature_uniqueness(_extract_array(inp, "features"))),
-    )
-    guard_registry.register(
-        "validate_ears_syntax",
-        lambda inp: _adapt_validation_result(_validate_ears_syntax_raw(inp)),
-    )
-    guard_registry.register(
-        "validate_ears_quality",
-        lambda inp: _adapt_validation_result(_validate_ears_quality_raw(inp)),
-    )
-    guard_registry.register(
-        "validate_ears_software_level",
-        lambda inp: _adapt_validation_result(_validate_ears_software_level_raw(inp)),
-    )
-    guard_registry.register(
-        "validate_activity_diagram_syntax",
-        lambda inp: _adapt_validation_result(validate_activity_diagram_syntax(str(inp.get("diagram", "")))),
-    )
-
-    # 6. Instanciar el repositorio de memoria del agente
     agent_memory = SqlAlchemyAgentSessionStore(session_factory)
 
-    # 7. Instanciar el SkillRegistry y registrar todos los skills
     skill_registry = SkillRegistry()
     skill_registry.register(
         Skill(
@@ -435,6 +378,14 @@ def build_pipeline_components(
             mode=RequirementsChatMode(),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate",
+            description="Evalua consistencia entre fases y determina artefactos afectados downstream",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyEvaluationMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -470,29 +421,55 @@ def build_pipeline_components(
     if embedding_generator is not None:
         knowledge_tools.register(*build_find_similar_sessions(agent_memory, embedding_generator))
 
+    from kosmo.infrastructure.llm.knowledge_tools import build_get_impact
+    from kosmo.infrastructure.persistence.postgres.repositories.traceability_repo import (
+        SqlAlchemyTraceabilityRepository,
+    )
+
+    traceability_repo = SqlAlchemyTraceabilityRepository(session_factory)
+    knowledge_tools.register(*build_get_impact(traceability_repo))
+
+    from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
+
+    outbox = OutboxStore(session_factory)
+
     agent = KOSMOAgent(
         llm_client=llm_client,
-        guard_registry=guard_registry,
         skill_registry=skill_registry,
         memory=agent_memory,  # type: ignore[reportArgumentType]
         embedding_generator=embedding_generator,
         knowledge_tools=knowledge_tools,
         pattern_store=pattern_store,  # type: ignore[reportArgumentType]
+        outbox=outbox,
     )
 
+    from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
     from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
-    validate_phase_context = ValidatePhaseContextUseCase(llm_client=llm_client)
+    validate_phase_context = ValidatePhaseContextUseCase()
+
+    chat_repo = SqlAlchemyChatRepository(session_factory)
+
+    process_chat_message = ProcessChatMessageUseCase(
+        chat_repo=chat_repo,
+        agent=agent,
+        skill_registry=skill_registry,
+        project_repo=project_repo,
+    )
 
     return PipelineComponents(
         llm_client=llm_client,
         context_builder=context_builder,
         agent=agent,
-        guard_registry=guard_registry,
         skill_registry=skill_registry,
         agent_memory=agent_memory,
         pattern_store=pattern_store,
         validate_phase_context=validate_phase_context,
+        process_chat_message=process_chat_message,
+        chat_repo=chat_repo,
+        traceability_repo=traceability_repo,
+        outbox=outbox,
     )
 
 
@@ -502,10 +479,12 @@ class DiscoveryComponents:
     get_discovery: GetDiscoveryUseCase
     save_discovery: SaveDiscoveryUseCase
     refine_discovery: RefineDiscoveryUseCase
-    process_discovery_chat_message: ProcessDiscoveryChatMessageUseCase
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
     manage_plan_changes: Any
     apply_plan_changes: Any
+    propagate_discovery_changes: Any
+    consistency_evaluator: Any
+    document_repo: Any
 
 
 def build_discovery_components(
@@ -516,11 +495,35 @@ def build_discovery_components(
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
+    from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
+    from kosmo.application.consistency.propagate_discovery_changes import PropagateDiscoveryChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
-    from kosmo.application.discovery.process_discovery_chat_message import ProcessDiscoveryChatMessageUseCase
+    from kosmo.contracts.consistency import ConsistencyEvaluator
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
+
+    feature_repo = SqlAlchemyFeatureRepository(session_factory)
+    requirement_repo = SqlAlchemyRequirementRepository(session_factory)
+    diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
+
+    consistency_evaluator: ConsistencyEvaluator = EvaluateConsistencyUseCase(
+        agent=pipeline.agent,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        document_repo=document_repo,
+    )
+
+    propagate_uc = PropagateDiscoveryChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=consistency_evaluator,
+        traceability_repo=pipeline.traceability_repo,
+    )
 
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
@@ -536,13 +539,6 @@ def build_discovery_components(
             context_builder=pipeline.context_builder,
             agent=pipeline.agent,
         ),
-        process_discovery_chat_message=ProcessDiscoveryChatMessageUseCase(
-            project_repo=project_repo,
-            document_repo=document_repo,
-            chat_repo=chat_repo,
-            context_builder=pipeline.context_builder,
-            agent=pipeline.agent,
-        ),
         get_discovery_chat_history=GetDiscoveryChatHistoryUseCase(
             project_repo=project_repo,
             chat_repo=chat_repo,
@@ -555,8 +551,14 @@ def build_discovery_components(
             project_repo=project_repo,
             chat_repo=chat_repo,
             document_repo=document_repo,
-            feature_repo=SqlAlchemyFeatureRepository(session_factory),
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            propagate_uc=propagate_uc,
+            session_factory=session_factory,
         ),
+        propagate_discovery_changes=propagate_uc,
+        consistency_evaluator=consistency_evaluator,
+        document_repo=document_repo,
     )
 
 
@@ -567,8 +569,8 @@ class FeaturesComponents:
     save_selected_features: SaveSelectedFeaturesUseCase
     create_characteristic: CreateCharacteristicUseCase
     feature_repo: SqlAlchemyFeatureRepository
-    process_feature_chat_message: Any
     get_feature_chat_history: Any
+    list_features: Any
 
 
 def build_features_components(
@@ -587,17 +589,6 @@ def build_features_components(
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
-
-    from kosmo.application.features.process_feature_chat_message import ProcessFeatureChatMessageUseCase
-
-    process_feature_chat = ProcessFeatureChatMessageUseCase(
-        project_repo=project_repo,
-        document_repo=document_repo,
-        feature_repo=feature_repo,
-        chat_repo=chat_repo,
-        context_builder=pipeline.context_builder,
-        agent=pipeline.agent,
-    )
 
     from kosmo.application.features.get_feature_chat_history import GetFeatureChatHistoryUseCase
 
@@ -619,11 +610,10 @@ def build_features_components(
         ),
         create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
-            suggest_use_case=suggest_features,
         ),
         feature_repo=feature_repo,
-        process_feature_chat_message=process_feature_chat,
         get_feature_chat_history=get_feature_chat_history,
+        list_features=ListFeaturesUseCase(feature_repo=feature_repo),
     )
 
 
@@ -633,8 +623,8 @@ class RequirementsComponents:
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
     refine_requirements: RefineRequirementsUseCase
-    process_requirement_chat_message: Any
     get_requirement_chat_history: Any
+    requirement_repo: Any
 
 
 def build_requirements_components(
@@ -650,17 +640,6 @@ def build_requirements_components(
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
 
-    from kosmo.application.requirements.process_requirement_chat_message import ProcessRequirementChatMessageUseCase
-
-    process_requirement_chat = ProcessRequirementChatMessageUseCase(
-        document_repo=document_repo,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        chat_repo=chat_repo,
-        agent=pipeline.agent,
-        context_builder=pipeline.context_builder,
-    )
-
     from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
 
     get_requirement_chat_history = GetRequirementChatHistoryUseCase(
@@ -675,6 +654,7 @@ def build_requirements_components(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             agent=pipeline.agent,
+            traceability_repo=pipeline.traceability_repo,
         ),
         get_requirements=GetRequirementsUseCase(
             project_repo=project_repo,
@@ -692,8 +672,8 @@ def build_requirements_components(
             requirement_repo=requirement_repo,
             agent=pipeline.agent,
         ),
-        process_requirement_chat_message=process_requirement_chat,
         get_requirement_chat_history=get_requirement_chat_history,
+        requirement_repo=requirement_repo,
     )
 
 
@@ -701,6 +681,7 @@ def build_requirements_components(
 class ModeloComponents:
     generate_diagram: GenerateActivityDiagramUseCase
     get_diagram: GetActivityDiagramUseCase
+    diagram_repo: Any
 
 
 def build_modelo_components(
@@ -710,71 +691,18 @@ def build_modelo_components(
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
     requirement_repo = SqlAlchemyRequirementRepository(session_factory)
     diagram_repo = SqlAlchemyActivityDiagramRepository(session_factory)
+    project_repo = SqlAlchemyProjectRepository(session_factory)
     return ModeloComponents(
         generate_diagram=GenerateActivityDiagramUseCase(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             diagram_repo=diagram_repo,
             agent=pipeline.agent,
+            project_repo=project_repo,
         ),
         get_diagram=GetActivityDiagramUseCase(
             feature_repo=feature_repo,
             diagram_repo=diagram_repo,
         ),
+        diagram_repo=diagram_repo,
     )
-
-
-def _markdown_input(inp: dict[str, object]) -> RichTextDocument:
-    from kosmo.domain.sdd.document_converters import markdown_to_document
-
-    raw = inp.get("document", inp.get("text", ""))
-    return markdown_to_document(str(raw))
-
-
-def _adapt_validation_result(vr: ValidationResult) -> dict[str, object]:
-    return {"is_valid": vr.is_valid, "errors": vr.errors, "warnings": vr.warnings}
-
-
-def _extract_array(inp: dict[str, object], key: str) -> list[Any]:
-    import json
-
-    raw = inp.get(key, [])
-    if isinstance(raw, str):
-        try:
-            raw = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return []
-    if not isinstance(raw, list):
-        return []
-
-    result: list[Any] = []
-    for item in cast(list[object], raw):
-        if isinstance(item, dict):
-            cleaned: dict[str, Any] = {}
-            for k, v in cast(dict[object, object], item).items():
-                if isinstance(k, str):
-                    cleaned[k] = v
-            result.append(cleaned)
-        else:
-            result.append(item)
-    return result
-
-
-def _validate_features_input(inp: dict[str, object]) -> ValidationResult:
-    features = _extract_array(inp, "features")
-    return validate_feature_structure(features)
-
-
-def _validate_ears_syntax_raw(inp: dict[str, object]) -> ValidationResult:
-    requirements = _extract_array(inp, "requirements")
-    return validate_ears_syntax(requirements)
-
-
-def _validate_ears_quality_raw(inp: dict[str, object]) -> ValidationResult:
-    requirements = _extract_array(inp, "requirements")
-    return validate_ears_quality(requirements)
-
-
-def _validate_ears_software_level_raw(inp: dict[str, object]) -> ValidationResult:
-    requirements = _extract_array(inp, "requirements")
-    return validate_ears_software_level(requirements)

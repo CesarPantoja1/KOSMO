@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from pgvector.sqlalchemy import Vector  # pyright: ignore[reportMissingTypeStubs]
 from sqlalchemy import DateTime, Integer, String, Text, func, text
@@ -15,7 +14,7 @@ class Base(DeclarativeBase):
 class UserModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[UUID] = mapped_column(pg.UUID(as_uuid=True), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(pg.CITEXT(), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -32,7 +31,7 @@ class UserModel(Base):
 class AuditEventModel(Base):
     __tablename__ = "audit_log"
 
-    id: Mapped[UUID] = mapped_column(pg.UUID(as_uuid=True), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -40,7 +39,7 @@ class AuditEventModel(Base):
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
-    actor_id: Mapped[UUID | None] = mapped_column(pg.UUID(as_uuid=True), nullable=True)
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     actor_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(pg.INET(), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(Text(), nullable=True)
@@ -92,6 +91,36 @@ class RequirementModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class RequirementItemModel(Base):
+    __tablename__ = "requirement_items"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    feature_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    requirement_number: Mapped[int] = mapped_column(Integer(), nullable=False)
+    display_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    pattern: Mapped[str] = mapped_column(String(32), nullable=False)
+    statement: Mapped[str] = mapped_column(Text(), nullable=False)
+    origin: Mapped[str] = mapped_column(Text(), nullable=False, default="")
+    acceptance_criteria: Mapped[list[Any]] = mapped_column(
+        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class TraceabilityEdgeModel(Base):
+    __tablename__ = "traceability_edges"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    origin: Mapped[str] = mapped_column(String(16), nullable=False, default="llm")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class DiscoveryDocumentModel(Base):
     __tablename__ = "discovery"
 
@@ -122,7 +151,7 @@ class AgentSessionModel(Base):
     max_iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
     is_completed: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    output_json: Mapped[str | None] = mapped_column(pg.JSONB(), nullable=True)
+    output_json: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
     validation_is_valid: Mapped[bool] = mapped_column(default=False, nullable=False)
     validation_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     validation_error_messages: Mapped[list[Any]] = mapped_column(
@@ -162,18 +191,18 @@ class KnowledgePatternModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class ChatHistoryModel(Base):
-    __tablename__ = "chat_histories"
+class ChatMessageModel(Base):
+    __tablename__ = "chat_messages"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
     context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    messages: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
-
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text(), nullable=False)
+    suggested_change: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class PlanChangeModel(Base):
@@ -189,9 +218,45 @@ class PlanChangeModel(Base):
     diff_before: Mapped[str] = mapped_column(Text(), nullable=False)
     diff_after: Mapped[str] = mapped_column(Text(), nullable=False)
     rationale: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        comment="pending | added | conflict | applied | discarded",
+    )
     origin: Mapped[str] = mapped_column(String(64), nullable=False)
     user_version: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class DocumentVersionModel(Base):
+    __tablename__ = "document_versions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    markdown: Mapped[str] = mapped_column(Text(), nullable=False)
+    change_ids: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class OutboxJobModel(Base):
+    __tablename__ = "outbox_jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(pg.JSONB(), nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserPreferenceModel(Base):
+    __tablename__ = "user_preferences"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    rule_text: Mapped[str] = mapped_column(Text(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

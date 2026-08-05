@@ -18,5 +18,5 @@ export interface ChatMessage {
 	role: 'user' | 'assistant';
 	content: string;
 	created_at: string;
-	change_suggestion?: ChangeSuggestion;
+	change_suggestions?: ChangeSuggestion[] | null;
 }

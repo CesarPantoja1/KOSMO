@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -67,6 +67,12 @@ class LLMClient(Protocol):
         temperature: float = 0.1,
         max_tokens: int = 2000,
     ) -> tuple[str, list[ToolCallRecord]]: ...
+
+
+class StreamResult:
+    def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]: ...
+
+    async def get_data(self) -> Any: ...
 
 
 class Embedder(Protocol):

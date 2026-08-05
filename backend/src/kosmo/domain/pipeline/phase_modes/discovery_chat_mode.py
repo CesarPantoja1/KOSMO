@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
-from kosmo.contracts import RespuestaChatLLM
-from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryChatContext
-from kosmo.contracts.pipeline.phase_outputs import (
-    GenerationMetadata,
-    ValidationResult,
-)
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 
 _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "Eres un asistente conversacional especializado en descubrimiento de producto. "
@@ -23,6 +16,10 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "- Alcance\n\n"
     "REGLAS:\n"
     "- Responde siempre en espanol con tildes correctas.\n"
+    "- Separa las ideas en parrafos cortos. Usa saltos de linea entre parrafos.\n"
+    "- Usa listas con guiones (-) o numeradas (1.) para enumerar elementos.\n"
+    "- Usa **negritas** para nombres de secciones y conceptos clave.\n"
+    "- NO escribas toda la respuesta en un solo bloque de texto.\n"
     "- Manten el analisis a NIVEL DE NEGOCIO. PROHIBIDO: API, base de datos, "
     "microservicios, endpoints, servidores, lenguajes de programacion, frameworks, "
     "protocolos, arquitectura, deployment, Docker, cloud, SQL, HTTP, REST, GraphQL, "
@@ -45,55 +42,49 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "para una version futura o que esta fuera del alcance actual. Si el usuario "
     "pide agregarlo, asume que es para el alcance actual.\n\n"
     "COMPORTAMIENTO:\n"
-    "- Si el usuario pide una modificacion al documento, genera una sugerencia de "
-    "cambio en el campo change_suggestion con los siguientes atributos:\n"
+    "- Si el usuario pide una modificacion al documento, genera una o varias sugerencias de "
+    "cambio en el campo change_suggestions (lista). Cada sugerencia representa una modificacion "
+    "independiente en una seccion especifica del documento. Si el cambio afecta varias secciones, "
+    "genera una sugerencia por cada seccion afectada. Atributos de cada sugerencia:\n"
     "  * section: titulo exacto de la seccion afectada tal como aparece en el "
     "documento (ej. 'Alcance', 'Vision del producto', 'Actores').\n"
     "  * description: explicacion breve de lo que cambia.\n"
-    "  * diff_before: fragmento textual EXACTO del documento actual que se "
-    "reemplazaria (copia textual, sin resumir).\n"
+    "  * diff_before: SOLO el fragmento textual que cambia, NUNCA el documento completo. "
+    "Para AGREGAR contenido completamente nuevo (sin modificar nada existente), "
+    "usa cadena vacía ('') y coloca TODO el contenido nuevo en diff_after. "
+    "Para MODIFICAR contenido existente, copia textualmente SOLO el fragmento mínimo que "
+    "se reemplaza. Para ELIMINAR, diff_after debe ser cadena vacía ('').\n"
     "  * diff_after: contenido sugerido para reemplazar el fragmento.\n"
     "  * rationale: justificacion del cambio propuesto (puede ser null).\n"
+    "- NUNCA copies el documento completo en diff_before. Solo el fragmento mínimo que "
+    "realmente se modifica. Si el cambio es puramente agregar contenido sin modificar nada "
+    "existente, diff_before debe ser cadena vacía ('').\n"
     "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
     "change_suggestion en null y responde de forma conversacional.\n\n"
     "FORMATO DE SALIDA (JSON):\n"
     "{\n"
     '  "content": "<tu respuesta conversacional>",\n'
-    '  "change_suggestion": null | {\n'
-    '    "section": "<titulo exacto de seccion>",\n'
-    '    "description": "<descripcion breve>",\n'
-    '    "diff_before": "<fragmento textual exacto actual>",\n'
-    '    "diff_after": "<contenido sugerido>",\n'
-    '    "rationale": "<justificacion o null>"\n'
-    "  }\n"
+    '  "change_suggestions": null | [\n'
+    "    {\n"
+    '      "section": "<titulo exacto de seccion>",\n'
+    '      "description": "<descripcion breve>",\n'
+    '      "diff_before": "<fragmento textual exacto actual>",\n'
+    '      "diff_after": "<contenido sugerido>",\n'
+    '      "rationale": "<justificacion o null>"\n'
+    "    }\n"
+    "  ]\n"
     "}\n"
 )
 
 
-class DiscoveryChatMode:
+class DiscoveryChatMode(BaseChatMode):
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.DESCUBRIMIENTO
 
     @property
-    def temperature(self) -> float:
-        return 0.4
-
-    @property
-    def max_tokens(self) -> int:
-        return 4096
-
-    @property
-    def output_type(self) -> type[RespuestaChatLLM]:
-        return RespuestaChatLLM
-
-    @property
     def system_prompt(self) -> str:
         return _DISCOVERY_CHAT_SYSTEM_PROMPT
-
-    @property
-    def available_tools(self) -> list[ToolDefinition]:
-        return []
 
     def build_user_prompt(self, context: DiscoveryChatContext) -> str:
         from kosmo.domain.sdd.document_converters import document_to_markdown
@@ -107,63 +98,3 @@ class DiscoveryChatMode:
             prefs = "\n".join(f"- {p.rule_text}" for p in context.user_preferences)
             parts.append(f"\n## Preferencias del usuario\n\n{prefs}")
         return "\n".join(parts)
-
-    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
-        errors: list[str] = []
-
-        if isinstance(output, RespuestaChatLLM):
-            if not output.content or not output.content.strip():
-                errors.append("El campo content no puede estar vacio.")
-            if output.change_suggestion is not None:
-                cs = output.change_suggestion
-                if not cs.section or not cs.section.strip():
-                    errors.append("El campo section no puede estar vacio.")
-                if not cs.description or not cs.description.strip():
-                    errors.append("El campo description no puede estar vacio.")
-                if not cs.diff_before or not cs.diff_before.strip():
-                    errors.append("El campo diff_before no puede estar vacio.")
-                if not cs.diff_after or not cs.diff_after.strip():
-                    errors.append("El campo diff_after no puede estar vacio.")
-                if cs.diff_before.strip() == cs.diff_after.strip():
-                    errors.append("diff_before y diff_after son identicos; la sugerencia no propone cambios reales.")
-        elif isinstance(output, dict):
-            errors.append("Formato de salida no reconocido. Se esperaba RespuestaChatLLM.")
-        else:
-            errors.append("Formato de salida no reconocido.")
-
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-        )
-
-    def build_validation_feedback(self, errors: list[str]) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            "## Feedback de validacion\n\n"
-            f"La respuesta tiene los siguientes errores:\n\n{error_list}\n\n"
-            "Corrige los problemas indicados y genera una nueva respuesta en el formato JSON esperado."
-        )
-
-    def build_retry_prompt(
-        self,
-        original_prompt: str,
-        errors: list[str],
-        retry_count: int,
-    ) -> str:
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return (
-            f"{original_prompt}\n\n"
-            f"## Correcciones necesarias (intento {retry_count})\n\n"
-            f"Errores detectados:\n{error_list}\n\n"
-            "Genera una nueva respuesta corrigiendo exclusivamente estos errores."
-        )
-
-    def build_output(
-        self,
-        raw_output: Any,
-        validation_result: ValidationResult,  # noqa: ARG002
-        metadata: GenerationMetadata,  # noqa: ARG002
-        *,
-        context: Any = None,  # noqa: ARG002
-    ) -> Any:
-        return raw_output

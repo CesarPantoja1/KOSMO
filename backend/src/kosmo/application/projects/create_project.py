@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from uuid import uuid4
 
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ProjectRepository
+from kosmo.domain.sdd.id_generator import IdGenerator
 
 _SLUG_DISALLOWED_RE = re.compile(r"[^\w\s-]", re.UNICODE)
 _SLUG_SEPARATOR_RE = re.compile(r"[-\s]+")
@@ -26,7 +26,7 @@ class CreateProjectUseCase:
     async def execute(self, *, name: str, description: str, owner_id: UserId) -> Project:
         slug = await self._build_unique_slug(name=name, owner_id=owner_id)
         project = Project(
-            id=ProjectId(f"prj_{uuid4().hex}"),
+            id=ProjectId(IdGenerator.generate("project")),
             name=name,
             slug=slug,
             description=description,

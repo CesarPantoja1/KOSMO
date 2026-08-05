@@ -1,10 +1,12 @@
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 
 from kosmo.application.chat.apply_plan_changes import (
     ApplyPlanChangesInput,
     ApplyPlanChangesUseCase,
+    revert_to_version,
 )
 from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
 from kosmo.contracts.auth import Principal
@@ -15,15 +17,21 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.schemas import (
     AddPlanChangeRequest,
+    AppliedChangeItemView,
     ApplyBatchRequest,
     BatchResultView,
-    FailedChangeView,
+    FailedChangeItemView,
     HttpErrorResponse,
+    PhaseNotificationList,
+    PhaseNotificationView,
     PlanStateView,
 )
+
+_log = structlog.get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/plan",
@@ -182,11 +190,61 @@ async def apply_batch(
     except DocumentNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     except ValueError as e:
+        _log.error("plan.apply_value_error", detail=str(e), exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    applied = [AppliedChangeItemView(change_id=str(c.id), section=c.section) for c in output.applied_changes]
+    failed = [FailedChangeItemView(change_id=str(fc.id), section="", error=fc.reason) for fc in output.failed_changes]
+
+    propagation: PhaseNotificationList | None = None
+    if output.propagation is not None:
+        affected = [
+            PhaseNotificationView(
+                phase=p.phase,
+                affected_count=p.affected_count,
+                affected_ids=p.affected_ids,
+            )
+            for p in output.propagation.affected_phases
+            if p.affected_count > 0
+        ]
+        if affected:
+            propagation = PhaseNotificationList(affected_phases=affected)
 
     return BatchResultView(
         applied_count=output.applied_count,
         failed_count=output.failed_count,
-        failed_changes=[FailedChangeView(id=str(fc.id), reason=fc.reason) for fc in output.failed_changes],
-        propagation=None,
+        applied=applied,
+        failed=failed,
+        propagation=propagation,
     )
+
+
+def _document_repo(request: Request) -> DocumentRepository:
+    return request.app.state.document_repo
+
+
+@router.post(
+    "/revert",
+    summary="Revertir a una versión anterior del documento",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Versión no encontrada."},
+    },
+)
+async def revert_document(
+    project_id: str,
+    version_id: Annotated[str, Body(..., embed=True)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    doc_repo: Annotated[DocumentRepository, Depends(_document_repo)],
+):
+    result = await revert_to_version(
+        document_repo=doc_repo,
+        project_id=ProjectId(project_id),
+        version_id=version_id,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Versión no encontrada",
+        )
+    return {"status": "ok", "version_id": version_id}

@@ -1,25 +1,24 @@
 'use client';
 
-import { generateCharacteristics } from '@/entities/characteristic';
-import {
-	getDiscovery,
-	saveDiscovery,
-	useDiscoveryStore,
-	type DiscoveryChatResponse,
-} from '@/entities/discovery';
-import type { PlanChange } from '@/entities/plan';
-import { addPlanChange, deletePlanChange, usePlanStore } from '@/entities/plan';
+import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
+import { usePlanActions } from '@/entities/plan';
 import {
 	Chatbot,
 	FloatingPlan,
 	MarkdownEditor,
 	type MarkdownEditorHandle,
 } from '@/feature';
-import type { ChangeSuggestion, ChatMessage } from '@/feature/chatbot';
-import { Ai, ArrowRight, ModalConfirmLeave, toast } from '@/shared/ui';
+import type { ChatMessage } from '@/feature/chatbot';
+import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+
+const generatingDiscoveryMessages = [
+	'Analizando información del proyecto...',
+	'Identificando problemas y oportunidades...',
+	'Generando documento de descubrimiento...',
+];
 
 /** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
 function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
@@ -28,16 +27,7 @@ function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
 		role: r.role,
 		content: r.content,
 		created_at: r.created_at,
-		change_suggestion: r.change_suggestion
-			? {
-					id: r.change_suggestion.id,
-					section: r.change_suggestion.section,
-					description: r.change_suggestion.description,
-					diff_before: r.change_suggestion.diff_before,
-					diff_after: r.change_suggestion.diff_after,
-					rationale: r.change_suggestion.rationale,
-				}
-			: undefined,
+		change_suggestions: r.change_suggestions ?? undefined,
 	};
 }
 
@@ -45,8 +35,9 @@ const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
 	const [markdown, setMarkdown] = useState('');
 	const currentProject = useAppStore((s) => s.currentProject);
-	const [isLoading, setIsLoading] = useState(!!currentProject);
-	const [isGenerating, setIsGenerating] = useState(false);
+	const [isLoading, _setIsLoading] = useState(!!currentProject);
+	const [hasDiscovery, setHasDiscovery] = useState(false);
+	const [isGeneratingDiscovery, setIsGeneratingDiscovery] = useState(false);
 	const savedContentRef = useRef('');
 	const router = useRouter();
 
@@ -59,13 +50,11 @@ const DiscoveryPage = () => {
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [isChatLoading, setIsChatLoading] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
-	const [editorKey, setEditorKey] = useState(0);
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
-	const storeSendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
-
-	const addToPlan = usePlanStore((s) => s.addToPlan);
-	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
+	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
+	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
+	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
 
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
@@ -75,7 +64,7 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
-	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
+	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -83,39 +72,18 @@ const DiscoveryPage = () => {
 			return;
 		}
 
-		const fetchDiscovery = async () => {
-			setIsLoading(true);
-			try {
-				const data = await getDiscovery(currentProject.id);
-				setMarkdown(data.content);
-				savedContentRef.current = data.content;
-				// Sprint 4 (T9) — Sincronizar e hidratar el plan desde el backend
-				fetchAndHydratePlan(currentProject.id, 'discovery');
-			} catch (err) {
-				const errorStatus =
-					err && typeof err === 'object' && 'status' in err
-						? (err as { status: unknown }).status
-						: undefined;
-				const errorMessage = err instanceof Error ? err.message : '';
-				if (
-					errorStatus === 404 ||
-					errorMessage.includes('404') ||
-					errorMessage.includes('no existe')
-				) {
-					setMarkdown(
-						'## Visión del producto\n\nAún no hay descubrimiento para este proyecto.',
-					);
-					savedContentRef.current = '';
-				} else {
-					toast.error(errorMessage || 'Error al cargar el descubrimiento');
-				}
-			} finally {
-				setIsLoading(false);
+		void (async () => {
+			if (currentDiscovery) {
+				setMarkdown(currentDiscovery.content);
+				savedContentRef.current = currentDiscovery.content;
+				setHasDiscovery(true);
+			} else {
+				setMarkdown('');
+				savedContentRef.current = '';
 			}
-		};
-
-		fetchDiscovery();
-	}, [currentProject, router, fetchAndHydratePlan]);
+			_setIsLoading(false);
+		})();
+	}, [currentProject, currentDiscovery, router]);
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
@@ -142,22 +110,25 @@ const DiscoveryPage = () => {
 			setPendingNavigationPath('caracteristicas');
 			return;
 		}
-		await generateAndNavigate();
+		router.push('caracteristicas');
 	};
 
-	const generateAndNavigate = async () => {
+	const handleGenerateDiscovery = async () => {
 		if (!currentProject) return;
 
-		setIsGenerating(true);
+		setIsGeneratingDiscovery(true);
 		try {
-			await generateCharacteristics(currentProject.id);
-			router.push('caracteristicas');
+			const data = await generateDiscovery(currentProject.id);
+			setMarkdown(data.content);
+			savedContentRef.current = data.content;
+			setHasDiscovery(true);
+			toast.success('Descubrimiento generado exitosamente');
 		} catch (err) {
 			const message =
-				err instanceof Error ? err.message : 'Error al generar las características';
+				err instanceof Error ? err.message : 'Error al generar el descubrimiento';
 			toast.error(message);
 		} finally {
-			setIsGenerating(false);
+			setIsGeneratingDiscovery(false);
 		}
 	};
 
@@ -169,7 +140,7 @@ const DiscoveryPage = () => {
 			const saved = await doSave();
 			setHasUnsavedChanges(false);
 			if (saved) {
-				await generateAndNavigate();
+				router.push('caracteristicas');
 			}
 		} else {
 			setHasUnsavedChanges(false);
@@ -212,48 +183,17 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handlePlanAction = (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => {
-		if (!currentProject) return;
-
-		if (action === 'add') {
-			const change: PlanChange = {
-				id: messageId,
-				section: suggestion.section,
-				description: suggestion.description ?? suggestion.section,
-				diff: {
-					before: suggestion.diff_before,
-					after: suggestion.diff_after,
-				},
-				status: 'pending',
-				origin: 'chat',
-				phase: 'discovery',
-				context: currentProject.id,
-				rationale: suggestion.rationale ?? undefined,
-				created_at: new Date().toISOString(),
-			};
-			addToPlan('discovery', change);
-			addPlanChange(currentProject.id, 'discovery', change).catch((err) => {
-				console.warn('[DiscoveryPage] Error al persistir cambio en backend:', err);
-			});
-		}
-
-		if (action === 'remove') {
-			removeFromPlan('discovery', messageId);
-			deletePlanChange(currentProject.id, 'discovery', messageId).catch((err) => {
-				console.warn('[DiscoveryPage] Error al eliminar cambio en backend:', err);
-			});
-		}
-	};
+	const handlePlanAction = usePlanActions(
+		currentProject?.id ?? null,
+		'discovery',
+		currentProject?.id ?? null,
+	);
 
 	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
 		setIsChatLoading(true);
 		try {
-			await storeSendChatMessage(currentProject.id, content);
+			await sendChatMessage(currentProject.id, content);
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
@@ -267,6 +207,14 @@ const DiscoveryPage = () => {
 
 	return (
 		<>
+			{isGeneratingDiscovery && (
+				<Loading
+					title='Generando Descubrimiento'
+					description='La IA está analizando la información del proyecto. Por favor, espera un momento.'
+					messages={generatingDiscoveryMessages}
+				/>
+			)}
+
 			{pendingNavigationPath && (
 				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
@@ -280,7 +228,7 @@ const DiscoveryPage = () => {
 						Identificar y documentar la información estratégica del proyecto para
 						comprender el problema, el contexto y el alcance del negocio.
 					</p>
-					{!isEditorMaximized && (
+					{!isEditorMaximized && hasDiscovery && (
 						<div className='flex justify-end gap-3'>
 							<button
 								onClick={() => setIsChatbotOpen(true)}
@@ -291,21 +239,34 @@ const DiscoveryPage = () => {
 							</button>
 							<button
 								onClick={handleNextLink}
-								disabled={isGenerating}
 								className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
 							>
-								<span className='text-center'>
-									{isGenerating ? 'Generando...' : 'Ir a características'}
-								</span>
+								<span className='text-center'>Ir a características</span>
 								<ArrowRight size={20} color='text-base-50' />
 							</button>
 						</div>
 					)}
 					<div className='flex-1 flex flex-col min-h-0'>
-						{/* TODO: Mejorar el skeleton */}
 						{isLoading && (
 							<div className='w-full min-h-105 relative'>
-								<div className='w-full h-full rounded-xl border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
+								<div className='flex justify-end gap-3 mb-4'>
+									<button
+										disabled={true}
+										className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+									>
+										<Ai size={20} color='text-base-50' />
+										<span className='text-center'>Refinar</span>
+									</button>
+									<button
+										disabled={true}
+										className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
+									>
+										<span className='text-center'>Ir a características</span>
+										<ArrowRight size={20} color='text-base-50' />
+									</button>
+								</div>
+
+								<div className='w-full h-full rounded-sm border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
 									<div className='flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3'>
 										<div className='flex items-center gap-2'>
 											<div className='h-4 w-20 animate-pulse rounded bg-base-200' />
@@ -327,10 +288,31 @@ const DiscoveryPage = () => {
 							</div>
 						)}
 
-						{!isLoading && (
+						{!isLoading && !isGeneratingDiscovery && !hasDiscovery && (
+							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
+								<div className='flex flex-col items-center gap-4 text-center px-6'>
+									<Ai color='text-ai' size={70} />
+									<h3 className='text-xl font-semibold text-base-800'>
+										Sin Descubrimiento generado
+									</h3>
+									<p className='text-base-600 max-w-md'>
+										Aún no se ha generado el descubrimiento de este proyecto. Haz clic en
+										el botón para que la IA analice la información y genere el documento.
+									</p>
+									<button
+										onClick={handleGenerateDiscovery}
+										className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
+									>
+										<Ai size={20} color='text-base-50' />
+										<span className='text-center'>Generar</span>
+									</button>
+								</div>
+							</div>
+						)}
+
+						{!isLoading && hasDiscovery && (
 							<div className='w-full h-full relative'>
 								<MarkdownEditor
-									key={editorKey}
 									ref={editorRef}
 									markdown={markdown}
 									onChange={setMarkdown}
@@ -342,6 +324,7 @@ const DiscoveryPage = () => {
 								<FloatingPlan
 									phase='discovery'
 									navigateTo='/proyecto/descubrimiento/plan'
+									contextId={currentProject?.id ?? null}
 								/>
 							</div>
 						)}

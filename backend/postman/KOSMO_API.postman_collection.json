@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "KOSMO API",
-		"description": "Coleccion completa de endpoints KOSMO. Flujo: Auth → Project → Discovery → Features → Requirements → Modelo.\n\nNuevo: Chat de Descubrimiento, Plan de Cambios, Consolidacion de Conocimiento.\n\nVariables globales:\n- `base_url`: http://localhost:8000\n- `token`: access token JWT (se popula automaticamente tras /token)\n- `project_id`: ID del proyecto creado\n- `feature_id`: ID de la primera caracteristica generada\n- `change_id`: ID de un cambio en el plan (se popula al agregar un cambio)",
+		"description": "Coleccion completa de endpoints KOSMO. Flujo: Auth → Project → Discovery → Features → Requirements → Modelo → Plan → Consistency.\n\nTodos los endpoints de generacion son SINCRONOS (200). El servidor espera a que termine la generacion antes de responder.\n\nVariables globales:\n- `base_url`: http://localhost:8000\n- `token`: access token JWT (se popula automaticamente tras /token)\n- `project_id`: ID del proyecto creado\n- `feature_id`: ID de la primera caracteristica generada\n- `change_id`: ID de un cambio en el plan (se popula al agregar un cambio)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -9,7 +9,8 @@
 		{ "key": "token", "value": "" },
 		{ "key": "project_id", "value": "" },
 		{ "key": "feature_id", "value": "" },
-		{ "key": "change_id", "value": "" }
+		{ "key": "change_id", "value": "" },
+		{ "key": "before", "value": "", "description": "Cursor opcional (next_cursor) para paginar el historial de chat" }
 	],
 	"auth": {
 		"type": "bearer",
@@ -228,11 +229,29 @@
 					}
 				},
 				{
+					"name": "POST Chat/Stream - Chat de Descubrimiento con streaming SSE",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat/stream", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat", "stream"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Agrega la capacidad de recogida y entrega a domicilio al alcance.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
 					"name": "GET Chat - Obtener historial del chat de Descubrimiento",
 					"event": [],
 					"request": {
 						"method": "GET",
-						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat"] }
+						"url": {
+							"raw": "{{base_url}}/api/v1/projects/{{project_id}}/discovery/chat?before={{before}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "projects", "{{project_id}}", "discovery", "chat"],
+							"query": [{ "key": "before", "value": "{{before}}", "description": "Cursor opcional (next_cursor) para paginar" }]
+						}
 					}
 				}
 			]
@@ -242,12 +261,20 @@
 			"item": [
 				{
 					"name": "POST Generate - Generar caracteristicas con IA",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
+					}
+				},
+				{
+					"name": "GET - Listar caracteristicas (captura feature_id)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"if (pm.response.code === 201) {",
+									"if (pm.response.code === 200) {",
 									"    var jsonData = pm.response.json();",
 									"    if (jsonData.length > 0) {",
 									"        pm.collectionVariables.set('feature_id', jsonData[0].id);",
@@ -259,14 +286,6 @@
 							}
 						}
 					],
-					"request": {
-						"method": "POST",
-						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
-					}
-				},
-				{
-					"name": "GET - Listar caracteristicas",
-					"event": [],
 					"request": {
 						"method": "GET",
 						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/features", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "features"] }
@@ -303,6 +322,45 @@
 							"mode": "raw",
 							"raw": "{\n  \"features\": [\n    {\n      \"title\": \"Registro de clientes frecuentes\",\n      \"description\": \"El usuario registra clientes habituales con sus preferencias de lavado para agilizar futuros pedidos.\",\n      \"origin\": \"Se deriva de Actores y Propuesta de valor del Descubrimiento\"\n    }\n  ]\n}",
 							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Chat - Enviar mensaje al chat de Caracteristicas",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "chat"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Ajusta el titulo de esta caracteristica para reflejar mejor la gestion de clientes frecuentes.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Chat/Stream - Chat de Caracteristicas con streaming SSE",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/chat/stream", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "chat", "stream"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Ajusta la descripcion de la caracteristica para mencionar el programa de puntos.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET Chat/History - Historial del chat de Caracteristicas",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/features/{{feature_id}}/chat/history?before={{before}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "features", "{{feature_id}}", "chat", "history"],
+							"query": [{ "key": "before", "value": "{{before}}", "description": "Cursor opcional (next_cursor) para paginar" }]
 						}
 					}
 				}
@@ -355,6 +413,45 @@
 							"mode": "raw",
 							"raw": "{\n  \"project_id\": \"{{project_id}}\",\n  \"instructions\": \"Agrega criterios de aceptacion para timeout de red y caso de error en cada requisito\"\n}",
 							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Chat - Enviar mensaje al chat de Requisitos",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/chat", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements", "chat"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Agrega un criterio de aceptacion para manejar conexiones de red lentas.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "POST Chat/Stream - Chat de Requisitos con streaming SSE",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/chat/stream", "host": ["{{base_url}}"], "path": ["api", "v1", "features", "{{feature_id}}", "requirements", "chat", "stream"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Modifica el statement del primer requisito para exigir confirmacion del usuario.\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "GET Chat/History - Historial del chat de Requisitos",
+					"event": [],
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/api/v1/features/{{feature_id}}/requirements/chat/history?before={{before}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "features", "{{feature_id}}", "requirements", "chat", "history"],
+							"query": [{ "key": "before", "value": "{{before}}", "description": "Cursor opcional (next_cursor) para paginar" }]
 						}
 					}
 				}
@@ -421,7 +518,7 @@
 						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/changes?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "changes"], "query": [{ "key": "phase", "value": "descubrimiento" }] },
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"change_id\": \"chg_01HXYAZABCDEFGHIJKLMNOP\",\n  \"section\": \"Propuesta de Valor\",\n  \"description\": \"Ampliar alcance a mercado latinoamericano\",\n  \"diff_before\": \"## Propuesta de Valor\\n\\nAyudamos a dueños de lavanderias en Argentina...\",\n  \"diff_after\": \"## Propuesta de Valor\\n\\nAyudamos a dueños de lavanderias en toda Latinoamerica...\",\n  \"rationale\": \"El mercado latinoamericano comparte problemas similares de gestion de lavanderias\"\n}",
+							"raw": "{\n  \"change_id\": \"chg_01HXYAZABCDEFGHIJKLMNOP\",\n  \"section\": \"Propuesta de Valor\",\n  \"description\": \"Ampliar alcance a mercado latinoamericano\",\n  \"diff_before\": \"## Propuesta de Valor\\n\\nAyudamos a duenos de lavanderias en Argentina...\",\n  \"diff_after\": \"## Propuesta de Valor\\n\\nAyudamos a duenos de lavanderias en toda Latinoamerica...\",\n  \"rationale\": \"El mercado latinoamericano comparte problemas similares de gestion de lavanderias\"\n}",
 							"options": { "raw": { "language": "json" } }
 						}
 					}
@@ -448,11 +545,42 @@
 					}
 				},
 				{
+					"name": "POST Revert - Revertir a una version anterior del documento",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan/revert", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan", "revert"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version_id\": \"dver_REPLACE_WITH_DOCUMENT_VERSION_ID\"\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
 					"name": "DELETE Plan - Descartar plan de cambios completo",
 					"event": [],
 					"request": {
 						"method": "DELETE",
 						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/plan?phase=descubrimiento", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "plan"], "query": [{ "key": "phase", "value": "descubrimiento" }] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Consistency",
+			"item": [
+				{
+					"name": "POST Evaluate - Evaluar consistencia entre fases",
+					"event": [],
+					"request": {
+						"method": "POST",
+						"url": { "raw": "{{base_url}}/api/v1/projects/{{project_id}}/consistency/evaluate", "host": ["{{base_url}}"], "path": ["api", "v1", "projects", "{{project_id}}", "consistency", "evaluate"] },
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phase_origin\": \"discovery\",\n  \"phase_destination\": \"features\",\n  \"changes\": [\n    {\n      \"section\": \"Propuesta de Valor\",\n      \"diff_before\": \"Ayudamos a duenos de lavanderias en Argentina\",\n      \"diff_after\": \"Ayudamos a duenos de lavanderias en toda Latinoamerica\"\n    }\n  ]\n}",
+							"options": { "raw": { "language": "json" } }
+						}
 					}
 				}
 			]

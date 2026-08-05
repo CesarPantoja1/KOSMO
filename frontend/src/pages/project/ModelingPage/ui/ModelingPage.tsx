@@ -6,9 +6,10 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useModelingStore } from '@/entities/modeling';
 import { useRequirementsStore } from '@/entities/requirements';
-import { Chatbot, PlantUmlViewer } from '@/feature';
+import { PlantUmlViewer } from '@/feature';
 import {
 	Ai,
+	ArrowLeft,
 	ArrowRight,
 	CursorClickFill,
 	Loading,
@@ -17,22 +18,26 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 
-import type { Characteristic } from '@/entities/characteristic';
-import { getCharacteristics } from '@/entities/characteristic';
+import { useCharacteristicStore } from '@/entities/characteristic';
 
+import { AsideCharacteristic } from '@/widgets';
 import { Modeling } from '@/widgets/main-navbar/ui/icons';
 
 import { generatePlantUmlDiagram, getDiagram } from '@/entities/modeling';
+
+const generatingPlantUmlMessages = [
+	'Analizando requisitos...',
+	'Generando diagrama de actividad UML...',
+	'Finalizando generación del diagrama...',
+];
 
 const ModelingPage = () => {
 	const currentProject = useAppStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [characteristics, setCharacteristics] = useState<Characteristic[]>([]);
-	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isGenerating, setIsGenerating] = useState(false);
-	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	// const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [isRefining, setIsRefining] = useState(false);
 
 	const [uml, setUML] = useState('');
@@ -43,6 +48,11 @@ const ModelingPage = () => {
 
 	const [plantumlSource, setPlantumlSource] = useState('');
 	const [isPlantumlMaximized, setPlantumlMaximized] = useState(false);
+
+	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
+	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
+	const selectedId = useCharacteristicStore((s) => s.selectedId);
+	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -70,8 +80,7 @@ const ModelingPage = () => {
 		const fetch = async () => {
 			setIsLoading(true);
 			try {
-				const data = await getCharacteristics(currentProject.id);
-				setCharacteristics(data);
+				await storeGetCharacteristics(currentProject.id);
 			} catch (err) {
 				const message =
 					err instanceof Error ? err.message : 'Error al cargar las características';
@@ -82,7 +91,7 @@ const ModelingPage = () => {
 		};
 
 		fetch();
-	}, [currentProject, router]);
+	}, [currentProject, router, storeGetCharacteristics]);
 
 	useEffect(() => {
 		if (!selectedId || !currentProject) return;
@@ -99,36 +108,18 @@ const ModelingPage = () => {
 			setPlantumlMaximized(false);
 
 			try {
-				const content = await getDiagram(projectId, characteristicId);
-
-				if (cancelled) return;
-				if (content) {
-					setHasRequirements(characteristicId, true);
-				}
-				setCharacteristics((prev) =>
-					prev.map((c) =>
-						c.id === characteristicId ? { ...c, requirements: content } : c,
-					),
-				);
-				setUML(content.diagram_syntax);
-				setSavedContent(content.diagram_syntax);
-
-				// Intentar cargar el diagrama existente
-				try {
-					const res = await getDiagram(projectId, characteristicId);
-					if (!cancelled && res.diagram_syntax) {
-						setPlantumlSource(res.diagram_syntax);
-						setHasDiagram(characteristicId, true);
-					}
-				} catch {
-					if (!cancelled) {
-						setPlantumlSource('');
-						setHasDiagram(characteristicId, false);
-					}
+				const res = await getDiagram(projectId, characteristicId);
+				if (!cancelled && res?.diagram_syntax) {
+					setUML(res.diagram_syntax);
+					setSavedContent(res.diagram_syntax);
+					setPlantumlSource(res.diagram_syntax);
+					setHasDiagram(characteristicId, true);
 				}
 			} catch {
-				if (!cancelled)
-					toast.error('Error al cargar la información de la característica');
+				if (!cancelled) {
+					setPlantumlSource('');
+					setHasDiagram(characteristicId, false);
+				}
 			} finally {
 				if (!cancelled) {
 					setIsLoadingRequirements(false);
@@ -155,6 +146,11 @@ const ModelingPage = () => {
 	const applySelected = (id: string) => {
 		setSelectedId(id);
 		setPendingCharSwitch(null);
+		// Cerrar chat si la nueva característica no tiene diagrama
+		const cHasDiag = hasDiagram[id] || false;
+		if (!cHasDiag) {
+			// setIsChatbotOpen(false);
+		}
 	};
 
 	const handleConfirmSwitch = () => {
@@ -186,7 +182,7 @@ const ModelingPage = () => {
 
 	const handleRefine = async (_instructions: string) => {
 		if (!selectedCharacteristic || !currentProject) return;
-		setIsChatbotOpen(false);
+		// setIsChatbotOpen(false);
 		setIsRefining(true);
 		try {
 			const res = await generatePlantUmlDiagram(
@@ -238,10 +234,10 @@ const ModelingPage = () => {
 						EARS generados.
 					</p>
 					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
+						{/* <button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
 							<Ai color='' size={20} />
 							Refinar
-						</button>
+						</button> */}
 
 						<Link
 							href='codigo'
@@ -253,16 +249,15 @@ const ModelingPage = () => {
 							<ArrowRight color='' size={20} />
 						</Link>
 					</div>
-				</div>
-
-				<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-					<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
-						<div className='h-7 bg-base-200 rounded w-48' />
-						{[1, 2, 3, 4].map((i) => (
-							<div key={i} className='h-14 bg-base-200 rounded' />
-						))}
+					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
+						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
+							<div className='h-7 bg-base-200 rounded w-48' />
+							{[1, 2, 3, 4].map((i) => (
+								<div key={i} className='h-14 bg-base-200 rounded' />
+							))}
+						</div>
+						<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
 					</div>
-					<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
 				</div>
 			</div>
 		);
@@ -300,6 +295,7 @@ const ModelingPage = () => {
 				<Loading
 					title='Generando diagrama de actividad'
 					description='Analizando los requisitos EARS para construir el diagrama PlantUML. Esto tomará unos segundos.'
+					messages={generatingPlantUmlMessages}
 				/>
 			)}
 
@@ -313,14 +309,14 @@ const ModelingPage = () => {
 
 					{!isEditorMaximized && !isPlantumlMaximized && (
 						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button
+							{/* <button
 								onClick={() => setIsChatbotOpen(true)}
 								disabled={!hasDiag}
 								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm'
 							>
 								<Ai color='' size={20} />
 								Refinar
-							</button>
+							</button> */}
 
 							<Link
 								href='codigo'
@@ -333,71 +329,14 @@ const ModelingPage = () => {
 						</div>
 					)}
 
-					<div className='flex gap-4 flex-1 min-h-0'>
-						<aside className='w-88 pt-3 bg-base-100/50 rounded-sm flex flex-col'>
-							<h3 className='text-primary-100 text-lg font-bold px-4 pb-3'>
-								Lista de Características
-							</h3>
-
-							<div className='flex-1 px-2 flex flex-col gap-1 overflow-y-auto pb-4'>
-								{characteristics.length === 0 && (
-									<p className='text-base-600 text-sm px-3 py-2'>
-										No hay características disponibles.
-									</p>
-								)}
-								{characteristics.map((c) => {
-									const isSelected = c.id === selectedId;
-									const cHasReq = Boolean(hasRequirements[c.id]);
-									const cHasDiag = Boolean(
-										hasDiagram[c.id] ||
-										(c.id === selectedId && plantumlSource.trim() !== ''),
-									);
-
-									return (
-										<button
-											key={c.id}
-											onClick={() => handleSelectCharacteristic(c.id)}
-											className={`w-full p-3 flex justify-start items-center gap-3 text-left cursor-pointer transition-colors ${
-												isSelected
-													? 'bg-primary-100/10 border-l-4 border-primary-100'
-													: 'border-l-4 border-transparent hover:bg-base-200/30'
-											}`}
-										>
-											<span
-												className={`text-base font-bold shrink-0 ${
-													isSelected ? 'text-base-800' : 'text-base-800'
-												}`}
-											>
-												{c.display_id}
-											</span>
-											<p
-												className={`flex-1 text-sm font-medium leading-snug ${
-													isSelected ? 'text-primary-100' : 'text-base-600'
-												}`}
-											>
-												{c.title}
-											</p>
-											{cHasDiag && (
-												<div className='shrink-0' title='Modelo generado'>
-													<Modeling
-														size={20}
-														color={isSelected ? 'text-primary-100' : 'text-base-600'}
-													/>
-												</div>
-											)}
-											{!cHasDiag && cHasReq && (
-												<span
-													className='shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded bg-primary-100/10 text-primary-100'
-													title='Requisitos EARS listos para modelar'
-												>
-													Reqs OK
-												</span>
-											)}
-										</button>
-									);
-								})}
-							</div>
-						</aside>
+					<div className='flex gap-1 flex-1 min-h-0'>
+						<AsideCharacteristic
+							characteristics={characteristics}
+							selectedId={selectedId}
+							onSelectCharacteristic={handleSelectCharacteristic}
+							hasIcon={hasDiagram}
+							icon={Modeling}
+						/>
 
 						<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
 							{!selectedCharacteristic && (
@@ -427,25 +366,43 @@ const ModelingPage = () => {
 
 							{/* Caso 1: La característica NO tiene requisitos EARS generados todavía */}
 							{selectedCharacteristic && !isLoadingRequirements && !hasReqs && (
-								<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-									<Ai color='text-ai' size={70} />
-									<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-										Sin requisitos EARS generados
-									</span>
-									<p className='text-base-800 text-lg text-center'>
-										Esta característica aún no tiene requisitos EARS generados. Primero
-										debes generar los requisitos en la sección correspondiente para poder
-										construir el diagrama UML.
-									</p>
-									<Link
-										href='/proyecto/requisitos'
-										onClick={handleNextLink('/proyecto/requisitos')}
-										className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
-									>
-										Ir a Requisitos
-										<ArrowRight color='' size={20} />
-									</Link>
-								</section>
+								<div className='flex flex-col flex-1 min-h-0 gap-4'>
+									<div className='flex flex-col gap-2 px-2'>
+										<div className='inline-flex justify-between items-center w-full'>
+											<div className='inline-flex justify-start gap-3 items-center'>
+												<span className='text-2xl font-bold text-base-800'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-2xl font-bold text-primary-100'>
+													{selectedCharacteristic.title}
+												</span>
+											</div>
+										</div>
+										<p className='text-base-600 text-base'>
+											{selectedCharacteristic.description}
+										</p>
+									</div>
+
+									<section className='flex flex-col my-auto items-center gap-5 px-20'>
+										<Ai color='text-ai' size={70} />
+										<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+											Sin requisitos EARS generados
+										</span>
+										<p className='text-base-800 text-lg text-center'>
+											Esta característica aún no tiene requisitos EARS generados. Primero
+											debes generar los requisitos en la sección correspondiente para
+											poder construir el diagrama UML.
+										</p>
+										<Link
+											href='/proyecto/requisitos'
+											onClick={handleNextLink('/proyecto/requisitos')}
+											className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
+										>
+											<ArrowLeft color='' size={20} />
+											Ir a Requisitos
+										</Link>
+									</section>
+								</div>
 							)}
 
 							{/* Caso 2: Tiene requisitos EARS Y el diagrama ya fue generado -> Mostrar PlantUmlViewer */}
@@ -487,33 +444,50 @@ const ModelingPage = () => {
 								!isLoadingRequirements &&
 								hasReqs &&
 								!hasDiag && (
-									<section className='flex flex-col h-full justify-center items-center gap-5 px-20'>
-										<Ai color='text-ai' size={70} />
+									<div className='flex flex-col flex-1 min-h-0 gap-4'>
+										<div className='flex flex-col gap-2 px-2'>
+											<div className='inline-flex justify-between items-center w-full'>
+												<div className='inline-flex justify-start gap-3 items-center'>
+													<span className='text-2xl font-bold text-base-800'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-2xl font-bold text-primary-100'>
+														{selectedCharacteristic.title}
+													</span>
+												</div>
+											</div>
+											<p className='text-base-600 text-base'>
+												{selectedCharacteristic.description}
+											</p>
+										</div>
+										<section className='flex flex-col my-auto items-center gap-5 px-20'>
+											<Ai color='text-ai' size={70} />
 
-										<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-											Sin modelo generado
-										</span>
+											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
+												Sin modelo generado
+											</span>
 
-										<p className='text-base-800 text-lg text-center'>
-											Los requisitos EARS están listos. Haz clic en el botón{' '}
-											<span className='text-xl font-bold'>Generar </span>
-											para construir el diagrama de actividad UML automáticamente.
-										</p>
+											<p className='text-base-800 text-lg text-center'>
+												Los requisitos EARS están listos. Haz clic en el botón{' '}
+												<span className='text-xl font-bold'>Generar </span>
+												para construir el diagrama de actividad UML automáticamente.
+											</p>
 
-										<button
-											onClick={handleGenerate}
-											className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-										>
-											<Ai color='' size={20} />
-											Generar
-										</button>
-									</section>
+											<button
+												onClick={handleGenerate}
+												className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
+											>
+												<Ai color='' size={20} />
+												Generar
+											</button>
+										</section>
+									</div>
 								)}
 						</div>
 					</div>
 				</div>
 
-				<div
+				{/* <div
 					className={`chatbot
 						${
 							isChatbotOpen
@@ -527,7 +501,7 @@ const ModelingPage = () => {
 						onClose={() => setIsChatbotOpen(false)}
 						onSendMessage={handleRefine}
 					/>
-				</div>
+				</div> */}
 			</div>
 		</>
 	);

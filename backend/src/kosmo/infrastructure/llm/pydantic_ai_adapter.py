@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from collections import OrderedDict
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 from pydantic_ai.agent import Agent
@@ -9,6 +12,8 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import Tool
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
+
+T = TypeVar("T")
 
 
 def _extract_json(text: str) -> str | None:
@@ -60,16 +65,34 @@ def _extract_balanced(text: str, start: int, open_char: str) -> str | None:
 
 class PydanticAILLMClient:
     _DEFAULT_TIMEOUT_SECONDS = 120
+    _MAX_AGENTS = 32
+    _RETRY_ATTEMPTS = 2
+    _RETRY_DELAY_SECONDS = 1.0
 
     def __init__(self, model: Any) -> None:
         self._model = model
-        self._agents: dict[str, Agent[Any]] = {}
+        self._agents: OrderedDict[str, Agent[Any]] = OrderedDict()
+
+    async def _run_with_retry(self, coro_fn: Any) -> Any:
+        last_exc: Exception | None = None
+        for attempt in range(self._RETRY_ATTEMPTS):
+            try:
+                return await coro_fn()
+            except Exception as exc:
+                last_exc = exc
+                if attempt < self._RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(self._RETRY_DELAY_SECONDS)
+        raise last_exc  # type: ignore[reportPossiblyUnboundVariable]
 
     def _get_agent(self, system_prompt: str) -> Agent[Any]:
         agent = self._agents.get(system_prompt)
-        if agent is None:
-            agent = Agent(model=self._model, system_prompt=system_prompt)  # type: ignore[reportCallIssue]
-            self._agents[system_prompt] = agent
+        if agent is not None:
+            self._agents.move_to_end(system_prompt)
+            return agent
+        agent = Agent(model=self._model, system_prompt=system_prompt)  # type: ignore[reportCallIssue]
+        if len(self._agents) >= self._MAX_AGENTS:
+            self._agents.popitem(last=False)
+        self._agents[system_prompt] = agent
         return agent
 
     async def complete(
@@ -80,13 +103,16 @@ class PydanticAILLMClient:
     ) -> LLMResponse:
         agent = self._get_agent(prompt.system_prompt)
 
-        result = await asyncio.wait_for(
-            agent.run(
-                prompt.user_prompt,
-                model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
-            ),
-            timeout=self._DEFAULT_TIMEOUT_SECONDS,
-        )
+        async def _call() -> Any:
+            return await asyncio.wait_for(
+                agent.run(
+                    prompt.user_prompt,
+                    model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+                ),
+                timeout=self._DEFAULT_TIMEOUT_SECONDS,
+            )
+
+        result = await self._run_with_retry(_call)
 
         usage = result.usage()
         return LLMResponse(
@@ -129,6 +155,10 @@ class PydanticAILLMClient:
             field_names = list(output_type.model_fields.keys())
             if len(field_names) == 1:
                 return output_type.model_validate({field_names[0]: text})  # type: ignore[reportReturnType]
+
+            primary = field_names[0] if field_names else "content"
+            fallback: dict[str, Any] = {name: (text if name == primary else None) for name in field_names}
+            return output_type.model_validate(fallback)  # type: ignore[reportReturnType]
 
         msg = f"No se pudo convertir la respuesta del LLM a {output_type.__name__}"
         raise ValueError(msg)
@@ -175,12 +205,46 @@ class PydanticAILLMClient:
         ]
 
         agent: Agent[Any] = Agent(self._model, system_prompt=prompt.system_prompt, tools=pydantic_tools)  # type: ignore[reportCallIssue]
-        result = await asyncio.wait_for(
-            agent.run(
+
+        async def _call() -> Any:
+            return await asyncio.wait_for(
+                agent.run(
+                    prompt.user_prompt,
+                    model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
+                ),
+                timeout=self._DEFAULT_TIMEOUT_SECONDS,
+            )
+
+        result = await self._run_with_retry(_call)
+
+        return (result.output or "", records)
+
+    @asynccontextmanager  # type: ignore[reportUntypedFunctionDecorator]
+    async def stream_typed(
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> AsyncIterator[StreamedTypedResult[T]]:
+        agent = self._get_agent(prompt.system_prompt)
+        async with asyncio.wait_for(  # type: ignore[reportUnknownMemberType]
+            agent.run_stream(  # type: ignore[reportUnknownMemberType]
                 prompt.user_prompt,
+                result_type=output_type,  # type: ignore[reportArgumentType]
                 model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
             ),
             timeout=self._DEFAULT_TIMEOUT_SECONDS,
-        )
+        ) as streamed:  # type: ignore[reportUnknownVariableType]
+            yield StreamedTypedResult(streamed)  # type: ignore[reportArgumentType]
 
-        return (result.output or "", records)
+
+class StreamedTypedResult[T]:
+    def __init__(self, streamed: Any) -> None:
+        self._streamed = streamed
+
+    def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:
+        return self._streamed.stream_text(delta=delta)  # type: ignore[reportReturnType]
+
+    async def get_data(self) -> T:
+        return await self._streamed.get_data()  # type: ignore[reportReturnType]

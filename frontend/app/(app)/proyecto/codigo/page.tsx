@@ -1,4 +1,1 @@
-export {
-	ImplementationPage as default,
-	metadata,
-} from '@/pages/project/ImplementationPage';
+export { ImplementationPage as default } from '@/pages/project/ImplementationPage';

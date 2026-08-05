@@ -20,6 +20,13 @@ class _MockRedis:
     async def ttl(self, key: str) -> int:
         return self._ttls.get(key, -1)
 
+    async def eval(self, script: str, numkeys: int, *args: str) -> int:
+        key = args[0] if args else ""
+        self._counts[key] = self._counts.get(key, 0) + 1
+        if self._counts[key] == 1 and len(args) >= 3:
+            self._ttls[key] = int(args[2])
+        return self._counts[key]
+
 
 def _build_app(limit: int) -> tuple[FastAPI, _MockRedis]:
     mock_redis = _MockRedis()

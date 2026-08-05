@@ -4,14 +4,15 @@ from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.contracts import (
     ChatMessageId,
     ChatRole,
+    DiffCambio,
     MensajeChat,
     RespuestaChatLLM,
+    SugerenciaCambio,
     SugerenciaCambioLLM,
 )
 from kosmo.contracts.llm.ports import PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import Skill
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.domain.pipeline.guard_registry import GuardRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 
 
@@ -143,7 +144,6 @@ class _StubChatMode:
 
 
 def _make_conversation_agent(llm, skill_name="test_chat"):
-    guard_registry = GuardRegistry()
     skill_reg = SkillRegistry()
     skill_reg.register(
         Skill(
@@ -155,7 +155,6 @@ def _make_conversation_agent(llm, skill_name="test_chat"):
     )
     return KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
         skill_registry=skill_reg,
     )
 
@@ -174,6 +173,77 @@ def _assistant_message(content: str) -> MensajeChat:
         role=ChatRole.ASSISTANT,
         content=content,
     )
+
+
+def _decision_message(content: str, section: str = "Alcance") -> MensajeChat:
+    return MensajeChat(
+        id=ChatMessageId("msg_decision"),
+        role=ChatRole.ASSISTANT,
+        content=content,
+        suggested_change=SugerenciaCambio(
+            id="chg_01",
+            section=section,
+            description="Ampliar alcance",
+            diff=DiffCambio(before="viejo", after="nuevo"),
+            rationale="Solicitado por el usuario",
+        ),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_execute_conversation_truncates_history_to_window() -> None:
+    """Más de 20 mensajes sin decisiones: solo los últimos 20 aparecen en el prompt."""
+    # Arrange
+    llm_output = RespuestaChatLLM(content="Respuesta", change_suggestion=None)
+    llm = _StubChatLLM(responses=[llm_output])
+    agent = _make_conversation_agent(llm)
+    context = object()
+    messages = [_user_message(f"Mensaje {i}") for i in range(25)]
+
+    # Act
+    await agent.execute_conversation(
+        skill_name="test_chat",
+        messages=messages,
+        context=context,
+    )
+
+    # Assert
+    user_prompt = llm.last_user_prompt
+    assert "Mensaje 0" not in user_prompt
+    assert "Mensaje 4" not in user_prompt
+    assert "Mensaje 5" in user_prompt
+    assert "Mensaje 24" in user_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_execute_conversation_preserves_decision_messages_outside_window() -> None:
+    """Mensajes con suggested_change fuera de la ventana se conservan junto a los últimos 20."""
+    # Arrange
+    llm_output = RespuestaChatLLM(content="Respuesta", change_suggestion=None)
+    llm = _StubChatLLM(responses=[llm_output])
+    agent = _make_conversation_agent(llm)
+    context = object()
+    messages = [_user_message(f"Mensaje {i}") for i in range(25)]
+    messages[2] = _decision_message("Decisión temprana del alcance")
+    messages[5] = _decision_message("Decisión sobre actores", section="Actores")
+
+    # Act
+    await agent.execute_conversation(
+        skill_name="test_chat",
+        messages=messages,
+        context=context,
+    )
+
+    # Assert
+    user_prompt = llm.last_user_prompt
+    assert "Decisión temprana del alcance" in user_prompt
+    assert "Decisión sobre actores" in user_prompt
+    assert "Mensaje 5" not in user_prompt
+    assert "Mensaje 6" in user_prompt
+    assert "Mensaje 24" in user_prompt
+    assert "Mensaje 0" not in user_prompt
 
 
 @pytest.mark.asyncio
@@ -276,20 +346,24 @@ async def test_execute_conversation_includes_history_in_prompt() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_execute_conversation_propagates_llm_error() -> None:
+async def test_execute_conversation_fallback_on_llm_error() -> None:
+    """Ante fallos del LLM, el agente retorna una respuesta genérica sin lanzar excepción."""
     # Arrange
     llm = _RaisingChatLLM()
     agent = _make_conversation_agent(llm)
     context = object()
     messages = [_user_message("Hola")]
 
-    # Act & Assert
-    with pytest.raises(TimeoutError, match="timeout"):
-        await agent.execute_conversation(
-            skill_name="test_chat",
-            messages=messages,
-            context=context,
-        )
+    # Act
+    result = await agent.execute_conversation(
+        skill_name="test_chat",
+        messages=messages,
+        context=context,
+    )
+
+    # Assert
+    assert result.role == ChatRole.ASSISTANT
+    assert "No se pudo" in result.content
 
 
 @pytest.mark.asyncio
@@ -315,10 +389,8 @@ async def test_execute_conversation_raises_when_skill_not_found() -> None:
 async def test_execute_conversation_raises_when_no_skill_registry() -> None:
     # Arrange
     llm = _StubChatLLM()
-    guard_registry = GuardRegistry()
     agent = KOSMOAgent(
         llm_client=llm,  # type: ignore[reportArgumentType]
-        guard_registry=guard_registry,
     )
     context = object()
     messages = [_user_message("Hola")]

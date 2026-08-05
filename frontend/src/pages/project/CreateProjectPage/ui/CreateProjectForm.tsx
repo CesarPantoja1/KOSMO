@@ -1,6 +1,5 @@
 'use client';
 
-import { generateDiscovery } from '@/entities/discovery/api/api';
 import { Ai, Loading, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppStore } from 'app/store/app.store';
@@ -24,7 +23,7 @@ const CreateProjectForm = () => {
 		handleSubmit,
 		formState: { isValid },
 	} = useForm<ProjectFormData>({
-		mode: 'onBlur',
+		mode: 'onSubmit',
 		resolver: zodResolver(projectSchema),
 		defaultValues: { name: '', description: '' },
 	});
@@ -62,15 +61,6 @@ const CreateProjectForm = () => {
 			try {
 				const project = await createProject(data);
 				setProjectState(project);
-
-				// Generar el descubrimiento automáticamente con IA
-				try {
-					await generateDiscovery(project.id);
-				} catch (genErr) {
-					console.error('Error generando descubrimiento:', genErr);
-					toast.warning('No se pudo generar el descubrimiento automáticamente');
-				}
-
 				router.replace('/proyecto/descubrimiento');
 			} catch (err) {
 				const message = err instanceof Error ? err.message : 'Error al crear el proyecto';
@@ -85,26 +75,21 @@ const CreateProjectForm = () => {
 		<>
 			{isSubmitting && (
 				<Loading
-					title='Generando Descripción General'
-					description='Optimizando la estructura de la Descripción General. Por favor, espera un momento.'
+					title='Creando Proyecto'
+					description='Creando tu proyecto. Por favor, espera...'
 				/>
 			)}
 			<form
 				onSubmit={handleSubmit(onSubmit)}
-				className='flex-1 min-h-0 flex flex-col gap-2.5 px-0.5'
+				className='flex-1 flex flex-col gap-5 px-0.5'
 				noValidate
 			>
-				<div className='flex justify-end'>
-					<button
-						disabled={!isValid || isSubmitting}
-						className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:bg-base-600'
-					>
-						<Ai size={20} color='' />
-						{isSubmitting ? 'Generando...' : 'Generar Proyecto'}
-					</button>
-				</div>
-				<div className='flex-1 min-h-0 px-8 py-3 rounded-lg shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline-1 outline-base-600 flex flex-col gap-3'>
-					<div className='w-full flex flex-col justify-center items-start gap-2.5'>
+				<button className='btn bg-ai inline-flex self-end text-base-50 hover:bg-ai/90 disabled:bg-base-600 transition-all duration-200 hover:shadow-md active:scale-95'>
+					<Ai size={20} color='' />
+					{isSubmitting ? 'Creando...' : 'Crear Proyecto'}
+				</button>
+				<div className='flex-1 flex flex-col gap-5 px-8 pt-8 mb-8 rounded-lg shadow-md border border-base-200'>
+					<div className='w-full flex flex-col items-start gap-2'>
 						<label
 							htmlFor='project-name'
 							className='text-base-800 text-2xl font-semibold'
@@ -120,7 +105,7 @@ const CreateProjectForm = () => {
 							onBlur={nameOnBlur}
 							onChange={handleNameChange}
 							placeholder='Ej. Ferretería'
-							className='w-full flex items-center px-3.5 py-1 justify-start outline-base-100 rounded-sm outline-2'
+							className='w-full flex items-center px-3.5 py-2 justify-start border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200'
 							autoComplete='off'
 						/>
 
@@ -134,7 +119,7 @@ const CreateProjectForm = () => {
 						</div>
 					</div>
 
-					<div className='w-full flex-1 pb-5 flex flex-col justify-center items-start gap-2.5'>
+					<div className='w-full flex-1 pb-5 flex flex-col gap-2'>
 						<label
 							htmlFor='project-description'
 							className='text-base-800 text-2xl font-semibold'
@@ -148,7 +133,7 @@ const CreateProjectForm = () => {
 							onBlur={descOnBlur}
 							onChange={handleDescChange}
 							placeholder='Ej. App para la gestión integral de las sucursales'
-							className='w-full flex-1 px-3.5 py-1  rounded-sm outline-2  outline-base-100 resize-none'
+							className='w-full flex-1 px-3.5 py-2 border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200 resize-none'
 						/>
 						<div className='w-full flex justify-end gap-1 items-center'>
 							{descError && (

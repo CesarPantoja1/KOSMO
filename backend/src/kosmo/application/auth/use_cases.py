@@ -1,6 +1,8 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
+
+from ulid import ULID
 
 from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
@@ -34,7 +36,7 @@ class IssueTokenPair:
         scopes: frozenset[str],
         family_id: str | None = None,
     ) -> TokenPair:
-        family = family_id or uuid4().hex
+        family = family_id or ULID().hex
         access = self.issuer.issue(subject=subject, scopes=scopes, token_type=TokenType.ACCESS, family_id=family)
         refresh = self.issuer.issue(subject=subject, scopes=scopes, token_type=TokenType.REFRESH, family_id=family)
         await self.revocation_store.register_refresh(
@@ -46,17 +48,44 @@ class IssueTokenPair:
         return TokenPair(access=access, refresh=refresh)
 
 
+_JTI_CACHE: dict[str, bool] = {}
+_JTI_CACHE_MAX = 1000
+
+
+def _jti_is_cached_revoked(jti: str) -> bool | None:
+    return _JTI_CACHE.get(jti)
+
+
+def _jti_cache_set(jti: str, revoked: bool) -> None:
+    if len(_JTI_CACHE) >= _JTI_CACHE_MAX:
+        _JTI_CACHE.pop(next(iter(_JTI_CACHE)))
+    _JTI_CACHE[jti] = revoked
+
+
 @dataclass(frozen=True, slots=True)
 class VerifyAccessToken:
     verifier: TokenVerifier
     revocation_store: TokenRevocationStore
 
     async def execute(self, token: str) -> Principal:
-        claims = self.verifier.verify(token, expected_type=TokenType.ACCESS)
+        claims = await asyncio.to_thread(self.verifier.verify, token, expected_type=TokenType.ACCESS)
+
+        cached = _jti_is_cached_revoked(claims.jti)
+        if cached:
+            raise TokenRevokedError("Access token revoked")
+        if cached is False and claims.family_id is not None:
+            family_cached = _jti_is_cached_revoked(claims.family_id)
+            if family_cached:
+                raise TokenRevokedError("Session revoked")
+
         if await self.revocation_store.is_access_revoked(jti=claims.jti):
+            _jti_cache_set(claims.jti, True)
             raise TokenRevokedError("Access token revoked")
         if claims.family_id is not None and not await self.revocation_store.is_family_alive(family_id=claims.family_id):
+            _jti_cache_set(claims.family_id, True)
             raise TokenRevokedError("Session revoked")
+
+        _jti_cache_set(claims.jti, False)
         return Principal(subject=claims.subject, scopes=claims.scopes)
 
 
@@ -69,7 +98,7 @@ class RefreshTokenPair:
 
     @traced("auth.token_refresh")
     async def execute(self, refresh_token: str, *, scopes: frozenset[str]) -> TokenPair:
-        claims = self.verifier.verify(refresh_token, expected_type=TokenType.REFRESH)
+        claims = await asyncio.to_thread(self.verifier.verify, refresh_token, expected_type=TokenType.REFRESH)
         consumed = await self.revocation_store.consume_refresh(jti=claims.jti)
         if consumed is None:
             if claims.family_id is not None and await self.revocation_store.is_family_alive(family_id=claims.family_id):
@@ -131,7 +160,7 @@ class RevokeSession:
 
     @traced("auth.logout")
     async def execute(self, *, access_token: str, refresh_token: str | None = None) -> None:
-        access_claims = self.verifier.verify(access_token, expected_type=TokenType.ACCESS)
+        access_claims = await asyncio.to_thread(self.verifier.verify, access_token, expected_type=TokenType.ACCESS)
         await self.revocation_store.revoke_access(
             jti=access_claims.jti,
             ttl_seconds=_seconds_until(access_claims.expires_at),
@@ -139,7 +168,9 @@ class RevokeSession:
         if access_claims.family_id is not None:
             await self.revocation_store.revoke_family(family_id=access_claims.family_id)
         if refresh_token is not None:
-            refresh_claims = self.verifier.verify(refresh_token, expected_type=TokenType.REFRESH)
+            refresh_claims = await asyncio.to_thread(
+                self.verifier.verify, refresh_token, expected_type=TokenType.REFRESH
+            )
             await self.revocation_store.revoke_refresh(jti=refresh_claims.jti)
             if refresh_claims.family_id is not None:
                 await self.revocation_store.revoke_family(family_id=refresh_claims.family_id)

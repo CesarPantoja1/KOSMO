@@ -4,7 +4,6 @@
 # - frontend: Next.js + Bun
 # - backend: FastAPI + uvicorn
 # - postgres: pgvector/Postgres for relational data and vector support
-# - mongodb: agent memory database
 # - redis: auth/session/rate-limit cache
 
 services:
@@ -54,7 +53,6 @@ services:
       AUTH_DISABLED: "true"
 
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}}
-      MONGO_URL: mongodb://${MONGO_USER:-kosmo}:${MONGO_PASSWORD:-kosmo}@mongodb:27017/${MONGO_DB:-kosmo_agent_memory}?authSource=admin
       REDIS_URL: redis://redis:6379/0
 
       JWT_PRIVATE_KEY_PATH: /tmp/kosmo-secrets/jwt_private.pem

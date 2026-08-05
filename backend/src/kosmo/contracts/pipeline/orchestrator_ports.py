@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
 from kosmo.contracts.pipeline.phase_contexts import (
+    DiscoveryChatContext,
     DiscoveryPhaseContext,
+    DiscoveryRefinePhaseContext,
     EARSPhaseContext,
+    FeatureChatContext,
     FeaturesPhaseContext,
     ModeloPhaseContext,
+    RequirementChatContext,
+    RequirementsRefinePhaseContext,
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -16,9 +21,25 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.ids import ProjectId
 
 if TYPE_CHECKING:
     from kosmo.contracts.chat import MensajeChat
+
+
+PhaseContext = (
+    ConsistencyPhaseContext
+    | DiscoveryChatContext
+    | DiscoveryPhaseContext
+    | DiscoveryRefinePhaseContext
+    | EARSPhaseContext
+    | FeatureChatContext
+    | FeaturesPhaseContext
+    | ModeloPhaseContext
+    | RequirementChatContext
+    | RequirementsRefinePhaseContext
+    | SuggestFeaturesContext
+)
 
 
 @dataclass(frozen=True)
@@ -43,49 +64,12 @@ class Skill:
     mode: PhaseMode
 
 
-@dataclass(frozen=True)
-class ToolResult:
-    tool_name: str
-    output: Any
-    is_error: bool = False
-    error_message: str | None = None
-
-
-@dataclass(frozen=True)
-class AgentStep:
-    step_number: int
-    reasoning: str = ""
-    action: str | None = None
-    action_input: dict[str, Any] = field(default_factory=dict)  # type: ignore[reportUnknownVariableType]
-    observation: str = ""
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: datetime | None = None
-
-
-@dataclass(frozen=True)
-class AgentTrace:
-    steps: list[AgentStep] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: datetime | None = None
-
-    @property
-    def step_count(self) -> int:
-        return len(self.steps)
-
-    @property
-    def tool_calls(self) -> int:
-        return sum(1 for s in self.steps if s.action is not None)
-
-
 class PhaseMode(Protocol):
     @property
     def phase_name(self) -> SpecPhase: ...
 
     @property
     def system_prompt(self) -> str: ...
-
-    @property
-    def available_tools(self) -> list[ToolDefinition]: ...
 
     @property
     def temperature(self) -> float: ...
@@ -98,11 +82,7 @@ class PhaseMode(Protocol):
 
     def build_user_prompt(
         self,
-        context: DiscoveryPhaseContext
-        | FeaturesPhaseContext
-        | EARSPhaseContext
-        | SuggestFeaturesContext
-        | ModeloPhaseContext,
+        context: PhaseContext,
     ) -> str: ...
 
     def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult: ...
@@ -130,9 +110,9 @@ class AgentPort(Protocol):
     async def execute_with_skill(
         self,
         skill_name: str,
-        context: Any,
+        context: PhaseContext,
         *,
-        project_id: Any | None = None,
+        project_id: ProjectId | None = None,
         user_instructions: str | None = None,
     ) -> Any: ...
 
@@ -140,5 +120,7 @@ class AgentPort(Protocol):
         self,
         skill_name: str,
         messages: list[MensajeChat],
-        context: Any,
+        context: PhaseContext,
+        *,
+        project_id: ProjectId | None = None,
     ) -> MensajeChat: ...

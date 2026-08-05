@@ -1,6 +1,6 @@
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import uuid4
 
 from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
@@ -10,6 +10,7 @@ from kosmo.contracts.auth import (
     UserRepository,
 )
 from kosmo.contracts.telemetry import record_auth_event, traced
+from kosmo.domain.sdd.id_generator import IdGenerator
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,9 +26,9 @@ class RegisterUser:
         if existing is not None:
             raise UserAlreadyExistsError("Email ya registrado")
         user = User(
-            id=str(uuid4()),
+            id=IdGenerator.generate("user"),
             email=normalized_email,
-            hashed_password=self.password_hasher.hash(password),
+            hashed_password=await asyncio.to_thread(self.password_hasher.hash, password),
             created_at=datetime.now(UTC),
         )
         await self.user_repository.create(user)

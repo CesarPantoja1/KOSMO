@@ -13,5 +13,6 @@ class Project:
     slug: str
     description: str
     owner_id: UserId
+    current_phase: str = "descubrimiento"
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
