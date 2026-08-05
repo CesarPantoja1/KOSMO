@@ -25,6 +25,10 @@ if TYPE_CHECKING:
         PropagateDiscoveryChangesOutput,
         PropagateDiscoveryChangesUseCase,
     )
+    from kosmo.application.consistency.propagate_feature_changes import (
+        PropagateFeatureChangesOutput,
+        PropagateFeatureChangesUseCase,
+    )
 
 _log = structlog.get_logger(__name__)
 
@@ -48,7 +52,7 @@ class ApplyPlanChangesOutput:
     failed_count: int
     applied_changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     failed_changes: list[FailedChange] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
-    propagation: PropagateDiscoveryChangesOutput | None = None
+    propagation: PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | None = None
 
     @property
     def applied_ids(self) -> list[str]:
@@ -65,6 +69,7 @@ class ApplyPlanChangesUseCase:
         requirement_repo: RequirementRepository | None = None,
         propagate_uc: PropagateDiscoveryChangesUseCase | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
+        propagate_feature_uc: PropagateFeatureChangesUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._chat_repo = chat_repo
@@ -73,6 +78,7 @@ class ApplyPlanChangesUseCase:
         self._requirement_repo = requirement_repo
         self._propagate_uc = propagate_uc
         self._session_factory = session_factory
+        self._propagate_feature_uc = propagate_feature_uc
 
     async def execute(self, input_data: ApplyPlanChangesInput) -> ApplyPlanChangesOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -183,29 +189,49 @@ class ApplyPlanChangesUseCase:
         self,
         input_data: ApplyPlanChangesInput,
         applied: list[PlanCambio],
-    ) -> PropagateDiscoveryChangesOutput | None:
-        if self._propagate_uc is None:
-            return None
-        if input_data.phase != SpecPhase.DESCUBRIMIENTO:
-            return None
+    ) -> PropagateDiscoveryChangesOutput | PropagateFeatureChangesOutput | None:
         if not applied:
             return None
 
-        try:
-            from kosmo.application.consistency.propagate_discovery_changes import (
-                PropagateDiscoveryChangesInput,
-            )
-
-            return await self._propagate_uc.execute(
-                PropagateDiscoveryChangesInput(
-                    project_id=input_data.project_id,
-                    phase=input_data.phase,
-                    applied_change_ids=[c.id for c in applied],
+        if input_data.phase == SpecPhase.DESCUBRIMIENTO:
+            if self._propagate_uc is None:
+                return None
+            try:
+                from kosmo.application.consistency.propagate_discovery_changes import (
+                    PropagateDiscoveryChangesInput,
                 )
-            )
-        except Exception:
-            _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
-            return None
+
+                return await self._propagate_uc.execute(
+                    PropagateDiscoveryChangesInput(
+                        project_id=input_data.project_id,
+                        phase=input_data.phase,
+                        applied_change_ids=[c.id for c in applied],
+                    )
+                )
+            except Exception:
+                _log.warning("apply.propagation_failed", project_id=str(input_data.project_id), exc_info=True)
+                return None
+
+        if input_data.phase == SpecPhase.CARACTERISTICAS:
+            if self._propagate_feature_uc is None:
+                return None
+            try:
+                from kosmo.application.consistency.propagate_feature_changes import (
+                    PropagateFeatureChangesInput,
+                )
+
+                return await self._propagate_feature_uc.execute(
+                    PropagateFeatureChangesInput(
+                        project_id=input_data.project_id,
+                        phase=input_data.phase,
+                        applied_change_ids=[c.id for c in applied],
+                    )
+                )
+            except Exception:
+                _log.warning("apply.feature_propagation_failed", project_id=str(input_data.project_id), exc_info=True)
+                return None
+
+        return None
 
     async def _apply_discovery_changes(
         self, project_id: ProjectId, changes: list[PlanCambio]

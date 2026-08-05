@@ -515,7 +515,19 @@ def build_discovery_components(
         document_repo=document_repo,
     )
 
+    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
+
     propagate_uc = PropagateDiscoveryChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=consistency_evaluator,
+        traceability_repo=pipeline.traceability_repo,
+    )
+
+    propagate_feature_uc = PropagateFeatureChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,
@@ -555,6 +567,7 @@ def build_discovery_components(
             requirement_repo=requirement_repo,
             propagate_uc=propagate_uc,
             session_factory=session_factory,
+            propagate_feature_uc=propagate_feature_uc,
         ),
         propagate_discovery_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
