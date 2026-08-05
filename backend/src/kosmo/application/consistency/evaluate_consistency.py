@@ -78,6 +78,8 @@ class EvaluateConsistencyUseCase:
         )
         if source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.CARACTERISTICAS:
             skill_name = "consistency_evaluate_requirements"
+        elif source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.DESCUBRIMIENTO:
+            skill_name = "consistency_evaluate_requirements_upstream"
         try:
             raw_output = await self._agent.execute_with_skill(
                 skill_name=skill_name,

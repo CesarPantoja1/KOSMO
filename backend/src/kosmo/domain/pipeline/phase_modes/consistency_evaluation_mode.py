@@ -140,6 +140,43 @@ CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT = (
     "Si la característica NO requiere cambios, devuelve: "
     '{"actions": [], "overall_rationale": "Los cambios en los requisitos no alteran el alcance de la característica."}'
 )
+CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT = (
+    "Eres un analista experto en trazabilidad de requisitos de software. "
+    "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS de un producto "
+    "y determinar si dichos cambios entran en conflicto o contradicen la Visión, "
+    "Alcance o reglas de negocio del documento de Descubrimiento (fase upstream).\n\n"
+    "## REGLAS DE ANALISIS\n\n"
+    "1. LEE los requisitos modificados (sección 'Documento fuente actual') correspondiente "
+    "a los Requisitos EARS, y evalúa los cambios introducidos contra el documento de Descubrimiento.\n"
+    "2. Para el documento de Descubrimiento, determina una UNICA accion:\n"
+    '   - "update": el cambio en los requisitos EARS altera una regla de negocio fundamental, '
+    "Visión o Alcance del proyecto en Descubrimiento. DEBES sugerir el texto corregido.\n"
+    '   - "keep": los cambios en los requisitos son detalles de bajo nivel o especificaciones técnicas '
+    "que NO contradicen ni alteran la visión de negocio de alto nivel. NO lo incluyas en la respuesta.\n"
+    '   - "delete": el concepto de negocio del que depende el artefacto fue ELIMINADO.\n\n'
+    "3. ANALISIS SEMANTICO: Concéntrate en el impacto a nivel de negocio y alcance. "
+    "Si un requisito especifica lógica que contradice el alcance del Descubrimiento, "
+    "esto es una contradicción y requeriría un 'update' al documento de descubrimiento.\n"
+    "4. NO documentes detalles técnicos o sintaxis EARS en el Descubrimiento de alto nivel.\n\n"
+    "## FORMATO DE SALIDA (JSON estricto)\n\n"
+    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
+    "{\n"
+    '  "actions": [\n'
+    "    {\n"
+    '      "artifact_id": "<id del documento de descubrimiento>",\n'
+    '      "action": "update" | "delete",\n'
+    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
+    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
+    '      "suggested_before": "<texto actual que debe cambiar>",\n'
+    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
+    "    }\n"
+    "  ],\n"
+    '  "overall_rationale": "<resumen general del analisis en español>"\n'
+    "}\n\n"
+    "Si el descubrimiento NO requiere cambios, devuelve: "
+    '{"actions": [], "overall_rationale": "Los cambios en los requisitos son consistentes '
+    'con la visión y alcance de negocio."}'
+)
 
 
 class ConsistencyEvaluationMode:

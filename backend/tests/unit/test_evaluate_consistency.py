@@ -30,6 +30,7 @@ class StubConsistencyAgent:
         self._affected_ids = affected_ids or []
         self._should_fail = should_fail
         self.last_context: object | None = None
+        self.last_skill_name: str | None = None
 
     async def execute_with_skill(  # noqa: ARG002
         self,
@@ -40,6 +41,7 @@ class StubConsistencyAgent:
         user_instructions: str | None = None,
     ) -> object:
         self.last_context = context
+        self.last_skill_name = skill_name
         if self._should_fail:
             raise RuntimeError("Stub agent failure")
         return {
@@ -375,7 +377,7 @@ def test_consistency_requirements_downstream_prompt_exists() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_evaluate_requirements_to_discovery_uses_upstream_skill() -> None:
-    """REQUISITOS → DESCUBRIMIENTO debe seguir usando consistency_evaluate_upstream."""
+    """REQUISITOS → DESCUBRIMIENTO debe usar el skill consistency_evaluate_requirements_upstream."""
     from kosmo.domain.sdd.document_converters import markdown_to_document
 
     project = _make_project("prj_r2d")
@@ -404,5 +406,19 @@ async def test_evaluate_requirements_to_discovery_uses_upstream_skill() -> None:
         applied_changes=[change],
     )
 
-    # Assert: no debe romperse — el routing existente (upstream) se mantiene
+    # Assert
     assert result.affected_artifact_ids == ["prj_r2d"]
+    assert agent.last_skill_name == "consistency_evaluate_requirements_upstream"
+
+
+@pytest.mark.unit
+def test_consistency_requirements_upstream_prompt_exists() -> None:
+    """Verifica que el prompt para requisitos→descubrimiento esté definido y exportado."""
+    from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+        CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT,
+    )
+
+    assert isinstance(CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT, str)
+    assert "Requisitos EARS" in CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT
+    assert "Descubrimiento" in CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT
+    assert "JSON" in CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT
