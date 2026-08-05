@@ -228,7 +228,8 @@ class ApplyPlanChangesUseCase:
                 )
                 from kosmo.contracts.sdd.ids import FeatureId
 
-                feature_id = FeatureId(applied[0].context_id) if applied and applied[0].context_id else FeatureId("")
+                context_id = next((c.context_id for c in applied if c.context_id), "")
+                feature_id = FeatureId(context_id)
 
                 return await self._propagate_feature_uc.execute(
                     PropagateFeatureChangesInput(
