@@ -360,6 +360,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
     app.state.requirement_repo = requirements_components.requirement_repo
 
+    from kosmo.application.consistency.propagate_requirement_changes import PropagateRequirementChangesUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyProjectRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
+        SqlAlchemyActivityDiagramRepository,
+    )
+
+    app.state.propagate_requirement_changes = PropagateRequirementChangesUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        chat_repo=app.state.chat_repo,
+        consistency_evaluator=app.state.consistency_evaluator,
+    )
+
     modelo_components = build_modelo_components(session_factory, pipeline_components)
     app.state.generate_diagram = modelo_components.generate_diagram
     app.state.get_diagram = modelo_components.get_diagram

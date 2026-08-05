@@ -20,9 +20,13 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
     RequirementsNotFoundError,
 )
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.schemas import (
+    PhaseNotificationList,
+    PhaseNotificationView,
+)
 
 router = APIRouter(
     prefix="/api/v1/features/{feature_id}/requirements",
@@ -189,3 +193,56 @@ async def refine_requirements(
         "document_markdown": output.phase_output.requirements_markdown,
         "total": len(output.requirements),
     }
+
+
+class PropagateRequirementsRequest(BaseModel):
+    project_id: str
+    applied_change_ids: list[str] = []
+
+
+@router.post(
+    "/propagate",
+    summary="Propagar cambios desde Requisitos",
+    description=(
+        "Evalúa el impacto de los cambios aplicados en los requisitos de una "
+        "característica en ambas direcciones: upstream hacia Características y "
+        "Descubrimiento, downstream hacia Modelo. Retorna las fases afectadas "
+        "para que el wizard actualice sus insignias de advertencia."
+    ),
+    response_model=PhaseNotificationList,
+    status_code=status.HTTP_200_OK,
+)
+async def propagate_requirement_changes(
+    feature_id: str,
+    body: PropagateRequirementsRequest,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> PhaseNotificationList:
+    from kosmo.application.consistency.propagate_requirement_changes import (
+        PropagateRequirementChangesInput,
+        PropagateRequirementChangesUseCase,
+    )
+
+    uc = cast("PropagateRequirementChangesUseCase", request.app.state.propagate_requirement_changes)
+
+    try:
+        output = await uc.execute(
+            PropagateRequirementChangesInput(
+                project_id=ProjectId(body.project_id),
+                feature_id=FeatureId(feature_id),
+                applied_change_ids=[PlanChangeId(cid) for cid in body.applied_change_ids],
+            )
+        )
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+
+    return PhaseNotificationList(
+        affected_phases=[
+            PhaseNotificationView(
+                phase=p.phase,
+                affected_count=p.affected_count,
+                affected_ids=p.affected_ids,
+            )
+            for p in output.affected_phases
+        ]
+    )
