@@ -79,17 +79,13 @@ class ApplyConsistencyImpactsUseCase:
 
             if not artifact_type or not target_id:
                 failed.append(
-                    FailedImpact(
-                        target_id=target_id, artifact_type=artifact_type, reason="Datos incompletos"
-                    )
+                    FailedImpact(target_id=target_id, artifact_type=artifact_type, reason="Datos incompletos")
                 )
                 continue
 
             if action == "update" and not before and not after:
                 failed.append(
-                    FailedImpact(
-                        target_id=target_id, artifact_type=artifact_type, reason="Sin sugerencia de cambio"
-                    )
+                    FailedImpact(target_id=target_id, artifact_type=artifact_type, reason="Sin sugerencia de cambio")
                 )
                 continue
 

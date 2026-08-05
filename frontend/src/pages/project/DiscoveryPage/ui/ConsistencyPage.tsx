@@ -1,6 +1,5 @@
 'use client';
 
-import { deleteFeature } from '@/entities/characteristic';
 import { applyConsistencyImpacts, useConsistencyStore } from '@/entities/consistency';
 import type { DownstreamProposal } from '@/entities/consistency';
 import { ModalConfirmLeave, toast } from '@/shared/ui';
@@ -37,8 +36,6 @@ const ConsistencyPage = () => {
 
 	const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 	const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-	const [deletingId, setDeletingId] = useState<string | null>(null);
-	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 	const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
 	const phaseGroups = useMemo(
@@ -148,26 +145,6 @@ const ConsistencyPage = () => {
 		toast.success('Todos los cambios han sido descartados');
 	};
 
-	const handleDeleteFeature = async () => {
-		if (!confirmDeleteId || !currentProject) return;
-		setDeletingId(confirmDeleteId);
-		setConfirmDeleteId(null);
-		try {
-			const impact = report?.downstream_impact.find((i) => i.id === confirmDeleteId);
-			const featureId = impact?.targetId;
-			if (featureId) {
-				await deleteFeature(currentProject.id, featureId);
-			}
-			useConsistencyStore.getState().acceptImpact(confirmDeleteId);
-			toast.success('Característica eliminada correctamente');
-			await refreshProject();
-		} catch {
-			toast.error('No se pudo eliminar la característica');
-		} finally {
-			setDeletingId(null);
-		}
-	};
-
 	return (
 		<>
 			<div className='page-container gap-2'>
@@ -256,17 +233,6 @@ const ConsistencyPage = () => {
 					description='Si sale ahora, los cambios sugeridos no se aplicarán y no se volverán a mostrar. ¿Está seguro que desea salir?'
 					cancelText='Cancelar'
 					confirmText='Salir'
-				/>
-			)}
-
-			{confirmDeleteId && (
-				<ModalConfirmLeave
-					onCancel={() => setConfirmDeleteId(null)}
-					onConfirm={handleDeleteFeature}
-					title='Eliminar característica'
-					description='Esta característica y todos sus requisitos y diagramas asociados se eliminarán permanentemente. ¿Está seguro?'
-					cancelText='Cancelar'
-					confirmText='Eliminar'
 				/>
 			)}
 		</>

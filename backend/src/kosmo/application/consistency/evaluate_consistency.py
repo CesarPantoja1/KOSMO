@@ -23,7 +23,7 @@ from kosmo.contracts.sdd.repositories import (
     FeatureRepository,
     RequirementRepository,
 )
-from kosmo.domain.sdd.discovery_diff import ChangeType, SectionChange, diff_discovery_versions
+from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange, diff_discovery_versions
 from kosmo.domain.sdd.document_converters import document_to_markdown
 
 _log = structlog.get_logger(__name__)
@@ -234,18 +234,34 @@ class EvaluateConsistencyUseCase:
         if not section_changes:
             return plan_changes
 
-        return self._section_changes_to_plan(section_changes)
+        return self._merge_changes(plan_changes, section_changes)
 
     @staticmethod
-    def _section_changes_to_plan(changes: list[SectionChange]) -> list[PlanCambio]:
+    def _merge_changes(originals: list[PlanCambio], diffs: list[SectionChange]) -> list[PlanCambio]:
+        desc_by_section: dict[str, str] = {}
+        for pc in originals:
+            section = (pc.section or "").strip()
+            if section and pc.description and pc.description != section:
+                desc_by_section[section.lower()] = pc.description
+
         result: list[PlanCambio] = []
-        for sc in changes:
-            if sc.change_type == ChangeType.ADDED:
-                description = f"Seccion nueva: {sc.section}"
-            elif sc.change_type == ChangeType.REMOVED:
-                description = f"Seccion eliminada: {sc.section}"
-            else:
-                description = f"Seccion modificada: {sc.section}"
+        for sc in diffs:
+            section_key = sc.section.strip().lower()
+            description = desc_by_section.get(section_key)
+            if not description:
+                for orig_section, desc in desc_by_section.items():
+                    if orig_section in section_key or section_key in orig_section:
+                        description = desc
+                        break
+            if not description:
+                if sc.change_type == ChangeType.ADDED:
+                    description = f"Seccion nueva: {sc.section}"
+                elif sc.change_type == ChangeType.REMOVED:
+                    description = f"Seccion eliminada: {sc.section}"
+                elif sc.change_class == ChangeClass.COSMETIC:
+                    description = f"Cambio cosmetico en {sc.section}"
+                else:
+                    description = f"Seccion modificada: {sc.section}"
             result.append(
                 PlanCambio(
                     id=PlanChangeId(f"chg_diff_{ULID().hex}"),

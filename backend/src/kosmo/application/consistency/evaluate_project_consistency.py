@@ -99,7 +99,16 @@ class EvaluateProjectConsistencyUseCase:
                 )
                 continue
 
-            items = await self._enrich_affected(result, api_phase, target_spec)
+            try:
+                items = await self._enrich_affected(result, api_phase, target_spec)
+            except Exception:
+                _log.warning(
+                    "consistency.enrich_failed",
+                    project_id=str(input_data.project_id),
+                    target=target_spec,
+                    exc_info=True,
+                )
+                continue
 
             if _is_upstream(api_phase, input_data.source_phase.value):
                 upstream.extend(items)
@@ -174,12 +183,8 @@ class EvaluateProjectConsistencyUseCase:
                 current_reqs = parse_requirements_markdown(req_md, feature.id, feature.number)
 
                 if action and action.suggested_before and action.suggested_after:
-                    before_reqs = parse_requirements_markdown(
-                        action.suggested_before, feature.id, feature.number
-                    )
-                    after_reqs = parse_requirements_markdown(
-                        action.suggested_after, feature.id, feature.number
-                    )
+                    before_reqs = parse_requirements_markdown(action.suggested_before, feature.id, feature.number)
+                    after_reqs = parse_requirements_markdown(action.suggested_after, feature.id, feature.number)
                     before_by_id = {r.display_id: r for r in before_reqs}
                     after_by_id = {r.display_id: r for r in after_reqs}
                     all_ids = sorted(set(before_by_id.keys()) | set(after_by_id.keys()))
@@ -198,20 +203,20 @@ class EvaluateProjectConsistencyUseCase:
                             "before": before_req.statement,
                             "after": after_req.statement,
                         }
-                        per_action = "update"
+                        req_action = "update"
                     elif before_req and not after_req:
                         per_diff = None
-                        per_action = "delete" if per_action == "delete" else "update"
+                        req_action = "delete"
                     elif not before_req and after_req:
                         per_diff = {
                             "field": "statement",
                             "before": "",
                             "after": after_req.statement,
                         }
-                        per_action = "create"
+                        req_action = "create"
                     else:
                         per_diff = None
-                        per_action = per_action
+                        req_action = per_action
 
                     target_req = before_req or after_req
                     req_title = target_req.title if target_req else req_display_id
@@ -227,11 +232,11 @@ class EvaluateProjectConsistencyUseCase:
                             rationale=per_rationale
                             or (
                                 "Se eliminará en cascada al eliminar la característica."
-                                if per_action == "delete"
+                                if req_action == "delete"
                                 else "El cambio en Descubrimiento afecta este requisito."
                             ),
                             diff=per_diff,
-                            action=per_action,
+                            action=req_action,
                         )
                     )
             elif target_spec == SpecPhase.MODELO:

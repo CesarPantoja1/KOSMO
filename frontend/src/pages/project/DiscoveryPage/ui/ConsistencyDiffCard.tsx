@@ -11,7 +11,6 @@ interface ConsistencyDiffCardProps {
 	onAccept?: () => void;
 	onReject?: () => void;
 	onUndo?: () => void;
-	onDelete?: () => void;
 	accepting?: boolean;
 }
 
@@ -90,7 +89,6 @@ export const ConsistencyDiffCard = ({
 	onAccept,
 	onReject,
 	onUndo,
-	onDelete,
 	accepting,
 }: ConsistencyDiffCardProps) => {
 	const accepted = item.accepted;

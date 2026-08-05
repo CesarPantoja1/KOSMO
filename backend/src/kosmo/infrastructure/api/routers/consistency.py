@@ -202,11 +202,8 @@ async def apply_consistency_impacts(
 ) -> dict[str, Any]:
     output = await uc.execute(project_id=ProjectId(project_id), impacts=request.impacts)
     return {
-        "applied": [
-            {"target_id": a.target_id, "artifact_type": a.artifact_type} for a in output.applied
-        ],
+        "applied": [{"target_id": a.target_id, "artifact_type": a.artifact_type} for a in output.applied],
         "failed": [
-            {"target_id": f.target_id, "artifact_type": f.artifact_type, "reason": f.reason}
-            for f in output.failed
+            {"target_id": f.target_id, "artifact_type": f.artifact_type, "reason": f.reason} for f in output.failed
         ],
     }
