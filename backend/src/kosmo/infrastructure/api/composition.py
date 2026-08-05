@@ -534,7 +534,6 @@ def build_discovery_components(
         diagram_repo=diagram_repo,
         chat_repo=chat_repo,
         consistency_evaluator=consistency_evaluator,
-        traceability_repo=pipeline.traceability_repo,
     )
 
     return DiscoveryComponents(
@@ -584,6 +583,7 @@ class FeaturesComponents:
     feature_repo: SqlAlchemyFeatureRepository
     get_feature_chat_history: Any
     list_features: Any
+    propagate_feature_changes: Any
 
 
 def build_features_components(
@@ -627,6 +627,7 @@ def build_features_components(
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,
         list_features=ListFeaturesUseCase(feature_repo=feature_repo),
+        propagate_feature_changes=None,
     )
 
 

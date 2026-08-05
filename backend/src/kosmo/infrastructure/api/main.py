@@ -324,6 +324,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.get_feature_chat_history = features_components.get_feature_chat_history
     app.state.list_features = features_components.list_features
 
+    from kosmo.application.consistency.propagate_feature_changes import (
+        PropagateFeatureChangesUseCase,
+    )
+
+    app.state.propagate_feature_changes = PropagateFeatureChangesUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        chat_repo=app.state.chat_repo,
+        consistency_evaluator=app.state.consistency_evaluator,
+    )
+
     from kosmo.application.features.delete_feature import DeleteFeatureUseCase
 
     app.state.delete_feature = DeleteFeatureUseCase(

@@ -226,11 +226,14 @@ class ApplyPlanChangesUseCase:
                 from kosmo.application.consistency.propagate_feature_changes import (
                     PropagateFeatureChangesInput,
                 )
+                from kosmo.contracts.sdd.ids import FeatureId
+
+                feature_id = FeatureId(applied[0].context_id) if applied and applied[0].context_id else FeatureId("")
 
                 return await self._propagate_feature_uc.execute(
                     PropagateFeatureChangesInput(
                         project_id=input_data.project_id,
-                        phase=input_data.phase,
+                        feature_id=feature_id,
                         applied_change_ids=[c.id for c in applied],
                     )
                 )

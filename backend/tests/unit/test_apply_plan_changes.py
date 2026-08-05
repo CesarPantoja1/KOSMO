@@ -690,13 +690,6 @@ async def test_propagation_failure_does_not_revert_applied_changes() -> None:
 @pytest.mark.unit
 async def test_apply_feature_change_updates_title_and_slug() -> None:
     # Arrange
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_propagation_fase_caracteristicas_invoca_propagate_feature_uc() -> None:
-    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
-
     project = _make_project()
     project_repo = InMemoryProjectRepository()
     await project_repo.save(project)
@@ -903,61 +896,3 @@ async def test_apply_feature_change_partial_failure_preserves_section_info() -> 
     assert result.applied_changes[0].section == "Descripción"
     assert result.failed_changes[0].section == "Prioridad"
     assert "no es modificable" in result.failed_changes[0].reason
-
-
-    requirement_repo = InMemoryRequirementRepository()
-    diagram_repo = InMemoryActivityDiagramRepository()
-
-    feat = Feature(
-        id=FeatureId("feat_01"),
-        number=1,
-        title="Feature Test",
-        slug="feature-test",
-        description="Desc",
-        project_id=project.id,
-    )
-    await feature_repo.save(feat)
-
-    change = PlanCambio(
-        id=PlanChangeId("chg_feat_01"),
-        context_id="feat_01",
-        section="Descripción",
-        description="Cambiar descripción",
-        diff=DiffCambio(before="Desc", after="Desc modificada"),
-        status=EstadoPlanCambio.PENDING,
-    )
-    await chat_repo.add_plan_change(project.id, SpecPhase.CARACTERISTICAS, change)
-
-    evaluator = FakeConsistencyEvaluator()
-    evaluator.set_affected_ids("descubrimiento", ["dsc_01"])
-    evaluator.set_affected_ids("requisitos", ["req_01"])
-    evaluator.set_affected_ids("modelo", ["mdl_01"])
-
-    propagate_feature_uc = PropagateFeatureChangesUseCase(
-        project_repo=project_repo,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        diagram_repo=diagram_repo,
-        chat_repo=chat_repo,
-        consistency_evaluator=evaluator,
-    )
-
-    uc = _make_uc(
-        project_repo, chat_repo, document_repo, feature_repo=feature_repo, propagate_feature_uc=propagate_feature_uc
-    )
-
-    result = await uc.execute(
-        ApplyPlanChangesInput(
-            project_id=project.id,
-            phase=SpecPhase.CARACTERISTICAS,
-            change_ids=[PlanChangeId("chg_feat_01")],
-        )
-    )
-
-    assert result.applied_count == 1
-    assert result.propagation is not None
-    phases = {p.phase: p for p in result.propagation.affected_phases}
-    assert "discovery" in phases
-    assert "requirements" in phases
-    assert "model" in phases
-

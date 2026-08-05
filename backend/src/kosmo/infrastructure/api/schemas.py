@@ -755,6 +755,19 @@ class ApplyBatchRequest(BaseModel):
     changes: list[str] = Field(description="IDs de los cambios a aplicar")
 
 
+# ═══ Propagación bidireccional (Sprint 4 - HU18) ═══
+
+
+class PropagateFeatureChangesRequest(BaseModel):
+    """Payload para solicitar propagación de cambios desde una característica."""
+
+    model_config = ConfigDict(extra="forbid")
+    applied_change_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs de los cambios aplicados en la característica",
+    )
+
+
 # ═══ Consistencia (Sprint 4 - HU17) ═══
 
 
