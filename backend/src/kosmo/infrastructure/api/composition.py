@@ -27,10 +27,12 @@ from kosmo.application.discovery import (
 )
 from kosmo.application.features import (
     CreateCharacteristicUseCase,
+    EditFeatureUseCase,
     GenerateFeaturesUseCase,
     SaveSelectedFeaturesUseCase,
     SuggestFeaturesUseCase,
 )
+from kosmo.application.features.check_feature_consistency import CheckFeatureConsistencyUseCase
 from kosmo.application.features.list_features import ListFeaturesUseCase
 from kosmo.application.modelo import (
     GenerateActivityDiagramUseCase,
@@ -52,12 +54,14 @@ from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.audit import AuditEventSink
 from kosmo.contracts.auth import LoginAttemptStore, PasswordHasher, SecretCipher, UserRepository
+from kosmo.contracts.consistency import ConsistencyEvaluator
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort, Skill
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
     ConsistencyEvaluationMode,
 )
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
@@ -386,6 +390,16 @@ def build_pipeline_components(
             mode=ConsistencyEvaluationMode(),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_upstream",
+            description="Evalua consistencia desde características hacia el documento de descubrimiento (upstream)",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.CARACTERISTICAS, system_prompt=CONSISTENCY_UPSTREAM_SYSTEM_PROMPT
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -515,6 +529,8 @@ def build_discovery_components(
         document_repo=document_repo,
     )
 
+    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
+
     propagate_uc = PropagateDiscoveryChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
@@ -523,6 +539,15 @@ def build_discovery_components(
         chat_repo=chat_repo,
         consistency_evaluator=consistency_evaluator,
         traceability_repo=pipeline.traceability_repo,
+    )
+
+    propagate_feature_uc = PropagateFeatureChangesUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        chat_repo=chat_repo,
+        consistency_evaluator=consistency_evaluator,
     )
 
     return DiscoveryComponents(
@@ -555,6 +580,7 @@ def build_discovery_components(
             requirement_repo=requirement_repo,
             propagate_uc=propagate_uc,
             session_factory=session_factory,
+            propagate_feature_uc=propagate_feature_uc,
         ),
         propagate_discovery_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
@@ -571,11 +597,15 @@ class FeaturesComponents:
     feature_repo: SqlAlchemyFeatureRepository
     get_feature_chat_history: Any
     list_features: Any
+    propagate_feature_changes: Any
+    edit_feature: EditFeatureUseCase
+    check_feature_consistency: CheckFeatureConsistencyUseCase
 
 
 def build_features_components(
     session_factory: async_sessionmaker[AsyncSession],
     pipeline: PipelineComponents,
+    consistency_evaluator: ConsistencyEvaluator,
 ) -> FeaturesComponents:
     document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
@@ -614,6 +644,15 @@ def build_features_components(
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,
         list_features=ListFeaturesUseCase(feature_repo=feature_repo),
+        propagate_feature_changes=None,
+        edit_feature=EditFeatureUseCase(
+            feature_repo=feature_repo,
+            consistency_evaluator=consistency_evaluator,
+        ),
+        check_feature_consistency=CheckFeatureConsistencyUseCase(
+            feature_repo=feature_repo,
+            consistency_evaluator=consistency_evaluator,
+        ),
     )
 
 

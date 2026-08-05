@@ -547,6 +547,23 @@ class CreateCharacteristicRequest(BaseModel):
     )
 
 
+class EditFeatureManualRequest(BaseModel):
+    """Payload para editar una característica de forma manual."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Nuevo título de la característica (máximo 50 caracteres).",
+    )
+    description: str = Field(
+        min_length=0,
+        max_length=500,
+        description="Nueva descripción de la característica (máximo 500 caracteres).",
+    )
+
+
 class ChangeSuggestion(BaseModel):
     """Sugerencia de cambio generada por la IA."""
 
@@ -753,6 +770,39 @@ class ApplyBatchRequest(BaseModel):
     phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
     context: str | None = Field(default=None, description="Contexto específico de los cambios")
     changes: list[str] = Field(description="IDs de los cambios a aplicar")
+
+
+# ═══ Verificación de consistencia en guardado manual (Sprint 4 - HU18/T7) ═══
+
+
+class CheckConsistencyRequestView(BaseModel):
+    """Payload para verificar consistencia antes de guardado manual de feature."""
+
+    model_config = ConfigDict(extra="forbid")
+    content: dict[str, object] = Field(description="Contenido nuevo a validar contra el documento fuente")
+
+
+class InconsistencyResultView(BaseModel):
+    """Resultado de verificación de consistencia en guardado manual."""
+
+    is_consistent: bool = Field(description="False si se detectó contradicción flagrante")
+    reason: str | None = Field(default=None, description="Motivo de la inconsistencia (solo si is_consistent = false)")
+    conflicting_section: str | None = Field(
+        default=None, description="Sección del documento fuente con la que hay conflicto"
+    )
+
+
+# ═══ Propagación bidireccional (Sprint 4 - HU18) ═══
+
+
+class PropagateFeatureChangesRequest(BaseModel):
+    """Payload para solicitar propagación de cambios desde una característica."""
+
+    model_config = ConfigDict(extra="forbid")
+    applied_change_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs de los cambios aplicados en la característica",
+    )
 
 
 # ═══ Consistencia (Sprint 4 - HU17) ═══

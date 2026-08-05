@@ -29,6 +29,7 @@ class StubConsistencyAgent:
     def __init__(self, *, affected_ids: list[str] | None = None, should_fail: bool = False) -> None:
         self._affected_ids = affected_ids or []
         self._should_fail = should_fail
+        self.last_context: object | None = None
 
     async def execute_with_skill(  # noqa: ARG002
         self,
@@ -38,6 +39,7 @@ class StubConsistencyAgent:
         project_id: object | None = None,
         user_instructions: str | None = None,
     ) -> object:
+        self.last_context = context
         if self._should_fail:
             raise RuntimeError("Stub agent failure")
         return {
@@ -242,3 +244,39 @@ async def test_evaluate_filters_out_unknown_ids() -> None:
 
     # Assert: solo devuelve IDs que corresponden a artefactos reales
     assert result.affected_artifact_ids == ["feat_04"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_fetch_source_content_for_features() -> None:
+    from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    project = _make_project("prj_005")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_05", "prj_005", "Gestión de inventario", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+    document_repo.discovery_docs["prj_005"] = markdown_to_document("## Visión\n\nVisión original.")
+
+    agent = StubConsistencyAgent(affected_ids=["prj_005"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _plan_change("chg_01")
+
+    _result = await uc.evaluate(
+        source_phase=SpecPhase.CARACTERISTICAS,
+        target_phase=SpecPhase.DESCUBRIMIENTO,
+        project_id=ProjectId("prj_005"),
+        applied_changes=[change],
+    )
+
+    assert isinstance(agent.last_context, ConsistencyPhaseContext)
+    assert "Gestión de inventario" in agent.last_context.source_content
+    assert "feat_05" in agent.last_context.source_content
