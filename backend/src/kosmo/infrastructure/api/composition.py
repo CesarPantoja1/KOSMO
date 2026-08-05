@@ -58,7 +58,7 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
-    _CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
+    CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
     ConsistencyEvaluationMode,
 )
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
@@ -393,7 +393,7 @@ def build_pipeline_components(
             description="Evalua consistencia desde características hacia el documento de descubrimiento (upstream)",
             phase=SpecPhase.CARACTERISTICAS,
             mode=ConsistencyEvaluationMode(
-                phase_name=SpecPhase.CARACTERISTICAS, system_prompt=_CONSISTENCY_UPSTREAM_SYSTEM_PROMPT
+                phase_name=SpecPhase.CARACTERISTICAS, system_prompt=CONSISTENCY_UPSTREAM_SYSTEM_PROMPT
             ),  # type: ignore[reportArgumentType]
         )
     )

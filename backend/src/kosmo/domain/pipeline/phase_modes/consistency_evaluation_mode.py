@@ -61,7 +61,7 @@ _CONSISTENCY_SYSTEM_PROMPT = (
     "Si ningun artefacto esta afectado, devuelve: "
     '{"actions": [], "overall_rationale": "Ningun artefacto requiere cambios."}'
 )
-_CONSISTENCY_UPSTREAM_SYSTEM_PROMPT = (
+CONSISTENCY_UPSTREAM_SYSTEM_PROMPT = (
     "Eres un analista experto en trazabilidad de requisitos de software. "
     "Tu tarea es analizar CAMBIOS aplicados a las Características de un producto "
     "y determinar si dichos cambios entran en conflicto o contradicen la Visión, "
