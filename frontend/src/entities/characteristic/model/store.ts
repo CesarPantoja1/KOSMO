@@ -9,6 +9,7 @@ import {
 import type {
 	CharacteristicChatResponse,
 	CharacteristicResponse,
+	CreateCharacteristicResponse,
 	SuggestCharacteristic,
 } from './types';
 
@@ -26,8 +27,8 @@ interface CharacteristicStore {
 	getSuggestCharacteristics: (projectId: string) => Promise<SuggestCharacteristic[]>;
 	addCharacteristic: (
 		projectId: string,
-		item: { title: string; description: string },
-	) => Promise<CharacteristicResponse>;
+		item: { title: string; description: string; origin?: string; force?: boolean },
+	) => Promise<CreateCharacteristicResponse>;
 
 	sendChatMessage: (
 		featureId: string,
@@ -74,9 +75,12 @@ export const useCharacteristicStore = create<CharacteristicStore>()((set, get) =
 
 	addCharacteristic: async (projectId, item) => {
 		const data = await addCharacteristic(projectId, item);
-		set((state) => ({
-			currentCharacteristics: [...state.currentCharacteristics, data],
-		}));
+		const feat = data.feature;
+		if (data.is_saved && feat) {
+			set((state) => ({
+				currentCharacteristics: [...state.currentCharacteristics, feat],
+			}));
+		}
 		return data;
 	},
 
