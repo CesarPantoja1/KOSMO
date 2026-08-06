@@ -14,7 +14,6 @@ interface MainNavbarProps {
 }
 
 export function MainNavbar({ children }: MainNavbarProps) {
-	const { setProjectState } = useAppStore();
 	const [projects, setProjects] = useState<Project[]>([]);
 
 	const [avatarOpen, setAvatarOpen] = useState(false);
@@ -49,6 +48,8 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	};
 
 	const handleProjectClick = (project: Project) => {
+		const { resetProjectState, setProjectState } = useAppStore.getState();
+		resetProjectState();
 		setProjectState(project);
 		router.push('/proyecto/descubrimiento');
 	};

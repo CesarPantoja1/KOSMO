@@ -1,6 +1,6 @@
 'use client';
 
-import { getDiscovery } from '@/entities/discovery';
+import { useDiscoveryStore } from '@/entities/discovery';
 import type { ConsistencyReportResponse } from '@/entities/consistency';
 import {
 	ConsistencyProgress,
@@ -17,7 +17,7 @@ import { MarkdownDiff } from '@/feature';
 import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 function buildProposal(original: string, changes: PlanChange[]): string {
 	let result = original;
@@ -62,7 +62,9 @@ export const PlanPage = () => {
 			router.push('/proyecto');
 			return;
 		}
-		getDiscovery(currentProject.id)
+		useDiscoveryStore
+			.getState()
+			.getDiscovery(currentProject.id)
 			.then((data) => setOriginalMarkdown(data.content))
 			.catch(() => toast.error('Error al cargar el descubrimiento'))
 			.finally(() => setIsLoading(false));
@@ -76,7 +78,7 @@ export const PlanPage = () => {
 
 		const finish = async () => {
 			if (currentProject) {
-				await getDiscovery(currentProject.id);
+				await useDiscoveryStore.getState().getDiscovery(currentProject.id);
 				await fetchAndHydratePlan(currentProject.id, 'discovery');
 			}
 			setIsProcessing(false);

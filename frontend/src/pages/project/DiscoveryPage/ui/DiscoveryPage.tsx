@@ -64,22 +64,11 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
-	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
 	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 
 	useEffect(() => {
 		if (!currentProject) {
 			router.push('/proyecto');
-			return;
-		}
-
-		if (currentDiscovery) {
-			queueMicrotask(() => {
-				setMarkdown(currentDiscovery.content);
-				savedContentRef.current = currentDiscovery.content;
-				setHasDiscovery(true);
-				_setIsLoading(false);
-			});
 			return;
 		}
 
