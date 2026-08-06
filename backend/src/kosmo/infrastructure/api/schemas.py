@@ -545,6 +545,14 @@ class CreateCharacteristicRequest(BaseModel):
         description="Descripción de la característica (máximo 500 caracteres).",
         examples=["Permite a los usuarios administrar el catálogo de productos del sistema."],
     )
+    origin: str = Field(
+        default="",
+        description="Origen y trazabilidad de la característica. Si se deja vacío, la IA lo deriva del descubrimiento.",
+    )
+    force: bool = Field(
+        default=False,
+        description="Si es true, fuerza la creación aunque la IA detecte inconsistencia con el descubrimiento.",
+    )
 
 
 class EditFeatureManualRequest(BaseModel):
@@ -814,6 +822,7 @@ class ChangeInputView(BaseModel):
     section: str = Field(description="Sección del documento afectada")
     diff_before: str = Field(description="Contenido antes del cambio")
     diff_after: str = Field(description="Contenido después del cambio")
+    description: str = Field(default="", description="Descripción semántica del cambio")
 
 
 class EvaluateConsistencyRequestView(BaseModel):

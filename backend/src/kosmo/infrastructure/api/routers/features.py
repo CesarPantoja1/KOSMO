@@ -196,15 +196,15 @@ async def suggest_features(
     "/manual",
     summary="Crear característica manualmente",
     description=(
-        "Crea una nueva característica con los datos proporcionados por el usuario. "
-        "El título no puede exceder 50 caracteres y la descripción no puede exceder 500 caracteres. "
-        "Requiere autenticación mediante Bearer token."
+        "Crea una nueva característica. Si no se proporciona origin, la IA lo deriva "
+        "del descubrimiento y verifica coherencia. Si la IA detecta inconsistencia, "
+        "devuelve is_saved=false con el origin derivado y la razón. Usa force=true para "
+        "forzar el guardado."
     ),
-    response_model=FeatureResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_201_CREATED: {
-            "description": "Característica creada exitosamente.",
+        status.HTTP_200_OK: {
+            "description": "Característica creada exitosamente o rechazada por inconsistencia.",
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "Datos de entrada inválidos (título vacío, título muy largo, descripción muy larga).",
@@ -222,13 +222,15 @@ async def create_characteristic_manual(
     payload: Annotated[CreateCharacteristicRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[CreateCharacteristicUseCase, Depends(_create_characteristic)],
-) -> FeatureResponse:
+) -> dict[str, object]:
     try:
         output = await use_case.execute(
             CreateCharacteristicInput(
                 project_id=ProjectId(project_id),
                 title=payload.title,
                 description=payload.description,
+                origin=payload.origin,
+                force=payload.force,
             )
         )
     except ValueError as exc:
@@ -236,7 +238,20 @@ async def create_characteristic_manual(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    return _feature_to_response(output.characteristic)
+
+    if output.is_saved and output.characteristic is not None:
+        return {
+            "is_saved": True,
+            "feature": _feature_to_response(output.characteristic).model_dump(),
+            "origin": output.origin,
+            "is_consistent": output.is_consistent,
+        }
+    return {
+        "is_saved": False,
+        "origin": output.origin,
+        "is_consistent": output.is_consistent,
+        "inconsistency_reason": output.inconsistency_reason,
+    }
 
 
 @router.put(

@@ -1,6 +1,6 @@
 'use client';
 
-import { Ai, Send } from '@/shared/ui';
+import { Ai, Loading, Send } from '@/shared/ui';
 import type { SuggestCharacteristic } from '@/entities/characteristic';
 import { useCreateCharacteristic } from '../hooks/use-create-characteristic';
 import CharacteristicModal from './CharacteristicModal';
@@ -30,10 +30,28 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 		handleSubmit,
 		handleCancel,
 		applySuggestion,
+		showConsistencyModal,
+		consistencyInfo,
+		isValidating,
+		handleForceCreate,
+		closeConsistencyModal,
 	} = useCreateCharacteristic(onCreated);
 
 	return (
-		<div className='flex-1 px-0.5 flex flex-col gap-6'>
+		<>
+			{isValidating && (
+				<Loading
+					title='Verificando característica'
+					description='La IA está analizando la coherencia de la característica con el descubrimiento del proyecto.'
+					messages={[
+						'Analizando coherencia con el descubrimiento...',
+						'Derivando origen de la característica...',
+						'Verificando reglas de negocio...',
+					]}
+				/>
+			)}
+
+			<div className='flex-1 px-0.5 flex flex-col gap-6'>
 			<div className='w-full flex flex-col gap-3'>
 				<h2 className='text-3xl font-bold text-base-800'>Crear una Característica</h2>
 				<p className='text-lg text-base-600'>
@@ -147,7 +165,51 @@ const CreateCharacteristic = ({ onCreated }: Props) => {
 					}}
 				/>
 			)}
+
+			{showConsistencyModal && consistencyInfo && (
+				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+					<div className='bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 flex flex-col gap-4'>
+						<h3 className='text-xl font-semibold text-base-800'>
+							Revisión de coherencia
+						</h3>
+						<p className='text-base text-base-600'>
+							La IA detectó que esta característica podría no alinearse con el
+							descubrimiento:
+						</p>
+						<div className='bg-status-error/10 border border-status-error/30 rounded-md p-3'>
+							<p className='text-sm text-status-error'>{consistencyInfo.reason}</p>
+						</div>
+						<div className='flex flex-col gap-1'>
+							<label className='text-sm font-medium text-base-800'>
+								Origen derivado:
+							</label>
+							<input
+								type='text'
+								className='w-full px-3 py-2 border border-base-200 rounded-md bg-base-50 text-base-800 text-sm'
+								defaultValue={consistencyInfo.origin}
+							/>
+						</div>
+						<div className='flex justify-end gap-3 pt-2'>
+							<button
+								type='button'
+								onClick={closeConsistencyModal}
+								className='btn bg-base-200 hover:bg-base-300 text-base-800'
+							>
+								Cancelar
+							</button>
+							<button
+								type='button'
+								onClick={handleForceCreate}
+								className='btn bg-primary-100 hover:bg-primary-100/90 text-base-50'
+							>
+								Forzar guardado
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
+		</>
 	);
 };
 
