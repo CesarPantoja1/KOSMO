@@ -7,29 +7,12 @@ import {
 	useConsistencyStore,
 	useConsistencyStream,
 } from '@/entities/consistency';
-import type { PlanChange } from '@/entities/plan';
-import {
-	applyPlanChanges,
-	discardPlan,
-	usePlanStore,
-} from '@/entities/plan';
+import { applyPlanChanges, buildProposal, discardPlan, usePlanStore } from '@/entities/plan';
 import { MarkdownDiff } from '@/feature';
 import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-function buildProposal(original: string, changes: PlanChange[]): string {
-	let result = original;
-	for (const change of changes) {
-		if (change.diff.before && result.includes(change.diff.before)) {
-			result = result.replace(change.diff.before, change.diff.after);
-		} else if (!change.diff.before && change.diff.after) {
-			result += '\n\n' + change.diff.after;
-		}
-	}
-	return result;
-}
 
 export const PlanPage = () => {
 	const router = useRouter();

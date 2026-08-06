@@ -23,3 +23,6 @@ export {
 	discardPlan,
 	getPlan,
 } from './api/api';
+
+// UTILS
+export { buildProposal } from './model/buildProposal';
