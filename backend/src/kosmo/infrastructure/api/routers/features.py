@@ -86,6 +86,7 @@ def _list_features(request: Request) -> ListFeaturesUseCase:
         "descubrimiento del proyecto. Las características representan capacidades "
         "funcionales del producto software a construir."
     ),
+    response_model=list[FeatureResponse],
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_200_OK: {"description": "Características generadas exitosamente."},
@@ -97,22 +98,9 @@ async def generate_features(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
-) -> dict[str, Any]:
+) -> list[FeatureResponse]:
     output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
-    return {
-        "project_id": str(output.project_id),
-        "features": [
-            {
-                "id": str(f.id),
-                "title": f.title,
-                "description": f.description,
-                "origin": f.origin,
-                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
-                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
-            }
-            for f in output.features
-        ],
-    }
+    return [_feature_to_response(f) for f in output.features]
 
 
 @router.get(
