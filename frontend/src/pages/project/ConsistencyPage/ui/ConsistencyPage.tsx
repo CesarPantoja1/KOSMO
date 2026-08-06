@@ -39,6 +39,8 @@ const ConsistencyPage = () => {
 
 	const report = useConsistencyStore((s) => s.report);
 	const rejectAll = useConsistencyStore((s) => s.rejectAll);
+	const acceptAll = useConsistencyStore((s) => s.acceptAll);
+	const acceptImpact = useConsistencyStore((s) => s.acceptImpact);
 	const clearReport = useConsistencyStore((s) => s.clearReport);
 	const undoImpact = useConsistencyStore((s) => s.undoImpact);
 
@@ -48,7 +50,8 @@ const ConsistencyPage = () => {
 
 	const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 	const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-	const [acceptingId, setAcceptingId] = useState<string | null>(null);
+	const [applying, setApplying] = useState(false);
+	const [showConfirmApply, setShowConfirmApply] = useState(false);
 
 	const phaseGroups = useMemo(
 		() => (report ? groupByPhase(report.downstream_impact) : []),
@@ -65,13 +68,7 @@ const ConsistencyPage = () => {
 		return null;
 	}
 
-	const hasPending = report.downstream_impact.some((i) => !i.accepted);
-
-	if (!hasPending) {
-		clearReport();
-		router.push(returnPath);
-		return null;
-	}
+	const hasPending = report.downstream_impact.some((i) => i.accepted === undefined);
 
 	const refreshProject = async () => {
 		try {
@@ -104,58 +101,62 @@ const ConsistencyPage = () => {
 		setPendingNavigation(null);
 	};
 
-	const handleAcceptAll = async () => {
+	const handleAcceptAllBatch = async () => {
 		if (!report || !currentProject) return;
-		const pending = report.downstream_impact.filter((i) => !i.accepted);
-		if (pending.length === 0) {
-			clearReport();
-			router.push(returnPath);
-			return;
-		}
+		const selected = report.downstream_impact.filter((i) => i.accepted === true);
+		if (selected.length === 0) return;
+		setApplying(true);
 		try {
-			const result = await applyConsistencyImpacts(currentProject.id, pending);
+			const result = await applyConsistencyImpacts(currentProject.id, selected);
 			const failedCount = (result.failed || []).filter((f) => f.target_id).length;
 			if (failedCount > 0) {
-				toast.error(`${failedCount} de ${pending.length} cambios no se pudieron aplicar`);
-			} else {
-				toast.success(`${pending.length} cambios aplicados correctamente`);
+				toast.error(`${failedCount} de ${selected.length} cambios no se pudieron aplicar`);
 			}
-			if (failedCount < pending.length) {
+			if (failedCount < selected.length) {
+				toast.success(`${selected.length - failedCount} cambios aplicados correctamente`);
 				await refreshProject();
+				clearReport();
+				router.push(returnPath);
 			}
 		} catch {
 			toast.error('No se pudieron aplicar los cambios');
 		} finally {
-			clearReport();
-			router.push(returnPath);
+			setApplying(false);
 		}
 	};
 
-	const handleAcceptImpact = async (impactId: string) => {
-		if (!report || !currentProject) return;
-		const impact = report.downstream_impact.find((i) => i.id === impactId);
-		if (!impact) return;
-		setAcceptingId(impactId);
-		try {
-			await applyConsistencyImpacts(currentProject.id, [impact]);
-			useConsistencyStore.getState().acceptImpact(impactId);
-			toast.success('Cambio aplicado correctamente');
-			await refreshProject();
-		} catch {
-			toast.error('No se pudo aplicar el cambio');
-		} finally {
-			setAcceptingId(null);
-		}
+	const handleAcceptImpact = (impactId: string) => {
+		acceptImpact(impactId);
 	};
 
 	const handleRejectImpact = (impactId: string) => {
 		useConsistencyStore.getState().rejectImpact(impactId);
 	};
 
+	const handleMarkAll = () => {
+		acceptAll();
+	};
+
 	const handleRejectAll = () => {
 		rejectAll();
-		toast.success('Todos los cambios han sido descartados');
+		clearReport();
+		router.push(returnPath);
 	};
+
+	const handleApplyClick = () => {
+		setShowConfirmApply(true);
+	};
+
+	const handleConfirmApply = () => {
+		setShowConfirmApply(false);
+		handleAcceptAllBatch();
+	};
+
+	const handleCancelApply = () => {
+		setShowConfirmApply(false);
+	};
+
+	const selectedCount = report.downstream_impact.filter((i) => i.accepted === true).length;
 
 	return (
 		<>
@@ -200,7 +201,7 @@ const ConsistencyPage = () => {
 												: undefined
 										}
 										onReject={
-											!impact.accepted
+											impact.accepted !== true
 												? () => handleRejectImpact(impact.id)
 												: undefined
 										}
@@ -209,7 +210,6 @@ const ConsistencyPage = () => {
 												? () => undoImpact(impact.id)
 												: undefined
 										}
-										accepting={acceptingId === impact.id}
 									/>
 										))}
 									</div>
@@ -224,13 +224,23 @@ const ConsistencyPage = () => {
 								>
 									Rechazar todos
 								</button>
-								<button
-									type='button'
-									onClick={handleAcceptAll}
-									className='cursor-pointer rounded-md bg-status-success px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-status-success/90 active:opacity-80'
-								>
-									Aceptar todos
-								</button>
+								<div className='flex items-center gap-3'>
+									<button
+										type='button'
+										onClick={handleMarkAll}
+										className='cursor-pointer rounded-md border border-base-300 bg-white px-5 py-2 text-sm font-medium text-base-950 transition-colors hover:bg-base-100 active:bg-base-200'
+									>
+										Marcar todos
+									</button>
+									<button
+										type='button'
+										onClick={handleApplyClick}
+										disabled={selectedCount === 0 || applying}
+										className='cursor-pointer rounded-md bg-status-success px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-status-success/90 active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed'
+									>
+										{applying ? 'Aplicando...' : `Aplicar seleccionados (${selectedCount})`}
+									</button>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -245,6 +255,17 @@ const ConsistencyPage = () => {
 					description='Si sale ahora, los cambios sugeridos no se aplicarán y no se volverán a mostrar. ¿Está seguro que desea salir?'
 					cancelText='Cancelar'
 					confirmText='Salir'
+				/>
+			)}
+
+			{showConfirmApply && (
+				<ModalConfirmLeave
+					onCancel={handleCancelApply}
+					onConfirm={handleConfirmApply}
+					title='Aplicar cambios seleccionados'
+					description={`Se aplicarán ${selectedCount} ${selectedCount === 1 ? 'cambio' : 'cambios'} sobre los artefactos downstream. Esta acción no se puede deshacer. ¿Desea continuar?`}
+					cancelText='Cancelar'
+					confirmText='Aplicar'
 				/>
 			)}
 		</>
