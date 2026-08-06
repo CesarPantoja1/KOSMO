@@ -76,6 +76,10 @@ export const PlanPage = () => {
 
 		const finish = async () => {
 			if (currentProject) {
+				if (!hasPending) {
+					const changeIds = changes.map((c) => c.id);
+					await applyPlanChanges(currentProject.id, 'discovery', changeIds);
+				}
 				await getDiscovery(currentProject.id);
 				await fetchAndHydratePlan(currentProject.id, 'discovery');
 			}
@@ -98,16 +102,12 @@ export const PlanPage = () => {
 
 	useEffect(() => {
 		if (!streamError) return;
-		void (async () => {
+		queueMicrotask(() => {
 			setIsProcessing(false);
 			setIsApplying(false);
-		})();
-		toast.error('Error al verificar la consistencia del proyecto');
-		if (currentProject) {
-			getDiscovery(currentProject.id).catch(() => {});
-			fetchAndHydratePlan(currentProject.id, 'discovery').catch(() => {});
-		}
-		router.push('/proyecto/descubrimiento');
+			toast.error('Error al verificar la consistencia. Tus cambios no fueron aplicados.');
+			router.push('/proyecto/descubrimiento');
+		});
 	}, [streamError]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const proposalMarkdown = buildProposal(originalMarkdown, changes);
@@ -135,33 +135,18 @@ export const PlanPage = () => {
 		setIsApplying(true);
 		setIsProcessing(true);
 
-		try {
-			const changeIds = changes.map((c) => c.id);
-			const result = await applyPlanChanges(currentProject.id, 'discovery', changeIds);
+		const changesToSend = changes.map((c) => ({
+			section: c.section,
+			diff_before: c.diff.before,
+			diff_after: c.diff.after,
+			description: c.description,
+		}));
 
-			if (result.failed_count > 0) {
-				const reasons = result.failed_changes.map((f) => f.reason).join('. ');
-				toast.error(`${result.failed_count} cambio(s) fallaron: ${reasons}`);
-			} else {
-				toast.success(`${result.applied_count} cambio(s) aplicados correctamente`);
-			}
-
-			const changesToSend = changes.map((c) => ({
-				section: c.section,
-				diff_before: c.diff.before,
-				diff_after: c.diff.after,
-			}));
-
-			startStream({
-				projectId: currentProject.id,
-				phaseOrigin: 'discovery',
-				changes: changesToSend,
-			});
-		} catch {
-			setIsApplying(false);
-			setIsProcessing(false);
-			toast.error('Error al aplicar los cambios');
-		}
+		startStream({
+			projectId: currentProject.id,
+			phaseOrigin: 'discovery',
+			changes: changesToSend,
+		});
 	};
 
 	if (isLoading) {

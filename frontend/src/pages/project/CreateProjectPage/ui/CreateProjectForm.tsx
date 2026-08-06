@@ -1,6 +1,6 @@
 'use client';
 
-import { Ai, Loading, toast } from '@/shared/ui';
+import { Ai, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
@@ -72,14 +72,7 @@ const CreateProjectForm = () => {
 	);
 
 	return (
-		<>
-			{isSubmitting && (
-				<Loading
-					title='Creando Proyecto'
-					description='Creando tu proyecto. Por favor, espera...'
-				/>
-			)}
-			<form
+		<form
 				onSubmit={handleSubmit(onSubmit)}
 				className='flex-1 flex flex-col gap-5 px-0.5'
 				noValidate
@@ -145,8 +138,7 @@ const CreateProjectForm = () => {
 						</div>
 					</div>
 				</div>
-			</form>
-		</>
+		</form>
 	);
 };
 

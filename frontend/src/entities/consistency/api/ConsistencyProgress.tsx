@@ -32,7 +32,7 @@ export function ConsistencyProgress({
 					{phases.length === 0 && (
 						<div className='flex items-center gap-3 text-sm text-base-500'>
 							<div className='h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-primary-100 border-t-transparent' />
-							<span>Preparando análisis...</span>
+							<span>Conectando con el motor de análisis...</span>
 						</div>
 					)}
 

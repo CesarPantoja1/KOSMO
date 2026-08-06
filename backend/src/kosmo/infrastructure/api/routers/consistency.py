@@ -153,7 +153,7 @@ def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
             PlanCambio(
                 id=change_id,
                 section=c.section,
-                description=c.section,
+                description=c.description or c.section,
                 diff=DiffCambio(before=c.diff_before, after=c.diff_after),
             )
         )

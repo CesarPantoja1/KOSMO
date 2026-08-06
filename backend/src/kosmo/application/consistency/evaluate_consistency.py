@@ -29,6 +29,29 @@ from kosmo.domain.sdd.document_converters import document_to_markdown
 _log = structlog.get_logger(__name__)
 
 
+def _validate_action(
+    artifact_id: str,
+    action: str,
+    suggested_before: str,
+    suggested_after: str,
+    artifact_desc: str,
+    artifact_type: str,
+) -> bool:
+    if action == "delete" and artifact_type == "DiscoveryDocument":
+        _log.warning("consistency.delete_discovery_blocked", artifact_id=artifact_id)
+        return False
+    if suggested_before == suggested_after:
+        return False
+    if suggested_before and suggested_before not in artifact_desc:
+        _log.warning(
+            "consistency.before_mismatch",
+            artifact_id=artifact_id,
+            before=suggested_before[:200],
+        )
+        return False
+    return True
+
+
 class EvaluateConsistencyUseCase:
     def __init__(
         self,
@@ -82,8 +105,14 @@ class EvaluateConsistencyUseCase:
             skill_name = "consistency_evaluate_requirements_upstream"
         elif source_phase == SpecPhase.REQUISITOS and target_phase == SpecPhase.MODELO:
             skill_name = "consistency_evaluate_requirements_model"
-        elif source_phase == SpecPhase.CARACTERISTICAS and target_phase in (SpecPhase.REQUISITOS, SpecPhase.MODELO):
+        elif source_phase == SpecPhase.CARACTERISTICAS and target_phase == SpecPhase.REQUISITOS:
             skill_name = "consistency_evaluate_features_downstream"
+        elif source_phase == SpecPhase.CARACTERISTICAS and target_phase == SpecPhase.MODELO:
+            skill_name = "consistency_evaluate_features_model"
+        elif source_phase == SpecPhase.DESCUBRIMIENTO and target_phase == SpecPhase.REQUISITOS:
+            skill_name = "consistency_evaluate_discovery_requirements"
+        elif source_phase == SpecPhase.DESCUBRIMIENTO and target_phase == SpecPhase.MODELO:
+            skill_name = "consistency_evaluate_discovery_model"
         try:
             raw_output = await self._agent.execute_with_skill(
                 skill_name=skill_name,
@@ -129,6 +158,7 @@ class EvaluateConsistencyUseCase:
         artifacts: list[DownstreamArtifact],
     ) -> ConsistencyEvaluationOutput:
         artifact_ids_set = {a.artifact_id for a in artifacts}
+        artifact_by_id = {a.artifact_id: a for a in artifacts}
         actions: list[ArtifactAction] = []
         affected_ids: list[str] = []
 
@@ -136,6 +166,17 @@ class EvaluateConsistencyUseCase:
             if item.artifact_id not in artifact_ids_set:
                 continue
             if item.action not in ("update", "delete"):
+                continue
+
+            art = artifact_by_id.get(item.artifact_id)
+            if art is not None and not _validate_action(
+                item.artifact_id,
+                item.action,
+                item.suggested_before,
+                item.suggested_after,
+                art.description,
+                art.artifact_type,
+            ):
                 continue
 
             actions.append(
@@ -176,6 +217,7 @@ class EvaluateConsistencyUseCase:
             )
 
         artifact_ids_set = {a.artifact_id for a in artifacts}
+        artifact_by_id = {a.artifact_id: a for a in artifacts}
         actions: list[ArtifactAction] = []
         affected_ids: list[str] = []
 
@@ -191,14 +233,27 @@ class EvaluateConsistencyUseCase:
             if action_type not in ("update", "delete"):
                 continue
 
+            suggested_before = str(item_dict.get("suggested_before", ""))
+            suggested_after = str(item_dict.get("suggested_after", ""))
+            art = artifact_by_id.get(artifact_id)
+            if art is not None and not _validate_action(
+                artifact_id,
+                action_type,
+                suggested_before,
+                suggested_after,
+                art.description,
+                art.artifact_type,
+            ):
+                continue
+
             actions.append(
                 ArtifactAction(
                     artifact_id=artifact_id,
                     action=action_type,
                     rationale=str(item_dict.get("rationale", "")),
                     suggested_field=str(item_dict.get("suggested_field", "")),
-                    suggested_before=str(item_dict.get("suggested_before", "")),
-                    suggested_after=str(item_dict.get("suggested_after", "")),
+                    suggested_before=suggested_before,
+                    suggested_after=suggested_after,
                 )
             )
             affected_ids.append(artifact_id)
@@ -307,12 +362,16 @@ class EvaluateConsistencyUseCase:
         if target_phase == SpecPhase.DESCUBRIMIENTO:
             doc = await self._document_repo.get_discovery(project_id)
             if doc is not None:
+                full_md = document_to_markdown(doc)
+                md_text = full_md[:8000]
+                if len(full_md) > 8000:
+                    md_text += "\n[…contenido truncado…]"
                 return [
                     DownstreamArtifact(
                         artifact_id=str(project_id),
                         artifact_type="DiscoveryDocument",
                         title="Documento de Descubrimiento",
-                        description=document_to_markdown(doc)[:8000],
+                        description=md_text,
                     )
                 ]
             return []
@@ -331,7 +390,7 @@ class EvaluateConsistencyUseCase:
                 artifact_id=str(f.id),
                 artifact_type="Feature",
                 title=f.title,
-                description=f.description,
+                description=f.description + (f"\nOrigen: {f.origin}" if f.origin else ""),
             )
             for f in features
         ]
@@ -342,12 +401,15 @@ class EvaluateConsistencyUseCase:
         for f in features:
             req_md = await self._requirement_repo.by_feature_id(f.id)
             if req_md is not None:
+                md_text = req_md[:20000]
+                if len(req_md) > 20000:
+                    md_text += "\n[…contenido truncado…]"
                 artifacts.append(
                     DownstreamArtifact(
                         artifact_id=str(f.id),
                         artifact_type="EARSRequirement",
                         title=f"Requisitos de {f.title}",
-                        description=req_md[:8000],
+                        description=md_text,
                     )
                 )
         return artifacts
@@ -360,6 +422,8 @@ class EvaluateConsistencyUseCase:
             if diagram_exists:
                 diagram = await self._diagram_repo.by_feature_id(f.id)
                 syntax = diagram.diagram_syntax[:8000] if diagram else ""
+                if diagram and len(diagram.diagram_syntax) > 8000:
+                    syntax += "\n[…contenido truncado…]"
                 artifacts.append(
                     DownstreamArtifact(
                         artifact_id=str(f.id),

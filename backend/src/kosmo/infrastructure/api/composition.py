@@ -62,7 +62,10 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    CONSISTENCY_DISCOVERY_MODEL_PROMPT,
+    CONSISTENCY_DISCOVERY_REQUIREMENTS_PROMPT,
     CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT,
+    CONSISTENCY_FEATURES_MODEL_PROMPT,
     CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
     CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
     CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT,
@@ -430,11 +433,44 @@ def build_pipeline_components(
     skill_registry.register(
         Skill(
             name="consistency_evaluate_features_downstream",
-            description="Evalua consistencia desde características hacia requisitos y modelo (downstream)",
+            description="Evalua consistencia desde características hacia requisitos EARS (downstream)",
             phase=SpecPhase.CARACTERISTICAS,
             mode=ConsistencyEvaluationMode(
                 phase_name=SpecPhase.CARACTERISTICAS,
                 system_prompt=CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_features_model",
+            description="Evalua consistencia desde características hacia diagramas de actividad (downstream)",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.CARACTERISTICAS,
+                system_prompt=CONSISTENCY_FEATURES_MODEL_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_discovery_requirements",
+            description="Evalua consistencia desde descubrimiento hacia requisitos EARS (downstream)",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.DESCUBRIMIENTO,
+                system_prompt=CONSISTENCY_DISCOVERY_REQUIREMENTS_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_discovery_model",
+            description="Evalua consistencia desde descubrimiento hacia diagramas de actividad (downstream)",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.DESCUBRIMIENTO,
+                system_prompt=CONSISTENCY_DISCOVERY_MODEL_PROMPT,
             ),  # type: ignore[reportArgumentType]
         )
     )
@@ -616,7 +652,6 @@ def build_discovery_components(
             document_repo=document_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
-            propagate_uc=propagate_uc,
             session_factory=session_factory,
         ),
         propagate_changes=propagate_uc,
@@ -676,6 +711,8 @@ def build_features_components(
         ),
         create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
+            document_repo=document_repo,
+            llm_client=pipeline.llm_client,
         ),
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,

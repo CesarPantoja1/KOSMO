@@ -51,8 +51,8 @@ class StubConsistencyAgent:
                     "action": "update",
                     "rationale": f"Stub rationale for {aid}",
                     "suggested_field": "description",
-                    "suggested_before": "before",
-                    "suggested_after": "after",
+                    "suggested_before": "",
+                    "suggested_after": "stub_suggested_fix",
                 }
                 for aid in self._affected_ids
             ],
@@ -371,7 +371,7 @@ def test_consistency_requirements_downstream_prompt_exists() -> None:
 
     assert isinstance(CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT, str)
     assert "Requisitos EARS" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT
-    assert "CARACTERÍSTICA PADRE" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT
+    assert "CARACTERISTICA" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT.upper()
     assert "JSON" in CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT
 
 

@@ -207,16 +207,29 @@ const realGetSuggestCharacteristics = async (
 	);
 };
 
+export interface CreateCharacteristicResponse {
+	is_saved: boolean;
+	feature?: CharacteristicResponse;
+	origin: string;
+	is_consistent: boolean;
+	inconsistency_reason?: string;
+}
+
 const realAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string },
-): Promise<CharacteristicResponse> => {
-	return apiClient<CharacteristicResponse>(
+	item: { title: string; description: string; origin?: string; force?: boolean },
+): Promise<CreateCharacteristicResponse> => {
+	return apiClient<CreateCharacteristicResponse>(
 		`/api/v1/projects/${projectId}/features/manual`,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ title: item.title, description: item.description }),
+			body: JSON.stringify({
+				title: item.title,
+				description: item.description,
+				origin: item.origin || '',
+				force: item.force || false,
+			}),
 		},
 	);
 };
@@ -255,8 +268,8 @@ export const getSuggestCharacteristics = (
 
 export const addCharacteristic = (
 	projectId: string,
-	item: { title: string; description: string },
-): Promise<CharacteristicResponse> =>
+	item: { title: string; description: string; origin?: string; force?: boolean },
+): Promise<CreateCharacteristicResponse> =>
 	USE_MOCKS
 		? mockAddCharacteristic(projectId, item)
 		: realAddCharacteristic(projectId, item);

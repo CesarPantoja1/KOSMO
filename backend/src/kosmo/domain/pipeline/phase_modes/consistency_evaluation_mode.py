@@ -13,243 +13,310 @@ from kosmo.contracts.pipeline.phase_outputs import (
 )
 from kosmo.contracts.sdd.document import SpecPhase
 
-_CONSISTENCY_SYSTEM_PROMPT = (
-    "Eres un analista experto en trazabilidad de requisitos de software. "
-    "Tu tarea es analizar CAMBIOS aplicados a un documento de Descubrimiento de producto "
-    "y determinar el impacto sobre artefactos de fases posteriores (Caracteristicas, Requisitos, Modelo).\n\n"
+# ═══════════════════════════════════════════════════════════════════
+# Bloques compartidos del builder de prompts
+# ═══════════════════════════════════════════════════════════════════
+
+_ROLE = "Eres un analista experto en trazabilidad de requisitos de software. "
+
+_FIDELITY_RULES = (
     "## REGLAS DE ANALISIS\n\n"
-    "1. LEE el documento fuente COMPLETO (seccion 'Documento fuente actual') y cada artefacto downstream.\n"
+    "1. LEE el documento fuente COMPLETO y cada artefacto destino.\n"
     "2. Para cada artefacto, determina una UNICA accion:\n"
-    '   - "update": el cambio afecta el contenido del artefacto (ej: unidad de medida, alcance, '
-    "terminologia, regla de negocio). DEBES sugerir el texto corregido.\n"
-    '   - "delete": el concepto del que depende el artefacto fue ELIMINADO del documento fuente. '
+    '   - "update": el cambio afecta el contenido del artefacto. '
+    "DEBES sugerir el texto corregido.\n"
+    '   - "delete": el concepto del que depende el artefacto fue ELIMINADO. '
     "El artefacto ya no tiene razon de existir.\n"
-    '   - "keep": el artefacto NO esta relacionado con ningun cambio. NO lo incluyas en la respuesta.\n\n'
-    "3. ANALISIS SEMANTICO: no busques coincidencia literal de palabras. "
-    "Si el descubrimiento cambia 'kilogramos' por 'libras', una caracteristica que menciona 'peso' o 'masa' "
-    "SI esta afectada aunque no use la palabra exacta.\n"
-    "4. Si un cambio es cosmetico (ortografia, formato) y no altera el significado, el artefacto NO esta afectado.\n"
-    "5. Si el cambio modifica una regla de negocio o un alcance funcional, TODOS los artefactos que "
-    "implementan esa regla estan afectados.\n\n"
+    '   - "keep": el artefacto NO esta relacionado con ningun cambio. '
+    "NO lo incluyas en la respuesta.\n\n"
+    "3. COPIA VERBATIM: 'suggested_before' debe ser una copia EXACTA y "
+    "LITERAL de un fragmento del artefacto destino tal como aparece en la "
+    "lista de artefactos. No parafrasees. Si el texto no existe exactamente "
+    "en el artefacto, la correccion no se podra aplicar.\n"
+    "4. ANALISIS SEMANTICO: no busques coincidencia literal entre el documento "
+    "fuente y los artefactos. Evalua el significado.\n"
+    "5. CAMBIOS COSMETICOS (ortografia, formato) que no alteran el significado "
+    "NO generan impacto.\n"
+    "6. Si el cambio modifica una REGLA DE NEGOCIO o ALCANCE FUNCIONAL, TODOS "
+    "los artefactos que implementan esa regla estan afectados.\n"
+    "7. Si el contenido contiene '[…contenido truncado…]', el texto fue "
+    "recortado. Si necesitas un fragmento que no aparece, indica en la rationale "
+    "que el cambio requiere revision manual.\n"
+    "8. Prohibido usar el caracter guion largo. Usa punto, coma o dos puntos.\n\n"
+)
+
+_DIRECTION_DOWNSTREAM = {
+    "Descubrimiento": (
+        "Tu tarea es analizar CAMBIOS aplicados al documento de Descubrimiento "
+        "y determinar si los artefactos de fases posteriores necesitan actualizarse "
+        "para mantenerse fieles a la vision, alcance y reglas de negocio.\n\n"
+    ),
+    "Caracteristicas": (
+        "Tu tarea es analizar CAMBIOS aplicados a las Caracteristicas y determinar "
+        "si los artefactos de fases posteriores necesitan actualizarse.\n\n"
+    ),
+    "Requisitos": (
+        "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS y determinar "
+        "si los artefactos de fases posteriores necesitan actualizarse.\n\n"
+    ),
+}
+
+_DIRECTION_UPSTREAM = {
+    "Caracteristicas": (
+        "Tu tarea es analizar CAMBIOS aplicados a las Caracteristicas y determinar "
+        "si contradicen la Vision, Alcance o reglas del documento de Descubrimiento. "
+        "Evalua SOLO a nivel de negocio y alcance. NO documentes detalles tecnicos "
+        "o de UI en el Descubrimiento. La accion 'delete' NO aplica: el Descubrimiento "
+        "nunca debe eliminarse por cambios en caracteristicas.\n\n"
+    ),
+    "Requisitos": (
+        "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS y determinar "
+        "si contradicen la Vision, Alcance o reglas del documento de Descubrimiento. "
+        "Los requisitos refinan el comportamiento: solo un cambio de regla de negocio "
+        "fundamental justifica modificar el Descubrimiento. NO documentes detalles "
+        "tecnicos o sintaxis EARS en el Descubrimiento. La accion 'delete' NO aplica: "
+        "el Descubrimiento nunca debe eliminarse por cambios en requisitos.\n\n"
+    ),
+    "RequisitosFeatures": (
+        "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS de una "
+        "caracteristica y determinar si modifican el alcance, intencion o "
+        "comportamiento esperado de la CARACTERISTICA PADRE.\n\n"
+        "Para la caracteristica padre, determina una UNICA accion:\n"
+        '   - "update": el cambio en los requisitos modifica el alcance, titulo '
+        "o descripcion de la caracteristica (ej: un requisito agrega una "
+        "funcionalidad no contemplada). DEBES sugerir el texto corregido.\n"
+        '   - "keep": los cambios son detalles de implementacion que NO afectan '
+        "el alcance. NO lo incluyas.\n\n"
+    ),
+}
+
+_LEVEL_RULES_FEATURES = (
+    "## NIVEL DE ANALISIS: Caracteristicas\n\n"
+    "Las caracteristicas representan capacidades del producto. El campo 'Origen' "
+    "de cada caracteristica contiene la cadena de derivacion declarada "
+    "(ej: 'Se deriva de C01 y Reglas de negocio'). Usala como evidencia primaria "
+    "de trazabilidad ANTES de inferir por semantica.\n\n"
+)
+
+_LEVEL_RULES_REQUIREMENTS = (
+    "## NIVEL DE ANALISIS: Requisitos EARS\n\n"
+    "Los requisitos representan comportamientos especificos en formato EARS. "
+    "Identifica los codigos REQ-X.Y afectados e incluyelos en la rationale. "
+    "Si un requisito cambia 'procesar pagos con tarjeta' por 'procesar pagos "
+    "con cualquier metodo', la caracteristica padre amplio su alcance. "
+    "Si el cambio solo refina criterios de aceptacion sin alterar la intencion "
+    "general, la caracteristica NO esta afectada.\n\n"
+)
+
+_LEVEL_RULES_MODEL = (
+    "## NIVEL DE ANALISIS: Diagramas de Actividad\n\n"
+    "Los diagramas representan flujos de proceso (actores, pasos, decisiones). "
+    "Analiza a nivel de flujo, no de formato PlantUML. Si cambia el numero de "
+    "pasos o la logica de un proceso, el diagrama esta afectado. Si el cambio "
+    "es cosmetico o solo afecta criterios de aceptacion, el diagrama NO esta "
+    "afectado.\n\n"
+)
+
+_LEVEL_RULES_DISCOVERY = (
+    "## NIVEL DE ANALISIS: Descubrimiento\n\n"
+    "El Descubrimiento define vision, alcance y reglas de negocio. Evalua "
+    "si el cambio contradice o amplia el alcance declarado. Solo 'update' "
+    "es valido para este artefacto.\n\n"
+)
+
+
+def _output_schema(target_artifact: str) -> str:
+    schemas = {
+        "Feature": (
+            '    {{"artifact_id": "<id exacto de la caracteristica>", '
+            '"action": "update" | "delete", '
+            '"rationale": "<explicacion en español>", '
+            '"suggested_field": "<title o description>", '
+            '"suggested_before": "<fragmento EXACTO del artefacto>", '
+            '"suggested_after": "<texto sugerido>"}}'
+        ),
+        "EARSRequirement": (
+            '    {{"artifact_id": "<id exacto de la feature, tal como aparece en la lista>", '
+            '"action": "update" | "delete", '
+            '"rationale": "<explicacion. Incluye codigos REQ-X.Y afectados>", '
+            '"suggested_before": "<fragmento EXACTO del markdown EARS actual>", '
+            '"suggested_after": "<fragmento corregido del markdown EARS>"}}'
+        ),
+        "ActivityDiagram": (
+            '    {{"artifact_id": "<id exacto de la feature>", '
+            '"action": "update" | "delete", '
+            '"rationale": "<explicacion en español>", '
+            '"suggested_field": "diagram_syntax", '
+            '"suggested_before": "<fragmento PlantUML EXACTO del diagrama>", '
+            '"suggested_after": "<fragmento PlantUML corregido>"}}'
+        ),
+        "DiscoveryDocument": (
+            '    {{"artifact_id": "<id EXACTO del documento, tal como aparece en la lista de artefactos>", '
+            '"action": "update", '
+            '"rationale": "<explicacion en español>", '
+            '"suggested_field": "<titulo de la seccion: ## Vision, ## Alcance, etc.>", '
+            '"suggested_before": "<contenido EXACTO de la seccion a modificar>", '
+            '"suggested_after": "<contenido corregido>"}}'
+        ),
+    }
+    return schemas.get(target_artifact, schemas["Feature"])
+
+
+_EMPTY_FALLBACK = (
+    "Si ningun artefacto esta afectado, devuelve: "
+    '{"actions": [], "overall_rationale": "Ningun artefacto requiere cambios."}'
+)
+
+
+def build_consistency_prompt(
+    direction: str,
+    source_label: str,
+    target_artifact: str,
+    extra_rules: str = "",
+) -> str:
+    if direction == "downstream":
+        task = _DIRECTION_DOWNSTREAM.get(source_label, _DIRECTION_DOWNSTREAM["Descubrimiento"])
+    elif direction == "upstream_features":
+        task = _DIRECTION_UPSTREAM.get("Caracteristicas", "")
+    elif direction == "upstream_requirements":
+        task = _DIRECTION_UPSTREAM.get("Requisitos", "")
+    elif direction == "upstream_requirements_features":
+        task = _DIRECTION_UPSTREAM.get("RequisitosFeatures", "")
+    else:
+        task = ""
+    schema = _output_schema(target_artifact)
+    return (
+        _ROLE
+        + task
+        + _FIDELITY_RULES
+        + extra_rules
+        + "## FORMATO DE SALIDA (JSON estricto)\n\n"
+        + "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
+        + "{\n"
+        + '  "actions": [\n'
+        + schema
+        + "\n"
+        + "  ],\n"
+        + '  "overall_rationale": "<resumen general del analisis en español>"\n'
+        + "}\n\n"
+        + _EMPTY_FALLBACK
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Prompts generados por el builder (1 variable por skill registrado)
+# ═══════════════════════════════════════════════════════════════════
+
+_DISCOVERY_EXAMPLES = (
     "## EJEMPLOS\n\n"
-    "Ejemplo 1 : Cambio de unidad:\n"
+    "Ejemplo 1 — Cambio de unidad:\n"
     '  Cambio: "peso en kilogramos" → "peso en libras"\n'
     '  Feature "Calculo de peso total" → accion: "update", '
     'razon: "La unidad de medida cambio de kg a lb, la feature debe reflejar libras."\n\n'
-    "Ejemplo 2 : Eliminacion de concepto:\n"
+    "Ejemplo 2 — Eliminacion de concepto:\n"
     '  Cambio: se elimina la seccion "Gestion de Inventario" del documento fuente\n'
     '  Feature "Control de stock" → accion: "delete", '
     'razon: "El concepto de inventario ya no existe en el descubrimiento."\n\n'
-    "Ejemplo 3 : Cambio cosmetico:\n"
-    '  Cambio: se corrige una tilde en "Visión"\n'
+    "Ejemplo 3 — Cambio cosmetico:\n"
+    '  Cambio: se corrige una tilde en "Vision"\n'
     '  Feature "Dashboard de metricas" → NO incluir (accion "keep" implicita).\n\n'
-    "## FORMATO DE SALIDA (JSON estricto)\n\n"
-    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
-    "{\n"
-    '  "actions": [\n'
-    "    {\n"
-    '      "artifact_id": "<id del artefacto>",\n'
-    '      "action": "update" | "delete",\n'
-    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
-    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
-    '      "suggested_before": "<texto actual que debe cambiar>",\n'
-    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
-    "    }\n"
-    "  ],\n"
-    '  "overall_rationale": "<resumen general del analisis en español>"\n'
-    "}\n\n"
-    "Si ningun artefacto esta afectado, devuelve: "
-    '{"actions": [], "overall_rationale": "Ningun artefacto requiere cambios."}'
-)
-CONSISTENCY_UPSTREAM_SYSTEM_PROMPT = (
-    "Eres un analista experto en trazabilidad de requisitos de software. "
-    "Tu tarea es analizar CAMBIOS aplicados a las Características de un producto "
-    "y determinar si dichos cambios entran en conflicto o contradicen la Visión, "
-    "Alcance o reglas del documento de Descubrimiento (fase upstream).\n\n"
-    "## REGLAS DE ANALISIS\n\n"
-    "1. LEE el documento fuente COMPLETO (seccion 'Documento fuente actual') correspondiente "
-    "al Descubrimiento, y evalúa los cambios introducidos en las Características.\n"
-    "2. Para el documento de Descubrimiento, determina una UNICA accion:\n"
-    '   - "update": el cambio en las características obliga a actualizar el descubrimiento '
-    "(ej: se agregó una característica fuera del alcance original, "
-    "y el negocio decide aceptarla ampliando el alcance, o cambia una regla fundamental). "
-    "DEBES sugerir el texto corregido.\n"
-    '   - "keep": los cambios en las características son consistentes con la Visión y Alcance '
-    "actuales, o son detalles de bajo nivel que NO requieren modificar el Descubrimiento "
-    "de alto nivel. NO lo incluyas en la respuesta.\n"
-    '   - "delete": el concepto del que depende el artefacto fue ELIMINADO. '
-    "(Rara vez aplica hacia upstream a menos que todo el proyecto cambie de rumbo radicalmente).\n\n"
-    "3. ANALISIS SEMANTICO: Concéntrate en el impacto a nivel de negocio y alcance. "
-    "Si una característica agrega un módulo de 'Pagos con Criptomonedas' pero el Descubrimiento "
-    "excluía explícitamente esto en el Alcance, esto es una contradicción y requeriría "
-    "un 'update' al alcance si se acepta el cambio.\n"
-    "4. NO documentes detalles técnicos o de UI en el Descubrimiento.\n\n"
-    "## FORMATO DE SALIDA (JSON estricto)\n\n"
-    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
-    "{\n"
-    '  "actions": [\n'
-    "    {\n"
-    '      "artifact_id": "<id del documento de descubrimiento>",\n'
-    '      "action": "update" | "delete",\n'
-    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
-    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
-    '      "suggested_before": "<texto actual que debe cambiar>",\n'
-    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
-    "    }\n"
-    "  ],\n"
-    '  "overall_rationale": "<resumen general del analisis en español>"\n'
-    "}\n\n"
-    "Si el descubrimiento NO requiere cambios, devuelve: "
-    '{"actions": [], "overall_rationale": "Los cambios son consistentes con la visión y alcance actual."}'
-)
-CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT = (
-    "Eres un analista experto en trazabilidad de requisitos de software. "
-    "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS de una característica "
-    "y determinar si dichos cambios modifican el alcance, la intención o el comportamiento "
-    "esperado de la CARACTERÍSTICA PADRE.\n\n"
-    "## REGLAS DE ANALISIS\n\n"
-    "1. LEE los requisitos modificados (sección 'Documento fuente actual') y evalúa "
-    "si los cambios alteran el propósito, alcance o título de la característica padre.\n"
-    "2. Para la característica padre, determina una UNICA accion:\n"
-    '   - "update": el cambio en los requisitos modifica el alcance, título o descripción esperada '
-    "de la característica (ej: un requisito agrega una funcionalidad no contemplada, "
-    "cambia una regla de negocio fundamental, o redefine el comportamiento esperado). "
-    "DEBES sugerir el texto corregido para el título o descripción de la característica.\n"
-    '   - "keep": los cambios en los requisitos son detalles de implementación o matizaciones que NO '
-    "afectan el alcance o propósito general de la característica. NO lo incluyas.\n\n"
-    "3. ANALISIS SEMANTICO: no busques coincidencia literal de palabras. "
-    "Si un requisito cambia 'procesar pagos con tarjeta' por 'procesar pagos con cualquier método', "
-    "la característica 'Gestión de pagos' amplió su alcance implícitamente.\n"
-    "4. Si el cambio en requisitos simplemente refina criterios de aceptación sin alterar "
-    "la intención general, la característica NO está afectada.\n\n"
-    "## FORMATO DE SALIDA (JSON estricto)\n\n"
-    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
-    "{\n"
-    '  "actions": [\n'
-    "    {\n"
-    '      "artifact_id": "<id de la característica padre>",\n'
-    '      "action": "update",\n'
-    '      "rationale": "<explicacion clara de por que esta afectada, en español>",\n'
-    '      "suggested_field": "<title o description>",\n'
-    '      "suggested_before": "<texto actual que debe cambiar>",\n'
-    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
-    "    }\n"
-    "  ],\n"
-    '  "overall_rationale": "<resumen general del analisis en español>"\n'
-    "}\n\n"
-    "Si la característica NO requiere cambios, devuelve: "
-    '{"actions": [], "overall_rationale": "Los cambios en los requisitos no alteran el alcance de la característica."}'
-)
-CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT = (
-    "Eres un analista experto en trazabilidad de requisitos de software. "
-    "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS de un producto "
-    "y determinar si dichos cambios entran en conflicto o contradicen la Visión, "
-    "Alcance o reglas de negocio del documento de Descubrimiento (fase upstream).\n\n"
-    "## REGLAS DE ANALISIS\n\n"
-    "1. LEE los requisitos modificados (sección 'Documento fuente actual') correspondiente "
-    "a los Requisitos EARS, y evalúa los cambios introducidos contra el documento de Descubrimiento.\n"
-    "2. Para el documento de Descubrimiento, determina una UNICA accion:\n"
-    '   - "update": el cambio en los requisitos EARS altera una regla de negocio fundamental, '
-    "Visión o Alcance del proyecto en Descubrimiento. DEBES sugerir el texto corregido.\n"
-    '   - "keep": los cambios en los requisitos son detalles de bajo nivel o especificaciones técnicas '
-    "que NO contradicen ni alteran la visión de negocio de alto nivel. NO lo incluyas en la respuesta.\n"
-    '   - "delete": el concepto de negocio del que depende el artefacto fue ELIMINADO.\n\n'
-    "3. ANALISIS SEMANTICO: Concéntrate en el impacto a nivel de negocio y alcance. "
-    "Si un requisito especifica lógica que contradice el alcance del Descubrimiento, "
-    "esto es una contradicción y requeriría un 'update' al documento de descubrimiento.\n"
-    "4. NO documentes detalles técnicos o sintaxis EARS en el Descubrimiento de alto nivel.\n\n"
-    "## FORMATO DE SALIDA (JSON estricto)\n\n"
-    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
-    "{\n"
-    '  "actions": [\n'
-    "    {\n"
-    '      "artifact_id": "<id del documento de descubrimiento>",\n'
-    '      "action": "update" | "delete",\n'
-    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
-    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
-    '      "suggested_before": "<texto actual que debe cambiar>",\n'
-    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
-    "    }\n"
-    "  ],\n"
-    '  "overall_rationale": "<resumen general del analisis en español>"\n'
-    "}\n\n"
-    "Si el descubrimiento NO requiere cambios, devuelve: "
-    '{"actions": [], "overall_rationale": "Los cambios en los requisitos son consistentes '
-    'con la visión y alcance de negocio."}'
 )
 
-
-CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT = (
-    "Eres un analista experto en trazabilidad de requisitos de software. "
-    "Tu tarea es analizar CAMBIOS aplicados a las Características de un producto "
-    "y determinar el impacto sobre artefactos de fases posteriores (Requisitos EARS, Diagramas de Actividad).\n\n"
-    "## REGLAS DE ANALISIS\n\n"
-    "1. LEE las características modificadas (sección 'Documento fuente actual') y cada artefacto downstream.\n"
-    "2. Para cada artefacto, determina una UNICA accion:\n"
-    '   - "update": el cambio en la característica afecta el contenido o el alcance del artefacto '
-    "(ej: cambio de alcance, regla de negocio, terminología, o comportamiento esperado). "
-    "DEBES sugerir el texto corregido.\n"
-    '   - "delete": el concepto del que depende el artefacto fue ELIMINADO de la característica. '
-    "El artefacto ya no tiene razon de existir.\n"
-    '   - "keep": el artefacto NO esta relacionado con ningun cambio. NO lo incluyas en la respuesta.\n\n'
-    "3. ANALISIS SEMANTICO: no busques coincidencia literal de palabras. "
-    "Si una característica cambia 'procesar pagos con tarjeta' por 'procesar pagos con cualquier método', "
-    "los requisitos y el modelo que implementan 'pagos' SI estan afectados aunque no usen las palabras exactas.\n"
-    "4. Si un cambio es cosmetico (ortografia, formato) y no altera el significado, el artefacto NO esta afectado.\n"
-    "5. Si el cambio en la característica modifica una regla de negocio o un alcance funcional, "
-    "TODOS los requisitos y diagramas que implementan esa regla estan afectados.\n\n"
-    "## FORMATO DE SALIDA (JSON estricto)\n\n"
-    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
-    "{\n"
-    '  "actions": [\n'
-    "    {\n"
-    '      "artifact_id": "<id del artefacto>",\n'
-    '      "action": "update" | "delete",\n'
-    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
-    '      "suggested_field": "<nombre del campo a modificar: title, description>",\n'
-    '      "suggested_before": "<texto actual que debe cambiar>",\n'
-    '      "suggested_after": "<texto sugerido con el cambio aplicado>"\n'
-    "    }\n"
-    "  ],\n"
-    '  "overall_rationale": "<resumen general del analisis en español>"\n'
-    "}\n\n"
-    "Si ningun artefacto esta afectado, devuelve: "
-    '{"actions": [], "overall_rationale": "Ningun artefacto requiere cambios."}'
+_CONSISTENCY_SYSTEM_PROMPT = build_consistency_prompt(
+    direction="downstream",
+    source_label="Descubrimiento",
+    target_artifact="Feature",
+    extra_rules=_DISCOVERY_EXAMPLES,
 )
-CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT = (
-    "Eres un analista experto en trazabilidad de requisitos de software. "
-    "Tu tarea es analizar CAMBIOS aplicados a los Requisitos EARS de un producto "
-    "y determinar el impacto sobre los Diagramas de Actividad UML (fase Modelo).\n\n"
-    "## REGLAS DE ANALISIS\n\n"
-    "1. LEE los requisitos modificados (sección 'Documento fuente actual') y cada diagrama de actividad downstream.\n"
-    "2. Para cada diagrama, determina una UNICA accion:\n"
-    '   - "update": el cambio en los requisitos altera el flujo de negocio, las entidades '
-    "o las interacciones representadas en el diagrama. DEBES sugerir el texto PlantUML corregido.\n"
-    '   - "delete": el flujo de negocio del que depende el diagrama fue ELIMINADO de los requisitos. '
-    "El diagrama ya no tiene razon de existir.\n"
-    '   - "keep": el diagrama NO esta relacionado con ningun cambio. NO lo incluyas en la respuesta.\n\n'
-    "3. ANALISIS SEMANTICO: no busques coincidencia literal de palabras. "
-    "Si un requisito cambia 'el sistema procesa el pago en 3 pasos' por 'el sistema procesa el pago en 5 pasos', "
-    "el diagrama de actividad de 'Procesamiento de Pago' SI esta afectado.\n"
-    "4. Si un cambio en requisitos es cosmetico o solo afecta criterios de aceptacion sin alterar "
-    "el flujo general, el diagrama NO esta afectado.\n\n"
-    "## FORMATO DE SALIDA (JSON estricto)\n\n"
+
+CONSISTENCY_UPSTREAM_SYSTEM_PROMPT = build_consistency_prompt(
+    direction="upstream_features",
+    source_label="Caracteristicas",
+    target_artifact="DiscoveryDocument",
+    extra_rules="El artifact_id del documento de Descubrimiento es EXACTAMENTE "
+    "el que aparece en la lista de artefactos. Copialo literalmente.\n\n",
+)
+
+CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT = build_consistency_prompt(
+    direction="upstream_requirements_features",
+    source_label="Requisitos",
+    target_artifact="Feature",
+    extra_rules=_LEVEL_RULES_REQUIREMENTS,
+)
+
+CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT = build_consistency_prompt(
+    direction="upstream_requirements",
+    source_label="Requisitos",
+    target_artifact="DiscoveryDocument",
+    extra_rules="El artifact_id del documento de Descubrimiento es EXACTAMENTE "
+    "el que aparece en la lista de artefactos. Copialo literalmente.\n\n",
+)
+
+CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT = build_consistency_prompt(
+    direction="downstream",
+    source_label="Caracteristicas",
+    target_artifact="EARSRequirement",
+    extra_rules=_LEVEL_RULES_FEATURES,
+)
+
+CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT = build_consistency_prompt(
+    direction="downstream",
+    source_label="Requisitos",
+    target_artifact="ActivityDiagram",
+    extra_rules=_LEVEL_RULES_MODEL,
+)
+
+CONSISTENCY_DISCOVERY_REQUIREMENTS_PROMPT = build_consistency_prompt(
+    direction="downstream",
+    source_label="Descubrimiento",
+    target_artifact="EARSRequirement",
+    extra_rules=_LEVEL_RULES_REQUIREMENTS + _DISCOVERY_EXAMPLES,
+)
+
+CONSISTENCY_DISCOVERY_MODEL_PROMPT = build_consistency_prompt(
+    direction="downstream",
+    source_label="Descubrimiento",
+    target_artifact="ActivityDiagram",
+    extra_rules=_LEVEL_RULES_MODEL,
+)
+
+CONSISTENCY_FEATURES_MODEL_PROMPT = build_consistency_prompt(
+    direction="downstream",
+    source_label="Caracteristicas",
+    target_artifact="ActivityDiagram",
+    extra_rules=_LEVEL_RULES_MODEL,
+)
+
+CONSISTENCY_VALIDATE_CREATE_FEATURE_PROMPT = (
+    "Eres un analista de trazabilidad de software.\n"
+    "Tu tarea es analizar un documento de Descubrimiento completo y una nueva "
+    "caracteristica propuesta, realizando DOS tareas en una sola respuesta:\n\n"
+    "1. DERIVA EL ORIGEN: identifica las secciones del Descubrimiento que "
+    "fundamentan esta caracteristica. Recorre todas las secciones del documento "
+    "(Vision, Espacio del problema, Actores, Propuesta de valor, Metas del "
+    "producto, Alcance, Reglas de negocio y cualquier otra presente). "
+    "Devuelve una cadena de trazabilidad en el campo 'origin' con el formato:\n"
+    '   "Derivado de [seccion(es)] del descubrimiento."\n'
+    "   Si la caracteristica no se relaciona claramente con ninguna seccion, usa:\n"
+    '   "Sin relacion directa con las secciones del descubrimiento."\n\n'
+    "2. VERIFICA COHERENCIA: determina si la caracteristica es consistente con "
+    "el contenido de TODAS las secciones del Descubrimiento. Si la caracteristica "
+    "contradice explicitamente la vision, el alcance declarado, los actores "
+    "identificados, las metas definidas o cualquier regla de negocio, indica "
+    "is_consistent=false y explica el motivo en el campo 'reason'.\n\n"
     "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
     "{\n"
-    '  "actions": [\n'
-    "    {\n"
-    '      "artifact_id": "<id del diagrama>",\n'
-    '      "action": "update" | "delete",\n'
-    '      "rationale": "<explicacion clara de por que esta afectado, en español>",\n'
-    '      "suggested_field": "diagram_syntax",\n'
-    '      "suggested_before": "<texto PlantUML actual que debe cambiar>",\n'
-    '      "suggested_after": "<texto PlantUML sugerido con el cambio aplicado>"\n'
-    "    }\n"
-    "  ],\n"
-    '  "overall_rationale": "<resumen general del analisis en español>"\n'
+    '  "origin": "<cadena de trazabilidad derivada>",\n'
+    '  "is_consistent": true,\n'
+    '  "reason": ""\n'
     "}\n\n"
-    "Si ningun diagrama esta afectado, devuelve: "
-    '{"actions": [], "overall_rationale": "Ningun diagrama requiere cambios."}'
+    "Si la caracteristica NO es consistente:\n"
+    "{\n"
+    '  "origin": "<cadena de trazabilidad derivada>",\n'
+    '  "is_consistent": false,\n'
+    '  "reason": "<explicacion clara de la contradiccion, en español>"\n'
+    "}\n\n"
+    "IMPORTANTE: Siempre incluye el campo origin. No uses el caracter guion largo (—)."
 )
 
 
@@ -268,7 +335,7 @@ class ConsistencyEvaluationMode:
 
     @property
     def temperature(self) -> float:
-        return 0.5
+        return 0.2
 
     @property
     def max_tokens(self) -> int:
@@ -290,15 +357,19 @@ class ConsistencyEvaluationMode:
         changes_text = "\n".join(
             f"### Cambio en '{c.section}'\n"
             f"**Descripcion:** {c.description}\n"
-            f"**Antes:**\n{c.diff.before[:15000]}\n"
-            f"**Despues:**\n{c.diff.after[:15000]}\n"
+            f"**Antes:**\n{c.diff.before[:15000]}{'[…truncado…]' if len(c.diff.before) > 15000 else ''}\n"
+            f"**Despues:**\n{c.diff.after[:15000]}{'[…truncado…]' if len(c.diff.after) > 15000 else ''}\n"
             for c in context.applied_changes
         )
         artifacts_text = "\n".join(
-            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", descripcion="{a.description[:12000]}"'
+            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", '
+            f'descripcion="{a.description[:12000]}'
+            f'{"[…truncado…]" if len(a.description) > 12000 else ""}"'
             for a in context.downstream_artifacts
         )
-        source_doc = context.source_content[:30000] if context.source_content else "(no disponible)"
+        src = context.source_content
+        truncated = "\n[…contenido truncado…]" if len(src) > 30000 else ""
+        source_doc = (src[:30000] + truncated) if src else "(no disponible)"
 
         return (
             f"## Fase origen: {context.source_phase.value}\n"
@@ -306,9 +377,15 @@ class ConsistencyEvaluationMode:
             f"### Documento fuente actual:\n{source_doc}\n\n"
             f"### Cambios aplicados:\n{changes_text}\n\n"
             f"### Artefactos actuales en la fase destino:\n{artifacts_text}\n\n"
+            "## Instrucciones\n\n"
             "Analiza cada artefacto contra los cambios aplicados y el documento fuente actual. "
             "Determina que accion requiere cada uno (update, delete, o keep). "
-            "Para acciones 'update', incluye el texto sugerido. "
+            "Para acciones 'update', incluye el texto sugerido.\n\n"
+            "**IMPORTANTE:** El valor de 'suggested_before' debe ser una copia "
+            "EXACTA y LITERAL de un fragmento del artefacto destino, tal como "
+            "aparece en la lista de arriba. No lo parafrasees ni lo resumas. "
+            "Si el texto no existe exactamente en el artefacto, la correccion "
+            "no se podra aplicar.\n\n"
             "Responde UNICAMENTE en el formato JSON especificado."
         )
 

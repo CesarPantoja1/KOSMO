@@ -20,7 +20,7 @@ interface ConsistencyStreamState {
 interface UseConsistencyStreamOptions {
 	projectId: string;
 	phaseOrigin: string;
-	changes: Array<{ section: string; diff_before: string; diff_after: string }>;
+	changes: Array<{ section: string; diff_before: string; diff_after: string; description?: string }>;
 }
 
 const PHASE_LABELS: Record<string, string> = {

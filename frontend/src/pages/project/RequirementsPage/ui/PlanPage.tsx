@@ -116,6 +116,8 @@ export const PlanPage = () => {
 		loadData();
 	}, [currentProject, router]);
 
+	const currentItem = items[currentIndex] ?? null;
+
 	useEffect(() => {
 		if (!isComplete || !streamReport) return;
 
@@ -146,14 +148,14 @@ export const PlanPage = () => {
 
 	useEffect(() => {
 		if (!streamError) return;
-		setIsProcessing(false);
-		setIsApplying(false);
-		toast.error('Error al verificar la consistencia del proyecto');
-		clearPlan('requirements');
-		router.push('/proyecto/requisitos');
+		queueMicrotask(() => {
+			setIsProcessing(false);
+			setIsApplying(false);
+			toast.error('Error al verificar la consistencia. Tus cambios no fueron aplicados.');
+			clearPlan('requirements');
+			router.push('/proyecto/requisitos');
+		});
 	}, [streamError]); // eslint-disable-line react-hooks/exhaustive-deps
-
-	const currentItem = items[currentIndex] ?? null;
 
 	const handleBack = () => {
 		router.push('/proyecto/requisitos');
@@ -204,6 +206,7 @@ export const PlanPage = () => {
 				section: c.section,
 				diff_before: c.diff.before,
 				diff_after: c.diff.after,
+				description: c.description,
 			}));
 
 			if (isLastItem) {
