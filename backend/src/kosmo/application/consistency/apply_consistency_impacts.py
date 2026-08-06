@@ -152,24 +152,6 @@ class ApplyConsistencyImpactsUseCase:
         if feature is not None:
             try:
                 parsed = parse_requirements_markdown(result, feature_id, feature.number)
-                items = [
-                    {
-                        "id": str(r.id),
-                        "feature_id": str(r.feature_id),
-                        "requirement_number": r.requirement_number,
-                        "display_id": r.display_id,
-                        "title": r.title,
-                        "pattern": r.pattern.name if hasattr(r.pattern, "name") else str(r.pattern),
-                        "statement": r.statement,
-                        "origin": r.origin,
-                        "acceptance_criteria": [
-                            {"scenario": ac.scenario, "given": ac.given, "when": ac.when, "then": ac.then}
-                            for ac in r.acceptance_criteria
-                        ],
-                    }
-                    for r in parsed
-                ]
-                await self._requirement_repo.save_items(feature_id, items)  # type: ignore[reportArgumentType]
 
                 if self._traceability_repo is not None:
                     await self._traceability_repo.delete_by_entity_id(str(feature_id))

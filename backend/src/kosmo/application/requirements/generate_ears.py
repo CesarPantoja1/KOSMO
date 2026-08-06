@@ -120,24 +120,6 @@ class GenerateEARSUseCase:
 
         await self._requirement_repo.save(input_data.feature_id, phase_output.requirements_markdown)
 
-        items = [
-            {
-                "id": str(r.id),
-                "requirement_number": r.requirement_number,
-                "display_id": r.display_id,
-                "title": r.title,
-                "pattern": r.pattern.value,
-                "statement": r.statement,
-                "origin": r.origin,
-                "acceptance_criteria": [
-                    {"scenario": ac.scenario, "given": ac.given, "when": ac.when, "then": ac.then}
-                    for ac in r.acceptance_criteria
-                ],
-            }
-            for r in phase_output.requirements
-        ]
-        await self._requirement_repo.save_items(input_data.feature_id, items)  # type: ignore[reportAttributeAccessIssue]
-
         if self._traceability_repo is not None:
             for r in phase_output.requirements:
                 await self._traceability_repo.add_edge(

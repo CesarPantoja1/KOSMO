@@ -91,24 +91,6 @@ class RequirementModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class RequirementItemModel(Base):
-    __tablename__ = "requirement_items"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    feature_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    requirement_number: Mapped[int] = mapped_column(Integer(), nullable=False)
-    display_id: Mapped[str] = mapped_column(String(16), nullable=False)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    pattern: Mapped[str] = mapped_column(String(32), nullable=False)
-    statement: Mapped[str] = mapped_column(Text(), nullable=False)
-    origin: Mapped[str] = mapped_column(Text(), nullable=False, default="")
-    acceptance_criteria: Mapped[list[Any]] = mapped_column(
-        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-
 class TraceabilityEdgeModel(Base):
     __tablename__ = "traceability_edges"
 
