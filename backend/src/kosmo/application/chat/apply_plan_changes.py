@@ -17,7 +17,7 @@ from kosmo.contracts.sdd.repositories import (
     RequirementRepository,
 )
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
-from kosmo.domain.sdd.plan_diffs import apply_change_diff
+from kosmo.domain.sdd.plan_diffs import apply_change_diff, collapse_whitespace, find_section
 
 _log = structlog.get_logger(__name__)
 
@@ -191,8 +191,6 @@ class ApplyPlanChangesUseCase:
                 instance=f"/api/v1/projects/{project_id}/plan/apply",
             )
 
-        from kosmo.domain.sdd.plan_diffs import _collapse_whitespace, _find_section
-
         markdown_before = document_to_markdown(document)
         markdown = markdown_before
         applied: list[PlanCambio] = []
@@ -200,7 +198,7 @@ class ApplyPlanChangesUseCase:
 
         def _position(change: PlanCambio) -> int:
             if change.section and change.diff.before:
-                sec_text, sec_start, _sec_end = _find_section(markdown, change.section)
+                sec_text, sec_start, _sec_end = find_section(markdown, change.section)
                 if sec_text:
                     idx = sec_text.find(change.diff.before)
                     if idx >= 0:
@@ -220,10 +218,10 @@ class ApplyPlanChangesUseCase:
             if result is None:
                 already_applied = False
                 if change.section and change.diff.after.strip():
-                    sec_text, _s, _e = _find_section(markdown, change.section)
+                    sec_text, _s, _e = find_section(markdown, change.section)
                     search_in = sec_text if sec_text is not None else markdown
-                    norm_after = _collapse_whitespace(change.diff.after)
-                    if norm_after and norm_after in _collapse_whitespace(search_in):
+                    norm_after = collapse_whitespace(change.diff.after)
+                    if norm_after and norm_after in collapse_whitespace(search_in):
                         _log.info(
                             "plan.change_already_applied",
                             change_id=str(change.id),
@@ -242,8 +240,7 @@ class ApplyPlanChangesUseCase:
                         FailedChange(
                             id=change.id,
                             reason=(
-                                f"El texto original no se encuentra en la sección "
-                                f"'{change.section or 'documento'}'."
+                                f"El texto original no se encuentra en la sección '{change.section or 'documento'}'."
                             ),
                             section=change.section,
                         )
@@ -258,9 +255,7 @@ class ApplyPlanChangesUseCase:
 
         if not applied and failed:
             try:
-                previous_md = await self._document_repo.get_latest_version(
-                    project_id, SpecPhase.DESCUBRIMIENTO
-                )
+                previous_md = await self._document_repo.get_latest_version(project_id, SpecPhase.DESCUBRIMIENTO)
                 if previous_md is not None and previous_md != markdown_before:
                     from kosmo.domain.sdd.discovery_diff import diff_discovery_versions
 
