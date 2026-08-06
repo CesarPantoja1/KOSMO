@@ -11,7 +11,7 @@ def apply_change_diff(markdown: str, *, before: str, after: str, section: str | 
             if section:
                 _sec, _start, _sec_end = find_section(markdown, section)
                 if _sec is not None:
-                    return markdown[:_sec_end].rstrip() + "\n" + after.strip() + "\n\n" + markdown[_sec_end:].lstrip()
+                    return _insert_in_section(markdown, _start, _sec_end, after)
             return f"{markdown}\n\n{after}"
         return markdown
 
@@ -49,7 +49,8 @@ def _apply_section_diff(markdown: str, before: str, after: str, section: str) ->
 
 def find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
     matches = list(_section_header_re.finditer(markdown))
-    normalized_query = _normalize(section)
+    cleaned = _strip_heading_prefix(section)
+    normalized_query = _normalize(cleaned)
 
     for i, m in enumerate(matches):
         heading_text = m.group(2)
@@ -61,6 +62,10 @@ def find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
     return None, 0, 0
 
 
+def _strip_heading_prefix(text: str) -> str:
+    return re.sub(r"^#{1,6}\s*", "", text).strip()
+
+
 def _extract_section(markdown: str, matches: list[re.Match[str]], idx: int) -> tuple[str, int, int]:
     start = matches[idx].start()
     end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
@@ -69,6 +74,16 @@ def _extract_section(markdown: str, matches: list[re.Match[str]], idx: int) -> t
 
 def collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _insert_in_section(markdown: str, sec_start: int, sec_end: int, after: str) -> str:
+    section_md = markdown[sec_start:sec_end]
+    headings = list(_section_header_re.finditer(section_md))
+    if len(headings) >= 3:
+        last_heading = headings[-1]
+        insert_pos = sec_start + last_heading.start()
+        return markdown[:insert_pos].rstrip() + "\n" + after.strip() + "\n\n" + markdown[insert_pos:].lstrip()
+    return markdown[:sec_end].rstrip() + "\n" + after.strip() + "\n\n" + markdown[sec_end:].lstrip()
 
 
 def _apply_normalized_replace(text: str, before: str, after: str) -> str | None:

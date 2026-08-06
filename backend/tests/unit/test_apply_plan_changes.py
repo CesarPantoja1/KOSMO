@@ -232,7 +232,7 @@ async def test_apply_reports_failed_when_before_not_found() -> None:
     assert result.failed_count == 1
     assert len(result.failed_changes) == 1
     assert str(result.failed_changes[0].id) == "chg_02"
-    assert "fragmento original" in result.failed_changes[0].reason.lower()
+    assert "no se encuentra" in result.failed_changes[0].reason.lower()
 
     from kosmo.domain.sdd.document_converters import document_to_markdown
 

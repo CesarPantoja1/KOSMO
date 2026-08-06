@@ -22,6 +22,12 @@ from kosmo.domain.sdd.plan_diffs import apply_change_diff, collapse_whitespace, 
 _log = structlog.get_logger(__name__)
 
 
+def _headings_in_markdown(markdown: str) -> list[str]:
+    import re
+
+    return [m.group(1) for m in re.finditer(r"^#{1,6}\s+(.+)$", markdown, re.MULTILINE)]
+
+
 @dataclass(frozen=True)
 class ApplyPlanChangesInput:
     project_id: ProjectId
@@ -196,9 +202,21 @@ class ApplyPlanChangesUseCase:
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
 
+        headings = _headings_in_markdown(markdown)
+
+        def _resolve_section(change: PlanCambio) -> str | None:
+            if change.section:
+                return change.section
+            if change.description:
+                for h in headings:
+                    if h.lower() in change.description.lower():
+                        return h
+            return None
+
         def _position(change: PlanCambio) -> int:
-            if change.section and change.diff.before:
-                sec_text, sec_start, _sec_end = find_section(markdown, change.section)
+            sec = _resolve_section(change)
+            if sec and change.diff.before:
+                sec_text, sec_start, _sec_end = find_section(markdown, sec)
                 if sec_text:
                     idx = sec_text.find(change.diff.before)
                     if idx >= 0:
@@ -212,9 +230,8 @@ class ApplyPlanChangesUseCase:
         ordered = sorted(changes, key=_position, reverse=True)
 
         for change in ordered:
-            result = apply_change_diff(
-                markdown, before=change.diff.before, after=change.diff.after, section=change.section
-            )
+            section = _resolve_section(change)
+            result = apply_change_diff(markdown, before=change.diff.before, after=change.diff.after, section=section)
             if result is None:
                 already_applied = False
                 if change.section and change.diff.after.strip():
