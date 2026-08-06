@@ -128,12 +128,12 @@ export const PlanPage = () => {
 				useConsistencyStore.getState().setReport(
 					streamReport as unknown as ConsistencyReportResponse,
 				);
-				toast.info(`${downstream.length} artefacto(s) en otras fases requieren revisión`);
+				router.push('/proyecto/caracteristicas/consistencia');
 			} else {
 				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
+				clearPlan('features');
+				router.push('/proyecto/caracteristicas');
 			}
-			clearPlan('features');
-			router.push('/proyecto/caracteristicas');
 		};
 
 		finish().catch(() => router.push('/proyecto/caracteristicas'));

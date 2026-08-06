@@ -250,6 +250,40 @@ async def test_evaluate_filters_out_unknown_ids() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_evaluate_deduplicates_repeated_artifact_ids() -> None:
+    # Arrange: el LLM devuelve dos acciones para el mismo artifact
+    project = _make_project("prj_dedup")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_01", "prj_dedup", "Feature Duplicada", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = StubConsistencyAgent(affected_ids=["feat_01", "feat_01"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _plan_change("chg_01")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_dedup"),
+        applied_changes=[change],
+    )
+
+    # Assert: el id repetido se deduplica, una sola accion
+    assert result.affected_artifact_ids == ["feat_01"]
+    assert len(result.actions) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_evaluate_fetch_source_content_for_features() -> None:
     from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
     from kosmo.domain.sdd.document_converters import markdown_to_document

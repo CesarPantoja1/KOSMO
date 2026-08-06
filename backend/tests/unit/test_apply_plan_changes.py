@@ -24,6 +24,7 @@ from tests.unit.fakes import (
     InMemoryDocumentRepository,
     InMemoryFeatureRepository,
     InMemoryProjectRepository,
+    InMemoryRequirementRepository,
 )
 
 _DEFAULT_MARKDOWN = "## Visión\n\nContenido de visión.\n\n## Alcance\n\nContenido de alcance original."
@@ -690,3 +691,56 @@ async def test_apply_llm_resolve_keeps_unlocated_change_failed() -> None:
     assert result.applied_count == 0
     assert result.failed_count == 1
     assert len(agent.calls) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_resolves_failed_requirement_change_with_llm() -> None:
+    # Arrange: cambio de requisitos con before inexistente → fast path falla
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(
+        FeatureId("feat_01"),
+        "### REQ-1.1\n\nEl sistema debe procesar pagos con tarjeta.\n",
+    )
+
+    change = _plan_change(
+        "chg_01",
+        before="Texto inexistente en requisitos",
+        after="Nuevo texto",
+        section="REQ-1.1",
+        context_id="feat_01",
+    )
+    await chat_repo.add_plan_change(project.id, SpecPhase.REQUISITOS, change)
+
+    agent = StubResolveAgent("### REQ-1.1\n\nEl sistema debe procesar pagos con cualquier metodo.\n")
+    uc = ApplyPlanChangesUseCase(
+        project_repo=project_repo,
+        chat_repo=chat_repo,
+        document_repo=document_repo,
+        requirement_repo=requirement_repo,
+        agent=agent,  # type: ignore[arg-type]
+    )
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.REQUISITOS,
+            change_ids=[PlanChangeId("chg_01")],
+        )
+    )
+
+    # Assert: el LLM resolvio el markdown de requisitos de la feature
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    assert len(agent.calls) == 1
+    saved = await requirement_repo.by_feature_id(FeatureId("feat_01"))
+    assert saved is not None
+    assert "cualquier metodo" in saved
+    statuses = {str(c.id): c.status for c in chat_repo.plans}
+    assert statuses["chg_01"] == EstadoPlanCambio.APPLIED

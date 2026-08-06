@@ -4,21 +4,36 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import structlog
+from ulid import ULID
 
+from kosmo.application.chat.apply_plan_changes import llm_resolve_markdown
+from kosmo.contracts.chat import DiffCambio, PlanCambio
 from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
+    DocumentRepository,
     FeatureRepository,
     ProjectRepository,
     RequirementRepository,
 )
+from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
 
 _log = structlog.get_logger(__name__)
+
+
+def _impact_to_plan_change(field: str, before: str, after: str) -> PlanCambio:
+    return PlanCambio(
+        id=PlanChangeId(f"chg_{ULID().hex}"),
+        section=field,
+        description="Aplicación de impacto de consistencia",
+        diff=DiffCambio(before=before, after=after),
+    )
 
 
 @dataclass(frozen=True)
@@ -48,12 +63,16 @@ class ApplyConsistencyImpactsUseCase:
         requirement_repo: RequirementRepository,
         diagram_repo: ActivityDiagramRepository,
         traceability_repo: TraceabilityRepository | None = None,
+        document_repo: DocumentRepository | None = None,
+        agent: AgentPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._diagram_repo = diagram_repo
         self._traceability_repo = traceability_repo
+        self._document_repo = document_repo
+        self._agent = agent
 
     async def execute(
         self,
@@ -91,7 +110,7 @@ class ApplyConsistencyImpactsUseCase:
                 continue
 
             try:
-                result = await self._apply_impact(artifact_type, target_id, action, field, before, after)
+                result = await self._apply_impact(project_id, artifact_type, target_id, action, field, before, after)
             except Exception as exc:
                 _log.warning(
                     "consistency.apply_impact_failed",
@@ -111,6 +130,7 @@ class ApplyConsistencyImpactsUseCase:
 
     async def _apply_impact(
         self,
+        project_id: ProjectId,
         artifact_type: str,
         target_id: str,
         action: str,
@@ -123,7 +143,7 @@ class ApplyConsistencyImpactsUseCase:
         if artifact_type == "EARSRequirement":
             if action == "delete":
                 return None  # cascada BD: la feature padre ya se eliminó
-            return await self._apply_requirement(feature_id, before, after)
+            return await self._apply_requirement(project_id, feature_id, before, after)
 
         if artifact_type == "Feature":
             if action == "delete":
@@ -135,14 +155,62 @@ class ApplyConsistencyImpactsUseCase:
                 return None  # cascada BD: la feature padre ya se eliminó
             return await self._update_diagram(feature_id, before, after)
 
+        if artifact_type == "DiscoveryDocument":
+            if action == "delete":
+                return "El documento de Descubrimiento no puede eliminarse"
+            return await self._update_discovery(project_id, before, after)
+
         return f"Tipo de artefacto desconocido: {artifact_type}"
 
-    async def _apply_requirement(self, feature_id: FeatureId, before: str, after: str) -> str | None:
+    async def _update_discovery(self, project_id: ProjectId, before: str, after: str) -> str | None:
+        if self._document_repo is None:
+            return "La aplicación de cambios del documento de Descubrimiento no está configurada"
+
+        document = await self._document_repo.get_discovery(project_id)
+        if document is None:
+            return "El documento de Descubrimiento no existe"
+
+        markdown = document_to_markdown(document)
+        result = apply_change_diff(markdown, before=before, after=after)
+        if result is None and self._agent is not None and (before.strip() or after.strip()):
+            change = _impact_to_plan_change("descubrimiento", before, after)
+            resolved = await llm_resolve_markdown(
+                self._agent,
+                project_id,
+                "Documento de Descubrimiento",
+                markdown,
+                [change],
+            )
+            if resolved is not None:
+                result = resolved
+        if result is None:
+            return "El texto original no se encontro en el documento de Descubrimiento"
+
+        await self._document_repo.save_discovery(
+            project_id=project_id,
+            document=markdown_to_document(result),
+        )
+        return None
+
+    async def _apply_requirement(
+        self, project_id: ProjectId, feature_id: FeatureId, before: str, after: str
+    ) -> str | None:
         markdown = await self._requirement_repo.by_feature_id(feature_id)
         if markdown is None:
             return "El documento de requisitos no existe"
 
         result = apply_change_diff(markdown, before=before, after=after)
+        if result is None and self._agent is not None and (before.strip() or after.strip()):
+            change = _impact_to_plan_change("requisitos", before, after)
+            resolved = await llm_resolve_markdown(
+                self._agent,
+                project_id,
+                f"Requisitos de {feature_id}",
+                markdown,
+                [change],
+            )
+            if resolved is not None:
+                result = resolved
         if result is None:
             return "El texto original no se encontro en los requisitos"
 

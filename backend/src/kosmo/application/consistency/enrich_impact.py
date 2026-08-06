@@ -60,7 +60,7 @@ async def enrich_impact_items(
                     phase=SPEC_TO_API_PHASE[target_spec],
                     target_id=artifact_id,
                     artifact_type="DiscoveryDocument",
-                    target_display_id=artifact_id,
+                    target_display_id="Documento",
                     target_title="Documento de Descubrimiento",
                     section=action.suggested_field if action else "content",
                     rationale=per_rationale or f"El cambio en {source_label} afecta el documento de Descubrimiento.",

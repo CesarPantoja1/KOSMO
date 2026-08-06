@@ -176,6 +176,8 @@ class EvaluateConsistencyUseCase:
                 continue
             if item.action not in ("update", "delete"):
                 continue
+            if item.artifact_id in affected_ids:
+                continue
 
             art = artifact_by_id.get(item.artifact_id)
             if art is not None and not _validate_action(
@@ -240,6 +242,8 @@ class EvaluateConsistencyUseCase:
 
             action_type: str = str(item_dict.get("action", ""))
             if action_type not in ("update", "delete"):
+                continue
+            if artifact_id in affected_ids:
                 continue
 
             suggested_before = str(item_dict.get("suggested_before", ""))

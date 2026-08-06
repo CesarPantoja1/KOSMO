@@ -12,6 +12,14 @@ const PHASE_LABELS: Record<string, string> = {
 	features: 'Características',
 	requirements: 'Requisitos',
 	model: 'Modelo',
+	discovery: 'Descubrimiento',
+};
+
+const RETURN_PATHS: Record<string, string> = {
+	discovery: '/proyecto/descubrimiento',
+	features: '/proyecto/caracteristicas',
+	requirements: '/proyecto/requisitos',
+	model: '/proyecto/modelo',
 };
 
 function groupByPhase(items: DownstreamProposal[]): [string, DownstreamProposal[]][] {
@@ -34,6 +42,10 @@ const ConsistencyPage = () => {
 	const clearReport = useConsistencyStore((s) => s.clearReport);
 	const undoImpact = useConsistencyStore((s) => s.undoImpact);
 
+	const returnPath = report
+		? (RETURN_PATHS[report.source_type] ?? '/proyecto/descubrimiento')
+		: '/proyecto/descubrimiento';
+
 	const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 	const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 	const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -49,7 +61,7 @@ const ConsistencyPage = () => {
 	}
 
 	if (!report) {
-		router.push('/proyecto/descubrimiento');
+		router.push(returnPath);
 		return null;
 	}
 
@@ -57,7 +69,7 @@ const ConsistencyPage = () => {
 
 	if (!hasPending) {
 		clearReport();
-		router.push('/proyecto/descubrimiento');
+		router.push(returnPath);
 		return null;
 	}
 
@@ -71,10 +83,10 @@ const ConsistencyPage = () => {
 
 	const handleBack = () => {
 		if (hasPending) {
-			setPendingNavigation('/proyecto/descubrimiento');
+			setPendingNavigation(returnPath);
 			setShowConfirmLeave(true);
 		} else {
-			router.push('/proyecto/descubrimiento');
+			router.push(returnPath);
 		}
 	};
 
@@ -97,7 +109,7 @@ const ConsistencyPage = () => {
 		const pending = report.downstream_impact.filter((i) => !i.accepted);
 		if (pending.length === 0) {
 			clearReport();
-			router.push('/proyecto/descubrimiento');
+			router.push(returnPath);
 			return;
 		}
 		try {
@@ -115,7 +127,7 @@ const ConsistencyPage = () => {
 			toast.error('No se pudieron aplicar los cambios');
 		} finally {
 			clearReport();
-			router.push('/proyecto/descubrimiento');
+			router.push(returnPath);
 		}
 	};
 

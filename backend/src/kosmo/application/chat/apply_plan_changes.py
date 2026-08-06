@@ -47,6 +47,41 @@ def _section_heading_preserved(original: str, rewritten: str) -> bool:
     return original_heading in re.sub(r"\s+", "", rewritten).lower()
 
 
+async def llm_resolve_markdown(
+    agent: AgentPort,
+    project_id: ProjectId,
+    section_name: str,
+    markdown: str,
+    changes: list[PlanCambio],
+) -> str | None:
+    context = PlanChangeResolutionContext(
+        section_name=section_name,
+        section_markdown=markdown,
+        changes=changes,
+    )
+    try:
+        result = await agent.execute_with_skill(
+            skill_name="plan_change_resolve",
+            context=context,
+            project_id=project_id,
+        )
+    except Exception:
+        _log.warning("plan.llm_resolve_failed", section=section_name, exc_info=True)
+        return None
+    if not isinstance(result, ResolvedSection):
+        _log.warning(
+            "plan.llm_resolve_bad_output",
+            section=section_name,
+            output_type=repr(result)[:200],
+        )
+        return None
+    new_text = result.section_markdown.strip()
+    if not new_text or new_text == markdown.strip():
+        _log.warning("plan.llm_resolve_invalid_section", section=section_name)
+        return None
+    return new_text
+
+
 @dataclass(frozen=True)
 class ApplyPlanChangesInput:
     project_id: ProjectId
@@ -147,6 +182,22 @@ class ApplyPlanChangesUseCase:
                 await self._persist_with_uow(input_data.project_id, applied, final_markdown, markdown_before)
         elif input_data.phase == SpecPhase.REQUISITOS:
             applied, phase_failed = await self._apply_requirement_changes(matched)
+            if phase_failed and self._agent is not None:
+                by_plan_id = {c.id: c for c in matched}
+                failed_plan = [by_plan_id[fc.id] for fc in phase_failed if fc.id in by_plan_id]
+                if failed_plan:
+                    llm_applied, llm_still = await self._resolve_requirement_failures_with_llm(
+                        input_data.project_id, failed_plan
+                    )
+                    applied.extend(llm_applied)
+                    phase_failed = [
+                        FailedChange(
+                            id=c.id,
+                            reason="El cambio no se pudo resolver de forma segura.",
+                            section=c.section or "",
+                        )
+                        for c in llm_still
+                    ]
             if applied and self._session_factory is not None:
                 await self._mark_changes_applied_uow(input_data.project_id, applied)
         else:
@@ -274,29 +325,8 @@ class ApplyPlanChangesUseCase:
         async def _resolve_one(
             heading: str, start: int, end: int, changes: list[PlanCambio]
         ) -> tuple[int, int, str] | None:
-            context = PlanChangeResolutionContext(
-                section_name=heading,
-                section_markdown=markdown[start:end],
-                changes=changes,
-            )
-            try:
-                result = await agent.execute_with_skill(
-                    skill_name="plan_change_resolve",
-                    context=context,
-                    project_id=project_id,
-                )
-            except Exception:
-                _log.warning("plan.llm_resolve_failed", section=heading, exc_info=True)
-                return None
-            if not isinstance(result, ResolvedSection):
-                _log.warning(
-                    "plan.llm_resolve_bad_output",
-                    section=heading,
-                    output_type=repr(result)[:200],
-                )
-                return None
-            new_text = result.section_markdown.strip()
-            if not new_text or not _section_heading_preserved(markdown[start:end], new_text):
+            new_text = await llm_resolve_markdown(agent, project_id, heading, markdown[start:end], changes)
+            if new_text is None or not _section_heading_preserved(markdown[start:end], new_text):
                 _log.warning("plan.llm_resolve_invalid_section", section=heading)
                 return None
             return start, end, new_text
@@ -316,6 +346,51 @@ class ApplyPlanChangesUseCase:
             c for s, changes in changes_by_section.items() if s not in resolved_starts for c in changes
         ] + unlocated
         return new_markdown, newly_applied, still_failed
+
+    async def _resolve_requirement_failures_with_llm(
+        self,
+        project_id: ProjectId,
+        failed: list[PlanCambio],
+    ) -> tuple[list[PlanCambio], list[PlanCambio]]:
+        agent = self._agent
+        requirement_repo = self._requirement_repo
+        if agent is None or not failed or requirement_repo is None:
+            return [], failed
+
+        grouped: dict[str, list[PlanCambio]] = {}
+        for c in failed:
+            fid = _feature_id_from_change(c)
+            if fid:
+                grouped.setdefault(fid, []).append(c)
+
+        newly_applied: list[PlanCambio] = []
+        still_failed: list[PlanCambio] = []
+
+        async def _resolve_one(fid: str, changes: list[PlanCambio]) -> tuple[str, list[PlanCambio]]:
+            fid_typed = FeatureId(fid)
+            markdown = await requirement_repo.by_feature_id(fid_typed)
+            if markdown is None:
+                return fid, changes
+            new_text = await llm_resolve_markdown(
+                agent,
+                project_id,
+                f"Requisitos de {fid}",
+                markdown,
+                changes,
+            )
+            if new_text is None:
+                return fid, changes
+            await requirement_repo.save(fid_typed, new_text)
+            return fid, []
+
+        results = await asyncio.gather(*[_resolve_one(fid, changes) for fid, changes in grouped.items()])
+        for fid, changes in grouped.items():
+            _resolved_fid, still = next((r for r in results if r[0] == fid), (fid, changes))
+            newly_applied.extend(c for c in changes if c not in still)
+            still_failed.extend(still)
+
+        still_failed.extend(c for c in failed if _feature_id_from_change(c) is None)
+        return newly_applied, still_failed
 
     async def _apply_discovery_changes(
         self, project_id: ProjectId, changes: list[PlanCambio]

@@ -132,15 +132,15 @@ export const PlanPage = () => {
 				useConsistencyStore.getState().setReport(
 					streamReport as unknown as ConsistencyReportResponse,
 				);
-				toast.info(`${downstream.length} artefacto(s) en otras fases requieren revisión`);
+				router.push('/proyecto/requisitos/consistencia');
 			} else {
 				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
+				clearPlan('requirements');
+				if (currentItem) {
+					setSelectedId(currentItem.characteristic.id);
+				}
+				router.push('/proyecto/requisitos');
 			}
-			clearPlan('requirements');
-			if (currentItem) {
-				setSelectedId(currentItem.characteristic.id);
-			}
-			router.push('/proyecto/requisitos');
 		};
 
 		finish().catch(() => router.push('/proyecto/requisitos'));
