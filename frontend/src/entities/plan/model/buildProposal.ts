@@ -1,17 +1,5 @@
 import type { PlanChange } from './types';
 
-const FUTURE_HINTS = [
-	'futur',
-	'no contempl',
-	'pendiente',
-	'proxim',
-	'roadmap',
-	'potencial',
-	'fuera de alcance',
-	'no incluido',
-	'a considerar',
-];
-
 interface HeadingMatch {
 	start: number;
 	end: number;
@@ -47,23 +35,6 @@ function findSectionRange(markdown: string, sectionName: string): { start: numbe
 	return null;
 }
 
-function findFutureBoundary(sectionMd: string): number | null {
-	const re = /^(#{1,6})\s+(.+)$/gm;
-	const headings: HeadingMatch[] = [];
-	let m: RegExpExecArray | null;
-	while ((m = re.exec(sectionMd)) !== null) {
-		headings.push({ start: m.index, end: m.index + m[0].length, text: m[2] });
-	}
-	for (let i = 1; i < headings.length; i++) {
-		const headingText = normalize(headings[i].text);
-		if (FUTURE_HINTS.some((hint) => headingText.includes(hint))) {
-			const boundary = sectionMd.lastIndexOf('\n\n', headings[i].start);
-			return boundary >= 0 ? boundary : headings[i].start;
-		}
-	}
-	return null;
-}
-
 function insertInSection(
 	markdown: string,
 	secStart: number,
@@ -79,11 +50,10 @@ function insertInSection(
 	}
 
 	if (headings.length >= 3) {
-		let insertPos = findFutureBoundary(sectionMd);
-		if (insertPos === null) {
-			const lastHeading = headings[headings.length - 1];
-			const pos = sectionMd.lastIndexOf('\n\n', lastHeading.start);
-			insertPos = pos >= 0 ? pos : lastHeading.start;
+		const secondSub = headings[2];
+		let insertPos = sectionMd.lastIndexOf('\n\n', secondSub.start);
+		if (insertPos < 0) {
+			insertPos = secondSub.start;
 		}
 		const head = markdown.slice(secStart, secStart + insertPos).replace(/\s+$/, '');
 		const tail = markdown.slice(secStart + insertPos, secEnd).replace(/^\n+/, '');

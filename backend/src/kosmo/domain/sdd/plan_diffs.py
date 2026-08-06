@@ -71,43 +71,20 @@ def collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-_FUTURE_HINTS = (
-    "futur",
-    "no contempl",
-    "pendiente",
-    "proxim",
-    "roadmap",
-    "potencial",
-    "fuera de alcance",
-    "no incluido",
-    "a considerar",
-)
-
-
 def _insert_in_section(markdown: str, sec_start: int, sec_end: int, after: str) -> str:
     section_md = markdown[sec_start:sec_end]
     headings = list(_section_header_re.finditer(section_md))
     if len(headings) >= 3:
-        insert_pos = _find_future_boundary(section_md, headings)
-        if insert_pos is None:
-            insert_pos = section_md.rfind("\n\n", 0, headings[-1].start())
-            if insert_pos < 0:
-                insert_pos = headings[-1].start()
+        second_sub = headings[2]
+        insert_pos = section_md.rfind("\n\n", 0, second_sub.start())
+        if insert_pos < 0:
+            insert_pos = second_sub.start()
         head = markdown[sec_start : sec_start + insert_pos].rstrip()
         tail = markdown[sec_start + insert_pos : sec_end].lstrip("\n")
         return markdown[:sec_start] + head + "\n" + after.strip() + "\n\n" + tail + markdown[sec_end:]
     head = markdown[:sec_end].rstrip()
     tail = markdown[sec_end:].lstrip("\n")
     return head + "\n" + after.strip() + "\n\n" + tail
-
-
-def _find_future_boundary(section_md: str, headings: list[re.Match[str]]) -> int | None:
-    for m in headings[1:]:
-        heading_text = _normalize(m.group(2))
-        if any(hint in heading_text for hint in _FUTURE_HINTS):
-            boundary = section_md.rfind("\n\n", 0, m.start())
-            return boundary if boundary >= 0 else m.start()
-    return None
 
 
 def _apply_normalized_replace(text: str, before: str, after: str) -> str | None:
