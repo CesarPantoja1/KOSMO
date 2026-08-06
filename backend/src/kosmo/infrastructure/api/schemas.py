@@ -766,9 +766,6 @@ class BatchResultView(BaseModel):
     failed: list[FailedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
         default_factory=list, description="Cambios que fallaron, con el motivo"
     )
-    propagation: PhaseNotificationList | None = Field(
-        default=None, description="Fases notificadas tras la aplicación (si corresponde)"
-    )
 
 
 class ApplyBatchRequest(BaseModel):

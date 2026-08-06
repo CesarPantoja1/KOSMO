@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
@@ -73,9 +74,9 @@ class CascadingConsistencyUseCase:
             )
 
         source_api = SPEC_TO_API_PHASE[source_phase]
-        downstream: _ImpactList = []
+        targets = _CASCADE_TARGETS[source_phase]
 
-        for target_spec in _CASCADE_TARGETS[source_phase]:
+        async def _eval_and_enrich(target_spec: SpecPhase) -> _ImpactList:
             try:
                 result = await self._evaluator.evaluate(
                     source_phase=source_phase,
@@ -90,21 +91,17 @@ class CascadingConsistencyUseCase:
                     target=target_spec.value,
                     exc_info=True,
                 )
-                continue
+                return []
 
             if not result.affected_artifact_ids:
-                continue
+                return []
 
             try:
                 items = await enrich_impact_items(
-                    result,
-                    target_spec,
-                    source_phase,
-                    self._feature_repo,
-                    self._requirement_repo,
-                    self._diagram_repo,
+                    result, target_spec, source_phase,
+                    self._feature_repo, self._requirement_repo, self._diagram_repo,
                 )
-                downstream.extend([impact_item_to_dict(item) for item in items])
+                return [impact_item_to_dict(item) for item in items]
             except Exception:
                 _log.warning(
                     "cascade.enrich_failed",
@@ -112,24 +109,26 @@ class CascadingConsistencyUseCase:
                     target=target_spec.value,
                     exc_info=True,
                 )
+                return []
+
+        gathered: list[list[dict[str, object]] | BaseException] = await asyncio.gather(
+            *[_eval_and_enrich(t) for t in targets], return_exceptions=True,
+        )
+
+        downstream: _ImpactList = []
+        for items in gathered:
+            if isinstance(items, list):
+                downstream.extend(items)
 
         your_changes: list[dict[str, object]] = [
-            {
-                "change_id": str(c.id),
-                "section": c.section,
-                "description": c.description,
-                "diff": {"before": c.diff.before, "after": c.diff.after},
-                "accepted": True,
-            }
+            {"change_id": str(c.id), "section": c.section, "description": c.description,
+             "diff": {"before": c.diff.before, "after": c.diff.after}, "accepted": True}
             for c in applied_changes
         ]
 
         return CascadingConsistencyOutput(
-            report_id=report_id,
-            source_type=source_api,
-            source_id=str(project_id),
-            downstream_impact=downstream,
-            your_changes=your_changes,  # type: ignore[reportArgumentType]
+            report_id=report_id, source_type=source_api, source_id=str(project_id),
+            downstream_impact=downstream, your_changes=your_changes,  # type: ignore[reportArgumentType]
         )
 
     async def execute_stream(
@@ -146,25 +145,22 @@ class CascadingConsistencyUseCase:
             return
 
         source_api = SPEC_TO_API_PHASE[source_phase]
-        all_downstream: _ImpactList = []
+        targets = _CASCADE_TARGETS[source_phase]
 
-        for target_spec in _CASCADE_TARGETS[source_phase]:
+        # Phase 1: show all phases immediately
+        for target_spec in targets:
             phase_api = SPEC_TO_API_PHASE[target_spec]
-            phase_label = _phase_label(target_spec)
+            yield _sse_event("progress", phase=phase_api, status="evaluating",
+                             message=f"Evaluando impacto en {_phase_label(target_spec)}...")
 
-            yield _sse_event(
-                "progress",
-                phase=phase_api,
-                status="evaluating",
-                message=f"Evaluando impacto en {phase_label}...",
-            )
-
+        # Phase 2: run all evaluate+enrich tasks in parallel
+        async def _eval_and_enrich(target_spec: SpecPhase) -> dict[str, object]:
+            phase_api = SPEC_TO_API_PHASE[target_spec]
+            label = _phase_label(target_spec)
             try:
                 result = await self._evaluator.evaluate(
-                    source_phase=source_phase,
-                    target_phase=target_spec,
-                    project_id=project_id,
-                    applied_changes=applied_changes,
+                    source_phase=source_phase, target_phase=target_spec,
+                    project_id=project_id, applied_changes=applied_changes,
                 )
             except Exception:
                 _log.warning(
@@ -173,41 +169,19 @@ class CascadingConsistencyUseCase:
                     target=target_spec.value,
                     exc_info=True,
                 )
-                yield _sse_event(
-                    "progress",
-                    phase=phase_api,
-                    status="error",
-                    message=f"No se pudo evaluar {phase_label}",
-                )
-                continue
+                return {"phase": phase_api, "type": "error", "message": f"No se pudo evaluar {label}"}
 
             if not result.affected_artifact_ids:
                 if result.status == ConsistencyStatus.ANALISIS_FALLIDO:
-                    yield _sse_event(
-                        "phase_result",
-                        phase=phase_api,
-                        affected_count=0,
-                        status="failed",
-                        message=f"El analisis de impacto fallo para {phase_label}",
-                    )
-                else:
-                    yield _sse_event(
-                        "phase_result",
-                        phase=phase_api,
-                        affected_count=0,
-                        status="no_impact",
-                        message=f"Sin cambios detectados en {phase_label}",
-                    )
-                continue
+                    return {"phase": phase_api, "type": "failed", "affected_count": 0,
+                            "message": f"El analisis de impacto fallo para {label}"}
+                return {"phase": phase_api, "type": "no_impact", "affected_count": 0,
+                        "message": f"Sin cambios detectados en {label}"}
 
             try:
                 items = await enrich_impact_items(
-                    result,
-                    target_spec,
-                    source_phase,
-                    self._feature_repo,
-                    self._requirement_repo,
-                    self._diagram_repo,
+                    result, target_spec, source_phase,
+                    self._feature_repo, self._requirement_repo, self._diagram_repo,
                 )
             except Exception:
                 _log.warning(
@@ -216,48 +190,48 @@ class CascadingConsistencyUseCase:
                     target=target_spec.value,
                     exc_info=True,
                 )
-                yield _sse_event(
-                    "phase_result",
-                    phase=phase_api,
-                    affected_count=0,
-                    status="failed",
-                    message=f"No se pudo enriquecer el impacto en {phase_label}",
-                )
+                return {"phase": phase_api, "type": "failed", "affected_count": 0,
+                        "message": f"No se pudo enriquecer el impacto en {label}"}
+
+            return {"phase": phase_api, "type": "done", "affected_count": len(items),
+                    "impact": items, "message": f"{len(items)} artefacto(s) afectado(s) en {label}"}
+
+        gathered = await asyncio.gather(*[_eval_and_enrich(t) for t in targets], return_exceptions=True)
+
+        # Phase 3: emit results and collect downstream impacts
+        all_downstream: _ImpactList = []
+        for entry in gathered:
+            if isinstance(entry, BaseException):
                 continue
-
-            all_downstream.extend([impact_item_to_dict(item) for item in items])
-
-            yield _sse_event(
-                "phase_result",
-                phase=phase_api,
-                affected_count=len(items),
-                impact=items,
-                message=f"{len(items)} artefacto(s) afectado(s) en {phase_label}",
-            )
+            phase_api_val: object = entry.get("phase", "")
+            phase_api = str(phase_api_val) if phase_api_val else ""
+            entry_type = str(entry.get("type", ""))
+            if entry_type == "done":
+                impact_items = entry.get("impact", [])
+                if isinstance(impact_items, list):
+                    dict_items = [impact_item_to_dict(i) for i in impact_items if not isinstance(i, BaseException)]  # type: ignore[reportUnknownArgumentType]
+                    all_downstream.extend(dict_items)
+                affected_raw = entry.get("affected_count", 0)
+                affected_count = int(affected_raw) if isinstance(affected_raw, int) else 0  # type: ignore[reportUnknownArgumentType]
+                yield _sse_event("phase_result", phase=phase_api,
+                                 affected_count=affected_count,
+                                 impact=impact_items, message=str(entry.get("message", "")))  # type: ignore[reportUnknownArgumentType]
+            else:
+                yield _sse_event("phase_result", phase=phase_api,
+                                 affected_count=0, status=entry_type,
+                                 message=str(entry.get("message", "")))
 
         your_changes: list[dict[str, object]] = [
-            {
-                "change_id": str(c.id),
-                "section": c.section,
-                "description": c.description,
-                "diff": {"before": c.diff.before, "after": c.diff.after},
-                "accepted": True,
-            }
+            {"change_id": str(c.id), "section": c.section, "description": c.description,
+             "diff": {"before": c.diff.before, "after": c.diff.after}, "accepted": True}
             for c in applied_changes
         ]
 
         complete_event = json.dumps(
-            {
-                "type": "complete",
-                "report": {
-                    "report_id": report_id,
-                    "source_type": source_api,
-                    "source_id": str(project_id),
-                    "your_changes": your_changes,
-                    "downstream_impact": all_downstream,
-                },
-            },
-            ensure_ascii=False,
+            {"type": "complete", "report": {
+                "report_id": report_id, "source_type": source_api, "source_id": str(project_id),
+                "your_changes": your_changes, "downstream_impact": all_downstream,
+            }}, ensure_ascii=False,
         )
         yield f"data: {complete_event}\n\n"
 
