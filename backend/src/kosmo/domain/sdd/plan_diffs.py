@@ -49,8 +49,7 @@ def _apply_section_diff(markdown: str, before: str, after: str, section: str) ->
 
 def find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
     matches = list(_section_header_re.finditer(markdown))
-    cleaned = _strip_heading_prefix(section)
-    normalized_query = _normalize(cleaned)
+    normalized_query = _normalize(section)
 
     for i, m in enumerate(matches):
         heading_text = m.group(2)
@@ -60,10 +59,6 @@ def find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
             return _extract_section(markdown, matches, i)
 
     return None, 0, 0
-
-
-def _strip_heading_prefix(text: str) -> str:
-    return re.sub(r"^#{1,6}\s*", "", text).strip()
 
 
 def _extract_section(markdown: str, matches: list[re.Match[str]], idx: int) -> tuple[str, int, int]:
@@ -76,14 +71,43 @@ def collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_FUTURE_HINTS = (
+    "futur",
+    "no contempl",
+    "pendiente",
+    "proxim",
+    "roadmap",
+    "potencial",
+    "fuera de alcance",
+    "no incluido",
+    "a considerar",
+)
+
+
 def _insert_in_section(markdown: str, sec_start: int, sec_end: int, after: str) -> str:
     section_md = markdown[sec_start:sec_end]
     headings = list(_section_header_re.finditer(section_md))
     if len(headings) >= 3:
-        last_heading = headings[-1]
-        insert_pos = sec_start + last_heading.start()
-        return markdown[:insert_pos].rstrip() + "\n" + after.strip() + "\n\n" + markdown[insert_pos:].lstrip()
-    return markdown[:sec_end].rstrip() + "\n" + after.strip() + "\n\n" + markdown[sec_end:].lstrip()
+        insert_pos = _find_future_boundary(section_md, headings)
+        if insert_pos is None:
+            insert_pos = section_md.rfind("\n\n", 0, headings[-1].start())
+            if insert_pos < 0:
+                insert_pos = headings[-1].start()
+        head = markdown[sec_start : sec_start + insert_pos].rstrip()
+        tail = markdown[sec_start + insert_pos : sec_end].lstrip("\n")
+        return markdown[:sec_start] + head + "\n" + after.strip() + "\n\n" + tail + markdown[sec_end:]
+    head = markdown[:sec_end].rstrip()
+    tail = markdown[sec_end:].lstrip("\n")
+    return head + "\n" + after.strip() + "\n\n" + tail
+
+
+def _find_future_boundary(section_md: str, headings: list[re.Match[str]]) -> int | None:
+    for m in headings[1:]:
+        heading_text = _normalize(m.group(2))
+        if any(hint in heading_text for hint in _FUTURE_HINTS):
+            boundary = section_md.rfind("\n\n", 0, m.start())
+            return boundary if boundary >= 0 else m.start()
+    return None
 
 
 def _apply_normalized_replace(text: str, before: str, after: str) -> str | None:

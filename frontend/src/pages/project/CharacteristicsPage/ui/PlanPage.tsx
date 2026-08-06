@@ -217,9 +217,12 @@ export const PlanPage = () => {
 			const result = await applyPlanChanges(currentProject.id, 'features', changeIds);
 
 			if (result.failed_count > 0) {
+				const reasons = (result.failed_changes || []).map((f) => f.reason).filter(Boolean).join(' ');
 				setIsProcessing(false);
 				setIsApplying(false);
-				toast.error(`${result.failed_count} cambio(s) no se pudieron aplicar. Revisa las características.`);
+				toast.error(
+					`${result.failed_count} cambio(s) no se pudieron aplicar. ${reasons || 'Revisa las características.'}`,
+				);
 				return;
 			}
 		} catch {

@@ -7,6 +7,8 @@ from kosmo.application.chat.apply_plan_changes import (
     ApplyPlanChangesUseCase,
 )
 from kosmo.contracts import ChatRepository, DiffCambio, EstadoPlanCambio, PlanCambio
+from kosmo.contracts.pipeline.phase_contexts import PlanChangeResolutionContext
+from kosmo.contracts.pipeline.phase_outputs import ResolvedSection
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.feature import Feature
@@ -42,13 +44,32 @@ def _make_uc(
     chat_repo: ChatRepository,
     document_repo: DocumentRepository,
     feature_repo: FeatureRepository | None = None,
+    agent: object | None = None,
 ) -> ApplyPlanChangesUseCase:
     return ApplyPlanChangesUseCase(
         project_repo=project_repo,
         chat_repo=chat_repo,
         document_repo=document_repo,
         feature_repo=feature_repo,
+        agent=agent,  # type: ignore[arg-type]
     )
+
+
+class StubResolveAgent:
+    def __init__(self, section_markdown: str) -> None:
+        self._section_markdown = section_markdown
+        self.calls: list[PlanChangeResolutionContext] = []
+
+    async def execute_with_skill(  # noqa: ARG002
+        self,
+        skill_name: str,
+        context: object,
+        *,
+        project_id: object | None = None,
+        user_instructions: str | None = None,
+    ) -> object:
+        self.calls.append(context)  # type: ignore[arg-type]
+        return ResolvedSection(section_markdown=self._section_markdown)
 
 
 async def _seed_document(document_repo: InMemoryDocumentRepository, project_id: ProjectId) -> None:
@@ -515,3 +536,157 @@ async def test_feature_listing_is_ordered_by_feature_number() -> None:
     listed = await feature_repo.list_by_project(project.id)
 
     assert [feature.number for feature in listed] == [1, 3]
+
+
+# ── LLM fallback: resolución inteligente de cambios fallidos ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_resolves_failed_change_with_llm() -> None:
+    # Arrange: el before citado no existe en el documento → fast path falla
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    await _seed_document(document_repo, project.id)
+
+    change = _plan_change("chg_01", before="Alcance antiguo", after="Alcance nuevo", section="Alcance")
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, change)
+
+    agent = StubResolveAgent("## Alcance\n\nContenido de alcance resuelto por la IA.")
+    uc = _make_uc(project_repo, chat_repo, document_repo, agent=agent)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.DESCUBRIMIENTO,
+            change_ids=[PlanChangeId("chg_01")],
+        )
+    )
+
+    # Assert
+    assert result.applied_count == 1
+    assert result.failed_count == 0
+    assert len(agent.calls) == 1
+    assert agent.calls[0].section_name == "Alcance"
+    assert len(agent.calls[0].changes) == 1
+
+    from kosmo.domain.sdd.document_converters import document_to_markdown
+
+    doc = await document_repo.get_discovery(project.id)
+    assert doc is not None
+    markdown = document_to_markdown(doc)
+    assert "## Visión" in markdown
+    assert "Contenido de alcance resuelto por la IA." in markdown
+    assert "Contenido de alcance original." not in markdown
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_llm_resolve_rejects_section_without_heading() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    await _seed_document(document_repo, project.id)
+
+    change = _plan_change("chg_01", before="Texto que no existe", after="Algo", section="Alcance")
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, change)
+
+    agent = StubResolveAgent("Contenido sin heading de seccion")
+    uc = _make_uc(project_repo, chat_repo, document_repo, agent=agent)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.DESCUBRIMIENTO,
+            change_ids=[PlanChangeId("chg_01")],
+        )
+    )
+
+    # Assert: el resultado invalido se rechaza y el cambio sigue fallido
+    assert result.applied_count == 0
+    assert result.failed_count == 1
+
+    from kosmo.domain.sdd.document_converters import document_to_markdown
+
+    doc = await document_repo.get_discovery(project.id)
+    assert doc is not None
+    assert document_to_markdown(doc) == _DEFAULT_MARKDOWN
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_llm_resolve_consolidates_colliding_changes() -> None:
+    # Arrange: dos cambios sobre la misma seccion, ambos con before inexistente
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    await _seed_document(document_repo, project.id)
+
+    c1 = _plan_change("chg_01", before="Texto viejo uno", after="Texto nuevo uno", section="Alcance")
+    c2 = _plan_change("chg_02", before="Texto viejo dos", after="Texto nuevo dos", section="Alcance")
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, c1)
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, c2)
+
+    agent = StubResolveAgent("## Alcance\n\nContenido de alcance con ambos cambios consolidados.")
+    uc = _make_uc(project_repo, chat_repo, document_repo, agent=agent)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.DESCUBRIMIENTO,
+            change_ids=[PlanChangeId("chg_01"), PlanChangeId("chg_02")],
+        )
+    )
+
+    # Assert: un solo llamado LLM con ambos cambios, ambos marcados aplicados
+    assert result.applied_count == 2
+    assert result.failed_count == 0
+    assert len(agent.calls) == 1
+    assert len(agent.calls[0].changes) == 2
+
+    statuses = {str(c.id): c.status for c in chat_repo.plans}
+    assert statuses["chg_01"] == EstadoPlanCambio.APPLIED
+    assert statuses["chg_02"] == EstadoPlanCambio.APPLIED
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_apply_llm_resolve_keeps_unlocated_change_failed() -> None:
+    # Arrange: cambio sin seccion localizable y sin texto en el documento
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    chat_repo = InMemoryChatRepository()
+    document_repo = InMemoryDocumentRepository()
+    await _seed_document(document_repo, project.id)
+
+    change = _plan_change("chg_01", before="Texto inexistente en todo el doc", after="Algo", section="NoExiste")
+    await chat_repo.add_plan_change(project.id, SpecPhase.DESCUBRIMIENTO, change)
+
+    agent = StubResolveAgent("## Alcance\n\nReescrito.")
+    uc = _make_uc(project_repo, chat_repo, document_repo, agent=agent)
+
+    # Act
+    result = await uc.execute(
+        ApplyPlanChangesInput(
+            project_id=project.id,
+            phase=SpecPhase.DESCUBRIMIENTO,
+            change_ids=[PlanChangeId("chg_01")],
+        )
+    )
+
+    # Assert: no se llama al LLM y el cambio permanece fallido
+    assert result.applied_count == 0
+    assert result.failed_count == 1
+    assert len(agent.calls) == 0

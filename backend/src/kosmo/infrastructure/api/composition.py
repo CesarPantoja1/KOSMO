@@ -81,6 +81,7 @@ from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_chat_mode import FeaturesChatMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_modes.modelo_mode import ModeloMode
+from kosmo.domain.pipeline.phase_modes.plan_change_resolution_mode import PlanChangeResolutionMode
 from kosmo.domain.pipeline.phase_modes.requirements_chat_mode import RequirementsChatMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
@@ -485,6 +486,14 @@ def build_pipeline_components(
             ),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="plan_change_resolve",
+            description="Resuelve colisiones de cambios sobre una seccion de documento markdown consolidandolos",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=PlanChangeResolutionMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -653,6 +662,7 @@ def build_discovery_components(
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
             session_factory=session_factory,
+            agent=pipeline.agent,
         ),
         propagate_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,

@@ -137,3 +137,7 @@ class ConsistencyAction(BaseModel):
 class ConsistencyReport(BaseModel):
     actions: list[ConsistencyAction] = Field(default_factory=list[ConsistencyAction])
     overall_rationale: str = ""
+
+
+class ResolvedSection(BaseModel):
+    section_markdown: str = Field(description="Sección completa reescrita con todos los cambios aplicados")

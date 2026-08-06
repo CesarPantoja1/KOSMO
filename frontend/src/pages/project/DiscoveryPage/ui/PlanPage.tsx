@@ -136,9 +136,12 @@ export const PlanPage = () => {
 			const result = await applyPlanChanges(currentProject.id, 'discovery', changeIds);
 
 			if (result.failed_count > 0) {
+				const reasons = (result.failed_changes || []).map((f) => f.reason).filter(Boolean).join(' ');
 				setIsProcessing(false);
 				setIsApplying(false);
-				toast.error(`${result.failed_count} cambio(s) no se pudieron aplicar. Revisa el documento.`);
+				toast.error(
+					`${result.failed_count} cambio(s) no se pudieron aplicar. ${reasons || 'Revisa el documento.'}`,
+				);
 				return;
 			}
 		} catch {
