@@ -101,7 +101,10 @@ class EvaluateProjectConsistencyUseCase:
                 )
                 continue
 
-            downstream.extend(items)
+            if target_spec == SpecPhase.DESCUBRIMIENTO:
+                upstream.extend(items)
+            else:
+                downstream.extend(items)
 
         return EvaluateProjectConsistencyOutput(
             report_id=report_id,

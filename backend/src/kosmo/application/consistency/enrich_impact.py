@@ -7,7 +7,7 @@ from kosmo.contracts.consistency import (
     ConsistencyEvaluationOutput,
     ImpactItem,
 )
-from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -32,9 +32,6 @@ async def enrich_impact_items(
     requirement_repo: RequirementRepository,
     diagram_repo: ActivityDiagramRepository,
 ) -> list[ImpactItem]:
-    if target_spec not in {SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO}:
-        return []
-
     items: list[ImpactItem] = []
 
     action_by_id: dict[str, ArtifactAction] = {}
@@ -42,6 +39,36 @@ async def enrich_impact_items(
         action_by_id[a.artifact_id] = a
 
     source_label = _SOURCE_LABEL.get(source_phase, source_phase.value)
+
+    if target_spec == SpecPhase.DESCUBRIMIENTO:
+        for artifact_id in result.affected_artifact_ids:
+            action = action_by_id.get(artifact_id)
+            per_rationale = action.rationale if action else result.rationale
+            per_action = action.action if action else "update"
+
+            diff: dict[str, object] | None = None
+            if action and action.suggested_before and action.suggested_after:
+                diff = {
+                    "field": action.suggested_field or "content",
+                    "before": action.suggested_before,
+                    "after": action.suggested_after,
+                }
+
+            items.append(
+                ImpactItem(
+                    id=f"imp_{ULID().hex}",
+                    phase=SPEC_TO_API_PHASE[target_spec],
+                    target_id=artifact_id,
+                    artifact_type="DiscoveryDocument",
+                    target_display_id=artifact_id,
+                    target_title="Documento de Descubrimiento",
+                    section=action.suggested_field if action else "content",
+                    rationale=per_rationale or f"El cambio en {source_label} afecta el documento de Descubrimiento.",
+                    diff=diff,
+                    action=per_action,
+                )
+            )
+        return items
 
     for fid_str in result.affected_artifact_ids:
         feature = await feature_repo.by_id(FeatureId(fid_str))
@@ -66,7 +93,7 @@ async def enrich_impact_items(
             items.append(
                 ImpactItem(
                     id=item_id,
-                    phase=_SPEC_TO_API[target_spec],
+                    phase=SPEC_TO_API_PHASE[target_spec],
                     target_id=fid_str,
                     artifact_type="Feature",
                     target_display_id=feature.display_id,
@@ -130,7 +157,7 @@ async def enrich_impact_items(
                 items.append(
                     ImpactItem(
                         id=f"imp_{ULID().hex}",
-                        phase=_SPEC_TO_API[target_spec],
+                        phase=SPEC_TO_API_PHASE[target_spec],
                         target_id=fid_str,
                         artifact_type="EARSRequirement",
                         target_display_id=req_display_id,
@@ -152,7 +179,7 @@ async def enrich_impact_items(
                 items.append(
                     ImpactItem(
                         id=item_id,
-                        phase=_SPEC_TO_API[target_spec],
+                        phase=SPEC_TO_API_PHASE[target_spec],
                         target_id=fid_str,
                         artifact_type="ActivityDiagram",
                         target_display_id=feature.display_id,
@@ -165,14 +192,6 @@ async def enrich_impact_items(
                 )
 
     return items
-
-
-_SPEC_TO_API: dict[SpecPhase, str] = {
-    SpecPhase.DESCUBRIMIENTO: "discovery",
-    SpecPhase.CARACTERISTICAS: "features",
-    SpecPhase.REQUISITOS: "requirements",
-    SpecPhase.MODELO: "model",
-}
 
 
 def impact_item_to_dict(item: ImpactItem) -> dict[str, object]:

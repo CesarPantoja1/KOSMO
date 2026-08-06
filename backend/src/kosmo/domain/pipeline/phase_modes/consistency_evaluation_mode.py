@@ -37,12 +37,23 @@ _FIDELITY_RULES = (
     "fuente y los artefactos. Evalua el significado.\n"
     "5. CAMBIOS COSMETICOS (ortografia, formato) que no alteran el significado "
     "NO generan impacto.\n"
-    "6. Si el cambio modifica una REGLA DE NEGOCIO o ALCANCE FUNCIONAL, TODOS "
+    "6. Si el cambio modifica NOMENCLATURA o TERMINOLOGIA (nombres de actores, "
+    "roles, entidades, conceptos del dominio), TODOS los artefactos que "
+    "mencionen el termino anterior deben marcarse como 'update' con el nuevo "
+    "termino. Este es un cambio semantico, no cosmetico.\n"
+    "7. Si el cambio modifica una REGLA DE NEGOCIO o ALCANCE FUNCIONAL, TODOS "
     "los artefactos que implementan esa regla estan afectados.\n"
-    "7. Si el contenido contiene '[…contenido truncado…]', el texto fue "
+    "8. Si el contenido contiene '[…contenido truncado…]', el texto fue "
     "recortado. Si necesitas un fragmento que no aparece, indica en la rationale "
     "que el cambio requiere revision manual.\n"
-    "8. Prohibido usar el caracter guion largo. Usa punto, coma o dos puntos.\n\n"
+    "9. Prohibido usar el caracter guion largo. Usa punto, coma o dos puntos.\n"
+    "10. ORTOGRAFIA: escribe en español correcto. Usa TODAS las tildes "
+    "(á, é, í, ó, ú), dieresis (ü) y eñes (ñ). Revisa especialmente: "
+    "descripción, característica, término, análisis, único, especifico, "
+    "después, automático, método, código, acción, sección, razón, lógica, "
+    "ortografía, número, género, ámbito, artículo.\n"
+    "11. Usa signos de puntuacion correctos: punto final en cada oracion, "
+    "comas donde corresponda, mayuscula inicial.\n\n"
 )
 
 _DIRECTION_DOWNSTREAM = {
@@ -330,6 +341,10 @@ class ConsistencyEvaluationMode:
         self._system_prompt = system_prompt or _CONSISTENCY_SYSTEM_PROMPT
 
     @property
+    def requires_enrichment(self) -> bool:
+        return False
+
+    @property
     def phase_name(self) -> SpecPhase:
         return self._phase_name
 
@@ -386,6 +401,9 @@ class ConsistencyEvaluationMode:
             "aparece en la lista de arriba. No lo parafrasees ni lo resumas. "
             "Si el texto no existe exactamente en el artefacto, la correccion "
             "no se podra aplicar.\n\n"
+            "Usa ortografia correcta en español con TODAS las tildes "
+            "(á, é, í, ó, ú), eñes (ñ), signos de puntuacion y mayusculas "
+            "iniciales donde corresponda.\n\n"
             "Responde UNICAMENTE en el formato JSON especificado."
         )
 

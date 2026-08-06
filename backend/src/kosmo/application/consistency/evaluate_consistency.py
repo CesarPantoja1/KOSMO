@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import structlog
 from ulid import ULID
 
@@ -29,6 +31,13 @@ from kosmo.domain.sdd.document_converters import document_to_markdown
 _log = structlog.get_logger(__name__)
 
 
+def _normalize_for_match(text: str) -> str:
+    t = text.replace("\r\n", "\n").replace("\r", "\n")
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n{2,}", "\n", t)
+    return t.strip()
+
+
 def _validate_action(
     artifact_id: str,
     action: str,
@@ -42,7 +51,7 @@ def _validate_action(
         return False
     if suggested_before == suggested_after:
         return False
-    if suggested_before and suggested_before not in artifact_desc:
+    if suggested_before and _normalize_for_match(suggested_before) not in _normalize_for_match(artifact_desc):
         _log.warning(
             "consistency.before_mismatch",
             artifact_id=artifact_id,

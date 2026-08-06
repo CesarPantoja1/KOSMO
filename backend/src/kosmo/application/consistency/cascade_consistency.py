@@ -232,7 +232,7 @@ class CascadingConsistencyUseCase:
                 "phase": phase_api,
                 "type": "done",
                 "affected_count": len(items),
-                "impact": items,
+                "impact": [impact_item_to_dict(item) for item in items],
                 "message": f"{len(items)} artefacto(s) afectado(s) en {label}",
             }
 
@@ -247,19 +247,17 @@ class CascadingConsistencyUseCase:
             phase_api = str(phase_api_val) if phase_api_val else ""
             entry_type = str(entry.get("type", ""))
             if entry_type == "done":
-                impact_items = entry.get("impact", [])
-                if isinstance(impact_items, list):
-                    dict_items = [impact_item_to_dict(i) for i in impact_items if not isinstance(i, BaseException)]  # type: ignore[reportUnknownArgumentType]
-                    all_downstream.extend(dict_items)
+                impact_dicts: _ImpactList = entry.get("impact", [])  # type: ignore[assignment]
+                all_downstream.extend(impact_dicts)
                 affected_raw = entry.get("affected_count", 0)
                 affected_count = int(affected_raw) if isinstance(affected_raw, int) else 0  # type: ignore[reportUnknownArgumentType]
                 yield _sse_event(
                     "phase_result",
                     phase=phase_api,
                     affected_count=affected_count,
-                    impact=impact_items,  # type: ignore[reportUnknownArgumentType]
+                    impact=impact_dicts,
                     message=str(entry.get("message", "")),
-                )  # type: ignore[reportUnknownArgumentType]
+                )
             else:
                 yield _sse_event(
                     "phase_result",
