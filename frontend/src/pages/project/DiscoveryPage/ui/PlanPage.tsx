@@ -76,10 +76,6 @@ export const PlanPage = () => {
 
 		const finish = async () => {
 			if (currentProject) {
-				if (!hasPending) {
-					const changeIds = changes.map((c) => c.id);
-					await applyPlanChanges(currentProject.id, 'discovery', changeIds);
-				}
 				await getDiscovery(currentProject.id);
 				await fetchAndHydratePlan(currentProject.id, 'discovery');
 			}
@@ -134,6 +130,23 @@ export const PlanPage = () => {
 		if (!currentProject || changes.length === 0) return;
 		setIsApplying(true);
 		setIsProcessing(true);
+
+		try {
+			const changeIds = changes.map((c) => c.id);
+			const result = await applyPlanChanges(currentProject.id, 'discovery', changeIds);
+
+			if (result.failed_count > 0) {
+				setIsProcessing(false);
+				setIsApplying(false);
+				toast.error(`${result.failed_count} cambio(s) no se pudieron aplicar. Revisa el documento.`);
+				return;
+			}
+		} catch {
+			setIsProcessing(false);
+			setIsApplying(false);
+			toast.error('Error al aplicar los cambios al documento');
+			return;
+		}
 
 		const changesToSend = changes.map((c) => ({
 			section: c.section,

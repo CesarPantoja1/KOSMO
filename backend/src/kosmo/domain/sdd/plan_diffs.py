@@ -8,6 +8,10 @@ _section_header_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 def apply_change_diff(markdown: str, *, before: str, after: str, section: str | None = None) -> str | None:
     if not before.strip():
         if after.strip():
+            if section:
+                _sec, _start, _sec_end = _find_section(markdown, section)
+                if _sec is not None:
+                    return markdown[:_sec_end].rstrip() + "\n" + after.strip() + "\n\n" + markdown[_sec_end:].lstrip()
             return f"{markdown}\n\n{after}"
         return markdown
 
@@ -20,14 +24,14 @@ def apply_change_diff(markdown: str, *, before: str, after: str, section: str | 
 def _try_replace(text: str, before: str, after: str) -> str | None:
     if before in text:
         return text.replace(before, after, 1)
-    if after in text:
-        return text
     if before.strip() in text:
         return text.replace(before.strip(), after.strip(), 1)
     normalized_before = _collapse_whitespace(before)
     normalized_text = _collapse_whitespace(text)
     if normalized_before in normalized_text:
         return _apply_normalized_replace(text, before, after)
+    if after in text:
+        return text
     return None
 
 

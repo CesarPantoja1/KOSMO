@@ -121,10 +121,6 @@ export const PlanPage = () => {
 		const hasPending = downstream.some((i) => !i.accepted);
 
 		const finish = async () => {
-			if (currentProject && !hasPending) {
-				const changeIds = changes.map((c) => c.id);
-				await applyPlanChanges(currentProject.id, 'features', changeIds);
-			}
 			setIsProcessing(false);
 			setIsApplying(false);
 
@@ -215,6 +211,23 @@ export const PlanPage = () => {
 		if (!currentProject || changes.length === 0) return;
 		setIsApplying(true);
 		setIsProcessing(true);
+
+		try {
+			const changeIds = changes.map((c) => c.id);
+			const result = await applyPlanChanges(currentProject.id, 'features', changeIds);
+
+			if (result.failed_count > 0) {
+				setIsProcessing(false);
+				setIsApplying(false);
+				toast.error(`${result.failed_count} cambio(s) no se pudieron aplicar. Revisa las características.`);
+				return;
+			}
+		} catch {
+			setIsProcessing(false);
+			setIsApplying(false);
+			toast.error('Error al aplicar los cambios a las características');
+			return;
+		}
 
 		const changesToSend = changes.map((c) => ({
 			section: c.section,

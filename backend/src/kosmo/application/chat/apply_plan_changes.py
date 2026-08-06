@@ -112,6 +112,14 @@ class ApplyPlanChangesUseCase:
                 await self._mark_changes_applied_uow(input_data.project_id, applied)
         failed.extend(phase_failed)
 
+        for fc in phase_failed:
+            _log.warning(
+                "plan.apply_change_failed",
+                change_id=str(fc.id),
+                reason=fc.reason,
+                section=fc.section,
+            )
+
         if self._session_factory is None or not applied:
             if input_data.phase == SpecPhase.DESCUBRIMIENTO and applied:
                 doc = markdown_to_document(final_markdown)  # type: ignore[reportPossiblyUnboundVariable]
@@ -183,27 +191,91 @@ class ApplyPlanChangesUseCase:
                 instance=f"/api/v1/projects/{project_id}/plan/apply",
             )
 
+        from kosmo.domain.sdd.plan_diffs import _collapse_whitespace, _find_section
+
         markdown_before = document_to_markdown(document)
         markdown = markdown_before
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
-        for change in changes:
+
+        def _position(change: PlanCambio) -> int:
+            if change.section and change.diff.before:
+                sec_text, sec_start, _sec_end = _find_section(markdown, change.section)
+                if sec_text:
+                    idx = sec_text.find(change.diff.before)
+                    if idx >= 0:
+                        return sec_start + idx
+            if change.diff.before:
+                idx = markdown.find(change.diff.before)
+                if idx >= 0:
+                    return idx
+            return -1
+
+        ordered = sorted(changes, key=_position, reverse=True)
+
+        for change in ordered:
             result = apply_change_diff(
                 markdown, before=change.diff.before, after=change.diff.after, section=change.section
             )
             if result is None:
-                failed.append(
-                    FailedChange(
-                        id=change.id,
-                        reason="El fragmento original ya no se encuentra en el documento",
+                already_applied = False
+                if change.section and change.diff.after.strip():
+                    sec_text, _s, _e = _find_section(markdown, change.section)
+                    search_in = sec_text if sec_text is not None else markdown
+                    norm_after = _collapse_whitespace(change.diff.after)
+                    if norm_after and norm_after in _collapse_whitespace(search_in):
+                        _log.info(
+                            "plan.change_already_applied",
+                            change_id=str(change.id),
+                            section=change.section,
+                        )
+                        applied.append(change)
+                        already_applied = True
+                if not already_applied:
+                    _log.warning(
+                        "plan.before_text_not_found",
+                        change_id=str(change.id),
                         section=change.section,
+                        before=change.diff.before[:200],
                     )
-                )
+                    failed.append(
+                        FailedChange(
+                            id=change.id,
+                            reason=(
+                                f"El texto original no se encuentra en la sección "
+                                f"'{change.section or 'documento'}'."
+                            ),
+                            section=change.section,
+                        )
+                    )
+                else:
+                    continue
             elif result == markdown:
                 applied.append(change)
             else:
                 markdown = result
                 applied.append(change)
+
+        if not applied and failed:
+            try:
+                previous_md = await self._document_repo.get_latest_version(
+                    project_id, SpecPhase.DESCUBRIMIENTO
+                )
+                if previous_md is not None and previous_md != markdown_before:
+                    from kosmo.domain.sdd.discovery_diff import diff_discovery_versions
+
+                    section_changes = diff_discovery_versions(previous_md, markdown_before)
+                    if section_changes:
+                        _log.info(
+                            "plan.version_diff_found",
+                            change_count=len(changes),
+                            section_count=len(section_changes),
+                        )
+                        for change in changes:
+                            applied.append(change)
+                        return applied, [], markdown_before, previous_md
+            except Exception:
+                _log.warning("plan.version_diff_fallback_failed", exc_info=True)
 
         return applied, failed, markdown, markdown_before
 

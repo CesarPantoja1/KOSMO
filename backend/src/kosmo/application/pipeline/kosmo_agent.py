@@ -54,7 +54,6 @@ class KOSMOAgent:
         self._pattern_store = pattern_store
         self._consolidation_threshold = consolidation_threshold
         self._outbox = outbox
-        self._pending_tasks: set[asyncio.Task[Any]] = set()
 
     async def execute_with_skill(
         self,
@@ -238,12 +237,20 @@ class KOSMOAgent:
         system_prompt = mode.system_prompt
         base_user_prompt = mode.build_user_prompt(context)
 
-        system_prompt = await self._enrich_system_prompt(
-            system_prompt, base_user_prompt, project_id, phase=mode.phase_name
-        )
-        knowledge_context, tool_invocations, reason_entries = await self._resolve_tools(
-            system_prompt, base_user_prompt, project_id
-        )
+        needs_enrichment = getattr(mode, "requires_enrichment", True)
+
+        if needs_enrichment:
+            system_prompt = await self._enrich_system_prompt(
+                system_prompt, base_user_prompt, project_id, phase=mode.phase_name
+            )
+
+        knowledge_context: str = ""
+        tool_invocations: list[dict[str, Any]] = []
+        reason_entries: list[str] = []
+        if needs_enrichment:
+            knowledge_context, tool_invocations, reason_entries = await self._resolve_tools(
+                system_prompt, base_user_prompt, project_id
+            )
 
         user_prompt = base_user_prompt
         if knowledge_context:
@@ -300,7 +307,7 @@ class KOSMOAgent:
                     generation_time_ms=total_ms,
                 )
 
-                if self._memory is not None and project_id is not None:
+                if needs_enrichment and self._memory is not None and project_id is not None:
                     _log.info("agent.saving_session", project_id=str(project_id), phase=mode.phase_name.value)
                     await self._save_completed_session(
                         project_id=project_id,
@@ -325,7 +332,12 @@ class KOSMOAgent:
             await asyncio.sleep(delay_s)
 
             retry_context = ""
-            if self._knowledge_tools is not None and last_validation.errors and iteration < self._max_iterations:
+            if (
+                needs_enrichment
+                and self._knowledge_tools is not None
+                and last_validation.errors
+                and iteration < self._max_iterations
+            ):
                 error_list = "; ".join(last_validation.errors[:5])
                 retry_system_prompt = (
                     system_prompt + "\n\nLa validacion del contenido generado fallo "
@@ -360,7 +372,7 @@ class KOSMOAgent:
             generation_time_ms=total_ms,
         )
 
-        if self._memory is not None and project_id is not None:
+        if needs_enrichment and self._memory is not None and project_id is not None:
             await self._save_completed_session(
                 project_id=project_id,
                 phase=mode.phase_name,
@@ -525,7 +537,7 @@ class KOSMOAgent:
                 },
             )
         else:
-            task = asyncio.create_task(
+            asyncio.create_task(
                 self._reflect_and_consolidate(
                     session_id=session.session_id,
                     phase=phase,
@@ -535,8 +547,6 @@ class KOSMOAgent:
                     validation=validation,
                 )
             )
-            self._pending_tasks.add(task)
-            task.add_done_callback(self._pending_tasks.discard)
 
     async def _reflect_and_consolidate(
         self,
