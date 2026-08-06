@@ -74,10 +74,12 @@ const DiscoveryPage = () => {
 		}
 
 		if (currentDiscovery) {
-			setMarkdown(currentDiscovery.content);
-			savedContentRef.current = currentDiscovery.content;
-			setHasDiscovery(true);
-			_setIsLoading(false);
+			queueMicrotask(() => {
+				setMarkdown(currentDiscovery.content);
+				savedContentRef.current = currentDiscovery.content;
+				setHasDiscovery(true);
+				_setIsLoading(false);
+			});
 			return;
 		}
 

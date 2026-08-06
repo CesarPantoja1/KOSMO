@@ -66,7 +66,6 @@ class EvaluateProjectConsistencyUseCase:
         upstream: list[ImpactItem] = []
 
         for target_spec in input_data.target_phases:
-
             try:
                 result = await self._evaluator.evaluate(
                     source_phase=input_data.source_phase,

@@ -158,8 +158,7 @@ async def enrich_impact_items(
                         target_display_id=feature.display_id,
                         target_title=f"Diagrama de {feature.title}",
                         section=action.suggested_field if action else "estructura UML",
-                        rationale=per_rationale
-                        or "El cambio podría requerir actualizar el diagrama de actividad.",
+                        rationale=per_rationale or "El cambio podría requerir actualizar el diagrama de actividad.",
                         diff=diff,
                         action=per_action,
                     )

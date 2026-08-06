@@ -5,6 +5,7 @@ Revises: 99ffc4fbdb91
 Create Date: 2026-08-05 21:52:51.556360
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -32,9 +33,7 @@ def downgrade() -> None:
         sa.Column("pattern", sa.String(32), nullable=False),
         sa.Column("statement", sa.Text(), nullable=False),
         sa.Column("origin", sa.Text(), nullable=False, server_default=""),
-        sa.Column(
-            "acceptance_criteria", sa.JSON(), nullable=False, server_default=sa.text("'[]'::jsonb")
-        ),
+        sa.Column("acceptance_criteria", sa.JSON(), nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
