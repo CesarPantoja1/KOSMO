@@ -49,30 +49,30 @@ export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 	return (
 		<div className='absolute bottom-6 right-2 z-50 flex flex-col items-end gap-2'>
 			{open && (
-				<div className='w-80 overflow-hidden rounded-xl border border-base-300 bg-base-50 shadow-[0_8px_24px_rgba(0,0,0,0.12)]'>
-					<div className='flex items-center justify-between border-b border-base-300 bg-base-100 px-4 py-3'>
-						<span className='text-xs font-semibold uppercase tracking-wide text-base-600'>
+				<div className='w-80 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-0 shadow-lg'>
+					<div className='flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-3'>
+						<span className='text-xs font-semibold uppercase tracking-wide text-neutral-500'>
 							Cambios pendientes
 						</span>
-						<span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-bold text-base-50'>
+						<span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-500 px-1.5 text-xs font-bold text-neutral-0'>
 							{items.length}
 						</span>
 					</div>
 
-					<ul className='max-h-60 overflow-y-auto divide-y divide-base-200'>
+					<ul className='max-h-60 overflow-y-auto divide-y divide-neutral-100'>
 						{items.map((item) => (
 							<li
 								key={item.id}
-								className='group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-base-100'
+								className='group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-neutral-50'
 							>
-								<span className='mt-1 h-2 w-2 shrink-0 rounded-full bg-status-warning' />
+								<span className='mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warning-500' />
 
 								<div className='min-w-0 flex-1'>
-									<p className='truncate text-sm font-medium text-base-950'>
+									<p className='truncate text-sm font-medium text-neutral-800'>
 										{item.section}
 									</p>
 									{item.description && item.description !== item.section && (
-										<p className='mt-0.5 truncate text-xs text-base-600'>
+										<p className='mt-0.5 truncate text-xs text-neutral-500'>
 											{item.description}
 										</p>
 									)}
@@ -81,8 +81,8 @@ export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 								<button
 									type='button'
 									onClick={() => handleRemove(item.id)}
-									title='Descartar cambio'
-									className='mt-0.5 shrink-0 rounded p-1 text-base-600 opacity-0 transition-all group-hover:opacity-100 hover:bg-status-error/10 hover:text-status-error'
+									title='Descartar sugerencia'
+									className='mt-0.5 shrink-0 rounded-md p-1 text-neutral-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-error-50 hover:text-error-500'
 								>
 									<Trash size={14} />
 								</button>
@@ -90,7 +90,7 @@ export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 						))}
 					</ul>
 
-					<div className='border-t border-base-300 px-4 py-3'>
+					<div className='border-t border-neutral-200 px-4 py-3'>
 						<button
 							type='button'
 							onClick={handleNavigateToPlan}
@@ -103,22 +103,21 @@ export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 				</div>
 			)}
 
+			{/* Toggle pill */}
 			<button
 				type='button'
 				onClick={() => setOpen((v) => !v)}
-				className='flex items-center gap-3 rounded-full border border-base-300 bg-base-50 py-2 pl-4 pr-3 shadow-[0_4px_12px_rgba(0,0,0,0.10)] transition-all hover:border-primary-100 hover:shadow-[0_4px_16px_rgba(83,168,62,0.20)]'
+				className='flex items-center gap-2.5 rounded-full border border-neutral-200 bg-neutral-0 py-2.5 pl-4 pr-3 shadow-md transition-all hover:border-primary-500 hover:shadow-[0_4px_16px_rgba(83,168,62,0.20)]'
 			>
-				<span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-xs font-bold text-base-50'>
+				<span className='flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-500 px-1.5 text-xs font-bold text-neutral-0'>
 					{items.length}
 				</span>
-
-				<span className='text-sm font-medium text-base-950'>
+				<span className='text-sm font-medium text-neutral-800'>
 					{items.length === 1
-						? '1 cambio en el plan'
-						: `${items.length} cambios en el plan`}
+						? '1 cambio pendiente'
+						: `${items.length} cambios pendientes`}
 				</span>
-
-				<span className='text-base-600'>
+				<span className='text-neutral-400'>
 					<ChevronIcon open={open} />
 				</span>
 			</button>

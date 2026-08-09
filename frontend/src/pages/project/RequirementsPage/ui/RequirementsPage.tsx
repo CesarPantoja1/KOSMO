@@ -1,6 +1,11 @@
 'use client';
 
-import { FloatingPlan, MarkdownEditor, PanelAsistenteRequisito } from '@/feature';
+import {
+	FloatingPlan,
+	MarkdownEditor,
+	MarkdownEditorSkeleton,
+	PanelAsistenteRequisito,
+} from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -287,36 +292,54 @@ const RequirementsPage = () => {
 		return (
 			<div className='page-container'>
 				<div className='page-header'>
-					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-					<p className='text-base-600 text-lg'>
-						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-						de cada función de la lista.
-					</p>
-					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
-							<Ai color='' size={20} />
-							Refinar
-						</button>
-
-						<Link
-							href='modelo'
-							aria-disabled
-							onClick={(e) => e.preventDefault()}
-							className='btn text-base-50 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90'
-						>
-							Ir a modelo
-							<ArrowRight color='' size={20} />
-						</Link>
+					<div className='flex items-start justify-between gap-4'>
+						<div className='flex flex-col gap-1'>
+							<h2 className='text-neutral-800 text-3xl font-bold'>
+								Criterios de aceptación
+							</h2>
+							<p className='text-neutral-500 text-base'>
+								Estructura los requisitos de cada funcionalidad bajo el estándar EARS.
+							</p>
+						</div>
+						<div className='flex items-center gap-3 shrink-0'>
+							<button
+								onClick={() => setIsChatbotOpen(true)}
+								disabled={!hasRequirements[selectedId ? selectedId : '']}
+								className='btn btn-ai disabled:opacity-50 disabled:cursor-not-allowed'
+							>
+								<Ai size={18} color='' />
+								Mejorar con IA
+							</button>
+							<Link
+								href='modelo'
+								onClick={handleNextLink('modelo')}
+								className='btn btn-primary'
+							>
+								Continuar
+								<ArrowRight color='' size={18} />
+							</Link>
+						</div>
 					</div>
-
-					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
-							<div className='h-7 bg-base-200 rounded w-48' />
+					<div className='flex gap-1 flex-1 min-h-0 pb-4'>
+						<div className='w-72 bg-neutral-50 border-r border-neutral-200 rounded-lg flex flex-col gap-3 p-3 animate-pulse shrink-0'>
+							<div className='h-5 bg-neutral-200 rounded-md w-40' />
 							{[1, 2, 3, 4].map((i) => (
-								<div key={i} className='h-14 bg-base-200 rounded' />
+								<div key={i} className='h-12 bg-neutral-200 rounded-md' />
 							))}
 						</div>
-						<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
+						<div className='flex-1 min-h-0 bg bg-neutral-50'>
+							<div className='flex flex-col gap-3 h-full min-h-0'>
+								<div className='flex flex-col gap-1 px-4 mt-3'>
+									<div className='flex items-center gap-2'>
+										<div className='h-4 w-16 rounded-md bg-neutral-200 animate-pulse' />
+										<div className='h-4 w-48 rounded-md bg-neutral-200 animate-pulse' />
+									</div>
+									<div className='h-4 w-full max-w-2xl rounded-md bg-neutral-200 animate-pulse' />
+								</div>
+
+								<MarkdownEditorSkeleton />
+							</div>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -338,41 +361,46 @@ const RequirementsPage = () => {
 
 			{isGenerating && (
 				<Loading
-					title='Generando requisitos EARS'
-					description='Estructurando la característica seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
+					title='Generando criterios de aceptación'
+					description='Estructurando la funcionalidad seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
 					messages={generatingRequirementsMessages}
 				/>
 			)}
 
 			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
 				<div className='page-header'>
-					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-					<p className='text-base-600 text-lg'>
-						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-						de cada función de la lista.
-					</p>
-
-					{!isEditorMaximized && (
-						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button
-								onClick={() => setIsChatbotOpen(true)}
-								disabled={!hasRequirements[selectedId ? selectedId : '']}
-								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50 disabled:cursor-not-allowed'
-							>
-								<Ai size={20} color='text-base-50' />
-								<span className='text-center'>Refinar</span>
-							</button>
-
-							<Link
-								href='modelo'
-								onClick={handleNextLink('modelo')}
-								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-							>
-								Ir a modelo
-								<ArrowRight color='' size={20} />
-							</Link>
+					{/* Header row */}
+					<div className='flex items-start justify-between gap-4'>
+						<div className='flex flex-col gap-1'>
+							<h2 className='text-neutral-800 text-3xl font-bold'>
+								Criterios de aceptación
+							</h2>
+							<p className='text-neutral-500 text-base'>
+								Estructura los requisitos de cada funcionalidad bajo el estándar EARS.
+							</p>
 						</div>
-					)}
+
+						{!isEditorMaximized && (
+							<div className='flex items-center gap-3 shrink-0'>
+								<button
+									onClick={() => setIsChatbotOpen(true)}
+									disabled={!hasRequirements[selectedId ? selectedId : '']}
+									className='btn btn-ai disabled:opacity-50 disabled:cursor-not-allowed'
+								>
+									<Ai size={18} color='' />
+									Mejorar con IA
+								</button>
+								<Link
+									href='modelo'
+									onClick={handleNextLink('modelo')}
+									className='btn btn-primary'
+								>
+									Continuar
+									<ArrowRight color='' size={18} />
+								</Link>
+							</div>
+						)}
+					</div>
 
 					<div className='flex gap-1 flex-1 min-h-0'>
 						<AsideCharacteristic
@@ -383,53 +411,53 @@ const RequirementsPage = () => {
 							icon={Requirements}
 						/>
 
-						<div className='relative flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
+						{/* Content area */}
+						<div className='relative flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
+							{/* No selection */}
 							{!selectedCharacteristic && (
-								<div className='flex flex-col items-center justify-center h-full gap-3'>
-									<CursorClickFill color='text-base-800' size={70} />
-									<div className='self-stretch px-24 flex flex-col justify-start items-start'>
-										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-											<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
-												Selecciona una Característica
-											</div>
-										</div>
-										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-											<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
-												Selecciona una característica del listado lateral para ver su
-												detalle
-												<br />o comenzar a generar sus requisitos EARS.
-											</div>
-										</div>
+								<div className='flex flex-col items-center justify-center h-full gap-4'>
+									<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100'>
+										<CursorClickFill color='text-neutral-400' size={40} />
+									</div>
+									<div className='flex flex-col items-center gap-2 text-center max-w-sm'>
+										<h3 className='text-neutral-700 text-lg font-semibold'>
+											Selecciona una funcionalidad
+										</h3>
+										<p className='text-neutral-400 text-sm'>
+											Elige una funcionalidad del listado lateral para ver o generar sus
+											criterios de aceptación.
+										</p>
 									</div>
 								</div>
 							)}
 
+							{/* Loading requirements */}
 							{selectedCharacteristic && isLoadingRequirements && (
-								<div className='flex flex-1 items-center justify-center'>
-									<span className='text-base-600 text-lg'>Cargando requisitos...</span>
+								<div className='flex flex-1 items-center justify-center gap-3'>
+									<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
+									<span className='text-neutral-500 text-sm'>Cargando criterios...</span>
 								</div>
 							)}
 
+							{/* Has requirements — editor */}
 							{selectedCharacteristic &&
 								!isLoadingRequirements &&
 								hasRequirements[selectedCharacteristic.id] && (
-									<div className='flex flex-col flex-1 min-h-0 gap-4'>
-										<div className='flex flex-col gap-2 px-2'>
-											<div className='inline-flex justify-between items-center w-full'>
-												<div className='inline-flex justify-start gap-3 items-center'>
-													<span className='text-2xl font-bold text-base-800'>
-														{selectedCharacteristic.display_id}
-													</span>
-													<span className='text-2xl font-bold text-primary-100'>
-														{selectedCharacteristic.title}
-													</span>
-												</div>
+									<div className='flex flex-col flex-1 min-h-0 gap-3'>
+										<div className='flex flex-col gap-1 px-2'>
+											<div className='flex items-center gap-2'>
+												<span className='text-base font-bold text-neutral-500'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-base font-semibold text-neutral-800'>
+													{selectedCharacteristic.title}
+												</span>
 											</div>
-											<p className='text-base-600 text-base'>
+											<p className='text-neutral-500 text-sm'>
 												{selectedCharacteristic.description}
 											</p>
 										</div>
-										<div className='flex-1 min-h-0 mt-2'>
+										<div className='flex-1 min-h-0'>
 											<MarkdownEditor
 												key={editorKey}
 												markdown={markdown}
@@ -442,48 +470,43 @@ const RequirementsPage = () => {
 									</div>
 								)}
 
+							{/* No requirements — empty state */}
 							{selectedCharacteristic &&
 								!isLoadingRequirements &&
 								!hasRequirements[selectedCharacteristic.id] && (
-									<div className='flex flex-col flex-1 min-h-0 gap-4'>
-										<div className='flex flex-col gap-2 px-2'>
-											<div className='inline-flex justify-between items-center w-full'>
-												<div className='inline-flex justify-start gap-3 items-center'>
-													<span className='text-2xl font-bold text-base-800'>
-														{selectedCharacteristic.display_id}
-													</span>
-													<span className='text-2xl font-bold text-primary-100'>
-														{selectedCharacteristic.title}
-													</span>
-												</div>
+									<div className='flex flex-col flex-1 min-h-0 gap-3'>
+										<div className='flex flex-col gap-1 px-2'>
+											<div className='flex items-center gap-2'>
+												<span className='text-base font-bold text-neutral-500'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-base font-semibold text-neutral-800'>
+													{selectedCharacteristic.title}
+												</span>
 											</div>
-											<p className='text-base-600 text-base'>
+											<p className='text-neutral-500 text-sm'>
 												{selectedCharacteristic.description}
 											</p>
 										</div>
 
-										<section className='flex flex-col my-auto items-center gap-5 px-20'>
-											<Ai color='text-ai' size={70} />
-
-											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-												Sin requisitos EARS
-											</span>
-
-											<p className='text-base-800 text-lg text-center'>
-												Esta característica aún no tiene requisitos generados. Haz clic en
-												el botón <span className='text-xl font-bold'>Generar </span>
-												para estructurarlos y completarlos automáticamente bajo el formato
-												EARS.
-											</p>
-
-											<button
-												onClick={handleGenerate}
-												className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-											>
-												<Ai color='' size={20} />
-												Generar
+										<div className='flex flex-col my-auto items-center gap-5 px-12'>
+											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
+												<Ai color='text-ai-500' size={48} />
+											</div>
+											<div className='flex flex-col items-center gap-2 text-center max-w-md'>
+												<h3 className='text-neutral-800 text-lg font-semibold'>
+													Aún no hay criterios generados
+												</h3>
+												<p className='text-neutral-500 text-sm'>
+													Esta funcionalidad aún no tiene criterios de aceptación. El
+													asistente los estructurará automáticamente bajo el formato EARS.
+												</p>
+											</div>
+											<button onClick={handleGenerate} className='btn btn-ai'>
+												<Ai color='' size={18} />
+												Generar criterios
 											</button>
-										</section>
+										</div>
 									</div>
 								)}
 
@@ -496,14 +519,13 @@ const RequirementsPage = () => {
 					</div>
 				</div>
 
+				{/* Chatbot panel */}
 				<div
-					className={`chatbot
-						${
-							isChatbotOpen
-								? 'opacity-100 translate-x-0 flex-4/12'
-								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-						}
-				`}
+					className={`chatbot ${
+						isChatbotOpen
+							? 'opacity-100 translate-x-0 w-96 shrink-0'
+							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+					}`}
 				>
 					<PanelAsistenteRequisito
 						featureId={selectedId}

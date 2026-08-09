@@ -228,35 +228,44 @@ const ModelingPage = () => {
 		return (
 			<div className='page-container'>
 				<div className='page-header'>
-					<h2 className='text-3xl font-bold text-base-800'>Diagramas</h2>
-					<p className='text-base-600 text-lg'>
-						Usar el asistente AI para generar diagramas UML de acuerdo a los requisitos
-						EARS generados.
-					</p>
-					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						{/* <button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
-							<Ai color='' size={20} />
-							Refinar
-						</button> */}
-
-						<Link
-							href='codigo'
-							aria-disabled
-							onClick={(e) => e.preventDefault()}
-							className='btn text-base-50 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90'
-						>
-							Ir a código
-							<ArrowRight color='' size={20} />
-						</Link>
+					<div className='flex items-start justify-between gap-4'>
+						<div className='flex flex-col gap-1'>
+							<h2 className='text-neutral-800 text-3xl font-bold'>Diagrama de flujo</h2>
+							<p className='text-neutral-500 text-base'>
+								Genera el diagrama de actividad UML a partir de los criterios de
+								aceptación.
+							</p>
+						</div>
+						<div className='flex items-center gap-3 shrink-0'>
+							<Link
+								href='codigo'
+								onClick={handleNextLink('codigo')}
+								className='btn btn-primary'
+							>
+								Continuar
+								<ArrowRight color='' size={18} />
+							</Link>
+						</div>{' '}
 					</div>
-					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
-							<div className='h-7 bg-base-200 rounded w-48' />
+					<div className='flex gap-1 flex-1 min-h-0 pb-4'>
+						<div className='w-72 bg-neutral-50 border-r border-neutral-200 rounded-lg flex flex-col gap-3 p-3 animate-pulse shrink-0'>
+							<div className='h-5 bg-neutral-200 rounded-md w-40' />
 							{[1, 2, 3, 4].map((i) => (
-								<div key={i} className='h-14 bg-base-200 rounded' />
+								<div key={i} className='h-12 bg-neutral-200 rounded-md' />
 							))}
 						</div>
-						<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
+
+						<div className='flex flex-col gap-3 h-full min-h-0 w-full bg-neutral-50'>
+							<div className='flex flex-col gap-1 px-4 mt-3'>
+								<div className='flex items-center gap-2'>
+									<div className='h-4 w-16 rounded-md bg-neutral-200 animate-pulse' />
+									<div className='h-4 w-48 rounded-md bg-neutral-200 animate-pulse' />
+								</div>
+								<div className='h-4 w-full max-w-2xl rounded-md bg-neutral-200 animate-pulse' />
+							</div>
+
+							<div className='flex-1 bg-neutral-50 rounded-lg animate-pulse' />
+						</div>
 					</div>
 				</div>
 			</div>
@@ -275,8 +284,8 @@ const ModelingPage = () => {
 		<>
 			{isRefining && (
 				<Loading
-					title='Refinando modelo'
-					description='Mejorando la calidad y consistencia del modelo. Esto tomará unos segundos.'
+					title='Mejorando el diagrama'
+					description='El asistente está refinando el diagrama de actividad. Esto tomará unos segundos.'
 				/>
 			)}
 
@@ -293,41 +302,37 @@ const ModelingPage = () => {
 
 			{isGenerating && (
 				<Loading
-					title='Generando diagrama de actividad'
-					description='Analizando los requisitos EARS para construir el diagrama PlantUML. Esto tomará unos segundos.'
+					title='Generando diagrama de flujo'
+					description='Analizando los criterios de aceptación para construir el diagrama de actividad UML.'
 					messages={generatingPlantUmlMessages}
 				/>
 			)}
 
 			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
 				<div className='page-header'>
-					<h2 className='text-3xl font-bold text-base-800'>Diagramas</h2>
-					<p className='text-base-600 text-lg'>
-						Usar el asistente AI para generar diagramas UML de acuerdo a los requisitos
-						EARS generados.
-					</p>
-
-					{!isEditorMaximized && !isPlantumlMaximized && (
-						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							{/* <button
-								onClick={() => setIsChatbotOpen(true)}
-								disabled={!hasDiag}
-								className='btn text-base-50 bg-ai hover:bg-ai/90 disabled:opacity-50 rounded-sm'
-							>
-								<Ai color='' size={20} />
-								Refinar
-							</button> */}
-
-							<Link
-								href='codigo'
-								onClick={handleNextLink('codigo')}
-								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-							>
-								Ir a código
-								<ArrowRight color='' size={20} />
-							</Link>
+					{/* Header row */}
+					<div className='flex items-start justify-between gap-4'>
+						<div className='flex flex-col gap-1'>
+							<h2 className='text-neutral-800 text-3xl font-bold'>Diagrama de flujo</h2>
+							<p className='text-neutral-500 text-base'>
+								Genera el diagrama de actividad UML a partir de los criterios de
+								aceptación.
+							</p>
 						</div>
-					)}
+
+						{!isEditorMaximized && !isPlantumlMaximized && (
+							<div className='flex items-center gap-3 shrink-0'>
+								<Link
+									href='codigo'
+									onClick={handleNextLink('codigo')}
+									className='btn btn-primary'
+								>
+									Continuar
+									<ArrowRight color='' size={18} />
+								</Link>
+							</div>
+						)}
+					</div>
 
 					<div className='flex gap-1 flex-1 min-h-0'>
 						<AsideCharacteristic
@@ -338,94 +343,94 @@ const ModelingPage = () => {
 							icon={Modeling}
 						/>
 
-						<div className='flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
+						<div className='flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
+							{/* No selection */}
 							{!selectedCharacteristic && (
-								<div className='flex flex-col items-center justify-center h-full gap-3'>
-									<CursorClickFill color='text-base-800' size={70} />
-									<div className='self-stretch px-24 flex flex-col justify-start items-start'>
-										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-											<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
-												Selecciona una Característica
-											</div>
-										</div>
-										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-											<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
-												Selecciona una característica del listado lateral para ver
-												<br />o comenzar a generar su diagrama UML.
-											</div>
-										</div>
+								<div className='flex flex-col items-center justify-center h-full gap-4'>
+									<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100'>
+										<CursorClickFill color='text-neutral-400' size={40} />
+									</div>
+									<div className='flex flex-col items-center gap-2 text-center max-w-sm'>
+										<h3 className='text-neutral-700 text-lg font-semibold'>
+											Selecciona una funcionalidad
+										</h3>
+										<p className='text-neutral-400 text-sm'>
+											Elige una funcionalidad del listado lateral para ver o generar su
+											diagrama de actividad UML.
+										</p>
 									</div>
 								</div>
 							)}
 
+							{/* Loading diagram */}
 							{selectedCharacteristic && isLoadingRequirements && (
-								<div className='flex flex-1 w-full items-center justify-center'>
-									<span className='text-base-600 text-lg'>Cargando modelo...</span>
+								<div className='flex flex-1 w-full items-center justify-center gap-3'>
+									<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
+									<span className='text-neutral-500 text-sm'>Cargando diagrama...</span>
 								</div>
 							)}
 
-							{/* Caso 1: La característica NO tiene requisitos EARS generados todavía */}
+							{/* Caso 1: Sin criterios de aceptación */}
 							{selectedCharacteristic && !isLoadingRequirements && !hasReqs && (
-								<div className='flex flex-col flex-1 min-h-0 gap-4'>
-									<div className='flex flex-col gap-2 px-2'>
-										<div className='inline-flex justify-between items-center w-full'>
-											<div className='inline-flex justify-start gap-3 items-center'>
-												<span className='text-2xl font-bold text-base-800'>
-													{selectedCharacteristic.display_id}
-												</span>
-												<span className='text-2xl font-bold text-primary-100'>
-													{selectedCharacteristic.title}
-												</span>
-											</div>
+								<div className='flex flex-col flex-1 min-h-0 gap-3'>
+									<div className='flex flex-col gap-1 px-2'>
+										<div className='flex items-center gap-2'>
+											<span className='text-base font-bold text-neutral-500'>
+												{selectedCharacteristic.display_id}
+											</span>
+											<span className='text-base font-semibold text-neutral-800'>
+												{selectedCharacteristic.title}
+											</span>
 										</div>
-										<p className='text-base-600 text-base'>
+										<p className='text-neutral-500 text-sm'>
 											{selectedCharacteristic.description}
 										</p>
 									</div>
 
-									<section className='flex flex-col my-auto items-center gap-5 px-20'>
-										<Ai color='text-ai' size={70} />
-										<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-											Sin requisitos EARS generados
-										</span>
-										<p className='text-base-800 text-lg text-center'>
-											Esta característica aún no tiene requisitos EARS generados. Primero
-											debes generar los requisitos en la sección correspondiente para
-											poder construir el diagrama UML.
-										</p>
+									<div className='flex flex-col my-auto items-center gap-5 px-12'>
+										<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-warning-50'>
+											<Ai color='text-warning-500' size={48} />
+										</div>
+										<div className='flex flex-col items-center gap-2 text-center max-w-md'>
+											<h3 className='text-neutral-800 text-lg font-semibold'>
+												Faltan criterios de aceptación
+											</h3>
+											<p className='text-neutral-500 text-sm'>
+												Para generar el diagrama primero debes definir los criterios de
+												aceptación de esta funcionalidad en la fase anterior.
+											</p>
+										</div>
 										<Link
 											href='/proyecto/requisitos'
 											onClick={handleNextLink('/proyecto/requisitos')}
-											className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
+											className='btn btn-secondary'
 										>
-											<ArrowLeft color='' size={20} />
-											Ir a Requisitos
+											<ArrowLeft color='' size={18} />
+											Ir a criterios
 										</Link>
-									</section>
+									</div>
 								</div>
 							)}
 
-							{/* Caso 2: Tiene requisitos EARS Y el diagrama ya fue generado -> Mostrar PlantUmlViewer */}
+							{/* Caso 2: Tiene criterios Y diagrama generado */}
 							{selectedCharacteristic && !isLoadingRequirements && hasReqs && hasDiag && (
-								<div className='flex flex-col flex-1 min-h-0 gap-4'>
+								<div className='flex flex-col flex-1 min-h-0 gap-3'>
 									{!isPlantumlMaximized && (
-										<div className='flex flex-col flex-1 min-h-0 gap-4'>
-											<div className='flex flex-col gap-2 px-2'>
-												<div className='inline-flex justify-between items-center w-full'>
-													<div className='inline-flex justify-start gap-3 items-center'>
-														<span className='text-2xl font-bold text-base-800'>
-															{selectedCharacteristic.display_id}
-														</span>
-														<span className='text-2xl font-bold text-primary-100'>
-															{selectedCharacteristic.title}
-														</span>
-													</div>
+										<div className='flex flex-col flex-1 min-h-0 gap-3'>
+											<div className='flex flex-col gap-1 px-2'>
+												<div className='flex items-center gap-2'>
+													<span className='text-base font-bold text-neutral-500'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-base font-semibold text-neutral-800'>
+														{selectedCharacteristic.title}
+													</span>
 												</div>
-												<p className='text-base-600 text-base'>
+												<p className='text-neutral-500 text-sm'>
 													{selectedCharacteristic.description}
 												</p>
 											</div>
-											<div className='flex-1 min-h-0 mt-2'>
+											<div className='flex-1 min-h-0'>
 												<PlantUmlViewer
 													key={selectedCharacteristic.id}
 													source={plantumlSource}
@@ -439,66 +444,49 @@ const ModelingPage = () => {
 								</div>
 							)}
 
-							{/* Caso 3: Tiene requisitos EARS pero NO tiene diagrama generado todavía -> Mostrar pantalla "Sin modelo generado" + Botón "Generar" */}
+							{/* Caso 3: Tiene criterios pero sin diagrama */}
 							{selectedCharacteristic &&
 								!isLoadingRequirements &&
 								hasReqs &&
 								!hasDiag && (
-									<div className='flex flex-col flex-1 min-h-0 gap-4'>
-										<div className='flex flex-col gap-2 px-2'>
-											<div className='inline-flex justify-between items-center w-full'>
-												<div className='inline-flex justify-start gap-3 items-center'>
-													<span className='text-2xl font-bold text-base-800'>
-														{selectedCharacteristic.display_id}
-													</span>
-													<span className='text-2xl font-bold text-primary-100'>
-														{selectedCharacteristic.title}
-													</span>
-												</div>
+									<div className='flex flex-col flex-1 min-h-0 gap-3'>
+										<div className='flex flex-col gap-1 px-2'>
+											<div className='flex items-center gap-2'>
+												<span className='text-base font-bold text-neutral-500'>
+													{selectedCharacteristic.display_id}
+												</span>
+												<span className='text-base font-semibold text-neutral-800'>
+													{selectedCharacteristic.title}
+												</span>
 											</div>
-											<p className='text-base-600 text-base'>
+											<p className='text-neutral-500 text-sm'>
 												{selectedCharacteristic.description}
 											</p>
 										</div>
-										<section className='flex flex-col my-auto items-center gap-5 px-20'>
-											<Ai color='text-ai' size={70} />
 
-											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-												Sin modelo generado
-											</span>
-
-											<p className='text-base-800 text-lg text-center'>
-												Los requisitos EARS están listos. Haz clic en el botón{' '}
-												<span className='text-xl font-bold'>Generar </span>
-												para construir el diagrama de actividad UML automáticamente.
-											</p>
-
-											<button onClick={handleGenerate} className='btn btn-ai mt-2'>
-												<Ai color='' size={20} />
-												Generar
+										<div className='flex flex-col my-auto items-center gap-5 px-12'>
+											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
+												<Ai color='text-ai-500' size={48} />
+											</div>
+											<div className='flex flex-col items-center gap-2 text-center max-w-md'>
+												<h3 className='text-neutral-800 text-lg font-semibold'>
+													Aún no hay diagrama generado
+												</h3>
+												<p className='text-neutral-500 text-sm'>
+													Los criterios de aceptación están listos. El asistente
+													construirá el diagrama de actividad UML automáticamente.
+												</p>
+											</div>
+											<button onClick={handleGenerate} className='btn btn-ai'>
+												<Ai color='' size={18} />
+												Generar diagrama
 											</button>
-										</section>
+										</div>
 									</div>
 								)}
 						</div>
 					</div>
 				</div>
-
-				{/* <div
-					className={`chatbot
-						${
-							isChatbotOpen
-								? 'opacity-100 translate-x-0 flex-4/12'
-								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-						}
-				`}
-				>
-					<Chatbot
-						placeholder='ej., "Haz que el diagrama de actividad sea más conciso y claro"'
-						onClose={() => setIsChatbotOpen(false)}
-						onSendMessage={handleRefine}
-					/>
-				</div> */}
 			</div>
 		</>
 	);

@@ -23,17 +23,17 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
 			>
 				{!isUser && (
-					<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
-						<Ai size={16} color='text-base-50' />
+					<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ai-500'>
+						<Ai size={14} color='text-neutral-0' />
 					</div>
 				)}
 				<div
 					className={`
-						max-w-[85%] px-5 py-2.5 text-sm leading-6 wrap-break-word whitespace-pre-wrap
+						max-w-[85%] px-4 py-2.5 text-sm leading-6 wrap-break-word whitespace-pre-wrap
 						${
 							isUser
-								? 'rounded-2xl rounded-br-sm bg-ai text-base-50'
-								: 'rounded-2xl rounded-tl-sm bg-stone-100 text-stone-700'
+								? 'rounded-2xl rounded-br-sm bg-ai-500 text-neutral-0'
+								: 'rounded-2xl rounded-tl-sm bg-neutral-0 border border-neutral-200 text-neutral-700 shadow-sm'
 						}
 					`}
 				>

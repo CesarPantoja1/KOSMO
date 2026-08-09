@@ -79,34 +79,34 @@ export const Chatbot = ({
 	}, [input]);
 
 	return (
-		<div className='flex h-full w-full flex-col overflow-hidden bg-base-50'>
+		<div className='flex h-full w-full flex-col overflow-hidden bg-neutral-0 border-l border-neutral-200'>
 			{/* Header */}
-			<header className='flex items-center justify-between border-b border-stone-300 bg-ai px-5 py-4'>
+			<header className='flex items-center justify-between border-b border-ai-600 bg-ai-500 px-5 py-4'>
 				<div className='flex items-center gap-2'>
-					<Ai size={20} color='text-base-50' />
+					<Ai size={18} color='text-neutral-0' />
 					<div>
-						<h3 className='font-semibold text-base-50'>{title}</h3>
-						<p className='text-xs text-base-100'>{subtitle}</p>
+						<h3 className='font-semibold text-neutral-0 text-sm'>{title}</h3>
+						<p className='text-xs text-ai-100'>{subtitle}</p>
 					</div>
 				</div>
 				<button
 					type='button'
 					onClick={onClose}
-					className='rounded cursor-pointer p-1 text-base-50'
+					className='rounded-md cursor-pointer p-1 text-neutral-0 hover:bg-ai-600 transition-colors'
 				>
 					<Close color='' />
 				</button>
 			</header>
 
 			{/* Mensajes */}
-			<div className='flex-1 overflow-y-auto space-y-4 px-5 py-5'>
+			<div className='flex-1 overflow-y-auto space-y-4 px-4 py-5 bg-neutral-50'>
 				{messages.length === 0 && !isLoading && (
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
-							<Ai size={16} color='text-base-50' />
+						<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ai-500'>
+							<Ai size={14} color='text-neutral-0' />
 						</div>
-						<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-stone-100 px-4 py-3'>
-							<p className='text-sm leading-6 text-stone-700'>{greeting}</p>
+						<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-neutral-0 border border-neutral-200 px-4 py-3 shadow-sm'>
+							<p className='text-sm leading-6 text-neutral-700'>{greeting}</p>
 						</div>
 					</div>
 				)}
@@ -121,11 +121,11 @@ export const Chatbot = ({
 
 				{(isSending || isLoading) && (
 					<div className='flex items-start gap-3'>
-						<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
-							<Ai size={16} color='text-base-50' />
+						<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ai-500'>
+							<Ai size={14} color='text-neutral-0' />
 						</div>
-						<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-stone-100 px-4 py-3'>
-							<span className='flex items-center gap-1 text-sm text-stone-500'>
+						<div className='max-w-[85%] rounded-2xl rounded-tl-sm bg-neutral-0 border border-neutral-200 px-4 py-3 shadow-sm'>
+							<span className='flex items-center gap-1 text-sm text-neutral-400'>
 								<span className='animate-bounce [animation-delay:0ms]'>·</span>
 								<span className='animate-bounce [animation-delay:150ms]'>·</span>
 								<span className='animate-bounce [animation-delay:300ms]'>·</span>
@@ -138,13 +138,12 @@ export const Chatbot = ({
 			</div>
 
 			{/* Input */}
-			<div className='border-t border-stone-200 bg-white p-3'>
-				<div className='flex items-end gap-2 rounded-2xl border border-stone-300 bg-base-50 px-3 py-2 transition-colors focus-within:border-ai'>
+			<div className='border-t border-neutral-200 bg-neutral-0 p-3'>
+				<div className='flex items-end gap-2 rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2 transition-colors focus-within:border-ai-500 focus-within:ring-2 focus-within:ring-ai-500/15'>
 					<textarea
 						value={input}
 						onChange={(e) => {
 							setInput(e.target.value);
-
 							e.target.style.height = '0px';
 							e.target.style.height = `${e.target.scrollHeight}px`;
 						}}
@@ -153,30 +152,18 @@ export const Chatbot = ({
 						placeholder={placeholder}
 						rows={1}
 						disabled={isSending || isLoading}
-						className='
-				max-h-36
-				min-h-[24px]
-				flex-1
-				resize-none
-				bg-transparent
-				py-1
-				text-sm
-				leading-6
-				outline-none
-			'
+						className='max-h-36 min-h-[24px] flex-1 resize-none bg-transparent py-1 text-sm leading-6 outline-none text-neutral-800 placeholder:text-neutral-400'
 					/>
-
 					<button
 						type='button'
 						onClick={handleSend}
 						disabled={!canSend}
-						className='btn btn-ai rounded-full'
+						className='btn btn-ai rounded-full p-2'
 					>
-						<Send size={16} color='' />
+						<Send size={15} color='' />
 					</button>
 				</div>
-
-				<p className='mt-2 px-1 text-[11px] text-stone-400'>
+				<p className='mt-2 px-1 text-[11px] text-neutral-400'>
 					Enter para enviar • Shift + Enter para nueva línea
 				</p>
 			</div>

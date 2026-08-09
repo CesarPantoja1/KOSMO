@@ -58,43 +58,45 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		<header className='flex h-screen max-h-screen overflow-hidden transition-all duration-300'>
 			{!isEditorMaximized && (
 				<div
-					className={`flex max-h-screen flex-col bg-base-200 transition-all duration-300 shrink-0 ${isSidebarExpanded ? 'w-2/12' : 'w-20'}`}
+					className={`flex max-h-screen flex-col bg-neutral-900 transition-all duration-300 shrink-0 ${isSidebarExpanded ? 'w-64' : 'w-16'}`}
 				>
-					<div className='relative group flex min-h-18 items-center justify-center bg-primary-100'>
+					{/* Logo / Brand */}
+					<div className='relative group flex min-h-16 items-center justify-center border-b border-neutral-700'>
 						{isSidebarExpanded ? (
 							<>
 								<button
-									className='text-2xl font-semibold text-base-50 cursor-pointer whitespace-nowrap'
+									className='text-xl font-bold text-neutral-0 cursor-pointer whitespace-nowrap tracking-wide'
 									onClick={handleBackToHub}
 								>
 									KOSMO
 								</button>
 								<button
-									className='absolute top-0 bottom-0 right-2 flex items-center justify-center cursor-pointer'
+									className='absolute top-0 bottom-0 right-3 flex items-center justify-center cursor-pointer text-neutral-400 hover:text-neutral-0 transition-colors'
 									onClick={() => setIsSidebarExpanded(false)}
 								>
-									<Sidebar size={38} color='text-base-50' />
+									<Sidebar size={22} color='text-current' />
 								</button>
 							</>
 						) : (
 							<>
-								<span className='text-2xl font-semibold text-base-50 select-none group-hover:invisible'>
+								<span className='text-xl font-bold text-neutral-0 select-none group-hover:invisible'>
 									K
 								</span>
 								<button
-									className='absolute top-0 bottom-0 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity'
+									className='absolute top-0 bottom-0 flex items-center justify-center cursor-pointer text-neutral-400 hover:text-neutral-0 transition-colors opacity-0 group-hover:opacity-100'
 									onClick={() => setIsSidebarExpanded(true)}
 								>
-									<Sidebar size={38} color='text-base-50' />
+									<Sidebar size={22} color='text-current' />
 								</button>
 							</>
 						)}
 					</div>
 
-					<div className='flex flex-col flex-1 p-2 overflow-y-auto'>
+					{/* Project list */}
+					<div className='flex flex-col flex-1 py-3 px-2 overflow-y-auto'>
 						{isSidebarExpanded ? (
-							<div className='flex flex-col gap-2'>
-								<span className='text-base-600 text-lg font-semibold px-2 pt-2'>
+							<div className='flex flex-col gap-1'>
+								<span className='text-neutral-500 text-xs font-semibold uppercase tracking-wider px-3 pb-2 pt-1'>
 									Proyectos
 								</span>
 								{projects.map((project) => {
@@ -103,14 +105,18 @@ export function MainNavbar({ children }: MainNavbarProps) {
 										<button
 											key={project.id}
 											type='button'
-											className={`flex items-center px-3.5 py-2.5 gap-2 cursor-pointer rounded-sm transition-colors ${isActive ? 'bg-primary-100 text-primary-800' : 'bg-base-200 hover:bg-base-300 text-base-800'}`}
+											className={`flex items-center px-3 py-2.5 gap-2.5 cursor-pointer rounded-md transition-colors text-left ${
+												isActive
+													? 'bg-neutral-700 text-neutral-0 border-l-2 border-primary-500'
+													: 'text-neutral-300 hover:bg-neutral-800 hover:text-neutral-0 border-l-2 border-transparent'
+											}`}
 											onClick={() => handleProjectClick(project)}
 											title={project.name}
 										>
 											<ComputerDesktop
-												color={isActive ? 'text-primary-600' : 'text-base-600'}
+												color={isActive ? 'text-primary-500' : 'text-neutral-500'}
 											/>
-											<span className='flex-1 text-left truncate text-base font-medium capitalize'>
+											<span className='flex-1 text-left truncate text-sm font-medium capitalize'>
 												{project.name}
 											</span>
 										</button>
@@ -118,21 +124,23 @@ export function MainNavbar({ children }: MainNavbarProps) {
 								})}
 							</div>
 						) : (
-							<div className='flex flex-col gap-2 items-center'>
+							<div className='flex flex-col gap-1 items-center'>
 								{projects.map((project) => {
 									const isActive = currentProject?.id === project.id;
 									return (
 										<button
 											key={project.id}
 											type='button'
-											className={`flex items-center justify-center w-12 h-12 cursor-pointer rounded-sm transition-colors ${isActive ? 'bg-primary-100 text-primary-800' : 'text-base-800 hover:bg-base-300'}`}
+											className={`flex items-center justify-center w-10 h-10 cursor-pointer rounded-md transition-colors ${
+												isActive
+													? 'bg-neutral-700 text-neutral-0'
+													: 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-0'
+											}`}
 											onClick={() => handleProjectClick(project)}
 											title={project.name}
 										>
-											<span
-												className={`text-xl font-semibold ${isActive ? 'text-primary-600' : 'text-base-600'}`}
-											>
-												{project.name.charAt(0).toUpperCase()}
+											<span className='text-sm font-semibold'>
+												{project.name.slice(0, 2).toUpperCase()}
 											</span>
 										</button>
 									);
@@ -141,17 +149,20 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						)}
 					</div>
 
+					{/* User section */}
 					<div
-						className={`border-t border-base-600 inline-flex items-center gap-3 overflow-hidden mt-auto ${isSidebarExpanded ? 'pl-2 pt-8 pb-4 justify-start' : 'p-2 py-8 justify-center'}`}
+						className={`border-t border-neutral-700 inline-flex items-center gap-3 overflow-hidden mt-auto ${
+							isSidebarExpanded ? 'px-3 py-4 justify-start' : 'p-2 py-4 justify-center'
+						}`}
 					>
-						<UserCircle size={40} color='text-base-600' className='shrink-0' />
+						<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
 						{isSidebarExpanded && (
-							<div className='w-40 inline-flex flex-col justify-center items-start'>
-								<h4 className='justify-start text-base-800 text-2xl font-semibold truncate w-full text-left'>
+							<div className='flex-1 min-w-0 flex flex-col justify-center'>
+								<h4 className='text-neutral-0 text-sm font-semibold truncate'>
 									Carlos Yupa
 								</h4>
-								<button className='justify-start text-base-600 text-base font-normal'>
-									Salir
+								<button className='text-left text-neutral-500 text-xs font-normal hover:text-neutral-300 transition-colors'>
+									Cerrar sesión
 								</button>
 							</div>
 						)}
@@ -164,16 +175,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 			>
 				{!isEditorMaximized && (
 					<div className='z-50 shrink-0'>
-						{/* <div className='flex items-center gap-1 py-2'>
-							<Home size={40} color='text-base-600' />
-							<Right size={36} color='text-base-600' />
-							<span className='text-base-600 text-sm font-medium capitalize'>
-								{pathname?.split('/').pop() || ''}
-							</span> 
-						</div> */}
-
 						<WizardNavegacion />
-						{/* <UserCircle size={40} color='text-base-600' /> */}
 					</div>
 				)}
 				<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
