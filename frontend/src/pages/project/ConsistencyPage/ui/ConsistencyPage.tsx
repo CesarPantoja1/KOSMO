@@ -110,7 +110,9 @@ const ConsistencyPage = () => {
 			const result = await applyConsistencyImpacts(currentProject.id, selected);
 			const failedCount = (result.failed || []).filter((f) => f.target_id).length;
 			if (failedCount > 0) {
-				toast.error(`${failedCount} de ${selected.length} cambios no se pudieron aplicar`);
+				toast.error(
+					`${failedCount} de ${selected.length} cambios no se pudieron aplicar`,
+				);
 			}
 			if (failedCount < selected.length) {
 				toast.success(`${selected.length - failedCount} cambios aplicados correctamente`);
@@ -156,7 +158,9 @@ const ConsistencyPage = () => {
 		setShowConfirmApply(false);
 	};
 
-	const selectedCount = report.downstream_impact.filter((i) => i.accepted === true).length;
+	const selectedCount = report.downstream_impact.filter(
+		(i) => i.accepted === true,
+	).length;
 
 	return (
 		<>
@@ -164,8 +168,8 @@ const ConsistencyPage = () => {
 				<div className='page-header'>
 					<h2 className='text-base-800 text-3xl font-bold'>Consistencia del Proyecto</h2>
 					<p className='text-base-600 text-lg'>
-						Revisa los cambios detectados entre fases de desarrollo, agrupados por
-						nivel de impacto.
+						Revisa los cambios detectados entre fases de desarrollo, agrupados por nivel
+						de impacto.
 					</p>
 
 					<div className='flex-1 min-h-0 mb-2'>
@@ -173,13 +177,11 @@ const ConsistencyPage = () => {
 							<div className='flex shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6 py-3'>
 								<span className='text-sm font-semibold text-base-950'>
 									{report.downstream_impact.length}{' '}
-									{report.downstream_impact.length === 1 ? 'impacto detectado' : 'impactos detectados'}
+									{report.downstream_impact.length === 1
+										? 'impacto detectado'
+										: 'impactos detectados'}
 								</span>
-								<button
-									type='button'
-									onClick={handleBack}
-									className='cursor-pointer rounded-md border border-base-300 bg-white px-4 py-1.5 text-sm font-medium text-base-950 transition-colors hover:bg-base-100 active:bg-base-200'
-								>
+								<button type='button' onClick={handleBack} className='btn btn-primary'>
 									Volver
 								</button>
 							</div>
@@ -191,26 +193,26 @@ const ConsistencyPage = () => {
 											{PHASE_LABELS[phase] || phase} ({items.length})
 										</h3>
 										{items.map((impact) => (
-									<ConsistencyDiffCard
-										key={impact.id}
-										type='downstream_impact'
-										item={impact}
-										onAccept={
-											impact.action !== 'delete' || impact.artifact_type === 'Feature'
-												? () => handleAcceptImpact(impact.id)
-												: undefined
-										}
-										onReject={
-											impact.accepted !== true
-												? () => handleRejectImpact(impact.id)
-												: undefined
-										}
-										onUndo={
-											impact.accepted !== undefined
-												? () => undoImpact(impact.id)
-												: undefined
-										}
-									/>
+											<ConsistencyDiffCard
+												key={impact.id}
+												type='downstream_impact'
+												item={impact}
+												onAccept={
+													impact.action !== 'delete' || impact.artifact_type === 'Feature'
+														? () => handleAcceptImpact(impact.id)
+														: undefined
+												}
+												onReject={
+													impact.accepted !== true
+														? () => handleRejectImpact(impact.id)
+														: undefined
+												}
+												onUndo={
+													impact.accepted !== undefined
+														? () => undoImpact(impact.id)
+														: undefined
+												}
+											/>
 										))}
 									</div>
 								))}
@@ -220,7 +222,7 @@ const ConsistencyPage = () => {
 								<button
 									type='button'
 									onClick={handleRejectAll}
-									className='cursor-pointer rounded-md border border-status-error bg-white px-5 py-2 text-sm font-medium text-status-error transition-colors hover:bg-status-error hover:text-white active:opacity-80'
+									className='btn btn-destructive'
 								>
 									Rechazar todos
 								</button>
@@ -228,7 +230,7 @@ const ConsistencyPage = () => {
 									<button
 										type='button'
 										onClick={handleMarkAll}
-										className='cursor-pointer rounded-md border border-base-300 bg-white px-5 py-2 text-sm font-medium text-base-950 transition-colors hover:bg-base-100 active:bg-base-200'
+										className='btn btn-warning'
 									>
 										Marcar todos
 									</button>
@@ -236,9 +238,11 @@ const ConsistencyPage = () => {
 										type='button'
 										onClick={handleApplyClick}
 										disabled={selectedCount === 0 || applying}
-										className='cursor-pointer rounded-md bg-status-success px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-status-success/90 active:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed'
+										className='btn btn-primary'
 									>
-										{applying ? 'Aplicando...' : `Aplicar seleccionados (${selectedCount})`}
+										{applying
+											? 'Aplicando...'
+											: `Aplicar seleccionados (${selectedCount})`}
 									</button>
 								</div>
 							</div>

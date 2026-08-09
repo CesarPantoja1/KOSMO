@@ -1,47 +1,12 @@
 'use client';
 
 import { deletePlanChange, usePlanStore } from '@/entities/plan';
-import { toast } from '@/shared/ui';
+import { ArrowRight, toast } from '@/shared/ui';
 import Trash from '@/shared/ui/icons/Trash';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-
-function ChevronIcon({ open }: { open: boolean }) {
-	return (
-		<svg
-			xmlns='http://www.w3.org/2000/svg'
-			viewBox='0 0 24 24'
-			width={14}
-			height={14}
-			className={`fill-current transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-		>
-			<path
-				fillRule='evenodd'
-				clipRule='evenodd'
-				d='M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z'
-			/>
-		</svg>
-	);
-}
-
-function ArrowRightIcon() {
-	return (
-		<svg
-			xmlns='http://www.w3.org/2000/svg'
-			viewBox='0 0 24 24'
-			width={14}
-			height={14}
-			className='fill-current'
-		>
-			<path
-				fillRule='evenodd'
-				clipRule='evenodd'
-				d='M12.97 3.97a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06l6.22-6.22H3a.75.75 0 0 1 0-1.5h16.19l-6.22-6.22a.75.75 0 0 1 0-1.06Z'
-			/>
-		</svg>
-	);
-}
+import { ChevronIcon } from './icon/ChevronIcon';
 
 interface Props {
 	phase: string;
@@ -129,10 +94,10 @@ export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 						<button
 							type='button'
 							onClick={handleNavigateToPlan}
-							className='btn w-full justify-center bg-primary-100 text-sm text-base-50 hover:bg-primary-800'
+							className='btn btn-primary w-full'
 						>
 							<span>Revisar y aplicar</span>
-							<ArrowRightIcon />
+							<ArrowRight color='' />
 						</button>
 					</div>
 				</div>

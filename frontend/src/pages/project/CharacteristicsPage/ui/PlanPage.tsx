@@ -12,7 +12,7 @@ import {
 } from '@/entities/consistency';
 import type { PlanChange } from '@/entities/plan';
 import { applyPlanChanges, discardPlan, usePlanStore } from '@/entities/plan';
-import { toast } from '@/shared/ui';
+import { ArrowLeft, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,7 +26,11 @@ function buildProposal(
 		for (const change of changes) {
 			if (change.context && change.context !== c.id) continue;
 			const attribute = featureAttribute(change.section);
-			if (attribute && change.diff.before && feature[attribute].includes(change.diff.before)) {
+			if (
+				attribute &&
+				change.diff.before &&
+				feature[attribute].includes(change.diff.before)
+			) {
 				feature = {
 					...feature,
 					[attribute]: feature[attribute].replace(change.diff.before, change.diff.after),
@@ -43,9 +47,12 @@ function featureAttribute(section: string): 'title' | 'description' | 'origin' |
 		.replace(/[\u0300-\u036f]/g, '')
 		.toLowerCase()
 		.replace(/[^a-z]/g, '');
-	if (normalized === 'titulo' || normalized === 'titulodelacaracteristica') return 'title';
-	if (normalized === 'descripcion' || normalized === 'descripciondelacaracteristica') return 'description';
-	if (normalized === 'origen' || normalized === 'origendelacaracteristica') return 'origin';
+	if (normalized === 'titulo' || normalized === 'titulodelacaracteristica')
+		return 'title';
+	if (normalized === 'descripcion' || normalized === 'descripciondelacaracteristica')
+		return 'description';
+	if (normalized === 'origen' || normalized === 'origendelacaracteristica')
+		return 'origin';
 	return null;
 }
 
@@ -117,7 +124,8 @@ export const PlanPage = () => {
 	useEffect(() => {
 		if (!isComplete || !streamReport) return;
 
-		const downstream = (streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
+		const downstream =
+			(streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
 		const hasPending = downstream.some((i) => !i.accepted);
 
 		const finish = async () => {
@@ -125,9 +133,9 @@ export const PlanPage = () => {
 			setIsApplying(false);
 
 			if (hasPending) {
-				useConsistencyStore.getState().setReport(
-					streamReport as unknown as ConsistencyReportResponse,
-				);
+				useConsistencyStore
+					.getState()
+					.setReport(streamReport as unknown as ConsistencyReportResponse);
 				router.push('/proyecto/caracteristicas/consistencia');
 			} else {
 				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
@@ -156,7 +164,9 @@ export const PlanPage = () => {
 				change.context === c.id ||
 				(!change.context &&
 					change.diff.before &&
-					[c.title, c.description, c.origin].some((value) => value.includes(change.diff.before))),
+					[c.title, c.description, c.origin].some((value) =>
+						value.includes(change.diff.before),
+					)),
 		),
 	);
 
@@ -217,7 +227,10 @@ export const PlanPage = () => {
 			const result = await applyPlanChanges(currentProject.id, 'features', changeIds);
 
 			if (result.failed_count > 0) {
-				const reasons = (result.failed_changes || []).map((f) => f.reason).filter(Boolean).join(' ');
+				const reasons = (result.failed_changes || [])
+					.map((f) => f.reason)
+					.filter(Boolean)
+					.join(' ');
 				setIsProcessing(false);
 				setIsApplying(false);
 				toast.error(
@@ -267,97 +280,94 @@ export const PlanPage = () => {
 			)}
 
 			<div className='page-container'>
-			<div className='page-header'>
-				<h2 className='text-base-800 text-3xl font-bold'>Características</h2>
-				<p className='text-base-600 text-lg'>
-					Revisa los cambios propuestos antes de aplicarlos a las características del
-					proyecto.
-				</p>
+				<div className='page-header'>
+					<h2 className='text-base-800 text-3xl font-bold'>Características</h2>
+					<p className='text-base-600 text-lg'>
+						Revisa los cambios propuestos antes de aplicarlos a las características del
+						proyecto.
+					</p>
 
-				<div className='flex-1 min-h-0 mb-2'>
-					<div className='flex h-full min-h-0 flex-col overflow-hidden bg-base-50'>
-						{/* Header */}
-						<div className='flex shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6 py-3'>
-							<div className='flex flex-1 items-center gap-2'>
-								<span className='flex-1 text-center text-sm font-semibold text-base-950'>
-									Original
-								</span>
-								<div className='w-px self-stretch bg-base-300' />
-								<span className='flex-1 text-center text-sm font-semibold text-base-950'>
-									Propuesta ({changes.length}{' '}
-									{changes.length === 1 ? 'cambio' : 'cambios'})
-								</span>
-							</div>
-							<button
-								type='button'
-								onClick={handleBack}
-								className='ml-6 cursor-pointer rounded-md border border-base-300 bg-white px-4 py-1.5 text-sm font-medium text-base-950 transition-colors hover:bg-base-100 active:bg-base-200'
-							>
-								Volver
-							</button>
-						</div>
-
-						{/* Panels */}
-						<div className='flex min-h-0 flex-1 overflow-hidden'>
-							{/* Left — Original */}
-							<div
-								ref={leftRef}
-								onScroll={handleLeftScroll}
-								className='flex-1 overflow-y-auto p-6 space-y-4'
-							>
-								{changedCharacteristics.map((c) => (
-									<CharacteristicDiffCard
-										key={c.id}
-										displayId={c.display_id}
-										title={c.title}
-										description={c.description}
-									/>
-								))}
+					<div className='flex-1 min-h-0 mb-2'>
+						<div className='flex h-full min-h-0 flex-col overflow-hidden bg-base-50'>
+							{/* Header */}
+							<div className='flex shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6 py-3'>
+								<div className='flex flex-1 items-center gap-2'>
+									<span className='flex-1 text-center text-sm font-semibold text-base-950'>
+										Original
+									</span>
+									<div className='w-px self-stretch bg-base-300' />
+									<span className='flex-1 text-center text-sm font-semibold text-base-950'>
+										Propuesta ({changes.length}{' '}
+										{changes.length === 1 ? 'cambio' : 'cambios'})
+									</span>
+								</div>
+								<button type='button' onClick={handleBack} className='btn btn-primary'>
+									<ArrowLeft color='' size={20} />
+									Volver
+								</button>
 							</div>
 
-							{/* Divider */}
-							<div className='w-px shrink-0 bg-base-300' />
+							{/* Panels */}
+							<div className='flex min-h-0 flex-1 overflow-hidden'>
+								{/* Left — Original */}
+								<div
+									ref={leftRef}
+									onScroll={handleLeftScroll}
+									className='flex-1 overflow-y-auto p-6 space-y-4'
+								>
+									{changedCharacteristics.map((c) => (
+										<CharacteristicDiffCard
+											key={c.id}
+											displayId={c.display_id}
+											title={c.title}
+											description={c.description}
+										/>
+									))}
+								</div>
 
-							{/* Right */}
-							<div
-								ref={rightRef}
-								onScroll={handleRightScroll}
-								className='flex-1 overflow-y-auto p-6 space-y-4'
-							>
-								{proposalCharacteristics.map((c) => (
-									<CharacteristicDiffCard
-										key={c.id}
-										displayId={c.display_id}
-										title={c.title}
-										description={c.description}
-									/>
-								))}
+								{/* Divider */}
+								<div className='w-px shrink-0 bg-base-300' />
+
+								{/* Right */}
+								<div
+									ref={rightRef}
+									onScroll={handleRightScroll}
+									className='flex-1 overflow-y-auto p-6 space-y-4'
+								>
+									{proposalCharacteristics.map((c) => (
+										<CharacteristicDiffCard
+											key={c.id}
+											displayId={c.display_id}
+											title={c.title}
+											description={c.description}
+										/>
+									))}
+								</div>
 							</div>
-						</div>
 
-						{/* Footer */}
-						<div className='flex shrink-0 items-center justify-between border-t border-base-300 bg-base-100 px-6 py-4'>
-							<button
-								type='button'
-								onClick={handleDiscard}
-								disabled={isDiscarding}
-								className='cursor-pointer rounded-md border border-status-error bg-white px-5 py-2 text-sm font-medium text-status-error transition-colors hover:bg-status-error hover:text-white active:opacity-80 disabled:opacity-50'
-							>
-								{isDiscarding ? 'Descartando...' : 'Descartar Cambios'}
-							</button>
-							<button
-								type='button'
-								onClick={handleApply}
-								disabled={isApplying || changes.length === 0}
-								className='cursor-pointer rounded-md bg-primary-100 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-800 active:opacity-80 disabled:opacity-50'
-							>
-								{isApplying ? 'Aplicando...' : 'Aplicar Cambios'}
-							</button>
+							{/* Footer */}
+							<div className='flex shrink-0 items-center justify-between border-t border-base-300 bg-base-100 px-6 py-4'>
+								<button
+									type='button'
+									onClick={handleDiscard}
+									disabled={isDiscarding}
+									className='btn btn-destructive'
+								>
+									{isDiscarding ? 'Descartando...' : 'Descartar Cambios'}
+								</button>
+								<button
+									type='button'
+									onClick={handleApply}
+									disabled={isApplying || changes.length === 0}
+									className='btn btn-primary'
+								>
+									{isApplying ? 'Aplicando...' : 'Aplicar Cambios'}
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-		</div>
 		</>
 	);
 };

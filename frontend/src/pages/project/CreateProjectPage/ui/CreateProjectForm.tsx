@@ -73,71 +73,68 @@ const CreateProjectForm = () => {
 
 	return (
 		<form
-				onSubmit={handleSubmit(onSubmit)}
-				className='flex-1 flex flex-col gap-5 px-0.5'
-				noValidate
-			>
-				<button className='btn bg-ai inline-flex self-end text-base-50 hover:bg-ai/90 disabled:bg-base-600 transition-all duration-200 hover:shadow-md active:scale-95'>
-					<Ai size={20} color='' />
-					{isSubmitting ? 'Creando...' : 'Crear Proyecto'}
-				</button>
-				<div className='flex-1 flex flex-col gap-5 px-8 pt-8 mb-8 rounded-lg shadow-md border border-base-200'>
-					<div className='w-full flex flex-col items-start gap-2'>
-						<label
-							htmlFor='project-name'
-							className='text-base-800 text-2xl font-semibold'
-						>
-							Nombre
-						</label>
+			onSubmit={handleSubmit(onSubmit)}
+			className='flex-1 flex flex-col gap-5 px-0.5'
+			noValidate
+		>
+			<button className='btn btn-ai'>
+				<Ai size={20} color='' />
+				{isSubmitting ? 'Creando...' : 'Crear Proyecto'}
+			</button>
+			<div className='flex-1 flex flex-col gap-5 px-8 pt-8 mb-8 rounded-lg shadow-md border border-base-200'>
+				<div className='w-full flex flex-col items-start gap-2'>
+					<label htmlFor='project-name' className='text-base-800 text-2xl font-semibold'>
+						Nombre
+					</label>
 
-						<input
-							ref={nameRef}
-							id='project-name'
-							type='text'
-							value={nameValue}
-							onBlur={nameOnBlur}
-							onChange={handleNameChange}
-							placeholder='Ej. Ferretería'
-							className='w-full flex items-center px-3.5 py-2 justify-start border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200'
-							autoComplete='off'
-						/>
+					<input
+						ref={nameRef}
+						id='project-name'
+						type='text'
+						value={nameValue}
+						onBlur={nameOnBlur}
+						onChange={handleNameChange}
+						placeholder='Ej. Ferretería'
+						className='w-full flex items-center px-3.5 py-2 justify-start border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200'
+						autoComplete='off'
+					/>
 
-						<div className='w-full flex justify-end gap-1 items-center'>
-							{nameError && (
-								<p className='text-status-error text-sm' role='alert'>
-									{nameError.message}
-								</p>
-							)}
-							<CharacterCounter current={nameValue.length} max={25} />
-						</div>
-					</div>
-
-					<div className='w-full flex-1 pb-5 flex flex-col gap-2'>
-						<label
-							htmlFor='project-description'
-							className='text-base-800 text-2xl font-semibold'
-						>
-							Descripción
-						</label>
-						<textarea
-							ref={descRef}
-							id='project-description'
-							value={descValue}
-							onBlur={descOnBlur}
-							onChange={handleDescChange}
-							placeholder='Ej. App para la gestión integral de las sucursales'
-							className='w-full flex-1 px-3.5 py-2 border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200 resize-none'
-						/>
-						<div className='w-full flex justify-end gap-1 items-center'>
-							{descError && (
-								<p className='text-status-error text-sm' role='alert'>
-									{descError.message}
-								</p>
-							)}
-							<CharacterCounter current={descValue.length} max={1000} />
-						</div>
+					<div className='w-full flex justify-end gap-1 items-center'>
+						{nameError && (
+							<p className='text-status-error text-sm' role='alert'>
+								{nameError.message}
+							</p>
+						)}
+						<CharacterCounter current={nameValue.length} max={25} />
 					</div>
 				</div>
+
+				<div className='w-full flex-1 pb-5 flex flex-col gap-2'>
+					<label
+						htmlFor='project-description'
+						className='text-base-800 text-2xl font-semibold'
+					>
+						Descripción
+					</label>
+					<textarea
+						ref={descRef}
+						id='project-description'
+						value={descValue}
+						onBlur={descOnBlur}
+						onChange={handleDescChange}
+						placeholder='Ej. App para la gestión integral de las sucursales'
+						className='w-full flex-1 px-3.5 py-2 border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200 resize-none'
+					/>
+					<div className='w-full flex justify-end gap-1 items-center'>
+						{descError && (
+							<p className='text-status-error text-sm' role='alert'>
+								{descError.message}
+							</p>
+						)}
+						<CharacterCounter current={descValue.length} max={1000} />
+					</div>
+				</div>
+			</div>
 		</form>
 	);
 };

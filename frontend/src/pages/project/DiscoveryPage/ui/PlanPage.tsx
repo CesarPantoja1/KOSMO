@@ -7,7 +7,12 @@ import {
 	useConsistencyStore,
 	useConsistencyStream,
 } from '@/entities/consistency';
-import { applyPlanChanges, buildProposal, discardPlan, usePlanStore } from '@/entities/plan';
+import {
+	applyPlanChanges,
+	buildProposal,
+	discardPlan,
+	usePlanStore,
+} from '@/entities/plan';
 import { MarkdownDiff } from '@/feature';
 import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
@@ -56,7 +61,8 @@ export const PlanPage = () => {
 	useEffect(() => {
 		if (!isComplete || !streamReport) return;
 
-		const downstream = (streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
+		const downstream =
+			(streamReport.downstream_impact as Array<Record<string, unknown>>) || [];
 		const hasPending = downstream.some((i) => !i.accepted);
 
 		const finish = async () => {
@@ -68,9 +74,9 @@ export const PlanPage = () => {
 			setIsApplying(false);
 
 			if (hasPending) {
-				useConsistencyStore.getState().setReport(
-					streamReport as unknown as ConsistencyReportResponse,
-				);
+				useConsistencyStore
+					.getState()
+					.setReport(streamReport as unknown as ConsistencyReportResponse);
 				router.push('/proyecto/descubrimiento/consistencia');
 			} else {
 				toast.info('No se detectaron cambios que afecten otras fases del proyecto');
@@ -121,7 +127,10 @@ export const PlanPage = () => {
 			const result = await applyPlanChanges(currentProject.id, 'discovery', changeIds);
 
 			if (result.failed_count > 0) {
-				const reasons = (result.failed_changes || []).map((f) => f.reason).filter(Boolean).join(' ');
+				const reasons = (result.failed_changes || [])
+					.map((f) => f.reason)
+					.filter(Boolean)
+					.join(' ');
 				setIsProcessing(false);
 				setIsApplying(false);
 				toast.error(
@@ -150,14 +159,6 @@ export const PlanPage = () => {
 		});
 	};
 
-	if (isLoading) {
-		return (
-			<div className='flex h-full items-center justify-center'>
-				<div className='h-8 w-8 animate-spin rounded-full border-4 border-base-300 border-t-primary-100' />
-			</div>
-		);
-	}
-
 	return (
 		<>
 			{isProcessing && (
@@ -172,23 +173,31 @@ export const PlanPage = () => {
 
 			<div className='page-container'>
 				<div className='page-header'>
-					<h2 className='text-base-800 text-3xl font-bold'>Descubrimiento del proyecto</h2>
+					<h2 className='text-base-800 text-3xl font-bold'>
+						Descubrimiento del proyecto
+					</h2>
 					<p className='text-base-600 text-lg'>
 						Revisa los cambios propuestos antes de aplicarlos al documento de
 						descubrimiento.
 					</p>
 
 					<div className='flex-1 min-h-0 mb-2'>
-						<MarkdownDiff
-							original={originalMarkdown}
-							proposal={proposalMarkdown}
-							originalLabel='Original'
-							proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
-							onBack={handleBack}
-							onDiscard={isDiscarding ? () => {} : handleDiscard}
-							onApply={isApplying || isDiscarding ? () => {} : handleApply}
-							processing={isApplying}
-						/>
+						{isLoading ? (
+							<div className='flex h-full items-center justify-center'>
+								<div className='h-8 w-8 animate-spin rounded-full border-4 border-base-300 border-t-primary-100' />
+							</div>
+						) : (
+							<MarkdownDiff
+								original={originalMarkdown}
+								proposal={proposalMarkdown}
+								originalLabel='Original'
+								proposalLabel={`Propuesta (${changes.length} ${changes.length === 1 ? 'cambio' : 'cambios'})`}
+								onBack={handleBack}
+								onDiscard={isDiscarding ? () => {} : handleDiscard}
+								onApply={isApplying || isDiscarding ? () => {} : handleApply}
+								processing={isApplying}
+							/>
+						)}
 					</div>
 				</div>
 			</div>

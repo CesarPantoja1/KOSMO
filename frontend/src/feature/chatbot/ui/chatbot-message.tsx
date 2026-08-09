@@ -29,7 +29,7 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				)}
 				<div
 					className={`
-						max-w-[85%] px-5 py-2.5 text-sm leading-6 break-words whitespace-pre-wrap
+						max-w-[85%] px-5 py-2.5 text-sm leading-6 wrap-break-word whitespace-pre-wrap
 						${
 							isUser
 								? 'rounded-2xl rounded-br-sm bg-ai text-base-50'
@@ -48,9 +48,7 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 						<TarjetaRecepcionPlan
 							messageId={message.id}
 							suggestion={suggestion}
-							onAction={(action) =>
-								onPlanAction?.(action, suggestion, message.id)
-							}
+							onAction={(action) => onPlanAction?.(action, suggestion, message.id)}
 						/>
 					</div>
 				))}

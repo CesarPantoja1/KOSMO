@@ -45,7 +45,15 @@ const actionBadge = (action: string | undefined) => {
 	return null;
 };
 
-function DiffContent({ field, before, after }: { field?: string; before: string; after: string }) {
+function DiffContent({
+	field,
+	before,
+	after,
+}: {
+	field?: string;
+	before: string;
+	after: string;
+}) {
 	if (field === 'diagram_syntax' || field?.includes('plantuml')) {
 		return (
 			<div className='flex gap-4 mb-3'>
@@ -56,7 +64,9 @@ function DiffContent({ field, before, after }: { field?: string; before: string;
 					</div>
 				</div>
 				<div className='flex-1 min-w-0'>
-					<div className='text-xs font-semibold text-base-400 uppercase mb-1'>Propuesto</div>
+					<div className='text-xs font-semibold text-base-400 uppercase mb-1'>
+						Propuesto
+					</div>
 					<div className='max-h-64 overflow-auto rounded outline outline-base-300 bg-base-50 p-2'>
 						<PlantUmlViewer source={after} />
 					</div>
@@ -74,7 +84,9 @@ function DiffContent({ field, before, after }: { field?: string; before: string;
 				</div>
 			</div>
 			<div className='flex-1 min-w-0'>
-				<div className='text-xs font-semibold text-base-400 uppercase mb-1'>Propuesto</div>
+				<div className='text-xs font-semibold text-base-400 uppercase mb-1'>
+					Propuesto
+				</div>
 				<div className='max-h-48 overflow-y-auto rounded outline outline-base-300 px-4 py-2 bg-base-50'>
 					<MarkdownText content={after || ''} className='text-sm text-base-800' />
 				</div>
@@ -96,9 +108,7 @@ export const ConsistencyDiffCard = ({
 	const [showFullRationale, setShowFullRationale] = useState(false);
 
 	const displayId =
-		type === 'downstream_impact'
-			? (item as DownstreamProposal).targetDisplayId
-			: '';
+		type === 'downstream_impact' ? (item as DownstreamProposal).targetDisplayId : '';
 
 	const title =
 		type === 'your_change'
@@ -111,18 +121,15 @@ export const ConsistencyDiffCard = ({
 			: (item as DownstreamProposal).rationale;
 
 	const action =
-		type === 'downstream_impact'
-			? (item as DownstreamProposal).action
-			: undefined;
+		type === 'downstream_impact' ? (item as DownstreamProposal).action : undefined;
 
 	const artifactType =
-		type === 'downstream_impact'
-			? (item as DownstreamProposal).artifact_type
-			: '';
+		type === 'downstream_impact' ? (item as DownstreamProposal).artifact_type : '';
 
 	const diff = item.diff;
 	const hasDiff = diff?.before || diff?.after;
-	const diffField = (diff && 'field' in diff ? (diff as { field: string }).field : '') || '';
+	const diffField =
+		(diff && 'field' in diff ? (diff as { field: string }).field : '') || '';
 	const isDelete = action === 'delete';
 	const isHandled = accepted !== undefined;
 	const isFeatureDelete = artifactType === 'Feature' && isDelete;
@@ -132,7 +139,9 @@ export const ConsistencyDiffCard = ({
 	const hasUndo = isHandled;
 
 	return (
-		<div className={`mx-0.5 mb-2 px-6 py-4 transition-shadow outline rounded ${outlineClass}`}>
+		<div
+			className={`mx-0.5 mb-2 px-6 py-4 transition-shadow outline rounded ${outlineClass}`}
+		>
 			<div className='flex items-start gap-4'>
 				{displayId && (
 					<div className='w-14 shrink-0 text-lg font-semibold text-base-800 pt-0.5 text-center'>
@@ -144,7 +153,9 @@ export const ConsistencyDiffCard = ({
 						<h3 className='text-primary-100 text-lg font-semibold truncate'>{title}</h3>
 						{actionBadge(action)}
 						{isHandled && (
-							<span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${accepted ? 'bg-status-success/10 text-status-success' : 'bg-status-error/10 text-status-error'}`}>
+							<span
+								className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${accepted ? 'bg-status-success/10 text-status-success' : 'bg-status-error/10 text-status-error'}`}
+							>
 								{accepted ? 'Aceptado' : 'Descartado'}
 							</span>
 						)}
@@ -176,12 +187,17 @@ export const ConsistencyDiffCard = ({
 					)}
 
 					{hasDiff && (
-						<DiffContent field={diffField} before={diff?.before || ''} after={diff?.after || ''} />
+						<DiffContent
+							field={diffField}
+							before={diff?.before || ''}
+							after={diff?.after || ''}
+						/>
 					)}
 
 					{!hasDiff && !isDelete && (
 						<p className='text-sm text-base-500 italic mb-3'>
-							Revisión manual requerida — el cambio no incluye diff automático. Consulta la justificación arriba.
+							Revisión manual requerida — el cambio no incluye diff automático. Consulta
+							la justificación arriba.
 						</p>
 					)}
 
@@ -191,7 +207,7 @@ export const ConsistencyDiffCard = ({
 								type='button'
 								onClick={onAccept}
 								disabled={accepting}
-								className='cursor-pointer rounded-md bg-status-success px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-status-success/90 active:opacity-80 disabled:opacity-50'
+								className='btn btn-primary'
 							>
 								{accepting ? 'Aplicando...' : 'Aceptar'}
 							</button>
@@ -201,26 +217,18 @@ export const ConsistencyDiffCard = ({
 								type='button'
 								onClick={onAccept}
 								disabled={accepting}
-								className='cursor-pointer rounded-md bg-status-success px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-status-success/90 active:opacity-80 disabled:opacity-50'
+								className='btn btn-primary'
 							>
 								{accepting ? 'Aplicando...' : 'Aceptar eliminación'}
 							</button>
 						)}
 						{hasActions && onReject && (
-							<button
-								type='button'
-								onClick={onReject}
-								className='cursor-pointer rounded-md border border-base-300 bg-white px-4 py-1.5 text-sm font-medium text-base-600 transition-colors hover:bg-base-100 active:bg-base-200'
-							>
+							<button type='button' onClick={onReject} className='btn btn-secondary'>
 								Descartar
 							</button>
 						)}
 						{hasUndo && onUndo && (
-							<button
-								type='button'
-								onClick={onUndo}
-								className='cursor-pointer rounded-md border border-amber-300 bg-white px-4 py-1.5 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-50 active:bg-amber-100'
-							>
+							<button type='button' onClick={onUndo} className='btn btn-warning'>
 								Deshacer
 							</button>
 						)}

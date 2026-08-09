@@ -473,10 +473,7 @@ const ModelingPage = () => {
 												para construir el diagrama de actividad UML automáticamente.
 											</p>
 
-											<button
-												onClick={handleGenerate}
-												className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-											>
+											<button onClick={handleGenerate} className='btn btn-ai mt-2'>
 												<Ai color='' size={20} />
 												Generar
 											</button>
