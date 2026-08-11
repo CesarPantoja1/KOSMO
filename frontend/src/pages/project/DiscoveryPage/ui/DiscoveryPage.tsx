@@ -62,10 +62,12 @@ const DiscoveryPage = () => {
 	const hasDiscovery = !!currentDiscovery?.content;
 	const [markdown, setMarkdown] = useState(currentDiscovery?.content ?? '');
 
-	// Sync markdown with store after Zustand persist hydration
+	// Sync markdown with store after Zustand persist hydration.
 	useEffect(() => {
-		if (currentDiscovery?.content && currentDiscovery.content !== markdown) {
-			// eslint-disable-next-line react-hooks/set-state-in-effect
+		if (
+			currentDiscovery?.content &&
+			currentDiscovery.content !== savedContentRef.current
+		) {
 			setMarkdown(currentDiscovery.content);
 			savedContentRef.current = currentDiscovery.content;
 		}
@@ -275,7 +277,7 @@ const DiscoveryPage = () => {
 						)}
 
 						{/* Editor with content */}
-						{!isLoading && hasDiscovery && markdown && (
+						{!isLoading && hasDiscovery && (
 							<div className='w-full h-full relative'>
 								<MarkdownEditor
 									ref={editorRef}

@@ -143,6 +143,10 @@ const RequirementsPage = () => {
 	};
 
 	const applySelected = (id: string) => {
+		// Reset editor state before switching so the new editor always mounts clean
+		setMarkdown('');
+		setSavedContent('');
+		setSaveStatus('idle');
 		setSelectedId(id);
 		setPendingCharSwitch(null);
 		if (!hasRequirements[id]) {
