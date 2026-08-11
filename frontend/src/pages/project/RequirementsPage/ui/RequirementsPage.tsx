@@ -99,6 +99,18 @@ const RequirementsPage = () => {
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
 	useEffect(() => {
+		if (!hasUnsavedChanges && pendingNavigationPath) {
+			setPendingNavigationPath(null);
+		}
+	}, [hasUnsavedChanges, pendingNavigationPath, setPendingNavigationPath]);
+
+	useEffect(() => {
+		if (!hasUnsavedChanges && pendingCharSwitch) {
+			setPendingCharSwitch(null);
+		}
+	}, [hasUnsavedChanges, pendingCharSwitch]);
+
+	useEffect(() => {
 		if (!selectedId || !currentProject) return;
 
 		let cancelled = false;

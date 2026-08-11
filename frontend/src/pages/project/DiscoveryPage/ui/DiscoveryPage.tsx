@@ -81,6 +81,12 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
+	useEffect(() => {
+		if (!hasUnsavedChanges && pendingNavigationPath) {
+			setPendingNavigationPath(null);
+		}
+	}, [hasUnsavedChanges, pendingNavigationPath, setPendingNavigationPath]);
+
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
 
@@ -118,7 +124,6 @@ const DiscoveryPage = () => {
 			const data = await generateDiscovery(currentProject.id);
 			setMarkdown(data.content);
 			savedContentRef.current = data.content;
-			toast.success('Descubrimiento generado exitosamente');
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : 'Error al generar el descubrimiento';

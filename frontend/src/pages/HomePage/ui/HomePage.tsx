@@ -36,7 +36,9 @@ type viewStyles = {
 export function HomePage() {
 	const router = useRouter();
 	const { setProjectState } = useProjectStore();
-	const resetProjectState = useAppStore((s) => s.resetProjectState);
+	const resetStateBeforeChangeProject = useAppStore(
+		(s) => s.resetStateBeforeChangeProject,
+	);
 	const projects = useProjectStore((s) => s.projects);
 	const getProjectsStore = useProjectStore((s) => s.getProjects);
 	const [loading, setLoading] = useState(true);
@@ -57,9 +59,9 @@ export function HomePage() {
 				setLoading(false);
 			}
 		};
-		resetProjectState();
+		resetStateBeforeChangeProject();
 		fetchProjects();
-	}, [resetProjectState, getProjectsStore]);
+	}, [resetStateBeforeChangeProject, getProjectsStore]);
 
 	const initializeProject = useAppStore((s) => s.initializeProject);
 

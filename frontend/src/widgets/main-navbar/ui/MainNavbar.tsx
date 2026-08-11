@@ -48,7 +48,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	};
 
 	const handleProjectClick = (project: Project) => {
-		useAppStore.getState().resetProjectState();
+		useAppStore.getState().resetStateBeforeChangeProject();
 		useProjectStore.getState().setProjectState(project);
 		router.push('/proyecto/descubrimiento');
 	};
