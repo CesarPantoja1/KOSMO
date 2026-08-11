@@ -18,6 +18,7 @@ import {
 
 import '@mdxeditor/editor/style.css';
 import { MaxEditor, MinEditor } from './icons';
+import { SaveIndicator, type SaveStatus } from './save-indicator';
 
 interface Props {
 	markdown: string;
@@ -25,10 +26,24 @@ interface Props {
 	isMaximized?: boolean;
 	onMaximize?: () => void;
 	onMinimize?: () => void;
+	saveStatus?: SaveStatus;
+	saveMessage?: string;
+	savedMessage?: string;
+	errorMessage?: string;
 }
 
 export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorContent(
-	{ markdown, onChange, isMaximized, onMaximize, onMinimize },
+	{
+		markdown,
+		onChange,
+		isMaximized,
+		onMaximize,
+		onMinimize,
+		saveStatus = 'idle',
+		saveMessage,
+		savedMessage,
+		errorMessage,
+	},
 	ref,
 ) {
 	return (
@@ -53,18 +68,26 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 									<BlockTypeSelect />
 									<ListsToggle />
 								</div>
-								<button
-									type='button'
-									className='cursor-pointer text-neutral-500 hover:text-neutral-800 transition-colors'
-									onClick={isMaximized ? onMinimize : onMaximize}
-									title={isMaximized ? 'Restablecer' : 'Expandir'}
-								>
-									{isMaximized ? (
-										<MinEditor size={20} color='currentColor' />
-									) : (
-										<MaxEditor size={20} color='currentColor' />
-									)}
-								</button>
+								<div className='flex items-center gap-3'>
+									<SaveIndicator
+										status={saveStatus}
+										saveMessage={saveMessage}
+										savedMessage={savedMessage}
+										errorMessage={errorMessage}
+									/>
+									<button
+										type='button'
+										className='cursor-pointer text-neutral-500 hover:text-neutral-800 transition-colors'
+										onClick={isMaximized ? onMinimize : onMaximize}
+										title={isMaximized ? 'Restablecer' : 'Expandir'}
+									>
+										{isMaximized ? (
+											<MinEditor size={20} color='currentColor' />
+										) : (
+											<MaxEditor size={20} color='currentColor' />
+										)}
+									</button>
+								</div>
 							</div>
 						),
 					}),

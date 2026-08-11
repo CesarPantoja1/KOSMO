@@ -1,10 +1,6 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type {
-	ApplyResponse,
-	PlanChange,
-	PlanResponse,
-} from '../model/types';
+import type { ApplyResponse, PlanChange, PlanResponse } from '../model/types';
 
 const BACKEND_PHASE: Record<string, string> = {
 	discovery: 'descubrimiento',
@@ -89,9 +85,8 @@ const mockAddPlanChange = async (
 	await delay(600);
 	const existing = mockPlanByPhase[phase] ?? [];
 	const idx = existing.findIndex((c) => c.id === change.id);
-	const updated = idx >= 0
-		? existing.map((c, i) => (i === idx ? change : c))
-		: [...existing, change];
+	const updated =
+		idx >= 0 ? existing.map((c, i) => (i === idx ? change : c)) : [...existing, change];
 	mockPlanByPhase[phase] = updated;
 	return {
 		project_id: _projectId,
@@ -125,15 +120,22 @@ const mockApplyChanges = async (
 	_projectId: string,
 	changeIds: string[],
 ): Promise<ApplyResponse> => {
-	await delay(1200);
+	await delay(5000);
 	const failed_changes: { id: string; reason: string }[] = [];
 	for (const phase of Object.keys(mockPlanByPhase)) {
 		const list = mockPlanByPhase[phase];
 		if (!list) continue;
-		const applied = list.filter((c) => changeIds.includes(c.id) && c.status !== 'conflict');
-		const failed = list.filter((c) => changeIds.includes(c.id) && c.status === 'conflict');
+		const applied = list.filter(
+			(c) => changeIds.includes(c.id) && c.status !== 'conflict',
+		);
+		const failed = list.filter(
+			(c) => changeIds.includes(c.id) && c.status === 'conflict',
+		);
 		for (const f of failed) {
-			failed_changes.push({ id: f.id, reason: 'El fragmento original ya no se encuentra en el documento' });
+			failed_changes.push({
+				id: f.id,
+				reason: 'El fragmento original ya no se encuentra en el documento',
+			});
 		}
 		mockPlanByPhase[phase] = list
 			.filter((c) => !changeIds.includes(c.id))
@@ -172,7 +174,11 @@ interface BackendPlanResponse {
 	conflict_count: number;
 }
 
-function mapBackendChange(item: BackendPlanResponse['changes'][number], frontendPhase: string, context: string): PlanChange {
+function mapBackendChange(
+	item: BackendPlanResponse['changes'][number],
+	frontendPhase: string,
+	context: string,
+): PlanChange {
 	return {
 		id: item.id,
 		section: item.section,
@@ -287,7 +293,13 @@ interface BackendApplyResponse {
 	applied_count: number;
 	failed_count: number;
 	failed: Array<{ change_id: string; section: string; error: string }>;
-	propagation: { affected_phases: Array<{ phase: string; affected_count: number; affected_ids: string[] }> } | null;
+	propagation: {
+		affected_phases: Array<{
+			phase: string;
+			affected_count: number;
+			affected_ids: string[];
+		}>;
+	} | null;
 }
 
 const realApplyChanges = async (
@@ -309,7 +321,10 @@ const realApplyChanges = async (
 	return {
 		applied_count: data.applied_count,
 		failed_count: data.failed_count,
-		failed_changes: (data.failed ?? []).map((f) => ({ id: f.change_id, reason: f.error })),
+		failed_changes: (data.failed ?? []).map((f) => ({
+			id: f.change_id,
+			reason: f.error,
+		})),
 		propagation: data.propagation ?? null,
 	};
 };

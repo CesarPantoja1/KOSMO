@@ -1,21 +1,20 @@
 'use client';
 
-import { Ai, toast } from '@/shared/ui';
+import { Ai, CharacterCounter, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 
 import { createProject } from '@/entities/project';
-import { projectSchema, type ProjectFormData } from '../lib/schema';
-import { CharacterCounter } from './CharacterCounter';
+import { projectSchema, type ProjectFormData } from '../model/types';
 
 const alphaRegex = /[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
-	const setProjectState = useAppStore((s) => s.setProjectState);
+	const setProjectState = useProjectStore((s) => s.setProjectState);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const {
@@ -60,6 +59,7 @@ const CreateProjectForm = () => {
 			setIsSubmitting(true);
 			try {
 				const project = await createProject(data);
+				useProjectStore.getState().addProject(project);
 				setProjectState(project);
 				router.replace('/proyecto/descubrimiento');
 			} catch (err) {
@@ -95,7 +95,7 @@ const CreateProjectForm = () => {
 						onBlur={nameOnBlur}
 						onChange={handleNameChange}
 						placeholder='Ej. Ferretería'
-						className='w-full min-h-[44px] px-4 py-2.5 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200'
+						className='w-full min-h-11 px-4 py-2.5 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200'
 						autoComplete='off'
 					/>
 					<div className='flex justify-between items-center gap-2'>
@@ -125,7 +125,7 @@ const CreateProjectForm = () => {
 						onBlur={descOnBlur}
 						onChange={handleDescChange}
 						placeholder='Describe el problema de negocio que quieres resolver...'
-						className='w-full min-h-[160px] px-4 py-3 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200 resize-none'
+						className='w-full min-h-40 px-4 py-3 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200 resize-none'
 					/>
 					<div className='flex justify-between items-center gap-2'>
 						{descError ? (

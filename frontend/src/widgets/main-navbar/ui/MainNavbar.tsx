@@ -5,16 +5,17 @@ import { useEffect, useState } from 'react';
 
 import { useAppStore } from 'app/store/app.store';
 
-import { Project, getProjects } from '@/entities/project';
+import { Project, useProjectStore } from '@/entities/project';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
-import { ComputerDesktop, Sidebar, UserCircle } from './icons';
+import { ComputerDesktop, Home, Sidebar, UserCircle } from './icons';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
 }
 
 export function MainNavbar({ children }: MainNavbarProps) {
-	const [projects, setProjects] = useState<Project[]>([]);
+	const projects = useProjectStore((s) => s.projects);
+	const getProjectsStore = useProjectStore((s) => s.getProjects);
 
 	const [avatarOpen, setAvatarOpen] = useState(false);
 	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -23,16 +24,15 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	useEffect(() => {
 		const fetchProjects = async () => {
 			try {
-				const data = await getProjects();
-				setProjects(data);
+				await getProjectsStore();
 			} catch (error) {
 				console.error('Failed to load projects', error);
 			}
 		};
 		fetchProjects();
-	}, []);
+	}, [getProjectsStore]);
 
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 
 	const handleBackToHub = () => {
@@ -48,9 +48,8 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	};
 
 	const handleProjectClick = (project: Project) => {
-		const { resetProjectState, setProjectState } = useAppStore.getState();
-		resetProjectState();
-		setProjectState(project);
+		useAppStore.getState().resetProjectState();
+		useProjectStore.getState().setProjectState(project);
 		router.push('/proyecto/descubrimiento');
 	};
 
@@ -58,7 +57,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		<header className='flex h-screen max-h-screen overflow-hidden transition-all duration-300'>
 			{!isEditorMaximized && (
 				<div
-					className={`flex max-h-screen flex-col bg-neutral-900 transition-all duration-300 shrink-0 ${isSidebarExpanded ? 'w-64' : 'w-16'}`}
+					className={`flex max-h-screen flex-col bg-neutral-900 transition-all duration-300 shrink-0 ${isSidebarExpanded ? 'w-64' : 'w-13'}`}
 				>
 					{/* Logo / Brand */}
 					<div className='relative group flex min-h-16 items-center justify-center border-b border-neutral-700'>
@@ -93,9 +92,17 @@ export function MainNavbar({ children }: MainNavbarProps) {
 					</div>
 
 					{/* Project list */}
-					<div className='flex flex-col flex-1 py-3 px-2 overflow-y-auto'>
+					<div className='flex flex-col flex-1 py-3 px-1 overflow-y-auto'>
 						{isSidebarExpanded ? (
 							<div className='flex flex-col gap-1'>
+								<button
+									className='flex items-center px-3 py-2.5 gap-2.5 cursor-pointer rounded-md transition-colors text-neutral-300 hover:bg-neutral-800 hover:text-neutral-0 border-l-2 border-transparent'
+									onClick={() => router.push('/')}
+									title='Inicio'
+								>
+									<Home size={20} color='text-neutral-500' />
+									<span className='flex-1 text-left truncate font-medium'>Inicio</span>
+								</button>
 								<span className='text-neutral-500 text-xs font-semibold uppercase tracking-wider px-3 pb-2 pt-1'>
 									Proyectos
 								</span>
@@ -114,9 +121,10 @@ export function MainNavbar({ children }: MainNavbarProps) {
 											title={project.name}
 										>
 											<ComputerDesktop
+												size={20}
 												color={isActive ? 'text-primary-500' : 'text-neutral-500'}
 											/>
-											<span className='flex-1 text-left truncate text-sm font-medium capitalize'>
+											<span className='flex-1 text-left truncate font-medium capitalize'>
 												{project.name}
 											</span>
 										</button>
@@ -125,6 +133,13 @@ export function MainNavbar({ children }: MainNavbarProps) {
 							</div>
 						) : (
 							<div className='flex flex-col gap-1 items-center'>
+								<button
+									className='flex items-center justify-center w-10 h-10 cursor-pointer rounded-md transition-colors text-neutral-400 hover:bg-neutral-800 hover:text-neutral-0'
+									onClick={() => router.push('/')}
+									title='Inicio'
+								>
+									<Home size={20} color='text-current' />
+								</button>
 								{projects.map((project) => {
 									const isActive = currentProject?.id === project.id;
 									return (

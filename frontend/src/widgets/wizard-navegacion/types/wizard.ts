@@ -1,5 +1,3 @@
-import { ProjectStatus } from './status';
-
 export type ItemWizardProps = {
 	href: string;
 	icon: React.ReactNode;
@@ -7,6 +5,4 @@ export type ItemWizardProps = {
 	label: string;
 	labelStyles: string;
 	onClick?: (e: React.MouseEvent) => void;
-	stepNumber?: number;
-	status?: ProjectStatus;
 };

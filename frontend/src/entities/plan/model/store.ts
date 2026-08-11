@@ -21,7 +21,6 @@ interface PlanStore {
 		phase: string,
 		contextId?: string,
 	) => Promise<void>;
-	resetPlan: () => void;
 }
 
 export const isUsingMocks = () => USE_MOCKS;
@@ -99,7 +98,6 @@ export const usePlanStore = create<PlanStore>()(
 					);
 				}
 			},
-			resetPlan: () => set({ planByPhase: {} }),
 		}),
 		{
 			name: 'kosmo-plan-store',
@@ -107,3 +105,8 @@ export const usePlanStore = create<PlanStore>()(
 		},
 	),
 );
+
+export const clearPlanStore = () => {
+	usePlanStore.persist.clearStorage();
+	usePlanStore.setState({ planByPhase: {} });
+};

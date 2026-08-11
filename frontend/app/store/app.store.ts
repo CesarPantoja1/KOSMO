@@ -1,27 +1,21 @@
-import { useConsistencyStore } from '@/entities/consistency';
-import { usePlanStore } from '@/entities/plan';
-import { useDiscoveryStore } from '@/entities/discovery';
+import { clearConsistencyStore } from '@/entities/consistency';
+import { clearPlanStore, usePlanStore } from '@/entities/plan';
+import { clearDiscoveryStore, useDiscoveryStore } from '@/entities/discovery';
 import { getDiscovery } from '@/entities/discovery/api/api';
-import { useCharacteristicStore } from '@/entities/characteristic';
+import { clearCharacteristicStore, useCharacteristicStore } from '@/entities/characteristic';
 import { getCharacteristics } from '@/entities/characteristic/api/api';
-import { useModelingStore } from '@/entities/modeling';
+import { clearModelingStore, useModelingStore } from '@/entities/modeling';
 import { getDiagram } from '@/entities/modeling/api/api';
-import { useRequirementsStore } from '@/entities/requirements';
+import { clearRequirementsStore, useRequirementsStore } from '@/entities/requirements';
 import { getRequirements } from '@/entities/requirements/api/api';
-import type { Project } from '@/entities/project/model/types';
+import { clearProjectStore } from '@/entities/project';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface AppState {
 	initialized: boolean;
 	setInitialized: (v: boolean) => void;
-	currentProject: Project | null;
-	setCurrentProject: (project: Project) => void;
-	clearCurrentProject: () => void;
-	setProjectState: (project: Project) => void;
 	resetProjectState: () => void;
-	isProyectosOpen: boolean;
-	setIsProyectosOpen: (v: boolean) => void;
 	hasUnsavedChanges: boolean;
 	setHasUnsavedChanges: (v: boolean) => void;
 	pendingNavigationPath: string | null;
@@ -36,28 +30,21 @@ export const useAppStore = create<AppState>()(
 		(set) => ({
 			initialized: false,
 			setInitialized: (v) => set({ initialized: v }),
-			currentProject: null,
-			setCurrentProject: (project) => set({ currentProject: project }),
-			clearCurrentProject: () => set({ currentProject: null, isProyectosOpen: false }),
-			setProjectState: (project) =>
-				set({ currentProject: project, isProyectosOpen: true }),
 			resetProjectState: () => {
+				clearProjectStore();
+				clearDiscoveryStore();
+				clearPlanStore();
+				clearCharacteristicStore();
+				clearModelingStore();
+				clearRequirementsStore();
+				clearConsistencyStore();
 				set({
-					currentProject: null,
-					isProyectosOpen: false,
+					initialized: false,
 					hasUnsavedChanges: false,
 					pendingNavigationPath: null,
+					isEditorMaximized: false,
 				});
-				usePlanStore.getState().resetPlan();
-				useDiscoveryStore.getState().resetDiscovery();
-				useCharacteristicStore.getState().clearCharacteristics();
-				useCharacteristicStore.getState().clearAllChatHistories();
-				useModelingStore.getState().resetModeling();
-				useRequirementsStore.getState().resetRequirements();
-				useConsistencyStore.getState().resetConsistency();
 			},
-			isProyectosOpen: false,
-			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),
 			hasUnsavedChanges: false,
 			setHasUnsavedChanges: (v) => set({ hasUnsavedChanges: v }),
 			pendingNavigationPath: null,
@@ -86,7 +73,11 @@ export const useAppStore = create<AppState>()(
 							]);
 
 							if (reqResult.status === 'fulfilled') {
-								useRequirementsStore.getState().setHasRequirements(c.id, !!reqResult.value);
+								const content = reqResult.value?.document_markdown ?? '';
+								useRequirementsStore.getState().setHasRequirements(c.id, !!content);
+								if (content) {
+									useRequirementsStore.getState().setCurrentRequirements(c.id, content);
+								}
 							}
 							if (diagramResult.status === 'fulfilled') {
 								useModelingStore.getState().setHasDiagram(c.id, !!diagramResult.value);
@@ -102,10 +93,17 @@ export const useAppStore = create<AppState>()(
 		}),
 		{
 			name: 'kosmo-app-store',
-			partialize: (state) => ({
-				currentProject: state.currentProject,
-				isProyectosOpen: state.isProyectosOpen,
-			}),
+			partialize: () => ({}),
 		},
 	),
 );
+
+export const clearAppStore = () => {
+	useAppStore.persist.clearStorage();
+	useAppStore.setState({
+		initialized: false,
+		hasUnsavedChanges: false,
+		pendingNavigationPath: null,
+		isEditorMaximized: false,
+	});
+};

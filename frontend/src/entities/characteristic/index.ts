@@ -3,7 +3,7 @@ export type { CharacteristicResponse, SuggestCharacteristic, CharacteristicChatR
 export type { CharacteristicResponse as Characteristic } from './model/types';
 
 // STORE
-export { useCharacteristicStore } from './model/store';
+export { useCharacteristicStore, clearCharacteristicStore } from './model/store';
 
 // API
 export {

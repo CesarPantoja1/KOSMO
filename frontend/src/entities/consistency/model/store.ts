@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { ConsistencyReportResponse } from './types';
 
 interface ConsistencyStore {
@@ -16,115 +17,128 @@ interface ConsistencyStore {
 	get hasPending(): boolean;
 }
 
-export const useConsistencyStore = create<ConsistencyStore>()((set, get) => ({
-	report: null,
+export const useConsistencyStore = create<ConsistencyStore>()(
+	persist(
+		(set, get) => ({
+			report: null,
 
-	get hasPending() {
-		const { report } = get();
-		if (!report) return false;
-		const pendingChanges = report.your_changes.some((c) => !c.accepted);
-		const pendingImpacts = report.downstream_impact.some((i) => !i.accepted);
-		return pendingChanges || pendingImpacts;
-	},
+			get hasPending() {
+				const { report } = get();
+				if (!report) return false;
+				const pendingChanges = report.your_changes.some((c) => !c.accepted);
+				const pendingImpacts = report.downstream_impact.some((i) => !i.accepted);
+				return pendingChanges || pendingImpacts;
+			},
 
-	setReport: (report) => set({ report }),
+			setReport: (report) => set({ report }),
 
-	acceptChange: (changeId) =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					your_changes: state.report.your_changes.map((c) =>
-						c.change_id === changeId ? { ...c, accepted: true } : c,
-					),
-				},
-			};
+			acceptChange: (changeId) =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							your_changes: state.report.your_changes.map((c) =>
+								c.change_id === changeId ? { ...c, accepted: true } : c,
+							),
+						},
+					};
+				}),
+
+			rejectChange: (changeId) =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							your_changes: state.report.your_changes.map((c) =>
+								c.change_id === changeId ? { ...c, accepted: false } : c,
+							),
+						},
+					};
+				}),
+
+			acceptImpact: (impactId) =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							downstream_impact: state.report.downstream_impact.map((i) =>
+								i.id === impactId ? { ...i, accepted: true } : i,
+							),
+						},
+					};
+				}),
+
+			rejectImpact: (impactId) =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							downstream_impact: state.report.downstream_impact.map((i) =>
+								i.id === impactId ? { ...i, accepted: false } : i,
+							),
+						},
+					};
+				}),
+
+			undoImpact: (impactId) =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							downstream_impact: state.report.downstream_impact.map((i) =>
+								i.id === impactId ? { ...i, accepted: undefined as unknown as boolean } : i,
+							),
+						},
+					};
+				}),
+
+			acceptAll: () =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							your_changes: state.report.your_changes.map((c) => ({ ...c, accepted: true })),
+							downstream_impact: state.report.downstream_impact.map((i) => ({
+								...i,
+								accepted: true,
+							})),
+						},
+					};
+				}),
+
+			rejectAll: () =>
+				set((state) => {
+					if (!state.report) return state;
+					return {
+						report: {
+							...state.report,
+							your_changes: state.report.your_changes.map((c) => ({ ...c, accepted: false })),
+							downstream_impact: state.report.downstream_impact.map((i) => ({
+								...i,
+								accepted: false,
+							})),
+						},
+					};
+				}),
+
+			clearReport: () => set({ report: null }),
+
+			resetConsistency: () => set({ report: null }),
 		}),
+		{
+			name: 'kosmo-consistency-store',
+			partialize: (state) => ({ report: state.report }),
+		},
+	),
+);
 
-	rejectChange: (changeId) =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					your_changes: state.report.your_changes.map((c) =>
-						c.change_id === changeId ? { ...c, accepted: false } : c,
-					),
-				},
-			};
-		}),
-
-	acceptImpact: (impactId) =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					downstream_impact: state.report.downstream_impact.map((i) =>
-						i.id === impactId ? { ...i, accepted: true } : i,
-					),
-				},
-			};
-		}),
-
-	rejectImpact: (impactId) =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					downstream_impact: state.report.downstream_impact.map((i) =>
-						i.id === impactId ? { ...i, accepted: false } : i,
-					),
-				},
-			};
-		}),
-
-	undoImpact: (impactId) =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					downstream_impact: state.report.downstream_impact.map((i) =>
-						i.id === impactId ? { ...i, accepted: undefined as unknown as boolean } : i,
-					),
-				},
-			};
-		}),
-
-	acceptAll: () =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					your_changes: state.report.your_changes.map((c) => ({ ...c, accepted: true })),
-					downstream_impact: state.report.downstream_impact.map((i) => ({
-						...i,
-						accepted: true,
-					})),
-				},
-			};
-		}),
-
-	rejectAll: () =>
-		set((state) => {
-			if (!state.report) return state;
-			return {
-				report: {
-					...state.report,
-					your_changes: state.report.your_changes.map((c) => ({ ...c, accepted: false })),
-					downstream_impact: state.report.downstream_impact.map((i) => ({
-						...i,
-						accepted: false,
-					})),
-				},
-			};
-		}),
-
-	clearReport: () => set({ report: null }),
-
-	resetConsistency: () => set({ report: null }),
-}));
+export const clearConsistencyStore = () => {
+	useConsistencyStore.persist.clearStorage();
+	useConsistencyStore.setState({ report: null });
+};

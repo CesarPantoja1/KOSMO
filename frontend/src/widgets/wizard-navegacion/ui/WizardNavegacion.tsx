@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 
 import { getStyleIconStatus } from '../lib/get-status-color';
 import { ProjectStatus } from '../types/status';
@@ -16,16 +17,16 @@ import {
 } from '@/widgets/main-navbar/ui/icons';
 
 const phaseItems = [
-	{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'Descubrimiento' },
-	{ href: '/proyecto/caracteristicas', Icon: Characteristics, label: 'Funcionalidades' },
-	{ href: '/proyecto/requisitos', Icon: Requirements, label: 'Criterios' },
-	{ href: '/proyecto/modelo', Icon: Modeling, label: 'Diagramas' },
-	{ href: '/proyecto/codigo', Icon: Implementation, label: 'Código' },
+	{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'DESCUBRIMIENTO' },
+	{ href: '/proyecto/caracteristicas', Icon: Characteristics, label: 'FUNCIONALIDADES' },
+	{ href: '/proyecto/requisitos', Icon: Requirements, label: 'CRITERIOS' },
+	{ href: '/proyecto/modelo', Icon: Modeling, label: 'DIAGRAMAS' },
+	{ href: '/proyecto/codigo', Icon: Implementation, label: 'CÓDIGO' },
 ] as const;
 
 export function WizardNavegacion() {
 	const pathname = usePathname();
-	const isProyectosOpen = useAppStore((s) => s.isProyectosOpen);
+	const isProyectosOpen = useProjectStore((s) => s.isProyectosOpen);
 
 	const handleWizardClick = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
@@ -42,7 +43,7 @@ export function WizardNavegacion() {
 	);
 
 	return (
-		<nav className='flex items-center justify-center gap-0 px-16 py-4 bg-gradient-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
+		<nav className='flex items-center justify-center gap-0 px-16 py-4 bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
 			{phaseItems.map(({ href, Icon, label }, index) => {
 				let status: ProjectStatus = 'disable';
 				if (activeIndex !== -1) {
@@ -65,8 +66,6 @@ export function WizardNavegacion() {
 							label={label}
 							labelStyles={colors.labelStyles}
 							onClick={handleWizardClick(href)}
-							stepNumber={index + 1}
-							status={status}
 						/>
 						{/* Connector line between steps */}
 						{!isLast && (
@@ -77,8 +76,8 @@ export function WizardNavegacion() {
 								<div
 									className={`h-0.5 w-full rounded-full transition-all duration-500 ${
 										index < activeIndex
-											? 'bg-gradient-to-r from-wizard-completed to-wizard-completed'
-											: 'bg-gradient-to-r from-wizard-connector-pending to-wizard-connector-pending'
+											? 'bg-linear-to-r from-wizard-completed to-wizard-completed'
+											: 'bg-linear-to-r from-wizard-connector-pending to-wizard-connector-pending'
 									}`}
 								/>
 							</div>

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Load from './icons/Load';
 
 type Props = {
 	title: string;
@@ -23,17 +22,18 @@ const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => 
 	}, [messages]);
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40'>
-			<div className='w-full max-w-lg rounded-xl bg-neutral-0 p-10 shadow-xl'>
-				<div className='flex flex-col items-center gap-8 text-center'>
-					<div className='space-y-2'>
-						<h2 className='text-xl font-semibold text-neutral-800'>{title}</h2>
+		<div className='warning-popup'>
+			<div
+				className='bg-neutral-0 rounded-xl shadow-lg py-8 px-10 w-full max-w-md mx-4 border border-neutral-200'
+				onClick={(e) => e.stopPropagation()}
+			>
+				<div className='flex flex-col items-center gap-6 text-center'>
+					<div>
+						<h3 className='text-lg font-semibold text-neutral-800 mb-2'>{title}</h3>
 						<p className='text-sm text-neutral-500'>{description}</p>
 					</div>
-					<div className='animate-spin-custom'>
-						<Load color='text-ai-500' />
-					</div>
-					<span className='text-sm text-neutral-400'>{messages[messageIndex]}</span>
+					<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
+					<span className='text-xs text-neutral-400'>{messages[messageIndex]}</span>
 				</div>
 			</div>
 		</div>

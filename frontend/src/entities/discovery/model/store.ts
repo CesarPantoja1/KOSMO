@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import {
 	generateDiscovery,
 	getDiscovery,
@@ -25,58 +26,74 @@ interface DiscoveryStore {
 	sendChatMessage: (projectId: string, content: string) => Promise<DiscoveryChatResponse>;
 }
 
-export const useDiscoveryStore = create<DiscoveryStore>()((set, get) => ({
-	currentDiscovery: null,
-	chatHistory: [],
+export const useDiscoveryStore = create<DiscoveryStore>()(
+	persist(
+		(set, get) => ({
+			currentDiscovery: null,
+			chatHistory: [],
 
-	setCurrentDiscovery: (discovery) => set({ currentDiscovery: discovery }),
-	clearDiscovery: () => set({ currentDiscovery: null }),
-	clearChatHistory: () => set({ chatHistory: [] }),
-	resetDiscovery: () => set({ currentDiscovery: null, chatHistory: [] }),
+			setCurrentDiscovery: (discovery) => set({ currentDiscovery: discovery }),
+			clearDiscovery: () => set({ currentDiscovery: null }),
+			clearChatHistory: () => set({ chatHistory: [] }),
+			resetDiscovery: () => set({ currentDiscovery: null, chatHistory: [] }),
 
-	getDiscovery: async (projectId) => {
-		const data = await getDiscovery(projectId);
-		set({ currentDiscovery: data });
-		return data;
-	},
+			getDiscovery: async (projectId) => {
+				const data = await getDiscovery(projectId);
+				set({ currentDiscovery: data });
+				return data;
+			},
 
-	saveDiscovery: async (projectId, content) => {
-		const data = await saveDiscovery(projectId, content);
-		set({ currentDiscovery: data });
-		return data;
-	},
+			saveDiscovery: async (projectId, content) => {
+				const data = await saveDiscovery(projectId, content);
+				set({ currentDiscovery: data });
+				return data;
+			},
 
-	generateDiscovery: async (projectId) => {
-		const data = await generateDiscovery(projectId);
-		set({ currentDiscovery: data });
-		return data;
-	},
+			generateDiscovery: async (projectId) => {
+				const data = await generateDiscovery(projectId);
+				set({ currentDiscovery: data });
+				return data;
+			},
 
-	refineDiscovery: async (projectId, instructions) => {
-		const data = await refineDiscovery(projectId, instructions);
-		set({ currentDiscovery: data });
-		return data;
-	},
+			refineDiscovery: async (projectId, instructions) => {
+				const data = await refineDiscovery(projectId, instructions);
+				set({ currentDiscovery: data });
+				return data;
+			},
 
-	sendChatMessage: async (projectId, content) => {
-		const userMessage: DiscoveryChatResponse = {
-			id: crypto.randomUUID(),
-			role: 'user',
-			content,
-			created_at: new Date().toISOString(),
-		};
-		set((state) => ({ chatHistory: [...state.chatHistory, userMessage] }));
-
-		const raw = await sendChatMessageApi(projectId, content) as unknown as Record<string, unknown>;
-		const response: DiscoveryChatResponse = raw.message !== undefined
-			? {
+			sendChatMessage: async (projectId, content) => {
+				const userMessage: DiscoveryChatResponse = {
 					id: crypto.randomUUID(),
-					role: 'assistant',
-					content: String(raw.message),
+					role: 'user',
+					content,
 					created_at: new Date().toISOString(),
-				}
-			: raw as unknown as DiscoveryChatResponse;
-		set((state) => ({ chatHistory: [...state.chatHistory, response] }));
-		return response;
-	},
-}));
+				};
+				set((state) => ({ chatHistory: [...state.chatHistory, userMessage] }));
+
+				const raw = await sendChatMessageApi(projectId, content) as unknown as Record<string, unknown>;
+				const response: DiscoveryChatResponse = raw.message !== undefined
+					? {
+							id: crypto.randomUUID(),
+							role: 'assistant',
+							content: String(raw.message),
+							created_at: new Date().toISOString(),
+						}
+					: raw as unknown as DiscoveryChatResponse;
+				set((state) => ({ chatHistory: [...state.chatHistory, response] }));
+				return response;
+			},
+		}),
+		{
+			name: 'kosmo-discovery-store',
+			partialize: (state) => ({
+				currentDiscovery: state.currentDiscovery,
+				chatHistory: state.chatHistory,
+			}),
+		},
+	),
+);
+
+export const clearDiscoveryStore = () => {
+	useDiscoveryStore.persist.clearStorage();
+	useDiscoveryStore.setState({ currentDiscovery: null, chatHistory: [] });
+};

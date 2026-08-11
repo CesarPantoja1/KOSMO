@@ -8,10 +8,12 @@ import {
 	MarkdownEditor,
 	MarkdownEditorSkeleton,
 	type MarkdownEditorHandle,
+	type SaveStatus,
 } from '@/feature';
 import type { ChatMessage } from '@/feature/chatbot';
-import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, ModalConfirm, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -34,13 +36,12 @@ function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
-	const [markdown, setMarkdown] = useState('');
-	const currentProject = useAppStore((s) => s.currentProject);
-	const [isLoading, _setIsLoading] = useState(!!currentProject);
-	const [hasDiscovery, setHasDiscovery] = useState(false);
+	const currentProject = useProjectStore((s) => s.currentProject);
+	const [isLoading] = useState(false);
 	const [isGeneratingDiscovery, setIsGeneratingDiscovery] = useState(false);
 	const savedContentRef = useRef('');
 	const router = useRouter();
+	const isSavingRef = useRef(false);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -51,11 +52,24 @@ const DiscoveryPage = () => {
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 	const [isChatLoading, setIsChatLoading] = useState(false);
 	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
+	const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
 	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
 	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
 	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
+	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
+	const hasDiscovery = !!currentDiscovery?.content;
+	const [markdown, setMarkdown] = useState(currentDiscovery?.content ?? '');
+
+	// Sync markdown with store after Zustand persist hydration
+	useEffect(() => {
+		if (currentDiscovery?.content && currentDiscovery.content !== markdown) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
+			setMarkdown(currentDiscovery.content);
+			savedContentRef.current = currentDiscovery.content;
+		}
+	}, [currentDiscovery]);
 
 	useEffect(() => {
 		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
@@ -65,43 +79,23 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
-	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
-
-	useEffect(() => {
-		if (!currentProject) {
-			router.push('/proyecto');
-			return;
-		}
-
-		getDiscovery(currentProject.id)
-			.then((data) => {
-				setMarkdown(data.content);
-				savedContentRef.current = data.content;
-				setHasDiscovery(true);
-			})
-			.catch(() => {
-				setMarkdown('');
-				savedContentRef.current = '';
-			})
-			.finally(() => _setIsLoading(false));
-	}, [currentProject, router]); // eslint-disable-line react-hooks/exhaustive-deps
-
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
 
-		const savingToast = toast.info('Guardando...');
+		setSaveStatus('saving');
 
 		try {
+			isSavingRef.current = true;
 			await saveDiscovery(currentProject.id, markdown);
 			savedContentRef.current = markdown;
 			setHasUnsavedChangesLocal(false);
-			toast.close(savingToast);
-			toast.success('Guardado');
+			setSaveStatus('saved');
 			return true;
 		} catch {
-			toast.close(savingToast);
-			toast.error('No se pudo guardar');
+			setSaveStatus('error');
 			return false;
+		} finally {
+			isSavingRef.current = false;
 		}
 	};
 
@@ -122,7 +116,6 @@ const DiscoveryPage = () => {
 			const data = await generateDiscovery(currentProject.id);
 			setMarkdown(data.content);
 			savedContentRef.current = data.content;
-			setHasDiscovery(true);
 			toast.success('Descubrimiento generado exitosamente');
 		} catch (err) {
 			const message =
@@ -217,7 +210,7 @@ const DiscoveryPage = () => {
 			)}
 
 			{pendingNavigationPath && (
-				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
 			<div className={`page-container gap-2 ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
@@ -233,9 +226,15 @@ const DiscoveryPage = () => {
 							</p>
 						</div>
 
-						{!isEditorMaximized && (
+						{!isEditorMaximized && hasDiscovery && (
 							<div className='flex items-center gap-3 shrink-0'>
-								<button onClick={() => setIsChatbotOpen(true)} className='btn btn-ai'>
+								<button
+									onClick={() => setIsChatbotOpen(true)}
+									className='btn btn-ai'
+									title={
+										!hasDiscovery ? 'Primero genera el documento de descubrimiento' : ''
+									}
+								>
 									<Ai size={18} color='' />
 									Mejorar con IA
 								</button>
@@ -276,7 +275,7 @@ const DiscoveryPage = () => {
 						)}
 
 						{/* Editor with content */}
-						{!isLoading && hasDiscovery && (
+						{!isLoading && hasDiscovery && markdown && (
 							<div className='w-full h-full relative'>
 								<MarkdownEditor
 									ref={editorRef}
@@ -285,6 +284,7 @@ const DiscoveryPage = () => {
 									isMaximized={isEditorMaximized}
 									onMaximize={() => setEditorMaximized(true)}
 									onMinimize={() => setEditorMaximized(false)}
+									saveStatus={saveStatus}
 								/>
 								<FloatingPlan
 									phase='discovery'

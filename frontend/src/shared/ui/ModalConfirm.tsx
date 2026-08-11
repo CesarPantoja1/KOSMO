@@ -9,7 +9,7 @@ interface Props {
 	confirmText?: string;
 }
 
-const ModalConfirmLeave = ({
+const ModalConfirm = ({
 	onCancel,
 	onConfirm,
 	title = 'Cambios sin guardar',
@@ -23,7 +23,9 @@ const ModalConfirmLeave = ({
 				className='bg-neutral-0 rounded-xl shadow-lg py-8 px-10 w-full max-w-md mx-4 border border-neutral-200'
 				onClick={(e) => e.stopPropagation()}
 			>
-				<h3 className='text-lg font-semibold text-neutral-800 mb-2 text-center'>{title}</h3>
+				<h3 className='text-lg font-semibold text-neutral-800 mb-2 text-center'>
+					{title}
+				</h3>
 				<p className='text-neutral-500 text-sm text-center mb-6'>{description}</p>
 				<div className='flex justify-center gap-3 mt-6'>
 					<button className='btn btn-secondary' onClick={onCancel}>
@@ -38,4 +40,4 @@ const ModalConfirmLeave = ({
 	);
 };
 
-export default ModalConfirmLeave;
+export { ModalConfirm };
