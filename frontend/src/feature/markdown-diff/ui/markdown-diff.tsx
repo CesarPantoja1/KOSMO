@@ -69,11 +69,7 @@ export function MarkdownDiff({
 						{proposalLabel}
 					</span>
 				</div>
-				<button
-					type='button'
-					onClick={onBack}
-					className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm mt-2'
-				>
+				<button type='button' onClick={onBack} className='btn btn-primary'>
 					<ArrowLeft color='' size={20} />
 					Volver
 				</button>
@@ -101,22 +97,14 @@ export function MarkdownDiff({
 
 			{/* Footer */}
 			<div className='flex shrink-0 items-center justify-between border-t border-base-300 bg-base-100 px-6 py-4'>
-				<button
-					type='button'
-					onClick={onDiscard}
-					className='cursor-pointer rounded-md border border-status-error bg-white px-5 py-2 text-sm font-medium text-status-error transition-colors hover:bg-status-error hover:text-white active:opacity-80'
-				>
+				<button type='button' onClick={onDiscard} className='btn btn-destructive'>
 					Descartar Cambios
 				</button>
 				<button
 					type='button'
 					onClick={onApply}
 					disabled={processing}
-					className={`rounded-md px-5 py-2 text-sm font-medium text-white transition-colors ${
-						processing
-							? 'cursor-not-allowed bg-primary-100/50'
-							: 'cursor-pointer bg-primary-100 hover:bg-primary-800 active:opacity-80'
-					}`}
+					className={'btn btn-primary'}
 				>
 					{processing ? 'Aplicando...' : 'Aplicar Cambios'}
 				</button>

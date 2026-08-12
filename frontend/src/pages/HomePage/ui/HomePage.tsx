@@ -86,7 +86,7 @@ export function HomePage() {
 
 	return (
 		<section className='page-container mt-6'>
-			<div className='page-header mb-3'>
+			<div className='page-header mb-8'>
 				<h2 className='text-base-800 text-3xl font-bold'>Proyectos</h2>
 				<p className='text-base-600 text-xl font-light'>
 					Gestiona y da seguimiento a tus iniciativas de producto
@@ -116,7 +116,7 @@ export function HomePage() {
 					</Link>
 				</div>
 
-				<div className='flex gap-y-6 gap-x-2 items-start flex-wrap overflow-y-auto relative'>
+				<div className='flex gap-y-6 gap-x-2 pb-8 items-start flex-wrap overflow-y-auto relative'>
 					{loading ? (
 						<>
 							{Array.from({ length: 6 }).map((_, index) => (

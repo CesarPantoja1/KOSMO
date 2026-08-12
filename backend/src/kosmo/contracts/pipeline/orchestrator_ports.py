@@ -12,6 +12,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     FeatureChatContext,
     FeaturesPhaseContext,
     ModeloPhaseContext,
+    PlanChangeResolutionContext,
     RequirementChatContext,
     RequirementsRefinePhaseContext,
     SuggestFeaturesContext,
@@ -36,6 +37,7 @@ PhaseContext = (
     | FeatureChatContext
     | FeaturesPhaseContext
     | ModeloPhaseContext
+    | PlanChangeResolutionContext
     | RequirementChatContext
     | RequirementsRefinePhaseContext
     | SuggestFeaturesContext

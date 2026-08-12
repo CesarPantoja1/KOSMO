@@ -8,6 +8,10 @@ _section_header_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 def apply_change_diff(markdown: str, *, before: str, after: str, section: str | None = None) -> str | None:
     if not before.strip():
         if after.strip():
+            if section:
+                _sec, _start, _sec_end = find_section(markdown, section)
+                if _sec is not None:
+                    return _insert_in_section(markdown, _start, _sec_end, after)
             return f"{markdown}\n\n{after}"
         return markdown
 
@@ -20,19 +24,19 @@ def apply_change_diff(markdown: str, *, before: str, after: str, section: str | 
 def _try_replace(text: str, before: str, after: str) -> str | None:
     if before in text:
         return text.replace(before, after, 1)
-    if after in text:
-        return text
     if before.strip() in text:
         return text.replace(before.strip(), after.strip(), 1)
-    normalized_before = _collapse_whitespace(before)
-    normalized_text = _collapse_whitespace(text)
+    normalized_before = collapse_whitespace(before)
+    normalized_text = collapse_whitespace(text)
     if normalized_before in normalized_text:
         return _apply_normalized_replace(text, before, after)
+    if after in text:
+        return text
     return None
 
 
 def _apply_section_diff(markdown: str, before: str, after: str, section: str) -> str | None:
-    section_text, start, end = _find_section(markdown, section)
+    section_text, start, end = find_section(markdown, section)
     if section_text is not None:
         result = _try_replace(section_text, before, after)
         if result is not None and result != section_text:
@@ -43,7 +47,7 @@ def _apply_section_diff(markdown: str, before: str, after: str, section: str) ->
     return _try_replace(markdown, before, after)
 
 
-def _find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
+def find_section(markdown: str, section: str) -> tuple[str | None, int, int]:
     matches = list(_section_header_re.finditer(markdown))
     normalized_query = _normalize(section)
 
@@ -63,8 +67,24 @@ def _extract_section(markdown: str, matches: list[re.Match[str]], idx: int) -> t
     return markdown[start:end], start, end
 
 
-def _collapse_whitespace(text: str) -> str:
+def collapse_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _insert_in_section(markdown: str, sec_start: int, sec_end: int, after: str) -> str:
+    section_md = markdown[sec_start:sec_end]
+    headings = list(_section_header_re.finditer(section_md))
+    if len(headings) >= 3:
+        second_sub = headings[2]
+        insert_pos = section_md.rfind("\n\n", 0, second_sub.start())
+        if insert_pos < 0:
+            insert_pos = second_sub.start()
+        head = markdown[sec_start : sec_start + insert_pos].rstrip()
+        tail = markdown[sec_start + insert_pos : sec_end].lstrip("\n")
+        return markdown[:sec_start] + head + "\n" + after.strip() + "\n\n" + tail + markdown[sec_end:]
+    head = markdown[:sec_end].rstrip()
+    tail = markdown[sec_end:].lstrip("\n")
+    return head + "\n" + after.strip() + "\n\n" + tail
 
 
 def _apply_normalized_replace(text: str, before: str, after: str) -> str | None:

@@ -89,8 +89,12 @@ export const Chatbot = ({
 						<p className='text-xs text-base-100'>{subtitle}</p>
 					</div>
 				</div>
-				<button type='button' onClick={onClose} className='rounded p-1 hover:bg-white/10'>
-					<Close color='text-base-50' />
+				<button
+					type='button'
+					onClick={onClose}
+					className='rounded cursor-pointer p-1 text-base-50'
+				>
+					<Close color='' />
 				</button>
 			</header>
 
@@ -166,9 +170,9 @@ export const Chatbot = ({
 						type='button'
 						onClick={handleSend}
 						disabled={!canSend}
-						className='flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ai text-base-50 transition-all hover:scale-105 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
+						className='btn btn-ai rounded-full'
 					>
-						<Send size={16} color='text-base-50' />
+						<Send size={16} color='' />
 					</button>
 				</div>
 

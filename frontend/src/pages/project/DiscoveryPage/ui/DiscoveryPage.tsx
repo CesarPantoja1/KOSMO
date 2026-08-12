@@ -64,7 +64,7 @@ const DiscoveryPage = () => {
 		setHasUnsavedChanges(hasUnsavedChanges);
 	}, [hasUnsavedChanges, setHasUnsavedChanges]);
 
-	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
+	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 
 	useEffect(() => {
 		if (!currentProject) {
@@ -72,18 +72,18 @@ const DiscoveryPage = () => {
 			return;
 		}
 
-		void (async () => {
-			if (currentDiscovery) {
-				setMarkdown(currentDiscovery.content);
-				savedContentRef.current = currentDiscovery.content;
+		getDiscovery(currentProject.id)
+			.then((data) => {
+				setMarkdown(data.content);
+				savedContentRef.current = data.content;
 				setHasDiscovery(true);
-			} else {
+			})
+			.catch(() => {
 				setMarkdown('');
 				savedContentRef.current = '';
-			}
-			_setIsLoading(false);
-		})();
-	}, [currentProject, currentDiscovery, router]);
+			})
+			.finally(() => _setIsLoading(false));
+	}, [currentProject, router]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
@@ -230,19 +230,13 @@ const DiscoveryPage = () => {
 					</p>
 					{!isEditorMaximized && hasDiscovery && (
 						<div className='flex justify-end gap-3'>
-							<button
-								onClick={() => setIsChatbotOpen(true)}
-								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
-							>
-								<Ai size={20} color='text-base-50' />
-								<span className='text-center'>Refinar</span>
+							<button onClick={() => setIsChatbotOpen(true)} className='btn btn-ai'>
+								<Ai size={20} color='' />
+								Refinar
 							</button>
-							<button
-								onClick={handleNextLink}
-								className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
-							>
+							<button onClick={handleNextLink} className='btn btn-primary'>
 								<span className='text-center'>Ir a características</span>
-								<ArrowRight size={20} color='text-base-50' />
+								<ArrowRight size={20} color='' />
 							</button>
 						</div>
 					)}
@@ -250,19 +244,13 @@ const DiscoveryPage = () => {
 						{isLoading && (
 							<div className='w-full min-h-105 relative'>
 								<div className='flex justify-end gap-3 mb-4'>
-									<button
-										disabled={true}
-										className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
-									>
-										<Ai size={20} color='text-base-50' />
+									<button disabled={true} className='btn btn-ai'>
+										<Ai size={20} color='' />
 										<span className='text-center'>Refinar</span>
 									</button>
-									<button
-										disabled={true}
-										className='btn bg-primary-100 text-base-50 hover:bg-primary-100/90 disabled:opacity-50'
-									>
+									<button disabled={true} className='btn btn-primary'>
 										<span className='text-center'>Ir a características</span>
-										<ArrowRight size={20} color='text-base-50' />
+										<ArrowRight size={20} color='' />
 									</button>
 								</div>
 
@@ -299,11 +287,8 @@ const DiscoveryPage = () => {
 										Aún no se ha generado el descubrimiento de este proyecto. Haz clic en
 										el botón para que la IA analice la información y genere el documento.
 									</p>
-									<button
-										onClick={handleGenerateDiscovery}
-										className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50'
-									>
-										<Ai size={20} color='text-base-50' />
+									<button onClick={handleGenerateDiscovery} className='btn btn-ai'>
+										<Ai size={20} color='' />
 										<span className='text-center'>Generar</span>
 									</button>
 								</div>

@@ -1,4 +1,3 @@
-import { ThemeProvider } from '@/shared/ui/ThemeProvider';
 import { ToasterProvider } from '@/shared/ui/toast';
 import localFont from 'next/font/local';
 import './globals.css';
@@ -24,10 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 	return (
 		<html lang='es' className={geistSans.variable}>
 			<body>
-				<ThemeProvider>
-					{children}
-					<ToasterProvider />
-				</ThemeProvider>
+				{children}
+				<ToasterProvider />
 			</body>
 		</html>
 	);

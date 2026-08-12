@@ -5,10 +5,7 @@ import {
 	deleteFeature,
 	type CharacteristicChatResponse,
 } from '@/entities/characteristic';
-import {
-	usePlanActions,
-	usePlanStore,
-} from '@/entities/plan';
+import { usePlanActions, usePlanStore } from '@/entities/plan';
 import { Chatbot, FloatingPlan } from '@/feature';
 import type { ChatMessage } from '@/feature/chatbot';
 import { Ai, Loading, ModalConfirmLeave, Plus, toast } from '@/shared/ui';
@@ -155,20 +152,14 @@ const CharacteristicsPage = () => {
 						)}
 						<div className='flex justify-end items-center gap-4'>
 							{hasCharacteristics && (
-								<Link
-									href='caracteristicas/nueva'
-									className='btn bg-primary-100 hover:bg-primary-100/90'
-								>
-									<Plus color='text-base-50' size={20} />
+								<Link href='caracteristicas/nueva' className='btn btn-primary'>
+									<Plus color='' size={20} />
 									<span className='text-center text-base-50'>Nueva Característica</span>
 								</Link>
 							)}
 
 							{hasCharacteristics && (
-								<Link
-									href='requisitos'
-									className='btn bg-primary-100 hover:bg-primary-100/90'
-								>
+								<Link href='requisitos' className='btn btn-primary'>
 									<div className='text-center text-base-50'>Ir a Requisitos</div>
 									<ArrowRight color='text-base-50' size={20} />
 								</Link>

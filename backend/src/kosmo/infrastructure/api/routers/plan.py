@@ -26,8 +26,6 @@ from kosmo.infrastructure.api.schemas import (
     BatchResultView,
     FailedChangeItemView,
     HttpErrorResponse,
-    PhaseNotificationList,
-    PhaseNotificationView,
     PlanStateView,
 )
 
@@ -198,26 +196,11 @@ async def apply_batch(
         FailedChangeItemView(change_id=str(fc.id), section=fc.section, error=fc.reason) for fc in output.failed_changes
     ]
 
-    propagation: PhaseNotificationList | None = None
-    if output.propagation is not None:
-        affected = [
-            PhaseNotificationView(
-                phase=p.phase,
-                affected_count=p.affected_count,
-                affected_ids=p.affected_ids,
-            )
-            for p in output.propagation.affected_phases
-            if p.affected_count > 0
-        ]
-        if affected:
-            propagation = PhaseNotificationList(affected_phases=affected)
-
     return BatchResultView(
         applied_count=output.applied_count,
         failed_count=output.failed_count,
         applied=applied,
         failed=failed,
-        propagation=propagation,
     )
 
 
