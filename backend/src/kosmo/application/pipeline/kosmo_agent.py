@@ -14,6 +14,7 @@ from kosmo.contracts.chat import ChatRole, DiffCambio, MensajeChat, RespuestaCha
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
+    DirectModificationResult,
     GenerationMetadata,
     ValidationResult,
 )
@@ -223,6 +224,75 @@ class KOSMOAgent:
         message = _to_assistant_message(result)
 
         yield message
+
+    async def execute_direct_modification(
+        self,
+        skill_name: str,
+        context: Any,
+        *,
+        history: list[MensajeChat] | None = None,
+        project_id: ProjectId | None = None,  # noqa: ARG002  # reservado para memoria futura
+    ) -> Any:
+        """Ejecuta una modificación directa de documento sin fase de plan.
+
+        El flujo es de un solo paso: interpreta la instrucción sobre el estado
+        más reciente del documento, aplica el cambio y retorna el resultado.
+        El historial opcional permite encadenar solicitudes sin reiniciar el
+        contexto de la sesión.
+        """
+        if self._skill_registry is None:
+            raise ValueError("SkillRegistry no configurado")
+
+        mode = self._skill_registry.resolve(skill_name)
+        sanitized_ctx = _sanitize_context(context)
+
+        base_user_prompt = mode.build_user_prompt(sanitized_ctx)
+        user_prompt = base_user_prompt
+        if history:
+            history_block = _format_chat_history(history)
+            user_prompt = (
+                f"{base_user_prompt}\n\n{history_block}\n\n"
+                "Aplica la ultima instruccion sobre el estado mas reciente del documento."
+            )
+
+        prompt = PromptTemplate(
+            system_prompt=mode.system_prompt,
+            user_prompt=user_prompt,
+        )
+
+        output: Any = None
+        for attempt in range(2):
+            try:
+                output = await self._llm_client.complete_typed(
+                    prompt=prompt,
+                    output_type=mode.output_type,
+                    temperature=mode.temperature,
+                    max_tokens=mode.max_tokens,
+                )
+            except Exception:
+                _log.warning("agent.direct_modification_llm_failed", attempt=attempt, exc_info=True)
+                if attempt == 0:
+                    continue
+                break
+
+            validation = mode.validate_output(output)
+            if validation.is_valid:
+                break
+
+            if attempt == 0 and validation.errors:
+                feedback = mode.build_validation_feedback(validation.errors)
+                prompt = PromptTemplate(
+                    system_prompt=prompt.system_prompt,
+                    user_prompt=user_prompt + "\n\n" + feedback,
+                )
+
+        if output is None or not isinstance(output, DirectModificationResult):
+            return DirectModificationResult(
+                applied=False,
+                clarification_message="No se pudo procesar la solicitud. Intenta de nuevo con más detalle.",
+            )
+
+        return output
 
     async def _execute_loop(
         self,

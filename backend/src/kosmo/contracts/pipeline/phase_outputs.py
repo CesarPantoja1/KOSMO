@@ -141,3 +141,14 @@ class ConsistencyReport(BaseModel):
 
 class ResolvedSection(BaseModel):
     section_markdown: str = Field(description="Sección completa reescrita con todos los cambios aplicados")
+
+
+class DirectModificationResult(BaseModel):
+    applied: bool = Field(description="True si la modificación fue aplicada al documento")
+    modified_document: str = Field(default="", description="Documento completo actualizado en markdown")
+    modified_section: str = Field(default="", description="Nombre de la sección modificada")
+    change_description: str = Field(default="", description="Descripción breve del cambio aplicado")
+    clarification_message: str = Field(
+        default="",
+        description="Mensaje solicitando detalle cuando la instrucción es ambigua (solo si applied=false)",
+    )

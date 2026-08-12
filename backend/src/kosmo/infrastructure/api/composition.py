@@ -72,6 +72,9 @@ from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
     CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
     ConsistencyEvaluationMode,
 )
+from kosmo.domain.pipeline.phase_modes.direct_modification_mode import (
+    DirectModificationMode,
+)
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.phase_modes.discovery_mode import DiscoveryMode
 from kosmo.domain.pipeline.phase_modes.discovery_refine_mode import (
@@ -492,6 +495,14 @@ def build_pipeline_components(
             description="Resuelve colisiones de cambios sobre una seccion de documento markdown consolidandolos",
             phase=SpecPhase.DESCUBRIMIENTO,
             mode=PlanChangeResolutionMode(),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="direct_modification",
+            description="Modifica documentos directamente desde instrucciones del chat sin fase de plan",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=DirectModificationMode(),  # type: ignore[reportArgumentType]
         )
     )
 

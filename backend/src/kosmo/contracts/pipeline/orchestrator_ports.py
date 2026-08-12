@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
 from kosmo.contracts.pipeline.phase_contexts import (
+    DirectModificationContext,
     DiscoveryChatContext,
     DiscoveryPhaseContext,
     DiscoveryRefinePhaseContext,
@@ -18,6 +19,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
+    DirectModificationResult,
     GenerationMetadata,
     ValidationResult,
 )
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
 
 PhaseContext = (
     ConsistencyPhaseContext
+    | DirectModificationContext
     | DiscoveryChatContext
     | DiscoveryPhaseContext
     | DiscoveryRefinePhaseContext
@@ -126,3 +129,12 @@ class AgentPort(Protocol):
         *,
         project_id: ProjectId | None = None,
     ) -> MensajeChat: ...
+
+    async def execute_direct_modification(
+        self,
+        skill_name: str,
+        context: DirectModificationContext,
+        *,
+        history: list[MensajeChat] | None = None,
+        project_id: ProjectId | None = None,
+    ) -> DirectModificationResult: ...
