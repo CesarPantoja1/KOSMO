@@ -48,6 +48,7 @@ from kosmo.application.requirements import (
     GenerateEARSUseCase,
     GetRequirementsUseCase,
     RefineRequirementsUseCase,
+    RegenerateRequirementsUseCase,
     SaveRequirementsUseCase,
 )
 from kosmo.config import Settings
@@ -61,6 +62,13 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
+    CONSISTENCY_DISCOVERY_MODEL_PROMPT,
+    CONSISTENCY_DISCOVERY_REQUIREMENTS_PROMPT,
+    CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT,
+    CONSISTENCY_FEATURES_MODEL_PROMPT,
+    CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
+    CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
+    CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT,
     CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
     ConsistencyEvaluationMode,
 )
@@ -73,6 +81,7 @@ from kosmo.domain.pipeline.phase_modes.ears_mode import EARSMode
 from kosmo.domain.pipeline.phase_modes.features_chat_mode import FeaturesChatMode
 from kosmo.domain.pipeline.phase_modes.features_mode import FeaturesMode
 from kosmo.domain.pipeline.phase_modes.modelo_mode import ModeloMode
+from kosmo.domain.pipeline.phase_modes.plan_change_resolution_mode import PlanChangeResolutionMode
 from kosmo.domain.pipeline.phase_modes.requirements_chat_mode import RequirementsChatMode
 from kosmo.domain.pipeline.phase_modes.requirements_refine_mode import (
     RequirementsRefineMode,
@@ -400,6 +409,91 @@ def build_pipeline_components(
             ),  # type: ignore[reportArgumentType]
         )
     )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_requirements",
+            description="Evalua consistencia desde requisitos EARS hacia la característica padre (downstream)",
+            phase=SpecPhase.REQUISITOS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.REQUISITOS,
+                system_prompt=CONSISTENCY_REQUIREMENTS_DOWNSTREAM_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_requirements_upstream",
+            description="Evalua consistencia desde requisitos EARS hacia el documento de descubrimiento (upstream)",
+            phase=SpecPhase.REQUISITOS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.REQUISITOS,
+                system_prompt=CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_features_downstream",
+            description="Evalua consistencia desde características hacia requisitos EARS (downstream)",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.CARACTERISTICAS,
+                system_prompt=CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_features_model",
+            description="Evalua consistencia desde características hacia diagramas de actividad (downstream)",
+            phase=SpecPhase.CARACTERISTICAS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.CARACTERISTICAS,
+                system_prompt=CONSISTENCY_FEATURES_MODEL_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_discovery_requirements",
+            description="Evalua consistencia desde descubrimiento hacia requisitos EARS (downstream)",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.DESCUBRIMIENTO,
+                system_prompt=CONSISTENCY_DISCOVERY_REQUIREMENTS_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_discovery_model",
+            description="Evalua consistencia desde descubrimiento hacia diagramas de actividad (downstream)",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.DESCUBRIMIENTO,
+                system_prompt=CONSISTENCY_DISCOVERY_MODEL_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_evaluate_requirements_model",
+            description="Evalua consistencia desde requisitos EARS hacia el diagrama de actividad (downstream)",
+            phase=SpecPhase.REQUISITOS,
+            mode=ConsistencyEvaluationMode(
+                phase_name=SpecPhase.REQUISITOS,
+                system_prompt=CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
+            ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="plan_change_resolve",
+            description="Resuelve colisiones de cambios sobre una seccion de documento markdown consolidandolos",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=PlanChangeResolutionMode(),  # type: ignore[reportArgumentType]
+        )
+    )
 
     # 8. Instanciar el agente unico con el SkillRegistry y memoria
 
@@ -496,7 +590,7 @@ class DiscoveryComponents:
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
     manage_plan_changes: Any
     apply_plan_changes: Any
-    propagate_discovery_changes: Any
+    propagate_changes: Any
     consistency_evaluator: Any
     document_repo: Any
 
@@ -510,7 +604,6 @@ def build_discovery_components(
     from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
     from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
     from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
-    from kosmo.application.consistency.propagate_discovery_changes import PropagateDiscoveryChangesUseCase
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.contracts.consistency import ConsistencyEvaluator
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
@@ -529,19 +622,9 @@ def build_discovery_components(
         document_repo=document_repo,
     )
 
-    from kosmo.application.consistency.propagate_feature_changes import PropagateFeatureChangesUseCase
+    from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 
-    propagate_uc = PropagateDiscoveryChangesUseCase(
-        project_repo=project_repo,
-        feature_repo=feature_repo,
-        requirement_repo=requirement_repo,
-        diagram_repo=diagram_repo,
-        chat_repo=chat_repo,
-        consistency_evaluator=consistency_evaluator,
-        traceability_repo=pipeline.traceability_repo,
-    )
-
-    propagate_feature_uc = PropagateFeatureChangesUseCase(
+    propagate_uc = PropagateChangesUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,
@@ -578,11 +661,10 @@ def build_discovery_components(
             document_repo=document_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,
-            propagate_uc=propagate_uc,
             session_factory=session_factory,
-            propagate_feature_uc=propagate_feature_uc,
+            agent=pipeline.agent,
         ),
-        propagate_discovery_changes=propagate_uc,
+        propagate_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
         document_repo=document_repo,
     )
@@ -597,7 +679,6 @@ class FeaturesComponents:
     feature_repo: SqlAlchemyFeatureRepository
     get_feature_chat_history: Any
     list_features: Any
-    propagate_feature_changes: Any
     edit_feature: EditFeatureUseCase
     check_feature_consistency: CheckFeatureConsistencyUseCase
 
@@ -640,11 +721,12 @@ def build_features_components(
         ),
         create_characteristic=CreateCharacteristicUseCase(
             feature_repo=feature_repo,
+            document_repo=document_repo,
+            llm_client=pipeline.llm_client,
         ),
         feature_repo=feature_repo,
         get_feature_chat_history=get_feature_chat_history,
         list_features=ListFeaturesUseCase(feature_repo=feature_repo),
-        propagate_feature_changes=None,
         edit_feature=EditFeatureUseCase(
             feature_repo=feature_repo,
             consistency_evaluator=consistency_evaluator,
@@ -662,6 +744,7 @@ class RequirementsComponents:
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
     refine_requirements: RefineRequirementsUseCase
+    regenerate_requirements: Any
     get_requirement_chat_history: Any
     requirement_repo: Any
 
@@ -706,6 +789,12 @@ def build_requirements_components(
             requirement_repo=requirement_repo,
         ),
         refine_requirements=RefineRequirementsUseCase(
+            project_repo=project_repo,
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            agent=pipeline.agent,
+        ),
+        regenerate_requirements=RegenerateRequirementsUseCase(
             project_repo=project_repo,
             feature_repo=feature_repo,
             requirement_repo=requirement_repo,

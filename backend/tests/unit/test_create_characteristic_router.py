@@ -9,10 +9,7 @@ from kosmo.contracts.auth import Principal
 from kosmo.infrastructure.api.routers.features import (
     create_characteristic_manual,
 )
-from kosmo.infrastructure.api.schemas import (
-    CreateCharacteristicRequest,
-    FeatureResponse,
-)
+from kosmo.infrastructure.api.schemas import CreateCharacteristicRequest
 from tests.unit.fakes import InMemoryFeatureRepository
 
 
@@ -22,7 +19,7 @@ def _principal() -> Principal:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_create_manual_returns_201_and_feature_response() -> None:
+async def test_create_manual_returns_saved_feature_payload() -> None:
     # Arrange
     repository: Any = InMemoryFeatureRepository()
     use_case = CreateCharacteristicUseCase(feature_repo=repository)
@@ -40,10 +37,14 @@ async def test_create_manual_returns_201_and_feature_response() -> None:
     )
 
     # Assert
-    assert isinstance(result, FeatureResponse)
-    assert result.project_id == "prj_manual_test"
-    assert result.title == "Catalogo de productos"
-    assert result.number == 1
-    assert result.display_id == "C01"
-    assert result.id.startswith("feat_")
-    assert result.slug == "catalogo-de-productos"
+    assert isinstance(result, dict)
+    assert result["is_saved"] is True
+    assert result["is_consistent"] is True
+    feature = result["feature"]
+    assert isinstance(feature, dict)
+    assert feature["project_id"] == "prj_manual_test"
+    assert feature["title"] == "Catalogo de productos"
+    assert feature["number"] == 1
+    assert feature["display_id"] == "C01"
+    assert feature["id"].startswith("feat_")
+    assert feature["slug"] == "catalogo-de-productos"

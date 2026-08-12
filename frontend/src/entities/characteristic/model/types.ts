@@ -36,3 +36,11 @@ export interface CharacteristicChatResponse {
 		rationale: string;
 	}> | null;
 }
+
+export interface CreateCharacteristicResponse {
+	is_saved: boolean;
+	feature?: CharacteristicResponse;
+	origin: string;
+	is_consistent: boolean;
+	inconsistency_reason?: string;
+}

@@ -98,7 +98,27 @@ body {
 }
 
 .btn {
-	@apply inline-flex items-center px-3.5 py-1.5 cursor-pointer gap-1.5 rounded-sm transition-colors duration-200;
+	@apply text-base-50 inline-flex justify-center items-center px-3.5 py-1.5 gap-1.5 rounded-sm cursor-pointer transition-colors duration-200 disabled:cursor-not-allowed active:scale-95 hover:shadow-md disabled:opacity-50 lg:px-4 lg:py-2 lg:text-lg;
+}
+
+.btn-destructive {
+	@apply bg-status-error hover:bg-status-error/90;
+}
+
+.btn-primary {
+	@apply bg-primary-100 hover:bg-primary-100/90;
+}
+
+.btn-secondary {
+	@apply bg-base-950 hover:bg-base-950/90;
+}
+
+.btn-ai {
+	@apply bg-ai hover:bg-ai/90;
+}
+
+.btn-warning {
+	@apply bg-status-warning hover:bg-status-warning/90;
 }
 
 .page-container {
@@ -111,4 +131,12 @@ body {
 
 .chatbot {
 	@apply overflow-hidden transition-all duration-300 ease-in-out;
+}
+
+.warning-popup {
+	@apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 transition-colors;
+}
+
+.btn-chat {
+	@apply text-primary-50 px-2.5 py-1.5 inline-flex items-center gap-1 text-xs min-w-16 cursor-pointer disabled:cursor-not-allowed;
 }

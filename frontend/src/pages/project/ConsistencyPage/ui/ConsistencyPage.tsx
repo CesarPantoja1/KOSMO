@@ -12,6 +12,14 @@ const PHASE_LABELS: Record<string, string> = {
 	features: 'Características',
 	requirements: 'Requisitos',
 	model: 'Modelo',
+	discovery: 'Descubrimiento',
+};
+
+const RETURN_PATHS: Record<string, string> = {
+	discovery: '/proyecto/descubrimiento',
+	features: '/proyecto/caracteristicas',
+	requirements: '/proyecto/requisitos',
+	model: '/proyecto/modelo',
 };
 
 function groupByPhase(items: DownstreamProposal[]): [string, DownstreamProposal[]][] {
@@ -31,12 +39,19 @@ const ConsistencyPage = () => {
 
 	const report = useConsistencyStore((s) => s.report);
 	const rejectAll = useConsistencyStore((s) => s.rejectAll);
+	const acceptAll = useConsistencyStore((s) => s.acceptAll);
+	const acceptImpact = useConsistencyStore((s) => s.acceptImpact);
 	const clearReport = useConsistencyStore((s) => s.clearReport);
 	const undoImpact = useConsistencyStore((s) => s.undoImpact);
 
+	const returnPath = report
+		? (RETURN_PATHS[report.source_type] ?? '/proyecto/descubrimiento')
+		: '/proyecto/descubrimiento';
+
 	const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 	const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-	const [acceptingId, setAcceptingId] = useState<string | null>(null);
+	const [applying, setApplying] = useState(false);
+	const [showConfirmApply, setShowConfirmApply] = useState(false);
 
 	const phaseGroups = useMemo(
 		() => (report ? groupByPhase(report.downstream_impact) : []),
@@ -49,17 +64,11 @@ const ConsistencyPage = () => {
 	}
 
 	if (!report) {
-		router.push('/proyecto/descubrimiento');
+		router.push(returnPath);
 		return null;
 	}
 
-	const hasPending = report.downstream_impact.some((i) => !i.accepted);
-
-	if (!hasPending) {
-		clearReport();
-		router.push('/proyecto/descubrimiento');
-		return null;
-	}
+	const hasPending = report.downstream_impact.some((i) => i.accepted === undefined);
 
 	const refreshProject = async () => {
 		try {
@@ -71,10 +80,10 @@ const ConsistencyPage = () => {
 
 	const handleBack = () => {
 		if (hasPending) {
-			setPendingNavigation('/proyecto/descubrimiento');
+			setPendingNavigation(returnPath);
 			setShowConfirmLeave(true);
 		} else {
-			router.push('/proyecto/descubrimiento');
+			router.push(returnPath);
 		}
 	};
 
@@ -92,58 +101,66 @@ const ConsistencyPage = () => {
 		setPendingNavigation(null);
 	};
 
-	const handleAcceptAll = async () => {
+	const handleAcceptAllBatch = async () => {
 		if (!report || !currentProject) return;
-		const pending = report.downstream_impact.filter((i) => !i.accepted);
-		if (pending.length === 0) {
-			clearReport();
-			router.push('/proyecto/descubrimiento');
-			return;
-		}
+		const selected = report.downstream_impact.filter((i) => i.accepted === true);
+		if (selected.length === 0) return;
+		setApplying(true);
 		try {
-			const result = await applyConsistencyImpacts(currentProject.id, pending);
+			const result = await applyConsistencyImpacts(currentProject.id, selected);
 			const failedCount = (result.failed || []).filter((f) => f.target_id).length;
 			if (failedCount > 0) {
-				toast.error(`${failedCount} de ${pending.length} cambios no se pudieron aplicar`);
-			} else {
-				toast.success(`${pending.length} cambios aplicados correctamente`);
+				toast.error(
+					`${failedCount} de ${selected.length} cambios no se pudieron aplicar`,
+				);
 			}
-			if (failedCount < pending.length) {
+			if (failedCount < selected.length) {
+				toast.success(`${selected.length - failedCount} cambios aplicados correctamente`);
 				await refreshProject();
+				clearReport();
+				router.push(returnPath);
 			}
 		} catch {
 			toast.error('No se pudieron aplicar los cambios');
 		} finally {
-			clearReport();
-			router.push('/proyecto/descubrimiento');
+			setApplying(false);
 		}
 	};
 
-	const handleAcceptImpact = async (impactId: string) => {
-		if (!report || !currentProject) return;
-		const impact = report.downstream_impact.find((i) => i.id === impactId);
-		if (!impact) return;
-		setAcceptingId(impactId);
-		try {
-			await applyConsistencyImpacts(currentProject.id, [impact]);
-			useConsistencyStore.getState().acceptImpact(impactId);
-			toast.success('Cambio aplicado correctamente');
-			await refreshProject();
-		} catch {
-			toast.error('No se pudo aplicar el cambio');
-		} finally {
-			setAcceptingId(null);
-		}
+	const handleAcceptImpact = (impactId: string) => {
+		acceptImpact(impactId);
 	};
 
 	const handleRejectImpact = (impactId: string) => {
 		useConsistencyStore.getState().rejectImpact(impactId);
 	};
 
+	const handleMarkAll = () => {
+		acceptAll();
+	};
+
 	const handleRejectAll = () => {
 		rejectAll();
-		toast.success('Todos los cambios han sido descartados');
+		clearReport();
+		router.push(returnPath);
 	};
+
+	const handleApplyClick = () => {
+		setShowConfirmApply(true);
+	};
+
+	const handleConfirmApply = () => {
+		setShowConfirmApply(false);
+		handleAcceptAllBatch();
+	};
+
+	const handleCancelApply = () => {
+		setShowConfirmApply(false);
+	};
+
+	const selectedCount = report.downstream_impact.filter(
+		(i) => i.accepted === true,
+	).length;
 
 	return (
 		<>
@@ -151,8 +168,8 @@ const ConsistencyPage = () => {
 				<div className='page-header'>
 					<h2 className='text-base-800 text-3xl font-bold'>Consistencia del Proyecto</h2>
 					<p className='text-base-600 text-lg'>
-						Revisa los cambios detectados entre fases de desarrollo, agrupados por
-						nivel de impacto.
+						Revisa los cambios detectados entre fases de desarrollo, agrupados por nivel
+						de impacto.
 					</p>
 
 					<div className='flex-1 min-h-0 mb-2'>
@@ -160,13 +177,11 @@ const ConsistencyPage = () => {
 							<div className='flex shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6 py-3'>
 								<span className='text-sm font-semibold text-base-950'>
 									{report.downstream_impact.length}{' '}
-									{report.downstream_impact.length === 1 ? 'impacto detectado' : 'impactos detectados'}
+									{report.downstream_impact.length === 1
+										? 'impacto detectado'
+										: 'impactos detectados'}
 								</span>
-								<button
-									type='button'
-									onClick={handleBack}
-									className='cursor-pointer rounded-md border border-base-300 bg-white px-4 py-1.5 text-sm font-medium text-base-950 transition-colors hover:bg-base-100 active:bg-base-200'
-								>
+								<button type='button' onClick={handleBack} className='btn btn-primary'>
 									Volver
 								</button>
 							</div>
@@ -178,27 +193,26 @@ const ConsistencyPage = () => {
 											{PHASE_LABELS[phase] || phase} ({items.length})
 										</h3>
 										{items.map((impact) => (
-									<ConsistencyDiffCard
-										key={impact.id}
-										type='downstream_impact'
-										item={impact}
-										onAccept={
-											impact.action !== 'delete' || impact.artifact_type === 'Feature'
-												? () => handleAcceptImpact(impact.id)
-												: undefined
-										}
-										onReject={
-											!impact.accepted
-												? () => handleRejectImpact(impact.id)
-												: undefined
-										}
-										onUndo={
-											impact.accepted !== undefined
-												? () => undoImpact(impact.id)
-												: undefined
-										}
-										accepting={acceptingId === impact.id}
-									/>
+											<ConsistencyDiffCard
+												key={impact.id}
+												type='downstream_impact'
+												item={impact}
+												onAccept={
+													impact.action !== 'delete' || impact.artifact_type === 'Feature'
+														? () => handleAcceptImpact(impact.id)
+														: undefined
+												}
+												onReject={
+													impact.accepted !== true
+														? () => handleRejectImpact(impact.id)
+														: undefined
+												}
+												onUndo={
+													impact.accepted !== undefined
+														? () => undoImpact(impact.id)
+														: undefined
+												}
+											/>
 										))}
 									</div>
 								))}
@@ -208,17 +222,29 @@ const ConsistencyPage = () => {
 								<button
 									type='button'
 									onClick={handleRejectAll}
-									className='cursor-pointer rounded-md border border-status-error bg-white px-5 py-2 text-sm font-medium text-status-error transition-colors hover:bg-status-error hover:text-white active:opacity-80'
+									className='btn btn-destructive'
 								>
 									Rechazar todos
 								</button>
-								<button
-									type='button'
-									onClick={handleAcceptAll}
-									className='cursor-pointer rounded-md bg-status-success px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-status-success/90 active:opacity-80'
-								>
-									Aceptar todos
-								</button>
+								<div className='flex items-center gap-3'>
+									<button
+										type='button'
+										onClick={handleMarkAll}
+										className='btn btn-warning'
+									>
+										Marcar todos
+									</button>
+									<button
+										type='button'
+										onClick={handleApplyClick}
+										disabled={selectedCount === 0 || applying}
+										className='btn btn-primary'
+									>
+										{applying
+											? 'Aplicando...'
+											: `Aplicar seleccionados (${selectedCount})`}
+									</button>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -233,6 +259,17 @@ const ConsistencyPage = () => {
 					description='Si sale ahora, los cambios sugeridos no se aplicarán y no se volverán a mostrar. ¿Está seguro que desea salir?'
 					cancelText='Cancelar'
 					confirmText='Salir'
+				/>
+			)}
+
+			{showConfirmApply && (
+				<ModalConfirmLeave
+					onCancel={handleCancelApply}
+					onConfirm={handleConfirmApply}
+					title='Aplicar cambios seleccionados'
+					description={`Se aplicarán ${selectedCount} ${selectedCount === 1 ? 'cambio' : 'cambios'} sobre los artefactos downstream. Esta acción no se puede deshacer. ¿Desea continuar?`}
+					cancelText='Cancelar'
+					confirmText='Aplicar'
 				/>
 			)}
 		</>

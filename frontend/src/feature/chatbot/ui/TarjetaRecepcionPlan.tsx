@@ -1,13 +1,12 @@
 'use client';
 
-import { ButtonSM } from '@/shared/ui/button';
+import { usePlanStore } from '@/entities/plan';
+import { normalizeDiff } from '@/entities/plan/model/normalizeDiff';
 import Check from '@/shared/ui/icons/Check';
 import Close from '@/shared/ui/icons/Close';
 import Plus from '@/shared/ui/icons/Plus';
 import Trash from '@/shared/ui/icons/Trash';
 import { MarkdownText } from '@/shared/ui/markdown-text';
-import { usePlanStore } from '@/entities/plan';
-import { normalizeDiff } from '@/entities/plan/model/normalizeDiff';
 import { useState } from 'react';
 import type { ChangeSuggestion } from '../types/chatbot';
 
@@ -37,7 +36,9 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 		status = 'pending';
 	} else if (planChange.status === 'applied') {
 		status = 'applied';
-	} else if (ACTIVE_STATUSES.includes(planChange.status as (typeof ACTIVE_STATUSES)[number])) {
+	} else if (
+		ACTIVE_STATUSES.includes(planChange.status as (typeof ACTIVE_STATUSES)[number])
+	) {
 		status = 'added';
 	} else {
 		status = 'discarded';
@@ -154,39 +155,27 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 				<div className='flex justify-end gap-2'>
 					{status === 'pending' && (
 						<>
-							<ButtonSM
-								variant='secondary'
-								onClick={handleDiscard}
-								icon={<Trash size={13} />}
-							>
+							<button className='btn-chat btn-destructive' onClick={handleDiscard}>
+								<Trash size={13} />
 								Descartar
-							</ButtonSM>
-							<ButtonSM
-								variant='primary'
-								onClick={handleAdd}
-								icon={<Plus size={13} color='text-white' />}
-							>
-								Agregar al plan
-							</ButtonSM>
+							</button>
+							<button className='btn-chat btn-primary' onClick={handleAdd}>
+								<Plus size={13} color='' />
+								Descartar Agregar al plan
+							</button>
 						</>
 					)}
 					{status === 'added' && (
-						<ButtonSM
-							variant='destructive'
-							onClick={handleRemove}
-							icon={<Trash size={13} color='text-white' />}
-						>
+						<button className='btn-chat btn-destructive' onClick={handleRemove}>
+							<Trash size={13} />
 							Quitar del plan
-						</ButtonSM>
+						</button>
 					)}
 					{status === 'discarded' && (
-						<ButtonSM
-							variant='primary'
-							onClick={handleAdd}
-							icon={<Plus size={13} color='text-white' />}
-						>
+						<button className='btn-chat btn-primary' onClick={handleAdd}>
+							<Plus size={13} color='' />
 							Agregar al plan
-						</ButtonSM>
+						</button>
 					)}
 				</div>
 			)}

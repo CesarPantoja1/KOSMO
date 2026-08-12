@@ -1,4 +1,4 @@
-type Phase = 'discovery' | 'features' | 'requirements' | 'modeling';
+type Phase = 'discovery' | 'features' | 'requirements' | 'model';
 
 export interface ConsistencyCheck {
 	project_id: string;

@@ -37,6 +37,7 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 	const config: RequestInit = {
 		...options,
 		headers,
+		cache: options.cache ?? 'no-store',
 	};
 
 	let res = await fetch(`${API_BASE_URL}${url}`, config);

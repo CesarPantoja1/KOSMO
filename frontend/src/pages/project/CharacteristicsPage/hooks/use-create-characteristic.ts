@@ -50,6 +50,11 @@ interface UseCreateCharacteristicReturn {
 	handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 	handleCancel: () => void;
 	applySuggestion: (title: string, description: string) => void;
+	showConsistencyModal: boolean;
+	consistencyInfo: { origin: string; reason: string } | null;
+	isValidating: boolean;
+	handleForceCreate: () => void;
+	closeConsistencyModal: () => void;
 }
 
 function validateField(value: string, maxLength: number): string {
@@ -88,6 +93,12 @@ export function useCreateCharacteristic(
 	} = useController({ name: 'description', control });
 
 	const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+	const [showConsistencyModal, setShowConsistencyModal] = useState(false);
+	const [isValidating, setIsValidating] = useState(false);
+	const [consistencyInfo, setConsistencyInfo] = useState<{
+		origin: string;
+		reason: string;
+	} | null>(null);
 	const [fieldErrors, setFieldErrors] = useState<FieldError>({
 		title: '',
 		description: '',
@@ -129,18 +140,48 @@ export function useCreateCharacteristic(
 			return;
 		}
 		if (!projectId) return;
+		setIsValidating(true);
 		try {
-			await addCharacteristic(projectId, {
+			const result = await addCharacteristic(projectId, {
 				title: data.title,
 				description: data.description,
 			});
-			onCreated?.();
+			setIsValidating(false);
+
+			if (result.is_saved) {
+				onCreated?.();
+			} else {
+				setConsistencyInfo({
+					origin: result.origin || '',
+					reason: result.inconsistency_reason || '',
+				});
+				setShowConsistencyModal(true);
+			}
 		} catch (err) {
+			setIsValidating(false);
 			const message =
 				err instanceof Error
 					? err.message
 					: 'No se pudo guardar la característica. Intenta nuevamente.';
 			toast.error(message);
+		}
+	};
+
+	const handleForceCreate = async () => {
+		if (!projectId || !consistencyInfo) return;
+		try {
+			const result = await addCharacteristic(projectId, {
+				title: titleValue,
+				description: descValue,
+				origin: consistencyInfo.origin,
+				force: true,
+			});
+			if (result.is_saved) {
+				setShowConsistencyModal(false);
+				onCreated?.();
+			}
+		} catch (err) {
+			toast.error('No se pudo forzar la creación.');
 		}
 	};
 
@@ -174,5 +215,10 @@ export function useCreateCharacteristic(
 		handleSubmit: formSubmit(onSubmit),
 		handleCancel,
 		applySuggestion,
+		showConsistencyModal,
+		consistencyInfo,
+		isValidating,
+		handleForceCreate,
+		closeConsistencyModal: () => setShowConsistencyModal(false),
 	};
 }

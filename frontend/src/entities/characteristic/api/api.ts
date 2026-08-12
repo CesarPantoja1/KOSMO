@@ -4,6 +4,7 @@ import type {
 	SuggestCharacteristic,
 	CharacteristicResponse,
 	CharacteristicChatResponse,
+	CreateCharacteristicResponse,
 } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -154,8 +155,8 @@ const mockGetSuggestCharacteristics = async (
 
 const mockAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string },
-): Promise<CharacteristicResponse> => {
+	item: { title: string; description: string; origin?: string; force?: boolean },
+): Promise<CreateCharacteristicResponse> => {
 	await delay(600);
 	const nextNum = mockStore.length + 1;
 	const newChar: CharacteristicResponse = {
@@ -165,11 +166,11 @@ const mockAddCharacteristic = async (
 		title: item.title,
 		slug: 'slug-generated-from-title',
 		description: item.description,
-		origin: 'item origin',
+		origin: item.origin || 'item origin',
 		display_id: `C${String(nextNum).padStart(2, '0')}`,
 	};
 	mockStore = [...mockStore, newChar];
-	return newChar;
+	return { is_saved: true, feature: newChar, origin: newChar.origin, is_consistent: true };
 };
 
 const mockSendChatMessage = async (
@@ -209,14 +210,19 @@ const realGetSuggestCharacteristics = async (
 
 const realAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string },
-): Promise<CharacteristicResponse> => {
-	return apiClient<CharacteristicResponse>(
+	item: { title: string; description: string; origin?: string; force?: boolean },
+): Promise<CreateCharacteristicResponse> => {
+	return apiClient<CreateCharacteristicResponse>(
 		`/api/v1/projects/${projectId}/features/manual`,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ title: item.title, description: item.description }),
+			body: JSON.stringify({
+				title: item.title,
+				description: item.description,
+				origin: item.origin || '',
+				force: item.force || false,
+			}),
 		},
 	);
 };
@@ -255,8 +261,8 @@ export const getSuggestCharacteristics = (
 
 export const addCharacteristic = (
 	projectId: string,
-	item: { title: string; description: string },
-): Promise<CharacteristicResponse> =>
+	item: { title: string; description: string; origin?: string; force?: boolean },
+): Promise<CreateCharacteristicResponse> =>
 	USE_MOCKS
 		? mockAddCharacteristic(projectId, item)
 		: realAddCharacteristic(projectId, item);

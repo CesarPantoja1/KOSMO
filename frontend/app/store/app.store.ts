@@ -85,11 +85,11 @@ export const useAppStore = create<AppState>()(
 								getDiagram(projectId, c.id),
 							]);
 
-							if (reqResult.status === 'fulfilled' && reqResult.value) {
-								useRequirementsStore.getState().setHasRequirements(c.id, true);
+							if (reqResult.status === 'fulfilled') {
+								useRequirementsStore.getState().setHasRequirements(c.id, !!reqResult.value);
 							}
-							if (diagramResult.status === 'fulfilled' && diagramResult.value) {
-								useModelingStore.getState().setHasDiagram(c.id, true);
+							if (diagramResult.status === 'fulfilled') {
+								useModelingStore.getState().setHasDiagram(c.id, !!diagramResult.value);
 							}
 						}),
 					);

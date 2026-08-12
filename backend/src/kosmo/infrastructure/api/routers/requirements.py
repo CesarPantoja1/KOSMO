@@ -11,18 +11,25 @@ from kosmo.application.requirements import (
     GetRequirementsUseCase,
     RefineRequirementsInput,
     RefineRequirementsUseCase,
+    RegenerateRequirementsInput,
+    RegenerateRequirementsUseCase,
     SaveRequirementsUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
     ProjectNotFoundError,
     RequirementsNotFoundError,
 )
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.schemas import (
+    PhaseNotificationList,
+    PhaseNotificationView,
+)
 
 router = APIRouter(
     prefix="/api/v1/features/{feature_id}/requirements",
@@ -189,3 +196,102 @@ async def refine_requirements(
         "document_markdown": output.phase_output.requirements_markdown,
         "total": len(output.requirements),
     }
+
+
+class PropagateRequirementsRequest(BaseModel):
+    project_id: str
+    applied_change_ids: list[str] = []
+
+
+@router.post(
+    "/propagate",
+    summary="Propagar cambios desde Requisitos",
+    description=(
+        "Evalúa el impacto de los cambios aplicados en los requisitos de una "
+        "característica en ambas direcciones: upstream hacia Características y "
+        "Descubrimiento, downstream hacia Modelo. Retorna las fases afectadas "
+        "para que el wizard actualice sus insignias de advertencia."
+    ),
+    response_model=PhaseNotificationList,
+    status_code=status.HTTP_200_OK,
+)
+async def propagate_requirement_changes(
+    feature_id: str,
+    body: PropagateRequirementsRequest,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> PhaseNotificationList:
+    from kosmo.application.consistency.propagate_changes import (
+        PropagateChangesInput,
+    )
+
+    uc = request.app.state.propagate_requirement_changes
+
+    try:
+        output = await uc.execute(
+            PropagateChangesInput(
+                project_id=ProjectId(body.project_id),
+                source_phase=SpecPhase.REQUISITOS,
+                applied_change_ids=[PlanChangeId(cid) for cid in body.applied_change_ids],
+                feature_id=FeatureId(feature_id),
+            )
+        )
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+
+    return PhaseNotificationList(
+        affected_phases=[
+            PhaseNotificationView(
+                phase=p.phase,
+                affected_count=p.affected_count,
+                affected_ids=p.affected_ids,
+            )
+            for p in output.affected_phases
+        ]
+    )
+
+
+class RegenerateRequirementsResponse(BaseModel):
+    artifact_id: str
+    content: str
+    phase: str
+
+
+@router.post(
+    "/regenerate",
+    summary="Regenerar requisitos EARS con IA",
+    description=(
+        "Regenera los requisitos de una característica a partir del estado "
+        "actual de la característica padre, manteniendo la estructura EARS y "
+        "los criterios de aceptación en formato Dado-Cuando-Entonces."
+    ),
+    response_model=RegenerateRequirementsResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def regenerate_requirements(
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+    project_id: str = Query(...),
+) -> RegenerateRequirementsResponse:
+    uc = cast("RegenerateRequirementsUseCase", request.app.state.regenerate_requirements)
+
+    try:
+        output = await uc.execute(
+            RegenerateRequirementsInput(
+                project_id=ProjectId(project_id),
+                feature_id=FeatureId(feature_id),
+            )
+        )
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except FeatureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+    except LLMInvocationError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=e.problem.detail) from e
+
+    return RegenerateRequirementsResponse(
+        artifact_id=output.artifact_id,
+        content=output.content,
+        phase=output.phase,
+    )

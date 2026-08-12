@@ -17,6 +17,11 @@ from kosmo.application.requirements.refine_requirements import (
     RefineRequirementsOutput,
     RefineRequirementsUseCase,
 )
+from kosmo.application.requirements.regenerate_requirements import (
+    RegenerateRequirementsInput,
+    RegenerateRequirementsOutput,
+    RegenerateRequirementsUseCase,
+)
 from kosmo.application.requirements.save_requirements import SaveRequirementsUseCase
 
 __all__ = [
@@ -31,5 +36,8 @@ __all__ = [
     "RefineRequirementsInput",
     "RefineRequirementsOutput",
     "RefineRequirementsUseCase",
+    "RegenerateRequirementsInput",
+    "RegenerateRequirementsOutput",
+    "RegenerateRequirementsUseCase",
     "SaveRequirementsUseCase",
 ]

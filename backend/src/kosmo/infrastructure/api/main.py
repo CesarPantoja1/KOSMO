@@ -280,7 +280,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.manage_plan_changes = discovery_components.manage_plan_changes
     app.state.apply_plan_changes = discovery_components.apply_plan_changes
     app.state.document_repo = discovery_components.document_repo
-    app.state.propagate_discovery_changes = discovery_components.propagate_discovery_changes
+    app.state.propagate_discovery_changes = discovery_components.propagate_changes
     app.state.consistency_evaluator = discovery_components.consistency_evaluator
 
     from kosmo.application.consistency.evaluate_project_consistency import EvaluateProjectConsistencyUseCase
@@ -288,6 +288,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
         SqlAlchemyActivityDiagramRepository,
     )
+    from kosmo.infrastructure.persistence.postgres.repositories.document_repo import SqlAlchemyDocumentRepository
     from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import SqlAlchemyFeatureRepository
     from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import SqlAlchemyRequirementRepository
 
@@ -307,7 +308,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         requirement_repo=SqlAlchemyRequirementRepository(session_factory),
         diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
         evaluator=discovery_components.consistency_evaluator,
-        traceability_repo=app.state.traceability_repo,
     )
 
     from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
@@ -318,6 +318,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         requirement_repo=SqlAlchemyRequirementRepository(session_factory),
         diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
         traceability_repo=app.state.traceability_repo,
+        document_repo=SqlAlchemyDocumentRepository(session_factory),
+        agent=pipeline_components.agent,
     )
 
     app.state.generate_features = features_components.generate_features
@@ -327,15 +329,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.feature_repo = features_components.feature_repo
     app.state.get_feature_chat_history = features_components.get_feature_chat_history
     app.state.list_features = features_components.list_features
-    app.state.propagate_feature_changes = features_components.propagate_feature_changes
     app.state.edit_feature = features_components.edit_feature
     app.state.check_feature_consistency = features_components.check_feature_consistency
 
-    from kosmo.application.consistency.propagate_feature_changes import (
-        PropagateFeatureChangesUseCase,
-    )
+    from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 
-    app.state.propagate_feature_changes = PropagateFeatureChangesUseCase(
+    app.state.propagate_feature_changes = PropagateChangesUseCase(
         project_repo=SqlAlchemyProjectRepository(session_factory),
         feature_repo=SqlAlchemyFeatureRepository(session_factory),
         requirement_repo=SqlAlchemyRequirementRepository(session_factory),
@@ -359,6 +358,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.refine_requirements = requirements_components.refine_requirements
     app.state.get_requirement_chat_history = requirements_components.get_requirement_chat_history
     app.state.requirement_repo = requirements_components.requirement_repo
+    app.state.regenerate_requirements = requirements_components.regenerate_requirements
+
+    from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
+    from kosmo.infrastructure.persistence.postgres.repositories import SqlAlchemyProjectRepository
+    from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
+        SqlAlchemyActivityDiagramRepository,
+    )
+
+    app.state.propagate_requirement_changes = PropagateChangesUseCase(
+        project_repo=SqlAlchemyProjectRepository(session_factory),
+        feature_repo=SqlAlchemyFeatureRepository(session_factory),
+        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
+        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
+        chat_repo=app.state.chat_repo,
+        consistency_evaluator=app.state.consistency_evaluator,
+    )
 
     modelo_components = build_modelo_components(session_factory, pipeline_components)
     app.state.generate_diagram = modelo_components.generate_diagram

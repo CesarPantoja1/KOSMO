@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from kosmo.contracts.chat import PlanCambio
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.sdd.document import RichTextDocument
 from kosmo.contracts.sdd.ears import EARSRequirement
@@ -83,3 +84,10 @@ class RequirementChatContext:
     discovery_document: RichTextDocument
     requirements_markdown: str = ""
     user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+
+@dataclass(frozen=True)
+class PlanChangeResolutionContext:
+    section_name: str
+    section_markdown: str
+    changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]

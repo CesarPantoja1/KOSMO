@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import structlog
 
+from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository, ProjectRepository
@@ -14,7 +15,7 @@ class DeleteFeatureUseCase:
         self,
         project_repo: ProjectRepository,
         feature_repo: FeatureRepository,
-        traceability_repo: object | None = None,
+        traceability_repo: TraceabilityRepository | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
@@ -39,7 +40,7 @@ class DeleteFeatureUseCase:
 
         if self._traceability_repo is not None:
             try:
-                await self._traceability_repo.delete_by_entity_id(str(feature_id))  # type: ignore[reportAttributeAccessIssue]
+                await self._traceability_repo.delete_by_entity_id(str(feature_id))
             except Exception:
                 _log.warning(
                     "delete_feature.traceability_cleanup_failed",

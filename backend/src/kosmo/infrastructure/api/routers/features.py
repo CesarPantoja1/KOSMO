@@ -24,6 +24,7 @@ from kosmo.application.features.list_features import (
     ListFeaturesUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     FeatureNotFoundError,
@@ -85,6 +86,7 @@ def _list_features(request: Request) -> ListFeaturesUseCase:
         "descubrimiento del proyecto. Las características representan capacidades "
         "funcionales del producto software a construir."
     ),
+    response_model=list[FeatureResponse],
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_200_OK: {"description": "Características generadas exitosamente."},
@@ -96,22 +98,9 @@ async def generate_features(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateFeaturesUseCase, Depends(_generate_features)],
-) -> dict[str, Any]:
+) -> list[FeatureResponse]:
     output = await use_case.execute(GenerateFeaturesInput(project_id=ProjectId(project_id)))
-    return {
-        "project_id": str(output.project_id),
-        "features": [
-            {
-                "id": str(f.id),
-                "title": f.title,
-                "description": f.description,
-                "origin": f.origin,
-                "created_at": f.created_at.isoformat().replace("+00:00", "Z"),
-                "updated_at": f.updated_at.isoformat().replace("+00:00", "Z"),
-            }
-            for f in output.features
-        ],
-    }
+    return [_feature_to_response(f) for f in output.features]
 
 
 @router.get(
@@ -195,15 +184,15 @@ async def suggest_features(
     "/manual",
     summary="Crear característica manualmente",
     description=(
-        "Crea una nueva característica con los datos proporcionados por el usuario. "
-        "El título no puede exceder 50 caracteres y la descripción no puede exceder 500 caracteres. "
-        "Requiere autenticación mediante Bearer token."
+        "Crea una nueva característica. Si no se proporciona origin, la IA lo deriva "
+        "del descubrimiento y verifica coherencia. Si la IA detecta inconsistencia, "
+        "devuelve is_saved=false con el origin derivado y la razón. Usa force=true para "
+        "forzar el guardado."
     ),
-    response_model=FeatureResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_201_CREATED: {
-            "description": "Característica creada exitosamente.",
+        status.HTTP_200_OK: {
+            "description": "Característica creada exitosamente o rechazada por inconsistencia.",
         },
         status.HTTP_400_BAD_REQUEST: {
             "description": "Datos de entrada inválidos (título vacío, título muy largo, descripción muy larga).",
@@ -221,13 +210,15 @@ async def create_characteristic_manual(
     payload: Annotated[CreateCharacteristicRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[CreateCharacteristicUseCase, Depends(_create_characteristic)],
-) -> FeatureResponse:
+) -> dict[str, object]:
     try:
         output = await use_case.execute(
             CreateCharacteristicInput(
                 project_id=ProjectId(project_id),
                 title=payload.title,
                 description=payload.description,
+                origin=payload.origin,
+                force=payload.force,
             )
         )
     except ValueError as exc:
@@ -235,7 +226,20 @@ async def create_characteristic_manual(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    return _feature_to_response(output.characteristic)
+
+    if output.is_saved and output.characteristic is not None:
+        return {
+            "is_saved": True,
+            "feature": _feature_to_response(output.characteristic).model_dump(),
+            "origin": output.origin,
+            "is_consistent": output.is_consistent,
+        }
+    return {
+        "is_saved": False,
+        "origin": output.origin,
+        "is_consistent": output.is_consistent,
+        "inconsistency_reason": output.inconsistency_reason,
+    }
 
 
 @router.put(
@@ -368,17 +372,18 @@ async def propagate_feature_changes(
     request: Annotated[PropagateFeatureChangesRequest, Body(...)],
     uc: Annotated[Any, Depends(_propagate_feature_changes)],
 ) -> PhaseNotificationList:
-    from kosmo.application.consistency.propagate_feature_changes import (
-        PropagateFeatureChangesInput,
+    from kosmo.application.consistency.propagate_changes import (
+        PropagateChangesInput,
     )
     from kosmo.contracts.sdd.ids import PlanChangeId
 
     try:
         output = await uc.execute(
-            PropagateFeatureChangesInput(
+            PropagateChangesInput(
                 project_id=ProjectId(project_id),
-                feature_id=FeatureId(feature_id),
+                source_phase=SpecPhase.CARACTERISTICAS,
                 applied_change_ids=[PlanChangeId(cid) for cid in request.applied_change_ids],
+                feature_id=FeatureId(feature_id),
             )
         )
     except ProjectNotFoundError as e:
