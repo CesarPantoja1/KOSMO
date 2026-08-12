@@ -40,6 +40,12 @@ tags:
     description: Consolidación de patrones de conocimiento
   - name: schemas
     description: Introspección de esquemas JSON
+  - name: traceability
+    description: Navegación y validación de dirección de trazabilidad entre fases
+  - name: documents
+    description: Modificación directa de documentos sin fase de plan intermedio
+  - name: implementation
+    description: Generación de código fuente por Feature vía OpenCode
 
 # ── Security ──────────────────────────────────────────────────────────
 security:
@@ -406,6 +412,11 @@ components:
           type: string
           description: Identificador visible para el usuario (C01, C02...)
           example: "C01"
+        implementation_status:
+          type: string
+          enum: [pending, in_progress, implemented, requires_review, failed]
+          nullable: true
+          description: Estado de implementación de código. null si nunca se intentó generar.
 
     FeatureSuggestionItem:
       type: object
@@ -940,7 +951,7 @@ components:
           example: "cnr_01HXYAZABCDEFGHIJKLMNOP"
         phase_origin:
           type: string
-          enum: [discovery, features, requirements]
+          enum: [discovery, features, requirements, model]
           description: Fase donde se originaron los cambios
         own_changes:
           type: array
@@ -998,7 +1009,7 @@ components:
       properties:
         phase_origin:
           type: string
-          enum: [discovery, features, requirements]
+          enum: [discovery, features, requirements, model]
           description: Fase de origen de los cambios
         phase_destination:
           type: string
@@ -1149,6 +1160,310 @@ components:
         status:
           type: string
           example: "ok"
+
+    # ═══ Traceability (Sprint 5 - HU-20) ═══
+
+    EditDirectionResponse:
+      type: object
+      description: Resultado de validación de dirección de edición en trazabilidad
+      properties:
+        allowed:
+          type: boolean
+          description: true si la edición es válida en el nivel actual
+          example: false
+        redirect_to_level:
+          type: string
+          enum: [discovery, features, requirements, model]
+          nullable: true
+          description: Nivel al que debe redirigirse (solo si allowed=false)
+          example: "features"
+        source_entity_id:
+          type: string
+          nullable: true
+          description: ID de la entidad fuente en el nivel izquierdo
+          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+        source_entity_label:
+          type: string
+          nullable: true
+          description: Etiqueta visible de la entidad fuente (ej. C01)
+          example: "C01"
+        message:
+          type: string
+          description: Mensaje explicativo para el usuario
+          example: "Los requisitos no se editan directamente. Ve a la característica 'C01 - Registrar gastos' para modificarlos."
+
+    # ═══ Documents (Sprint 5 - HU-20) ═══
+
+    DocumentModifyRequest:
+      type: object
+      required: [document_type, document_id, instruction]
+      additionalProperties: false
+      properties:
+        document_type:
+          type: string
+          enum: [discovery, features, requirements, model]
+          description: Tipo de documento a modificar
+          example: "discovery"
+        document_id:
+          type: string
+          description: ID del documento a modificar
+          example: "doc_prj_01KTABCDEFGHIJKLMNOP"
+        instruction:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Instrucción textual del cambio deseado
+          example: "Cambia el público objetivo a pequeñas y medianas empresas"
+
+    DocumentModifyResponse:
+      type: object
+      description: Resultado de una modificación directa de documento
+      properties:
+        document_id:
+          type: string
+          description: ID del documento modificado
+          example: "doc_prj_01KTABCDEFGHIJKLMNOP"
+        content:
+          type: string
+          description: Contenido completo del documento actualizado
+        highlighted_section:
+          type: string
+          nullable: true
+          description: Nombre de la sección modificada, para resaltar en la UI
+          example: "2 Público objetivo"
+        message:
+          type: string
+          description: Mensaje de confirmación para el usuario
+          example: "Documento actualizado. Sección 'Público objetivo' modificada."
+
+    # ═══ Implementation (Sprint 5 - HU-21) ═══
+
+    MissingArtifact:
+      type: object
+      description: Artefacto requerido que falta para iniciar la generación de código
+      properties:
+        type:
+          type: string
+          enum: [requirements, diagram]
+          description: Tipo de artefacto faltante
+          example: "requirements"
+        label:
+          type: string
+          description: Etiqueta legible del artefacto faltante
+          example: "Requisitos EARS"
+
+    ImplementationReadinessResponse:
+      type: object
+      description: Verificación de si una Feature está lista para generación de código
+      properties:
+        is_ready:
+          type: boolean
+          description: true si la feature tiene todos los artefactos requeridos
+          example: false
+        has_requirements:
+          type: boolean
+          description: true si la feature tiene requisitos EARS generados
+          example: true
+        has_diagram:
+          type: boolean
+          description: true si la feature tiene diagrama de actividad generado
+          example: false
+        missing_artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingArtifact"
+          description: Lista de artefactos que faltan para alcanzar is_ready
+
+    ImplementationStatusResponse:
+      type: object
+      description: Estado actual de la implementación de código de una Feature
+      properties:
+        feature_id:
+          type: string
+          description: ID de la feature
+          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+        status:
+          type: string
+          enum: [pending, in_progress, implemented, requires_review, failed]
+          description: Estado de la implementación
+          example: "in_progress"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Momento en que inició la generación (ISO-8601 UTC)
+          example: "2026-08-11T14:30:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Momento en que finalizó la generación (ISO-8601 UTC)
+          example: null
+        retry_count:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Número de reintentos de corrección ejecutados
+          example: 0
+        current_step:
+          type: string
+          nullable: true
+          description: Paso actual del pipeline (solo si status=in_progress)
+          example: "Generando plan de implementación"
+
+    ValidationErrorItem:
+      type: object
+      description: Error de validación determinística extraído de la salida de un comando
+      properties:
+        file:
+          type: string
+          nullable: true
+          description: Archivo donde ocurrió el error
+          example: "src/app/expenses/page.tsx"
+        line:
+          type: integer
+          nullable: true
+          description: Número de línea del error
+          example: 42
+        column:
+          type: integer
+          nullable: true
+          description: Número de columna del error
+          example: 10
+        message:
+          type: string
+          description: Mensaje descriptivo del error
+          example: "Type 'string' is not assignable to type 'number'."
+        severity:
+          type: string
+          enum: [error, warning]
+          description: Severidad del error
+          example: "error"
+        rule:
+          type: string
+          nullable: true
+          description: Regla de linter asociada (ej. nombre de regla de eslint)
+          example: "@typescript-eslint/no-explicit-any"
+
+    ValidationRunResult:
+      type: object
+      description: Resultado de la ejecución de un paso del pipeline de validación
+      properties:
+        command:
+          type: string
+          description: Comando ejecutado
+          example: "tsc --noEmit"
+        is_success:
+          type: boolean
+          description: true si el comando terminó sin errores
+          example: true
+        exit_code:
+          type: integer
+          description: Código de salida del proceso
+          example: 0
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationErrorItem"
+          description: Errores encontrados (vacío si is_success=true)
+        duration_ms:
+          type: integer
+          description: Duración de la ejecución en milisegundos
+          example: 1234
+
+    ImplementationStreamEvent:
+      type: object
+      description: Evento SSE emitido durante el streaming de progreso de generación
+      properties:
+        event:
+          type: string
+          enum:
+            [preparing, plan_progress, plan_complete, build_progress, build_complete,
+             validation_progress, validation_result, complete, error]
+          description: Tipo de evento de progreso
+          example: "plan_progress"
+        step:
+          type: string
+          nullable: true
+          description: Paso del pipeline en el que se encuentra la generación
+          example: "Analizando código existente"
+        message:
+          type: string
+          description: Mensaje descriptivo del estado actual
+          example: "El agente está analizando la estructura del workspace"
+        details:
+          nullable: true
+          description: Datos adicionales según el tipo de evento
+          example: null
+
+    TraceabilityEdge:
+      type: object
+      description: Arista de trazabilidad entre un requisito y los archivos que lo implementan
+      properties:
+        requirement_id:
+          type: string
+          description: ID del requisito (formato feature_id:REQ-N.M)
+          example: "feat_01HXYAZABCDEFGHIJKLMNOP:REQ-1.1"
+        requirement_label:
+          type: string
+          description: Etiqueta visible del requisito
+          example: "REQ-1.1"
+        source_file:
+          type: string
+          description: Ruta del archivo de código fuente que implementa el requisito
+          example: "src/app/expenses/page.tsx"
+        test_file:
+          type: string
+          nullable: true
+          description: Ruta del archivo de test asociado al requisito
+          example: "tests/expenses.test.ts"
+
+    ImplementationTraceabilityResponse:
+      type: object
+      description: Trazabilidad completa entre una Feature, sus requisitos y los archivos generados
+      properties:
+        feature_id:
+          type: string
+          description: ID de la feature
+          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+        feature_label:
+          type: string
+          description: Etiqueta visible de la feature
+          example: "C01"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceabilityEdge"
+          description: Aristas de trazabilidad Feature→Requirement→Archivo→Test
+
+    WorkspaceResponse:
+      type: object
+      description: Información del workspace de implementación de un proyecto
+      properties:
+        project_id:
+          type: string
+          description: ID del proyecto
+          example: "prj_01KTABCDEFGHIJKLMNOP"
+        workspace_dir:
+          type: string
+          nullable: true
+          description: Ruta absoluta al directorio del workspace
+          example: "/workspaces/prj_01KTABCDEFGHIJKLMNOP"
+        status:
+          type: string
+          enum: [not_created, creating, ready, in_use]
+          description: Estado del workspace
+          example: "ready"
+        files_count:
+          type: integer
+          description: Cantidad de archivos en el workspace
+          example: 45
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Momento de creación del workspace (ISO-8601 UTC)
+          example: "2026-08-11T10:00:00Z"
 
 paths:
   # ── Health ──────────────────────────────────────────────────────────
@@ -3121,6 +3436,21 @@ paths:
             type: string
             enum: [discovery, features, requirements, model]
           description: Filtrar por fase específica. Si se omite, devuelve todas.
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Número de página (20 resultados por página)
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          description: Cantidad de resultados por página
       responses:
         "200":
           description: Estado de consistencia por fase
@@ -3260,6 +3590,383 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Proyecto no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ── Traceability (Sprint 5 - HU-20) ──────────────────────────────────
+
+  /api/v1/traceability/edit-direction:
+    get:
+      tags: [traceability]
+      summary: Validar dirección de edición en trazabilidad
+      description: >-
+        Verifica si la edición de una entidad es válida en el nivel actual del
+        flujo de trazabilidad. Si no lo es, indica el nivel correcto y la
+        entidad fuente hacia la cual redirigir.
+      operationId: check_edit_direction
+      parameters:
+        - name: entity_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [requirement, feature, diagram]
+          description: Tipo de entidad que se intenta editar
+          example: "requirement"
+        - name: entity_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: ID de la entidad que se intenta editar
+          example: "req_01HXYAZABCDEFGHIJKLMNOP"
+      responses:
+        "200":
+          description: Resultado de la validación de dirección
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditDirectionResponse"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Entidad no encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ── Documents (Sprint 5 - HU-20) ─────────────────────────────────────
+
+  /api/v1/documents/modify-direct:
+    post:
+      tags: [documents]
+      summary: Modificar documento directamente sin fase de plan
+      description: >-
+        Recibe una instrucción textual y modifica directamente el documento
+        indicado sin pasar por la fase de planificación del chat. La IA
+        interpreta la intención, identifica la sección afectada, aplica el
+        cambio y retorna el documento actualizado con la sección resaltada.
+
+        Si la instrucción es ambigua (ej. "Cambia eso" sin especificar),
+        retorna 400 solicitando más detalles.
+      operationId: modify_document_direct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentModifyRequest"
+      responses:
+        "200":
+          description: Documento modificado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentModifyResponse"
+        "400":
+          description: Instrucción ambigua o inválida — se requiere más detalle
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Documento no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "502":
+          description: Error al invocar el servicio de IA
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ── Implementation (Sprint 5 - HU-21) ────────────────────────────────
+
+  /api/v1/projects/{project_id}/features/{feature_id}/implementation/readiness:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+      - name: feature_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID de la feature
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+    get:
+      tags: [implementation]
+      summary: Verificar si una feature está lista para generación de código
+      description: >-
+        Verifica que la feature tenga todos los artefactos requeridos para
+        iniciar la generación de código: requisitos EARS y diagrama de
+        actividad. Retorna qué artefactos faltan en caso de no estar lista.
+      operationId: check_implementation_readiness
+      responses:
+        "200":
+          description: Resultado de la verificación de readiness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImplementationReadinessResponse"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto o feature no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/features/{feature_id}/implementation/stream:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+      - name: feature_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID de la feature a implementar
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+    post:
+      tags: [implementation]
+      summary: Iniciar generación de código con streaming SSE de progreso
+      description: >-
+        Inicia el pipeline completo de generación de código para una feature:
+        preparación de contexto → planificación (OpenCode Plan Agent) →
+        generación (OpenCode Build Agent) → validación determinística
+        (typecheck, lint, tests, build) → commit/rollback → trazabilidad.
+
+        El progreso se transmite en tiempo real mediante Server-Sent Events.
+        Soporta hasta 3 reintentos automáticos con corrección de errores.
+
+        Requiere que la feature tenga requisitos EARS y diagrama de actividad.
+        El workspace del proyecto no debe estar bloqueado por otra generación.
+      operationId: start_implementation_stream
+      responses:
+        "200":
+          description: Stream SSE del progreso de generación
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ImplementationStreamEvent"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto o feature no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: >-
+            Feature no lista (faltan requisitos o diagrama) o workspace
+            bloqueado por otra generación en curso
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/features/{feature_id}/implementation/status:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+      - name: feature_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID de la feature
+        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+    get:
+      tags: [implementation]
+      summary: Obtener estado de implementación de una feature
+      description: >-
+        Devuelve el estado actual de la generación de código para una feature
+        específica, incluyendo timestamp de inicio/fin, contador de reintentos
+        y paso actual del pipeline si está en progreso.
+      operationId: get_implementation_status
+      responses:
+        "200":
+          description: Estado de implementación de la feature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImplementationStatusResponse"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto o feature no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/implementation/traceability:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+    get:
+      tags: [implementation]
+      summary: Obtener trazabilidad de implementación del proyecto
+      description: >-
+        Devuelve el mapeo completo Feature→Requirement→Archivo→Test para
+        todas las features implementadas del proyecto. Permite filtrar por
+        una feature específica mediante query parameter.
+      operationId: get_implementation_traceability
+      parameters:
+        - name: feature_id
+          in: query
+          schema:
+            type: string
+          description: ID de la feature para filtrar. Si se omite, devuelve todas.
+          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+      responses:
+        "200":
+          description: Trazabilidad de implementación
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ImplementationTraceabilityResponse"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/implementation/workspace:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+    get:
+      tags: [implementation]
+      summary: Obtener información del workspace de implementación
+      description: >-
+        Devuelve el estado y metadatos del workspace de código del proyecto:
+        ruta, estado (no creado, creando, listo, en uso) y cantidad de archivos.
+      operationId: get_workspace
+      responses:
+        "200":
+          description: Información del workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceResponse"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/implementation/validate:
+    parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: ID del proyecto
+        example: "prj_01KTABCDEFGHIJKLMNOP"
+    post:
+      tags: [implementation]
+      summary: Re-ejecutar pipeline de validación sobre workspace existente
+      description: >-
+        Ejecuta el pipeline de validación determinística (typecheck, lint,
+        tests, build) sobre el workspace actual del proyecto sin disparar
+        una nueva generación. Útil para verificar el estado después de
+        cambios manuales o correcciones.
+      operationId: revalidate_workspace
+      responses:
+        "200":
+          description: Resultados de la validación (un resultado por paso)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ValidationRunResult"
+        "401":
+          description: Token ausente, inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Proyecto no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Workspace no existe o no está en estado ready
           content:
             application/problem+json:
               schema:
