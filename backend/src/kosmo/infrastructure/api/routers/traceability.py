@@ -6,8 +6,8 @@ from kosmo.application.traceability.manage_traceability_navigation import (
     ManageTraceabilityNavigationUseCase,
     TraceabilityNavigationInput,
 )
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import TraceabilityNavigationOutputView
