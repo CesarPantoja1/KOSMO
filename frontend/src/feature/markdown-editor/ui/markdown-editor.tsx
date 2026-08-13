@@ -22,6 +22,7 @@ interface Props {
 	saveMessage?: string;
 	savedMessage?: string;
 	errorMessage?: string;
+	readOnly?: boolean;
 }
 
 function slugify(text: string) {
@@ -34,7 +35,7 @@ function slugify(text: string) {
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 	function MarkdownEditor(
-		{ markdown, onChange, isMaximized, onMaximize, onMinimize, saveStatus = 'idle', saveMessage, savedMessage, errorMessage },
+		{ markdown, onChange, isMaximized, onMaximize, onMinimize, saveStatus = 'idle', saveMessage, savedMessage, errorMessage, readOnly },
 		ref,
 	) {
 		const [localMarkdown, setLocalMarkdown] = useState(markdown);
@@ -142,6 +143,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 						saveMessage={saveMessage}
 						savedMessage={savedMessage}
 						errorMessage={errorMessage}
+						readOnly={readOnly}
 					/>
 				</section>
 			</div>

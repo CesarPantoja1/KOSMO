@@ -1,7 +1,6 @@
 'use client';
 
 import {
-	FloatingPlan,
 	MarkdownEditor,
 	MarkdownEditorSkeleton,
 	PanelAsistenteRequisito,
@@ -12,7 +11,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { usePlanActions, usePlanStore } from '@/entities/plan';
 import { useRequirementsStore } from '@/entities/requirements';
 import {
 	Ai,
@@ -39,9 +37,6 @@ const generatingRequirementsMessages = [
 
 const RequirementsPage = () => {
 	const router = useRouter();
-
-	// Plan store
-	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
 
 	// Características estado
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -81,18 +76,6 @@ const RequirementsPage = () => {
 		console.log('id actual es ' + selectedIdRef.current);
 		console.log('id actual es ' + markdown);
 	}, [selectedId]);
-
-	useEffect(() => {
-		if (currentProject) {
-			fetchAndHydratePlan(currentProject.id, 'requirements');
-		}
-	}, [currentProject, fetchAndHydratePlan]);
-
-	const handlePlanAction = usePlanActions(
-		currentProject?.id ?? null,
-		'requirements',
-		selectedId,
-	);
 
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
@@ -469,21 +452,15 @@ const RequirementsPage = () => {
 													<Ai color='' size={18} />
 													Generar criterios
 												</button>
+															</div>
+														</div>
+													)}
+												</div>
 											</div>
-										</div>
-									)}
+										)}
+									</div>
 
-								<FloatingPlan
-									phase='requirements'
-									navigateTo='/proyecto/requisitos/plan'
-									contextId={selectedId}
-								/>
-							</div>
-						</div>
-					)}
-				</div>
-
-				{/* Chatbot panel */}
+									{/* Chatbot panel */}
 				<div
 					className={`chatbot ${
 						isChatbotOpen
@@ -493,8 +470,8 @@ const RequirementsPage = () => {
 				>
 					<PanelAsistenteRequisito
 						featureId={selectedId}
+						projectId={currentProject?.id ?? null}
 						onClose={() => setIsChatbotOpen(false)}
-						onPlanAction={handlePlanAction}
 					/>
 				</div>
 			</div>

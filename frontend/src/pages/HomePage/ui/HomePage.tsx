@@ -66,6 +66,7 @@ export function HomePage() {
 	const initializeProject = useAppStore((s) => s.initializeProject);
 
 	const handleProjectClick = (project: Project) => {
+		resetStateBeforeChangeProject();
 		setProjectState(project);
 		initializeProject(project.id);
 		router.push('/proyecto/descubrimiento');

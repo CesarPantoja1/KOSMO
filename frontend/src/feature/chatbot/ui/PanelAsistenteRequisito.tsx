@@ -6,20 +6,16 @@ import {
 } from '@/entities/requirements';
 import { toast } from '@/shared/ui';
 import { useEffect, useState } from 'react';
-import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
+import type { ChatMessage } from '../types/chatbot';
 import { Chatbot } from './Chatbot';
 
 interface PanelAsistenteRequisitoProps {
 	/** ID de la característica para el chat (contexto activo) */
 	featureId: string | null;
+	/** ID del proyecto para rehidratación cuando hay change_suggestions */
+	projectId?: string | null;
 	/** Callback para cerrar el panel */
 	onClose?: () => void;
-	/** Callback para cuando el usuario interactúa con una sugerencia del plan */
-	onPlanAction?: (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => void;
 	title?: string;
 	subtitle?: string;
 	placeholder?: string;
@@ -40,8 +36,8 @@ function toChatMessage(r: RequirementChatResponse): ChatMessage {
 
 export const PanelAsistenteRequisito = ({
 	featureId,
+	projectId,
 	onClose,
-	onPlanAction,
 	title = 'Asistente de Requisitos EARS',
 	subtitle = 'Refinamiento y criterios de aceptación',
 	placeholder = 'Ej., Agregar escenarios alternativos...',
@@ -51,6 +47,7 @@ export const PanelAsistenteRequisito = ({
 	const chatHistories = useRequirementsStore((s) => s.chatHistories);
 	const loadChatHistory = useRequirementsStore((s) => s.loadChatHistory);
 	const sendChatMessage = useRequirementsStore((s) => s.sendChatMessage);
+	const getRequirements = useRequirementsStore((s) => s.getRequirements);
 
 	// T5: Limpieza y recarga del historial al cambiar de requisito seleccionado
 	useEffect(() => {
@@ -87,7 +84,10 @@ export const PanelAsistenteRequisito = ({
 
 		setIsLoading(true);
 		try {
-			await sendChatMessage(featureId, content);
+			const response = await sendChatMessage(featureId, content);
+			if (response.change_suggestions && response.change_suggestions.length > 0 && projectId && featureId) {
+				await getRequirements(projectId, featureId);
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : '';
 			if (message.includes('inválido') || message.includes('format')) {
@@ -116,7 +116,6 @@ export const PanelAsistenteRequisito = ({
 			messages={messages}
 			onSendMessage={handleSendMessage}
 			isLoading={isLoading}
-			onPlanAction={onPlanAction}
 		/>
 	);
 };

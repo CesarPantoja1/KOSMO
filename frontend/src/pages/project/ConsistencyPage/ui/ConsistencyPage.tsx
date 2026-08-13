@@ -163,91 +163,90 @@ const ConsistencyPage = () => {
 		(i) => i.accepted === true,
 	).length;
 
+	const pendingCount = report.downstream_impact.filter((i) => i.accepted === undefined).length;
+
 	return (
 		<>
-			<div className='page-container gap-2'>
-				<div className='page-header'>
-					<h2 className='text-base-800 text-3xl font-bold'>Consistencia del Proyecto</h2>
-					<p className='text-base-600 text-lg'>
-						Revisa los cambios detectados entre fases de desarrollo, agrupados por nivel
-						de impacto.
-					</p>
+			<div className='flex h-full min-h-0 flex-col bg-neutral-100'>
+				{/* Barra superior */}
+				<div className='flex shrink-0 items-center justify-between px-6 py-4 bg-neutral-0 border-b border-neutral-200'>
+					<div className='flex items-center gap-4'>
+						<h1 className='text-xl font-semibold text-neutral-800'>
+							Revisión de consistencia
+						</h1>
+						{pendingCount > 0 && (
+							<span className='px-3 py-1 text-sm font-medium rounded-full bg-warning-50 text-warning-700 border border-warning-200'>
+								{pendingCount} {pendingCount === 1 ? 'cambio pendiente' : 'cambios pendientes'}
+							</span>
+						)}
+					</div>
+					<button type='button' onClick={handleBack} className='btn btn-secondary'>
+						Volver
+					</button>
+				</div>
 
-					<div className='flex-1 min-h-0 mb-2'>
-						<div className='flex h-full min-h-0 flex-col overflow-hidden bg-base-50 rounded'>
-							<div className='flex shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6 py-3'>
-								<span className='text-sm font-semibold text-base-950'>
-									{report.downstream_impact.length}{' '}
-									{report.downstream_impact.length === 1
-										? 'impacto detectado'
-										: 'impactos detectados'}
-								</span>
-								<button type='button' onClick={handleBack} className='btn btn-primary'>
-									Volver
-								</button>
-							</div>
-
-							<div className='flex-1 overflow-y-auto p-6 space-y-6'>
-								{phaseGroups.map(([phase, items]) => (
-									<div key={phase}>
-										<h3 className='text-sm font-semibold text-base-500 uppercase tracking-wide mb-3'>
-											{PHASE_LABELS[phase] || phase} ({items.length})
-										</h3>
-										{items.map((impact) => (
-											<ConsistencyDiffCard
-												key={impact.id}
-												type='downstream_impact'
-												item={impact}
-												onAccept={
-													impact.action !== 'delete' || impact.artifact_type === 'Feature'
-														? () => handleAcceptImpact(impact.id)
-														: undefined
-												}
-												onReject={
-													impact.accepted !== true
-														? () => handleRejectImpact(impact.id)
-														: undefined
-												}
-												onUndo={
-													impact.accepted !== undefined
-														? () => undoImpact(impact.id)
-														: undefined
-												}
-											/>
-										))}
-									</div>
+				{/* Contenido scrolleable */}
+				<div className='flex-1 overflow-y-auto p-6'>
+					<div className='max-w-4xl mx-auto space-y-6'>
+						{phaseGroups.map(([phase, items]) => (
+							<div key={phase} className='space-y-4'>
+								<h3 className='text-sm font-semibold text-neutral-500 uppercase tracking-wide'>
+									{PHASE_LABELS[phase] || phase} ({items.length})
+								</h3>
+								{items.map((impact) => (
+									<ConsistencyDiffCard
+										key={impact.id}
+										type='downstream_impact'
+										item={impact}
+										onAccept={
+											impact.action !== 'delete' || impact.artifact_type === 'Feature'
+												? () => handleAcceptImpact(impact.id)
+												: undefined
+										}
+										onReject={
+											impact.accepted !== true
+												? () => handleRejectImpact(impact.id)
+												: undefined
+										}
+										onUndo={
+											impact.accepted !== undefined
+												? () => undoImpact(impact.id)
+												: undefined
+										}
+									/>
 								))}
 							</div>
+						))}
+					</div>
+				</div>
 
-							<div className='flex shrink-0 items-center justify-between border-t border-base-300 bg-base-100 px-6 py-4'>
-								<button
-									type='button'
-									onClick={handleRejectAll}
-									className='btn btn-destructive'
-								>
-									Rechazar todos
-								</button>
-								<div className='flex items-center gap-3'>
-									<button
-										type='button'
-										onClick={handleMarkAll}
-										className='btn btn-warning'
-									>
-										Marcar todos
-									</button>
-									<button
-										type='button'
-										onClick={handleApplyClick}
-										disabled={selectedCount === 0 || applying}
-										className='btn btn-primary'
-									>
-										{applying
-											? 'Aplicando...'
-											: `Aplicar seleccionados (${selectedCount})`}
-									</button>
-								</div>
-							</div>
-						</div>
+				{/* Barra inferior */}
+				<div className='flex shrink-0 items-center justify-between px-6 py-4 bg-neutral-0 border-t border-neutral-200'>
+					<button
+						type='button'
+						onClick={handleRejectAll}
+						className='btn btn-destructive'
+					>
+						Rechazar todos
+					</button>
+					<div className='flex items-center gap-3'>
+						<button
+							type='button'
+							onClick={handleMarkAll}
+							className='btn btn-warning'
+						>
+							Marcar todos
+						</button>
+						<button
+							type='button'
+							onClick={handleApplyClick}
+							disabled={selectedCount === 0 || applying}
+							className='btn btn-primary'
+						>
+							{applying
+								? 'Aplicando...'
+								: `Aplicar seleccionados (${selectedCount})`}
+						</button>
 					</div>
 				</div>
 			</div>

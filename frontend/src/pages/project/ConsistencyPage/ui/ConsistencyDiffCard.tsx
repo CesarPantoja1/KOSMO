@@ -14,30 +14,30 @@ interface ConsistencyDiffCardProps {
 	accepting?: boolean;
 }
 
-const getStatusOutline = (accepted: boolean | undefined) => {
-	if (accepted === true) return 'outline-status-success';
-	if (accepted === false) return 'outline-status-error';
-	return 'outline-base-300';
+const getStatusBorder = (accepted: boolean | undefined) => {
+	if (accepted === true) return 'border-success-500';
+	if (accepted === false) return 'border-error-500';
+	return 'border-neutral-200';
 };
 
 const actionBadge = (action: string | undefined) => {
 	if (action === 'delete') {
 		return (
-			<span className='ml-2 shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700'>
+			<span className='ml-2 shrink-0 rounded-full bg-error-50 px-2 py-0.5 text-xs font-semibold text-error-700 border border-error-200'>
 				Eliminar
 			</span>
 		);
 	}
 	if (action === 'update') {
 		return (
-			<span className='ml-2 shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700'>
+			<span className='ml-2 shrink-0 rounded-full bg-warning-50 px-2 py-0.5 text-xs font-semibold text-warning-700 border border-warning-200'>
 				Modificar
 			</span>
 		);
 	}
 	if (action === 'create' || action === 'new') {
 		return (
-			<span className='ml-2 shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700'>
+			<span className='ml-2 shrink-0 rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700 border border-success-200'>
 				Nuevo
 			</span>
 		);
@@ -58,16 +58,16 @@ function DiffContent({
 		return (
 			<div className='flex gap-4 mb-3'>
 				<div className='flex-1 min-w-0'>
-					<div className='text-xs font-semibold text-base-400 uppercase mb-1'>Actual</div>
-					<div className='max-h-64 overflow-auto rounded outline outline-base-300 bg-base-50 p-2'>
+					<div className='text-xs font-semibold text-neutral-400 uppercase mb-1'>Actual</div>
+					<div className='max-h-64 overflow-auto rounded border border-neutral-200 bg-neutral-50 p-2'>
 						<PlantUmlViewer source={before} />
 					</div>
 				</div>
 				<div className='flex-1 min-w-0'>
-					<div className='text-xs font-semibold text-base-400 uppercase mb-1'>
+					<div className='text-xs font-semibold text-neutral-400 uppercase mb-1'>
 						Propuesto
 					</div>
-					<div className='max-h-64 overflow-auto rounded outline outline-base-300 bg-base-50 p-2'>
+					<div className='max-h-64 overflow-auto rounded border border-neutral-200 bg-neutral-50 p-2'>
 						<PlantUmlViewer source={after} />
 					</div>
 				</div>
@@ -78,17 +78,17 @@ function DiffContent({
 	return (
 		<div className='flex gap-4 mb-3'>
 			<div className='flex-1 min-w-0'>
-				<div className='text-xs font-semibold text-base-400 uppercase mb-1'>Actual</div>
-				<div className='max-h-48 overflow-y-auto rounded outline outline-base-300 px-4 py-2 bg-base-50'>
-					<MarkdownText content={before || ''} className='text-sm text-base-800' />
+				<div className='text-xs font-semibold text-neutral-400 uppercase mb-1'>Actual</div>
+				<div className='max-h-48 overflow-y-auto rounded border border-neutral-200 px-4 py-2 bg-neutral-50'>
+					<MarkdownText content={before || ''} className='text-sm text-neutral-800' />
 				</div>
 			</div>
 			<div className='flex-1 min-w-0'>
-				<div className='text-xs font-semibold text-base-400 uppercase mb-1'>
+				<div className='text-xs font-semibold text-neutral-400 uppercase mb-1'>
 					Propuesto
 				</div>
-				<div className='max-h-48 overflow-y-auto rounded outline outline-base-300 px-4 py-2 bg-base-50'>
-					<MarkdownText content={after || ''} className='text-sm text-base-800' />
+				<div className='max-h-48 overflow-y-auto rounded border border-neutral-200 px-4 py-2 bg-neutral-50'>
+					<MarkdownText content={after || ''} className='text-sm text-neutral-800' />
 				</div>
 			</div>
 		</div>
@@ -104,7 +104,7 @@ export const ConsistencyDiffCard = ({
 	accepting,
 }: ConsistencyDiffCardProps) => {
 	const accepted = item.accepted;
-	const outlineClass = getStatusOutline(accepted);
+	const borderClass = getStatusBorder(accepted);
 	const [showFullRationale, setShowFullRationale] = useState(false);
 
 	const displayId =
@@ -140,21 +140,21 @@ export const ConsistencyDiffCard = ({
 
 	return (
 		<div
-			className={`mx-0.5 mb-2 px-6 py-4 transition-shadow outline rounded ${outlineClass}`}
+			className={`bg-neutral-0 rounded-lg border ${borderClass} shadow-sm px-6 py-4 transition-shadow hover:shadow-md`}
 		>
 			<div className='flex items-start gap-4'>
 				{displayId && (
-					<div className='w-14 shrink-0 text-lg font-semibold text-base-800 pt-0.5 text-center'>
+					<div className='w-14 shrink-0 text-lg font-semibold text-neutral-700 pt-0.5 text-center'>
 						{displayId}
 					</div>
 				)}
 				<div className='flex-1 min-w-0'>
 					<div className='flex items-center gap-2 mb-1'>
-						<h3 className='text-primary-100 text-lg font-semibold truncate'>{title}</h3>
+						<h3 className='text-neutral-800 text-base font-semibold truncate'>{title}</h3>
 						{actionBadge(action)}
 						{isHandled && (
 							<span
-								className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${accepted ? 'bg-status-success/10 text-status-success' : 'bg-status-error/10 text-status-error'}`}
+								className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${accepted ? 'bg-success-50 text-success-700 border border-success-200' : 'bg-error-50 text-error-700 border border-error-200'}`}
 							>
 								{accepted ? 'Aceptado' : 'Descartado'}
 							</span>
@@ -164,14 +164,14 @@ export const ConsistencyDiffCard = ({
 					{rationale && (
 						<div className='mb-3'>
 							{showFullRationale || rationale.length <= 150 ? (
-								<p className='text-sm text-base-600 leading-relaxed'>{rationale}</p>
+								<p className='text-sm text-neutral-600 leading-relaxed'>{rationale}</p>
 							) : (
-								<p className='text-sm text-base-600 leading-relaxed'>
+								<p className='text-sm text-neutral-600 leading-relaxed'>
 									{rationale.slice(0, 150)}…
 									<button
 										type='button'
 										onClick={() => setShowFullRationale(true)}
-										className='ml-1 cursor-pointer text-primary-90 underline text-xs'
+										className='ml-1 cursor-pointer text-neutral-800 underline text-xs'
 									>
 										Ver detalle
 									</button>
@@ -181,7 +181,7 @@ export const ConsistencyDiffCard = ({
 					)}
 
 					{isChildDelete && (
-						<p className='text-sm text-base-500 italic mb-3'>
+						<p className='text-sm text-neutral-500 italic mb-3'>
 							Se eliminará en cascada al eliminar la característica asociada.
 						</p>
 					)}
@@ -195,7 +195,7 @@ export const ConsistencyDiffCard = ({
 					)}
 
 					{!hasDiff && !isDelete && (
-						<p className='text-sm text-base-500 italic mb-3'>
+						<p className='text-sm text-neutral-500 italic mb-3'>
 							Revisión manual requerida — el cambio no incluye diff automático. Consulta
 							la justificación arriba.
 						</p>

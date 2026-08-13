@@ -1,10 +1,8 @@
 'use client';
 
 import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
-import { usePlanActions } from '@/entities/plan';
 import {
 	Chatbot,
-	FloatingPlan,
 	MarkdownEditor,
 	MarkdownEditorSkeleton,
 	type MarkdownEditorHandle,
@@ -56,6 +54,7 @@ const DiscoveryPage = () => {
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
 	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
+	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
 	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
 	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
@@ -184,17 +183,16 @@ const DiscoveryPage = () => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [markdown]);
 
-	const handlePlanAction = usePlanActions(
-		currentProject?.id ?? null,
-		'discovery',
-		currentProject?.id ?? null,
-	);
-
 	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
 		setIsChatLoading(true);
 		try {
-			await sendChatMessage(currentProject.id, content);
+			const response = await sendChatMessage(currentProject.id, content);
+			if (response.change_suggestions && response.change_suggestions.length > 0) {
+				const updated = await getDiscovery(currentProject.id);
+				setMarkdown(updated.content);
+				savedContentRef.current = updated.content;
+			}
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
@@ -292,11 +290,7 @@ const DiscoveryPage = () => {
 									onMaximize={() => setEditorMaximized(true)}
 									onMinimize={() => setEditorMaximized(false)}
 									saveStatus={saveStatus}
-								/>
-								<FloatingPlan
-									phase='discovery'
-									navigateTo='/proyecto/descubrimiento/plan'
-									contextId={currentProject?.id ?? null}
+									readOnly={isChatLoading}
 								/>
 							</div>
 						)}
@@ -317,7 +311,6 @@ const DiscoveryPage = () => {
 						messages={chatMessages}
 						onSendMessage={handleSendChat}
 						isLoading={isChatLoading}
-						onPlanAction={handlePlanAction}
 					/>
 				</div>
 			</div>

@@ -53,7 +53,7 @@ const mockSaveDiscovery = async (
 	content: string,
 ): Promise<DiscoveryResponse> => {
 	await delay(500);
-	mockContent = content;
+	// mockContent = content;
 	return {
 		id: 'mock-discovery-1',
 		project_id: projectId,

@@ -2,19 +2,14 @@
 
 import { Ai } from '@/shared/ui';
 import { MarkdownText } from '@/shared/ui/markdown-text';
-import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
+import type { ChatMessage } from '../types/chatbot';
 import { TarjetaRecepcionPlan } from './TarjetaRecepcionPlan';
 
 interface ChatbotMessageProps {
 	message: ChatMessage;
-	onPlanAction?: (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => void;
 }
 
-export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) => {
+export const ChatbotMessage = ({ message }: ChatbotMessageProps) => {
 	const isUser = message.role === 'user';
 
 	return (
@@ -45,11 +40,7 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				message.change_suggestions.length > 0 &&
 				message.change_suggestions.map((suggestion) => (
 					<div className='w-full' key={suggestion.id}>
-						<TarjetaRecepcionPlan
-							messageId={message.id}
-							suggestion={suggestion}
-							onAction={(action) => onPlanAction?.(action, suggestion, message.id)}
-						/>
+						<TarjetaRecepcionPlan suggestion={suggestion} />
 					</div>
 				))}
 		</div>

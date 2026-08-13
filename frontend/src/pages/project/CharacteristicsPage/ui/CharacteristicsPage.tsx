@@ -6,15 +6,13 @@ import {
 	type CharacteristicChatResponse,
 } from '@/entities/characteristic';
 import { useDiscoveryStore } from '@/entities/discovery';
-import { usePlanActions, usePlanStore } from '@/entities/plan';
-import { Chatbot, FloatingPlan } from '@/feature';
+import { Chatbot } from '@/feature';
 import type { ChatMessage } from '@/feature/chatbot';
 import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
-import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
@@ -50,17 +48,10 @@ const CharacteristicsPage = () => {
 
 	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
 	const sendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
+	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 	const generateCharacteristics = useCharacteristicStore(
 		(s) => s.generateCharacteristics,
 	);
-
-	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
-
-	useEffect(() => {
-		if (currentProject) {
-			fetchAndHydratePlan(currentProject.id, 'features');
-		}
-	}, [currentProject, fetchAndHydratePlan]);
 
 	const handleRefine = (featureId: string) => {
 		setActiveFeatureId(featureId);
@@ -97,7 +88,6 @@ const CharacteristicsPage = () => {
 		setIsGeneratingCharacteristics(true);
 		try {
 			await generateCharacteristics(currentProject.id);
-			fetchAndHydratePlan(currentProject.id, 'features');
 			toast.success('Características generadas exitosamente');
 		} catch (err) {
 			const message =
@@ -112,7 +102,10 @@ const CharacteristicsPage = () => {
 		if (!activeFeatureId) return;
 		setIsChatLoading(true);
 		try {
-			await sendChatMessage(activeFeatureId, content);
+			const response = await sendChatMessage(activeFeatureId, content);
+			if (response.change_suggestions && response.change_suggestions.length > 0 && currentProject) {
+				await getCharacteristics(currentProject.id);
+			}
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
@@ -121,12 +114,6 @@ const CharacteristicsPage = () => {
 			setIsChatLoading(false);
 		}
 	};
-
-	const handlePlanAction = usePlanActions(
-		currentProject?.id ?? null,
-		'features',
-		activeFeatureId,
-	);
 
 	const chatMessages: ChatMessage[] = (chatHistories[activeFeatureId!] ?? []).map(
 		toChatMessage,
@@ -271,12 +258,6 @@ const CharacteristicsPage = () => {
 										))
 									)}
 								</div>
-
-								<FloatingPlan
-									phase='features'
-									navigateTo='/proyecto/caracteristicas/plan'
-									contextId={activeFeatureId}
-								/>
 							</>
 						)}
 					</div>
@@ -296,7 +277,6 @@ const CharacteristicsPage = () => {
 						messages={chatMessages}
 						onSendMessage={handleSendChat}
 						isLoading={isChatLoading}
-						onPlanAction={handlePlanAction}
 					/>
 				</div>
 			</div>

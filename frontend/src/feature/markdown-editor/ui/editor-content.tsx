@@ -30,6 +30,7 @@ interface Props {
 	saveMessage?: string;
 	savedMessage?: string;
 	errorMessage?: string;
+	readOnly?: boolean;
 }
 
 export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorContent(
@@ -43,6 +44,7 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 		saveMessage,
 		savedMessage,
 		errorMessage,
+		readOnly,
 	},
 	ref,
 ) {
@@ -51,6 +53,7 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 			<MDXEditor
 				markdown={markdown}
 				onChange={onChange}
+				readOnly={readOnly}
 				contentEditableClassName='prose max-w-none px-10 py-8 bg-neutral-0 focus:outline-none'
 				plugins={[
 					headingsPlugin(),

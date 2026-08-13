@@ -46,10 +46,13 @@ export function MainNavbar({ children }: MainNavbarProps) {
 
 		router.push('/proyecto');
 	};
+	const initializeProject = useAppStore((s) => s.initializeProject);
 
 	const handleProjectClick = (project: Project) => {
 		useAppStore.getState().resetStateBeforeChangeProject();
 		useProjectStore.getState().setProjectState(project);
+		initializeProject(project.id);
+
 		router.push('/proyecto/descubrimiento');
 	};
 

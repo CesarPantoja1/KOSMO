@@ -2,7 +2,7 @@
 
 import { Ai, Close, Send } from '@/shared/ui';
 import { useEffect, useRef, useState } from 'react';
-import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
+import type { ChatMessage } from '../types/chatbot';
 import { ChatbotMessage } from './chatbot-message';
 
 interface Props {
@@ -17,13 +17,6 @@ interface Props {
 	messages?: ChatMessage[];
 	onSendMessage?: (content: string) => Promise<void>;
 	isLoading?: boolean;
-	/** Callback emitido cuando el usuario interactúa con una sugerencia de cambio.
-	 *  La página consumidora decide qué hacer con la acción. */
-	onPlanAction?: (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => void;
 }
 
 export const Chatbot = ({
@@ -35,7 +28,6 @@ export const Chatbot = ({
 	messages = [],
 	onSendMessage,
 	isLoading = false,
-	onPlanAction,
 }: Props) => {
 	const [input, setInput] = useState('');
 	const [isSending, setIsSending] = useState(false);
@@ -115,7 +107,6 @@ export const Chatbot = ({
 					<ChatbotMessage
 						key={message.id}
 						message={message}
-						onPlanAction={onPlanAction}
 					/>
 				))}
 
