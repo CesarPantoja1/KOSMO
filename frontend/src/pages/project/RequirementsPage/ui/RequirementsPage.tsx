@@ -21,6 +21,7 @@ import {
 	ModalConfirm,
 	toast,
 } from '@/shared/ui';
+import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
 import { getTraceabilityNavigation, type TraceabilityNavigationOutput } from '@/entities/traceability';
 
@@ -283,15 +284,16 @@ const RequirementsPage = () => {
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 			
-			<ModalConfirm
-				isOpen={!!traceabilityCheck}
-				title='Edición no permitida'
-				message={traceabilityCheck?.redirect_message || 'No tienes permisos para editar este nivel.'}
-				confirmText={`Ir a ${traceabilityCheck?.source_entity_name || 'Origen'}`}
-				cancelText='Cancelar'
-				onConfirm={handleGoToSource}
-				onCancel={() => setTraceabilityCheck(null)}
-			/>
+			{!!traceabilityCheck && (
+				<ModalConfirm
+					title='Edición no permitida'
+					description={traceabilityCheck.redirect_message || 'No tienes permisos para editar este nivel.'}
+					confirmText={`Ir a ${traceabilityCheck.source_entity_name || 'Origen'}`}
+					cancelText='Cancelar'
+					onConfirm={handleGoToSource}
+					onCancel={() => setTraceabilityCheck(null)}
+				/>
+			)}
 
 			{isGenerating && (
 				<Loading
@@ -320,7 +322,9 @@ const RequirementsPage = () => {
 									disabled={isCheckingTraceability || isEditable || !hasRequirements[selectedId ? selectedId : '']}
 									className='btn btn-outline disabled:opacity-50 disabled:cursor-not-allowed'
 								>
-									{isCheckingTraceability ? <Loading size={18} /> : null}
+									{isCheckingTraceability ? (
+										<div className='h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
+									) : null}
 									Editar
 								</button>
 								<button

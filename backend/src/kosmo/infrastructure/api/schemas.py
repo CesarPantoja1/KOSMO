@@ -894,7 +894,9 @@ class TraceabilityNavigationOutputView(BaseModel):
     """Respuesta de navegación con guardas de trazabilidad."""
 
     permitted: bool = Field(description="Indica si la edición está permitida en este nivel.")
-    redirect_message: str | None = Field(default=None, description="Mensaje para mostrar al usuario si no está permitido.")
+    redirect_message: str | None = Field(
+        default=None, description="Mensaje para mostrar al usuario si no está permitido."
+    )
     source_entity_name: str | None = Field(default=None, description="Nombre de la entidad de origen.")
     source_entity_id: str | None = Field(default=None, description="ID de la entidad de origen.")
     source_level: str | None = Field(default=None, description="Fase de la entidad de origen (ej. caracteristicas).")

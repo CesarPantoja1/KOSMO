@@ -35,8 +35,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 
 	const handleBackToHub = () => {
-		setAvatarOpen(false);
-
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
 		if (hasUnsavedChanges) {
 			setPendingNavigationPath('/proyecto');
