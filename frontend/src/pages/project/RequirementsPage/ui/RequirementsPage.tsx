@@ -21,8 +21,8 @@ import {
 	ModalConfirm,
 	toast,
 } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
+import { getTraceabilityNavigation, type TraceabilityNavigationOutput } from '@/entities/traceability';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 
@@ -69,6 +69,11 @@ const RequirementsPage = () => {
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
+
+	// Trazabilidad
+	const [traceabilityCheck, setTraceabilityCheck] = useState<TraceabilityNavigationOutput | null>(null);
+	const [isCheckingTraceability, setIsCheckingTraceability] = useState(false);
+	const [isEditable, setIsEditable] = useState(false);
 
 	const selectedIdRef = useRef(selectedId);
 	useEffect(() => {
@@ -142,6 +147,7 @@ const RequirementsPage = () => {
 		setMarkdown('');
 		setSavedContent('');
 		setSaveStatus('idle');
+		setIsEditable(false);
 		setSelectedId(id);
 		setPendingCharSwitch(null);
 		if (!hasRequirements[id]) {
@@ -175,22 +181,42 @@ const RequirementsPage = () => {
 		}
 	};
 
-	const handleSave = async (): Promise<boolean> => {
-		const charId = selectedIdRef.current;
-		if (!charId || !currentProject) return false;
+	const handleSave = useCallback(async () => {
+		if (!selectedId || !currentProject) return;
 
 		setSaveStatus('saving');
-
 		try {
-			await saveRequirements(currentProject.id, charId, markdown);
+			await saveRequirements(currentProject.id, selectedId, markdown);
 			setSavedContent(markdown);
 			setSaveStatus('saved');
-			return true;
-		} catch (_err) {
+		} catch (err) {
 			setSaveStatus('error');
-			console.log(_err);
-			return false;
+			toast.error('Error al guardar los requisitos');
 		}
+	}, [currentProject, selectedId, markdown, saveRequirements]);
+
+	const handleEdit = async () => {
+		if (!selectedId) return;
+		setIsCheckingTraceability(true);
+		try {
+			const res = await getTraceabilityNavigation(selectedId, 'requisitos');
+			if (!res.permitted) {
+				setTraceabilityCheck(res);
+			} else {
+				setIsEditable(true);
+			}
+		} catch (err) {
+			toast.error('Error al verificar permisos de edición');
+		} finally {
+			setIsCheckingTraceability(false);
+		}
+	};
+
+	const handleGoToSource = () => {
+		if (traceabilityCheck?.source_level === 'caracteristicas') {
+			router.push('/proyecto/caracteristicas');
+		}
+		setTraceabilityCheck(null);
 	};
 
 	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
@@ -242,8 +268,7 @@ const RequirementsPage = () => {
 		}, 3000);
 
 		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [markdown]);
+	}, [markdown, handleSave, savedContent]);
 
 	const hasCharacteristics = characteristics.length > 0;
 
@@ -256,6 +281,16 @@ const RequirementsPage = () => {
 			{pendingNavigationPath && (
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
+			
+			<ModalConfirm
+				isOpen={!!traceabilityCheck}
+				title='Edición no permitida'
+				message={traceabilityCheck?.redirect_message || 'No tienes permisos para editar este nivel.'}
+				confirmText={`Ir a ${traceabilityCheck?.source_entity_name || 'Origen'}`}
+				cancelText='Cancelar'
+				onConfirm={handleGoToSource}
+				onCancel={() => setTraceabilityCheck(null)}
+			/>
 
 			{isGenerating && (
 				<Loading
@@ -267,7 +302,6 @@ const RequirementsPage = () => {
 
 			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
 				<div className='page-header'>
-					{/* Header row */}
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
 							<h2 className='text-neutral-800 text-3xl font-bold'>
@@ -280,6 +314,14 @@ const RequirementsPage = () => {
 
 						{!isLoading && hasCharacteristics && !isEditorMaximized && (
 							<div className='flex items-center gap-3 shrink-0'>
+								<button
+									onClick={handleEdit}
+									disabled={isCheckingTraceability || isEditable || !hasRequirements[selectedId ? selectedId : '']}
+									className='btn btn-outline disabled:opacity-50 disabled:cursor-not-allowed'
+								>
+									{isCheckingTraceability ? <Loading size={18} /> : null}
+									Editar
+								</button>
 								<button
 									onClick={() => setIsChatbotOpen(true)}
 									disabled={!hasRequirements[selectedId ? selectedId : '']}
@@ -352,9 +394,7 @@ const RequirementsPage = () => {
 								icon={Requirements}
 							/>
 
-							{/* Content area */}
 							<div className='relative flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
-								{/* No selection */}
 								{!selectedCharacteristic && (
 									<div className='flex flex-col items-center justify-center h-full gap-4'>
 										<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100'>
@@ -372,7 +412,6 @@ const RequirementsPage = () => {
 									</div>
 								)}
 
-								{/* Loading requirements */}
 								{selectedCharacteristic && isLoadingRequirements && (
 									<div className='flex flex-1 items-center justify-center gap-3'>
 										<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
@@ -382,7 +421,6 @@ const RequirementsPage = () => {
 									</div>
 								)}
 
-								{/* Has requirements — editor */}
 								{selectedCharacteristic &&
 									!isLoadingRequirements &&
 									hasRequirements[selectedCharacteristic.id] &&
@@ -410,12 +448,12 @@ const RequirementsPage = () => {
 													onMaximize={() => setEditorMaximized(true)}
 													onMinimize={() => setEditorMaximized(false)}
 													saveStatus={saveStatus}
+													readOnly={!isEditable}
 												/>
 											</div>
 										</div>
 									)}
 
-								{/* No requirements — empty state */}
 								{selectedCharacteristic &&
 									!isLoadingRequirements &&
 									!hasRequirements[selectedCharacteristic.id] && (
@@ -452,15 +490,14 @@ const RequirementsPage = () => {
 													<Ai color='' size={18} />
 													Generar criterios
 												</button>
-															</div>
-														</div>
-													)}
-												</div>
 											</div>
-										)}
-									</div>
+										</div>
+									)}
+							</div>
+						</div>
+					)}
+				</div>
 
-									{/* Chatbot panel */}
 				<div
 					className={`chatbot ${
 						isChatbotOpen

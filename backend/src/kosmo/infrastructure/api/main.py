@@ -26,6 +26,7 @@ from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirement_chat import router as requirement_chat_router
 from kosmo.infrastructure.api.routers.requirements import router as requirements_router
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
+from kosmo.infrastructure.api.routers.traceability import router as traceability_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
 from kosmo.infrastructure.persistence.postgres.outbox import run_outbox_worker
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
@@ -300,6 +301,7 @@ app.include_router(consistency_router)
 app.include_router(schemas_router)
 app.include_router(knowledge_router)
 app.include_router(documents_router)
+app.include_router(traceability_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
