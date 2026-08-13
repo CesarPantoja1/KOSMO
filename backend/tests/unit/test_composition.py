@@ -3,9 +3,14 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from starlette.requests import Request
 
+from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
+from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
+from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.config import Settings
-from kosmo.infrastructure.api.composition import build_app_components
+from kosmo.infrastructure.api.composition import AppContainer, build_app_components
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 
 
@@ -70,65 +75,40 @@ async def test_build_app_components_reuses_registry_instances() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_app_components_binds_expected_state_attributes() -> None:
+async def test_app_container_exposes_typed_components() -> None:
+    # Arrange
+    settings = _make_settings()
+
+    # Act
+    components = build_app_components(settings)
+
+    try:
+        # Assert: los campos del contenedor tienen tipos concretos (no Any)
+        assert isinstance(components, AppContainer)
+        assert isinstance(components.pipeline.process_chat_message, ProcessChatMessageUseCase)
+        assert isinstance(components.discovery.apply_plan_changes, ApplyPlanChangesUseCase)
+        assert isinstance(components.consistency.apply_consistency_impacts, ApplyConsistencyImpactsUseCase)
+        assert components.projects.create_project is not None
+        assert components.pipeline.outbox is not None
+        assert components.db_engine is not None
+    finally:
+        await components.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_container_returns_container_from_app_state() -> None:
     # Arrange
     settings = _make_settings()
     components = build_app_components(settings)
     app = FastAPI()
+    app.state.container = components
+    request = Request(scope={"type": "http", "method": "GET", "path": "/", "app": app})
 
     # Act
-    components.bind_to_state(app)
+    container = get_container(request)
 
-    try:
-        # Assert: los nombres que consumen los routers apuntan a los componentes
-        state = app.state
-        assert state.db_engine is components.db_engine
-        assert state.redis is None
-        assert state.create_project is components.projects.create_project
-        assert state.get_project is components.projects.get_project
-        assert state.list_projects is components.projects.list_projects
-        assert state.validate_phase_context is components.pipeline.validate_phase_context
-        assert state.process_chat_message is components.pipeline.process_chat_message
-        assert state.context_builder is components.pipeline.context_builder
-        assert state.agent is components.pipeline.agent
-        assert state.chat_repo is components.pipeline.chat_repo
-        assert state.traceability_repo is components.pipeline.traceability_repo
-        assert state.generate_discovery is components.discovery.generate_discovery
-        assert state.get_discovery is components.discovery.get_discovery
-        assert state.save_discovery is components.discovery.save_discovery
-        assert state.refine_discovery is components.discovery.refine_discovery
-        assert state.get_discovery_chat_history is components.discovery.get_discovery_chat_history
-        assert state.manage_plan_changes is components.discovery.manage_plan_changes
-        assert state.apply_plan_changes is components.discovery.apply_plan_changes
-        assert state.document_repo is components.discovery.document_repo
-        assert state.propagate_discovery_changes is components.discovery.propagate_changes
-        assert state.consistency_evaluator is components.discovery.consistency_evaluator
-        assert state.evaluate_project_consistency is components.consistency.evaluate_project_consistency
-        assert state.cascade_consistency is components.consistency.cascade_consistency
-        assert state.apply_consistency_impacts is components.consistency.apply_consistency_impacts
-        assert state.generate_features is components.features.generate_features
-        assert state.suggest_features is components.features.suggest_features
-        assert state.save_selected_features is components.features.save_selected_features
-        assert state.create_characteristic is components.features.create_characteristic
-        assert state.feature_repo is components.features.feature_repo
-        assert state.get_feature_chat_history is components.features.get_feature_chat_history
-        assert state.list_features is components.features.list_features
-        assert state.edit_feature is components.features.edit_feature
-        assert state.check_feature_consistency is components.features.check_feature_consistency
-        assert state.propagate_feature_changes is components.consistency.propagate_feature_changes
-        assert state.delete_feature is components.consistency.delete_feature
-        assert state.generate_ears is components.requirements.generate_ears
-        assert state.get_requirements is components.requirements.get_requirements
-        assert state.save_requirements is components.requirements.save_requirements
-        assert state.refine_requirements is components.requirements.refine_requirements
-        assert state.get_requirement_chat_history is components.requirements.get_requirement_chat_history
-        assert state.requirement_repo is components.requirements.requirement_repo
-        assert state.regenerate_requirements is components.requirements.regenerate_requirements
-        assert state.propagate_requirement_changes is components.consistency.propagate_requirement_changes
-        assert state.generate_diagram is components.modelo.generate_diagram
-        assert state.get_diagram is components.modelo.get_diagram
-        assert state.diagram_repo is components.modelo.diagram_repo
-        assert state.consolidate_patterns is components.pipeline.consolidate_patterns
-        assert state.outbox is components.pipeline.outbox
-    finally:
-        await components.close()
+    # Assert
+    assert container is components
+
+    await components.close()

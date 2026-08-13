@@ -23,7 +23,9 @@ from kosmo.contracts.auth import (
     TokenRevokedError,
     UserAlreadyExistsError,
 )
+from kosmo.infrastructure.api.composition import AuthComponents
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import IpRateLimiter
 from kosmo.infrastructure.api.schemas import (
     AuthorizationCodeResponse,
@@ -47,24 +49,30 @@ _refresh_limiter = IpRateLimiter(30)
 _logout_limiter = IpRateLimiter(20)
 
 
+def _auth_components(request: Request) -> AuthComponents:
+    container = get_container(request)
+    assert container.auth is not None
+    return container.auth
+
+
 def _register(request: Request) -> RegisterUser:
-    return request.app.state.register_user
+    return _auth_components(request).register_user
 
 
 def _authorize(request: Request) -> AuthorizeWithPkce:
-    return request.app.state.authorize_with_pkce
+    return _auth_components(request).authorize_with_pkce
 
 
 def _exchange(request: Request) -> ExchangeAuthorizationCode:
-    return request.app.state.exchange_authorization_code
+    return _auth_components(request).exchange_authorization_code
 
 
 def _refresh(request: Request) -> RefreshTokenPair:
-    return request.app.state.refresh_token_pair
+    return _auth_components(request).refresh_token_pair
 
 
 def _revoke(request: Request) -> RevokeSession:
-    return request.app.state.revoke_session
+    return _auth_components(request).revoke_session
 
 
 def _oauth_error(*, status_code: int, error: str, description: str) -> JSONResponse:

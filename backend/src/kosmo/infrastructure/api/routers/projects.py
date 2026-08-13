@@ -11,6 +11,7 @@ from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     CreateProjectRequest,
     ProjectResponse,
@@ -20,15 +21,15 @@ router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
 
 def _create_project(request: Request) -> CreateProjectUseCase:
-    return request.app.state.create_project
+    return get_container(request).projects.create_project
 
 
 def _get_project(request: Request) -> GetProjectUseCase:
-    return request.app.state.get_project
+    return get_container(request).projects.get_project
 
 
 def _list_projects(request: Request) -> ListProjectsUseCase:
-    return request.app.state.list_projects
+    return get_container(request).projects.list_projects
 
 
 @router.post(

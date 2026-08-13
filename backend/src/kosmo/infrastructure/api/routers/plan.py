@@ -19,6 +19,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     AddPlanChangeRequest,
     AppliedChangeItemView,
@@ -42,11 +43,11 @@ router = APIRouter(
 
 
 def _manage_plan_changes(request: Request) -> ManagePlanChangesUseCase:
-    return request.app.state.manage_plan_changes
+    return get_container(request).discovery.manage_plan_changes
 
 
 def _apply_plan_changes(request: Request) -> ApplyPlanChangesUseCase:
-    return request.app.state.apply_plan_changes
+    return get_container(request).discovery.apply_plan_changes
 
 
 @router.get(
@@ -205,7 +206,7 @@ async def apply_batch(
 
 
 def _document_repo(request: Request) -> DocumentRepository:
-    return request.app.state.document_repo
+    return get_container(request).discovery.document_repo
 
 
 @router.post(

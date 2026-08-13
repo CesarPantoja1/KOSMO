@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -34,8 +35,10 @@ class StubRefineAgent:
 
 class _FakeState:
     def __init__(self, use_case: RefineRequirementsUseCase, feature_repo: Any) -> None:
-        self.refine_requirements = use_case
-        self.feature_repo = feature_repo
+        self.container = SimpleNamespace(
+            requirements=SimpleNamespace(refine_requirements=use_case),
+            features=SimpleNamespace(feature_repo=feature_repo),
+        )
 
 
 class _FakeApp:

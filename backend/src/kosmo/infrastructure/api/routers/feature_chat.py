@@ -29,6 +29,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
     ChatMessage,
@@ -43,19 +44,19 @@ router = APIRouter(
 
 
 def _process_feature_chat(request: Request) -> ProcessChatMessageUseCase:
-    return request.app.state.process_chat_message
+    return get_container(request).pipeline.process_chat_message
 
 
 def _get_feature_chat_history(request: Request) -> GetFeatureChatHistoryUseCase:
-    return request.app.state.get_feature_chat_history
+    return get_container(request).features.get_feature_chat_history
 
 
 def _validate_phase_context(request: Request) -> ValidatePhaseContextUseCase:
-    return request.app.state.validate_phase_context
+    return get_container(request).pipeline.validate_phase_context
 
 
 def _context_builder(request: Request) -> ContextBuilder:
-    return request.app.state.context_builder
+    return get_container(request).pipeline.context_builder
 
 
 @router.post(
@@ -172,12 +173,15 @@ async def get_feature_chat_history(
     return ChatHistoryResponse.from_domain(output.history)
 
 
-def _agent_dep(request: Request):
-    return request.app.state.agent
+def _agent_dep(request: Request) -> KOSMOAgent:
+    container = get_container(request)
+    agent = container.pipeline.agent
+    assert isinstance(agent, KOSMOAgent)
+    return agent
 
 
 def _chat_repo_dep(request: Request) -> ChatRepository:
-    return request.app.state.chat_repo  # type: ignore[reportReturnType]
+    return get_container(request).pipeline.chat_repo
 
 
 @router.post(

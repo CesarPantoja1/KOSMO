@@ -221,7 +221,7 @@ def _make_outbox_handler(pipeline: Any) -> Any:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
     components = build_app_components(settings)
-    components.bind_to_state(app)
+    app.state.container = components
 
     outbox_task = asyncio.create_task(
         run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components.pipeline))

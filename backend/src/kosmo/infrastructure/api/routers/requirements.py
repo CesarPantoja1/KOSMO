@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
+from kosmo.application.consistency.propagate_changes import (
+    PropagateChangesInput,
+    PropagateChangesUseCase,
+)
 from kosmo.application.requirements import (
     GenerateEARSInput,
     GenerateEARSUseCase,
@@ -26,6 +30,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     PhaseNotificationList,
     PhaseNotificationView,
@@ -52,7 +57,7 @@ class RefineRequirementsRequest(BaseModel):
 
 
 async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    fid = await resolve_feature_id(request.app.state.feature_repo, ProjectId(project_id), id_or_slug)
+    fid = await resolve_feature_id(get_container(request).features.feature_repo, ProjectId(project_id), id_or_slug)
     if fid is None:
         raise FeatureNotFoundError(feature_id=id_or_slug, instance=f"/api/v1/features/{id_or_slug}/requirements")
     return fid
@@ -71,7 +76,7 @@ async def generate_requirements(
     request: Request,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
-    uc = cast("GenerateEARSUseCase", request.app.state.generate_ears)
+    uc: GenerateEARSUseCase = get_container(request).requirements.generate_ears
 
     output = await uc.execute(GenerateEARSInput(project_id=ProjectId(body.project_id), feature_id=fid))
     return {
@@ -105,7 +110,7 @@ async def get_requirements(
     project_id: str = Query(...),
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, project_id, feature_id)
-    uc = cast("GetRequirementsUseCase", request.app.state.get_requirements)
+    uc: GetRequirementsUseCase = get_container(request).requirements.get_requirements
 
     try:
         output = await uc.execute(
@@ -133,7 +138,7 @@ async def save_requirements(
     request: Request,
 ) -> dict[str, str]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
-    uc = cast("SaveRequirementsUseCase", request.app.state.save_requirements)
+    uc: SaveRequirementsUseCase = get_container(request).requirements.save_requirements
 
     try:
         await uc.execute(
@@ -169,7 +174,7 @@ async def refine_requirements(
     request: Request,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
-    uc = cast("RefineRequirementsUseCase", request.app.state.refine_requirements)
+    uc: RefineRequirementsUseCase = get_container(request).requirements.refine_requirements
 
     try:
         output = await uc.execute(
@@ -221,11 +226,7 @@ async def propagate_requirement_changes(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> PhaseNotificationList:
-    from kosmo.application.consistency.propagate_changes import (
-        PropagateChangesInput,
-    )
-
-    uc = request.app.state.propagate_requirement_changes
+    uc: PropagateChangesUseCase = get_container(request).consistency.propagate_requirement_changes
 
     try:
         output = await uc.execute(
@@ -274,7 +275,7 @@ async def regenerate_requirements(
     request: Request,
     project_id: str = Query(...),
 ) -> RegenerateRequirementsResponse:
-    uc = cast("RegenerateRequirementsUseCase", request.app.state.regenerate_requirements)
+    uc: RegenerateRequirementsUseCase = get_container(request).requirements.regenerate_requirements
 
     try:
         output = await uc.execute(

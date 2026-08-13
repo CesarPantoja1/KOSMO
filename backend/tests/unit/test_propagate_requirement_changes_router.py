@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,6 +21,14 @@ from tests.unit.fakes import (
     InMemoryFeatureRepository,
     InMemoryProjectRepository,
 )
+
+
+def _make_request(uc: PropagateChangesUseCase) -> MagicMock:
+    mock_req = MagicMock()
+    mock_req.app.state.container = SimpleNamespace(
+        consistency=SimpleNamespace(propagate_requirement_changes=uc),
+    )
+    return mock_req
 
 
 @pytest.mark.asyncio
@@ -59,8 +68,7 @@ async def test_propagate_requirement_changes_router_returns_affected_phases() ->
 
     principal = Principal(subject="usr_test", scopes=frozenset({"*"}))
 
-    mock_req = MagicMock()
-    mock_req.app.state.propagate_requirement_changes = uc
+    mock_req = _make_request(uc)
 
     # Act
     result = await propagate_requirement_changes(
@@ -101,8 +109,7 @@ async def test_propagate_requirement_changes_raises_on_project_not_found() -> No
 
     principal = Principal(subject="usr_test", scopes=frozenset({"*"}))
 
-    mock_req = MagicMock()
-    mock_req.app.state.propagate_requirement_changes = uc
+    mock_req = _make_request(uc)
 
     from fastapi import HTTPException
 

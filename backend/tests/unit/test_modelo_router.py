@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -39,9 +40,10 @@ def _principal() -> Principal:
 
 def _make_mock_request(generate_uc: Any = None, get_uc: Any = None) -> MagicMock:
     req = MagicMock()
-    req.app.state.generate_diagram = generate_uc
-    req.app.state.get_diagram = get_uc
-    req.app.state.feature_repo = InMemoryFeatureRepository()
+    req.app.state.container = SimpleNamespace(
+        modelo=SimpleNamespace(generate_diagram=generate_uc, get_diagram=get_uc),
+        features=SimpleNamespace(feature_repo=InMemoryFeatureRepository()),
+    )
     return req
 
 

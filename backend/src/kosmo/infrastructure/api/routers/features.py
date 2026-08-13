@@ -4,6 +4,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
+from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 from kosmo.application.features import (
     CheckFeatureConsistencyInput,
     CheckFeatureConsistencyUseCase,
@@ -32,6 +33,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     CheckConsistencyRequestView,
@@ -55,27 +57,27 @@ _generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
 
 
 def _generate_features(request: Request) -> GenerateFeaturesUseCase:
-    return request.app.state.generate_features
+    return get_container(request).features.generate_features
 
 
 def _suggest_features(request: Request) -> SuggestFeaturesUseCase:
-    return request.app.state.suggest_features
+    return get_container(request).features.suggest_features
 
 
 def _save_selected_features(request: Request) -> SaveSelectedFeaturesUseCase:
-    return request.app.state.save_selected_features
+    return get_container(request).features.save_selected_features
 
 
 def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
-    return request.app.state.create_characteristic
+    return get_container(request).features.create_characteristic
 
 
 def _edit_feature(request: Request) -> EditFeatureUseCase:
-    return request.app.state.edit_feature
+    return get_container(request).features.edit_feature
 
 
 def _list_features(request: Request) -> ListFeaturesUseCase:
-    return request.app.state.list_features
+    return get_container(request).features.list_features
 
 
 @router.post(
@@ -350,8 +352,8 @@ def _feature_to_response(f: Any) -> FeatureResponse:
     )
 
 
-def _propagate_feature_changes(request: Request):
-    return request.app.state.propagate_feature_changes
+def _propagate_feature_changes(request: Request) -> PropagateChangesUseCase:
+    return get_container(request).consistency.propagate_feature_changes
 
 
 @router.post(
@@ -370,7 +372,7 @@ async def propagate_feature_changes(
     feature_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Annotated[PropagateFeatureChangesRequest, Body(...)],
-    uc: Annotated[Any, Depends(_propagate_feature_changes)],
+    uc: Annotated[PropagateChangesUseCase, Depends(_propagate_feature_changes)],
 ) -> PhaseNotificationList:
     from kosmo.application.consistency.propagate_changes import (
         PropagateChangesInput,
@@ -402,11 +404,11 @@ async def propagate_feature_changes(
 
 
 def _delete_feature_uc(request: Request) -> DeleteFeatureUseCase:
-    return request.app.state.delete_feature
+    return get_container(request).consistency.delete_feature
 
 
 def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCase:
-    return request.app.state.check_feature_consistency
+    return get_container(request).features.check_feature_consistency
 
 
 @router.delete(

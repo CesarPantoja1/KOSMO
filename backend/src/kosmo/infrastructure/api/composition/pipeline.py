@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
+from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
+from kosmo.contracts.chat import ChatRepository
+from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.domain.pipeline.context_builder import ContextBuilder
@@ -42,11 +45,11 @@ class PipelineComponents:
     skill_registry: SkillRegistry
     agent_memory: AgentMemoryPort
     pattern_store: KnowledgePatternStore
-    validate_phase_context: Any
-    process_chat_message: Any
-    chat_repo: Any
-    traceability_repo: Any
-    outbox: Any
+    validate_phase_context: ValidatePhaseContextUseCase
+    process_chat_message: ProcessChatMessageUseCase
+    chat_repo: ChatRepository
+    traceability_repo: TraceabilityRepository
+    outbox: OutboxStore
     consolidate_patterns: ConsolidateKnowledgePatterns
 
 
@@ -138,9 +141,6 @@ def build_pipeline_components(
         pattern_store=pattern_store,  # type: ignore[reportArgumentType]
         outbox=outbox,
     )
-
-    from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
-    from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 
     validate_phase_context = ValidatePhaseContextUseCase()
 

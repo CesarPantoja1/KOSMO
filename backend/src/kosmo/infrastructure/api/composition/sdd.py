@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
 from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
@@ -46,11 +45,14 @@ from kosmo.application.requirements import (
 )
 from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
 from kosmo.contracts.consistency import ConsistencyEvaluator
+from kosmo.contracts.sdd.repositories import (
+    ActivityDiagramRepository,
+    DocumentRepository,
+    FeatureRepository,
+    RequirementRepository,
+)
 from kosmo.infrastructure.api.composition.pipeline import PipelineComponents
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
-from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
-    SqlAlchemyFeatureRepository,
-)
 from kosmo.infrastructure.persistence.postgres.uow import SqlAlchemyUnitOfWork
 
 
@@ -76,11 +78,11 @@ class DiscoveryComponents:
     save_discovery: SaveDiscoveryUseCase
     refine_discovery: RefineDiscoveryUseCase
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
-    manage_plan_changes: Any
-    apply_plan_changes: Any
-    propagate_changes: Any
-    consistency_evaluator: Any
-    document_repo: Any
+    manage_plan_changes: ManagePlanChangesUseCase
+    apply_plan_changes: ApplyPlanChangesUseCase
+    propagate_changes: PropagateChangesUseCase
+    consistency_evaluator: ConsistencyEvaluator
+    document_repo: DocumentRepository
 
 
 def build_discovery_components(
@@ -143,9 +145,9 @@ class FeaturesComponents:
     suggest_features: SuggestFeaturesUseCase
     save_selected_features: SaveSelectedFeaturesUseCase
     create_characteristic: CreateCharacteristicUseCase
-    feature_repo: SqlAlchemyFeatureRepository
-    get_feature_chat_history: Any
-    list_features: Any
+    feature_repo: FeatureRepository
+    get_feature_chat_history: GetFeatureChatHistoryUseCase
+    list_features: ListFeaturesUseCase
     edit_feature: EditFeatureUseCase
     check_feature_consistency: CheckFeatureConsistencyUseCase
 
@@ -202,9 +204,9 @@ class RequirementsComponents:
     get_requirements: GetRequirementsUseCase
     save_requirements: SaveRequirementsUseCase
     refine_requirements: RefineRequirementsUseCase
-    regenerate_requirements: Any
-    get_requirement_chat_history: Any
-    requirement_repo: Any
+    regenerate_requirements: RegenerateRequirementsUseCase
+    get_requirement_chat_history: GetRequirementChatHistoryUseCase
+    requirement_repo: RequirementRepository
 
 
 def build_requirements_components(
@@ -253,7 +255,7 @@ def build_requirements_components(
 class ModeloComponents:
     generate_diagram: GenerateActivityDiagramUseCase
     get_diagram: GetActivityDiagramUseCase
-    diagram_repo: Any
+    diagram_repo: ActivityDiagramRepository
 
 
 def build_modelo_components(repos: RepositoryRegistry, pipeline: PipelineComponents) -> ModeloComponents:

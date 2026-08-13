@@ -19,6 +19,7 @@ from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
 from kosmo.infrastructure.api.async_generation import sse_consistency_response
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
     EvaluateConsistencyRequestView,
@@ -36,15 +37,15 @@ router = APIRouter(
 
 
 def _consistency_uc(request: Request) -> EvaluateProjectConsistencyUseCase:
-    return request.app.state.evaluate_project_consistency
+    return get_container(request).consistency.evaluate_project_consistency
 
 
 def _cascade_uc(request: Request) -> CascadingConsistencyUseCase:
-    return request.app.state.cascade_consistency
+    return get_container(request).consistency.cascade_consistency
 
 
 def _apply_uc(request: Request) -> ApplyConsistencyImpactsUseCase:
-    return request.app.state.apply_consistency_impacts
+    return get_container(request).consistency.apply_consistency_impacts
 
 
 @router.post(
