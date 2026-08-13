@@ -2,7 +2,10 @@ import { clearConsistencyStore } from '@/entities/consistency';
 import { clearPlanStore, usePlanStore } from '@/entities/plan';
 import { clearDiscoveryStore, useDiscoveryStore } from '@/entities/discovery';
 import { getDiscovery } from '@/entities/discovery/api/api';
-import { clearCharacteristicStore, useCharacteristicStore } from '@/entities/characteristic';
+import {
+	clearCharacteristicStore,
+	useCharacteristicStore,
+} from '@/entities/characteristic';
 import { getCharacteristics } from '@/entities/characteristic/api/api';
 import { clearModelingStore, useModelingStore } from '@/entities/modeling';
 import { getDiagram } from '@/entities/modeling/api/api';
@@ -11,11 +14,13 @@ import { getRequirements } from '@/entities/requirements/api/api';
 import { clearProjectStore } from '@/entities/project';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearProjectStoreExceptProjects } from '@/entities/project/model/store';
 
 interface AppState {
 	initialized: boolean;
 	setInitialized: (v: boolean) => void;
 	resetProjectState: () => void;
+	resetStateBeforeChangeProject: () => void;
 	hasUnsavedChanges: boolean;
 	setHasUnsavedChanges: (v: boolean) => void;
 	pendingNavigationPath: string | null;
@@ -32,6 +37,21 @@ export const useAppStore = create<AppState>()(
 			setInitialized: (v) => set({ initialized: v }),
 			resetProjectState: () => {
 				clearProjectStore();
+				clearDiscoveryStore();
+				clearPlanStore();
+				clearCharacteristicStore();
+				clearModelingStore();
+				clearRequirementsStore();
+				clearConsistencyStore();
+				set({
+					initialized: false,
+					hasUnsavedChanges: false,
+					pendingNavigationPath: null,
+					isEditorMaximized: false,
+				});
+			},
+			resetStateBeforeChangeProject: () => {
+				clearProjectStoreExceptProjects();
 				clearDiscoveryStore();
 				clearPlanStore();
 				clearCharacteristicStore();

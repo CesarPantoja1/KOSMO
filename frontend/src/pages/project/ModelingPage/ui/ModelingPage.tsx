@@ -144,7 +144,6 @@ const ModelingPage = () => {
 				selectedCharacteristic.id,
 			);
 			setPlantumlSource(content);
-			toast.success('Diagrama de actividad generado con éxito');
 		} catch (_err) {
 			console.log(_err);
 			toast.error('No se pudo generar el diagrama de actividad. Intenta de nuevo.');

@@ -54,5 +54,13 @@ export const useProjectStore = create<ProjectStore>()(
 
 export const clearProjectStore = () => {
 	useProjectStore.persist.clearStorage();
-	useProjectStore.setState({ projects: [], currentProject: null, isProyectosOpen: false });
+	useProjectStore.setState({
+		projects: [],
+		currentProject: null,
+		isProyectosOpen: false,
+	});
+};
+
+export const clearProjectStoreExceptProjects = () => {
+	useProjectStore.setState({ currentProject: null, isProyectosOpen: false });
 };

@@ -11,8 +11,7 @@ import { Text } from 'react-aria-components/Toast';
 import type { ToastPosition, ToastContent } from './types';
 import type { QueuedToast } from 'react-aria-components/Toast';
 import { queue } from './toast';
-import { CheckIcon, ErrorIcon, WarningIcon, InfoIcon } from './icons';
-import Close from '../icons/Close';
+import { CheckIcon, ErrorIcon, WarningIcon, InfoIcon, CloseIcon } from './icons';
 
 type ToasterProviderProps = {
 	position?: ToastPosition;
@@ -31,59 +30,61 @@ const positionStyles: Record<ToastPosition, string> = {
 const variantConfig = {
 	success: {
 		icon: CheckIcon,
-		iconColor: 'text-base-50',
-		toastBg: 'bg-primary-100',
-		borderColor: 'border-base-950',
+		iconBg: 'bg-success-50',
+		iconColor: 'text-success-700',
+		borderColor: 'border-success-500/20',
+		titleColor: 'text-success-700',
 	},
 	error: {
 		icon: ErrorIcon,
-		iconColor: 'text-base-50',
-		toastBg: 'bg-status-error',
-		borderColor: 'border-red-200',
+		iconBg: 'bg-error-50',
+		iconColor: 'text-error-700',
+		borderColor: 'border-error-500/20',
+		titleColor: 'text-error-700',
 	},
 	warning: {
 		icon: WarningIcon,
-		iconColor: 'text-base-50',
-		toastBg: 'bg-status-warning',
-		borderColor: 'border-amber-200',
+		iconBg: 'bg-warning-50',
+		iconColor: 'text-warning-700',
+		borderColor: 'border-warning-500/20',
+		titleColor: 'text-warning-700',
 	},
 	info: {
 		icon: InfoIcon,
-		iconColor: 'text-base-50',
-		toastBg: 'bg-status-info',
-		borderColor: 'border-blue-200',
+		iconBg: 'bg-info-50',
+		iconColor: 'text-info-700',
+		borderColor: 'border-info-500/20',
+		titleColor: 'text-info-700',
 	},
 } as const;
 
 function ToastItem({ toastItem }: { toastItem: { toast: QueuedToast<ToastContent> } }) {
 	const { content } = toastItem.toast;
 	const config = variantConfig[content.variant];
-	//const Icon = config.icon;
+	const Icon = config.icon;
 
 	return (
 		<UNSTABLE_Toast toast={toastItem.toast}>
 			<div
-				className={`flex items-start gap-3 rounded-lg border ${config.borderColor} ${config.toastBg} p-4 shadow-lg`}
+				className={`flex items-start gap-3 rounded-lg border bg-neutral-0 ${config.borderColor} p-4 shadow-sm`}
 			>
-				{/*
 				<span
-					className={`flex size-8 shrink-0 items-center justify-center rounded-full ${config.iconBg} ${config.iconColor}`}
+					className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${config.iconBg}`}
 				>
-					<Icon className='size-5' />
+					<Icon className={`h-4 w-4 ${config.iconColor}`} />
 				</span>
-				*/}
 				<UNSTABLE_ToastContent className='min-w-0 flex-1'>
 					{content.title && (
-						<Text slot='title' className='text-sm font-semibold text-base-600'>
+						<Text slot='title' className={`text-sm font-semibold ${config.titleColor}`}>
 							{content.title}
 						</Text>
 					)}
-					<Text slot='description' className='text-sm text-base-50'>
+					<Text slot='description' className='text-sm text-neutral-500'>
 						{content.message}
 					</Text>
 				</UNSTABLE_ToastContent>
-				<Button slot='close' className='cursor-pointer'>
-					<Close color='text-base-50' size={24} />
+				<Button slot='close' className='cursor-pointer rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-600'>
+					<CloseIcon className='h-4 w-4' />
 				</Button>
 			</div>
 		</UNSTABLE_Toast>
