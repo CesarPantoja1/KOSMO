@@ -1,22 +1,10 @@
 from __future__ import annotations
 
-import re
-import unicodedata
-
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ProjectRepository
+from kosmo.domain.sdd import slugify_spanish
 from kosmo.domain.sdd.id_generator import IdGenerator
-
-_SLUG_DISALLOWED_RE = re.compile(r"[^\w\s-]", re.UNICODE)
-_SLUG_SEPARATOR_RE = re.compile(r"[-\s]+")
-
-
-def slugify_spanish(text: str) -> str:
-    normalized = unicodedata.normalize("NFKD", text.lower().strip())
-    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
-    normalized = _SLUG_DISALLOWED_RE.sub("", normalized)
-    return _SLUG_SEPARATOR_RE.sub("-", normalized).strip("-")
 
 
 class CreateProjectUseCase:

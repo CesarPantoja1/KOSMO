@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import re
-
 import structlog
 from ulid import ULID
 
-from kosmo.contracts.chat import DiffCambio, PlanCambio
+from kosmo.contracts.chat import PlanCambio
 from kosmo.contracts.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
@@ -18,24 +16,19 @@ from kosmo.contracts.pipeline.consistency_phase_context import (
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_outputs import ConsistencyReport
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,
     FeatureRepository,
     RequirementRepository,
 )
-from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange, diff_discovery_versions
+from kosmo.domain.sdd.discovery_diff import diff_discovery_versions
 from kosmo.domain.sdd.document_converters import document_to_markdown
+from kosmo.domain.sdd.plan_diffs import merge_changes_with_diffs
+from kosmo.domain.sdd.text_normalizer import normalize_for_match
 
 _log = structlog.get_logger(__name__)
-
-
-def _normalize_for_match(text: str) -> str:
-    t = text.replace("\r\n", "\n").replace("\r", "\n")
-    t = re.sub(r"[ \t]+", " ", t)
-    t = re.sub(r"\n{2,}", "\n", t)
-    return t.strip()
 
 
 def _validate_action(
@@ -51,7 +44,7 @@ def _validate_action(
         return False
     if suggested_before == suggested_after:
         return False
-    if suggested_before and _normalize_for_match(suggested_before) not in _normalize_for_match(artifact_desc):
+    if suggested_before and normalize_for_match(suggested_before) not in normalize_for_match(artifact_desc):
         _log.warning(
             "consistency.before_mismatch",
             artifact_id=artifact_id,
@@ -331,43 +324,7 @@ class EvaluateConsistencyUseCase:
         if not section_changes:
             return plan_changes
 
-        return self._merge_changes(plan_changes, section_changes)
-
-    @staticmethod
-    def _merge_changes(originals: list[PlanCambio], diffs: list[SectionChange]) -> list[PlanCambio]:
-        desc_by_section: dict[str, str] = {}
-        for pc in originals:
-            section = (pc.section or "").strip()
-            if section and pc.description and pc.description != section:
-                desc_by_section[section.lower()] = pc.description
-
-        result: list[PlanCambio] = []
-        for sc in diffs:
-            section_key = sc.section.strip().lower()
-            description = desc_by_section.get(section_key)
-            if not description:
-                for orig_section, desc in desc_by_section.items():
-                    if orig_section in section_key or section_key in orig_section:
-                        description = desc
-                        break
-            if not description:
-                if sc.change_type == ChangeType.ADDED:
-                    description = f"Seccion nueva: {sc.section}"
-                elif sc.change_type == ChangeType.REMOVED:
-                    description = f"Seccion eliminada: {sc.section}"
-                elif sc.change_class == ChangeClass.COSMETIC:
-                    description = f"Cambio cosmetico en {sc.section}"
-                else:
-                    description = f"Seccion modificada: {sc.section}"
-            result.append(
-                PlanCambio(
-                    id=PlanChangeId(f"chg_diff_{ULID().hex}"),
-                    section=sc.section,
-                    description=description,
-                    diff=DiffCambio(before=sc.before, after=sc.after),
-                )
-            )
-        return result
+        return merge_changes_with_diffs(plan_changes, section_changes)
 
     async def _fetch_downstream_artifacts(
         self, target_phase: SpecPhase, project_id: ProjectId

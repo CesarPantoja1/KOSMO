@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from dataclasses import dataclass, field
-from unicodedata import normalize
 
 import structlog
 
@@ -17,29 +15,11 @@ from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundErr
 from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
+from kosmo.domain.sdd.feature_attribute import feature_attribute
 from kosmo.domain.sdd.plan_diffs import apply_change_diff, collapse_whitespace, find_section
+from kosmo.domain.sdd.section_parser import section_heading_preserved, section_spans
 
 _log = structlog.get_logger(__name__)
-
-
-def _section_spans(markdown: str) -> list[tuple[str, int, int]]:
-    matches = list(re.finditer(r"^(#{1,6})\s+(.+)$", markdown, re.MULTILINE))
-    spans: list[tuple[str, int, int]] = []
-    for i, m in enumerate(matches):
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(markdown)
-        spans.append((m.group(2), m.start(), end))
-    return spans
-
-
-def _section_heading_preserved(original: str, rewritten: str) -> bool:
-    def _first_heading(text: str) -> str:
-        m = re.search(r"^#{1,6}\s+(.+)$", text, re.MULTILINE)
-        return re.sub(r"\s+", "", (m.group(1) if m else "")).lower()
-
-    original_heading = _first_heading(original)
-    if not original_heading:
-        return True
-    return original_heading in re.sub(r"\s+", "", rewritten).lower()
 
 
 async def llm_resolve_markdown(
@@ -237,7 +217,7 @@ class ApplyPlanChangesUseCase:
             if sec_text is not None:
                 return change.section, start, end
         if change.diff.before:
-            for heading, start, end in _section_spans(markdown):
+            for heading, start, end in section_spans(markdown):
                 if change.diff.before in markdown[start:end]:
                     return heading, start, end
         return None
@@ -282,7 +262,7 @@ class ApplyPlanChangesUseCase:
             heading: str, start: int, end: int, changes: list[PlanCambio]
         ) -> tuple[int, int, str] | None:
             new_text = await llm_resolve_markdown(agent, project_id, heading, markdown[start:end], changes)
-            if new_text is None or not _section_heading_preserved(markdown[start:end], new_text):
+            if new_text is None or not section_heading_preserved(markdown[start:end], new_text):
                 _log.warning("plan.llm_resolve_invalid_section", section=heading)
                 return None
             return start, end, new_text
@@ -452,7 +432,7 @@ class ApplyPlanChangesUseCase:
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
         for change in changes:
-            attribute = _feature_attribute(change.section)
+            attribute = feature_attribute(change.section)
             if attribute is None:
                 failed.append(
                     FailedChange(
@@ -565,14 +545,3 @@ async def revert_to_version(
         return None
     await document_repo.save_discovery(project_id=project_id, document=markdown_to_document(markdown))
     return markdown
-
-
-def _feature_attribute(section: str) -> str | None:
-    normalized = "".join(char for char in normalize("NFKD", section).lower() if char.isalnum())
-    if normalized in {"titulo", "titulodelacaracteristica"}:
-        return "title"
-    if normalized in {"descripcion", "descripciondelacaracteristica"}:
-        return "description"
-    if normalized in {"origen", "origendelacaracteristica"}:
-        return "origin"
-    return None
