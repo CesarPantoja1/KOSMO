@@ -15,6 +15,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
 from kosmo.contracts.sdd.document import (
     AcceptanceCriterion,
     RichTextDocument,
+    SpecPhase,
 )
 from kosmo.contracts.sdd.ears import EARSPattern, EARSRequirement
 from kosmo.contracts.sdd.errors import (
@@ -31,6 +32,8 @@ from tests.unit.fakes import (
     InMemoryFeatureRepository,
     InMemoryProjectRepository,
     InMemoryRequirementRepository,
+    InMemoryTraceabilityRepository,
+    InMemoryUnitOfWork,
 )
 
 
@@ -42,6 +45,24 @@ class MockAgent:
         self, skill_name: str, context: Any, *, project_id: Any = None, user_instructions: str | None = None
     ) -> Any:  # noqa: ARG002
         return self._output
+
+
+def _make_uc(
+    project_repo: InMemoryProjectRepository,
+    document_repo: InMemoryDocumentRepository,
+    feature_repo: InMemoryFeatureRepository,
+    requirement_repo: InMemoryRequirementRepository,
+    agent: Any,
+    traceability: InMemoryTraceabilityRepository | None = None,
+) -> GenerateEARSUseCase:
+    uow = InMemoryUnitOfWork(
+        projects=project_repo,
+        documents=document_repo,
+        features=feature_repo,
+        requirements=requirement_repo,
+        traceability=traceability,
+    )
+    return GenerateEARSUseCase(uow=uow, agent=agent)  # type: ignore[arg-type]
 
 
 def _make_feature(feature_id: str = "feat_01") -> Feature:
@@ -123,13 +144,7 @@ async def test_generate_ears_success() -> None:
     feature = _make_feature()
     await feat_repo.save_many([feature])
     agent = MockAgent(output=_make_valid_ears_output())
-    use_case = GenerateEARSUseCase(
-        project_repo=project_repo,
-        document_repo=doc_repo,
-        feature_repo=feat_repo,
-        requirement_repo=req_repo,
-        agent=agent,
-    )
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent)
 
     # Act
     result = await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
@@ -149,13 +164,7 @@ async def test_generate_ears_raises_project_not_found() -> None:
     feat_repo = InMemoryFeatureRepository()
     req_repo = InMemoryRequirementRepository()
     agent = MockAgent(output=_make_valid_ears_output())
-    use_case = GenerateEARSUseCase(
-        project_repo=project_repo,
-        document_repo=doc_repo,
-        feature_repo=feat_repo,
-        requirement_repo=req_repo,
-        agent=agent,
-    )
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent)
 
     # Act & Assert
     with pytest.raises(ProjectNotFoundError) as exc_info:
@@ -180,13 +189,7 @@ async def test_generate_ears_raises_feature_not_found() -> None:
     )
     await project_repo.save(project)
     agent = MockAgent(output=_make_valid_ears_output())
-    use_case = GenerateEARSUseCase(
-        project_repo=project_repo,
-        document_repo=doc_repo,
-        feature_repo=feat_repo,
-        requirement_repo=req_repo,
-        agent=agent,
-    )
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent)
 
     # Act & Assert
     with pytest.raises(FeatureNotFoundError) as exc_info:
@@ -213,13 +216,7 @@ async def test_generate_ears_raises_document_not_found() -> None:
     feature = _make_feature()
     await feat_repo.save_many([feature])
     agent = MockAgent(output=_make_valid_ears_output())
-    use_case = GenerateEARSUseCase(
-        project_repo=project_repo,
-        document_repo=doc_repo,
-        feature_repo=feat_repo,
-        requirement_repo=req_repo,
-        agent=agent,
-    )
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent)
 
     # Act & Assert
     with pytest.raises(DocumentNotFoundError) as exc_info:
@@ -247,13 +244,7 @@ async def test_generate_ears_persists_requirements_markdown() -> None:
     feature = _make_feature()
     await feat_repo.save_many([feature])
     agent = MockAgent(output=_make_valid_ears_output())
-    use_case = GenerateEARSUseCase(
-        project_repo=project_repo,
-        document_repo=doc_repo,
-        feature_repo=feat_repo,
-        requirement_repo=req_repo,
-        agent=agent,
-    )
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent)
 
     # Act
     result = await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
@@ -263,6 +254,44 @@ async def test_generate_ears_persists_requirements_markdown() -> None:
     assert saved is not None
     assert "shall" in saved
     assert len(result.requirements) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_ears_records_traceability_edges_and_advances_phase() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    doc_repo = InMemoryDocumentRepository()
+    feat_repo = InMemoryFeatureRepository()
+    req_repo = InMemoryRequirementRepository()
+    traceability = InMemoryTraceabilityRepository()
+    project = Project(
+        id=ProjectId("prj_01"),
+        name="Test Project",
+        slug="test-project",
+        description="Testing",
+        owner_id=UserId("usr_01"),
+    )
+    await project_repo.save(project)
+    await doc_repo.save_discovery(ProjectId("prj_01"), _make_discovery_document())
+    feature = _make_feature()
+    await feat_repo.save_many([feature])
+    agent = MockAgent(output=_make_valid_ears_output())
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent, traceability)
+
+    # Act
+    result = await use_case.execute(GenerateEARSInput(project_id=ProjectId("prj_01"), feature_id=FeatureId("feat_01")))
+
+    # Assert: edges feature→requirement y avance de fase en la misma ejecucion
+    assert len(traceability.edges) == 1
+    assert traceability.edges[0][0] == "feature"
+    assert traceability.edges[0][1] == "feat_01"
+    assert traceability.edges[0][2] == "requirement"
+    assert traceability.edges[0][3] == str(result.requirements[0].id)
+
+    persisted_project = await project_repo.by_id(ProjectId("prj_01"))
+    assert persisted_project is not None
+    assert persisted_project.current_phase == SpecPhase.REQUISITOS.value
 
 
 @pytest.mark.asyncio
@@ -292,13 +321,7 @@ async def test_generate_ears_raises_when_llm_fails() -> None:
             raise RuntimeError("LLM service unavailable")
 
     agent = FailingAgent()
-    use_case = GenerateEARSUseCase(
-        project_repo=project_repo,
-        document_repo=doc_repo,
-        feature_repo=feat_repo,
-        requirement_repo=req_repo,
-        agent=agent,
-    )
+    use_case = _make_uc(project_repo, doc_repo, feat_repo, req_repo, agent)
 
     # Act & Assert
     with pytest.raises(LLMInvocationError) as exc_info:

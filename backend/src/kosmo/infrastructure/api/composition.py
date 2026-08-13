@@ -618,6 +618,7 @@ def build_discovery_components(
     from kosmo.application.discovery.get_discovery_chat_history import GetDiscoveryChatHistoryUseCase
     from kosmo.contracts.consistency import ConsistencyEvaluator
     from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
+    from kosmo.infrastructure.persistence.postgres.uow import SqlAlchemyUnitOfWork
 
     chat_repo = SqlAlchemyChatRepository(session_factory)
 
@@ -644,6 +645,8 @@ def build_discovery_components(
         consistency_evaluator=consistency_evaluator,
     )
 
+    uow = SqlAlchemyUnitOfWork(session_factory)
+
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
             project_repo=project_repo,
@@ -667,12 +670,7 @@ def build_discovery_components(
             chat_repo=chat_repo,
         ),
         apply_plan_changes=ApplyPlanChangesUseCase(
-            project_repo=project_repo,
-            chat_repo=chat_repo,
-            document_repo=document_repo,
-            feature_repo=feature_repo,
-            requirement_repo=requirement_repo,
-            session_factory=session_factory,
+            uow=uow,
             agent=pipeline.agent,
         ),
         propagate_changes=propagate_uc,
@@ -765,7 +763,6 @@ def build_requirements_components(
     pipeline: PipelineComponents,
 ) -> RequirementsComponents:
     project_repo = SqlAlchemyProjectRepository(session_factory)
-    document_repo = SqlAlchemyDocumentRepository(session_factory)
     feature_repo = SqlAlchemyFeatureRepository(session_factory)
     requirement_repo = SqlAlchemyRequirementRepository(session_factory)
 
@@ -780,14 +777,14 @@ def build_requirements_components(
         chat_repo=chat_repo,
     )
 
+    from kosmo.infrastructure.persistence.postgres.uow import SqlAlchemyUnitOfWork
+
+    uow = SqlAlchemyUnitOfWork(session_factory)
+
     return RequirementsComponents(
         generate_ears=GenerateEARSUseCase(
-            project_repo=project_repo,
-            document_repo=document_repo,
-            feature_repo=feature_repo,
-            requirement_repo=requirement_repo,
+            uow=uow,
             agent=pipeline.agent,
-            traceability_repo=pipeline.traceability_repo,
         ),
         get_requirements=GetRequirementsUseCase(
             project_repo=project_repo,

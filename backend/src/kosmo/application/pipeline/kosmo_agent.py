@@ -12,6 +12,7 @@ import structlog
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.chat import ChatRole, DiffCambio, MensajeChat, RespuestaChatLLM, SugerenciaCambio
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
+from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
     DirectModificationResult,
@@ -44,7 +45,7 @@ class KOSMOAgent:
         knowledge_tools: KnowledgeToolRegistry | None = None,
         pattern_store: KnowledgePatternStore | None = None,
         consolidation_threshold: int = _CONSOLIDATION_THRESHOLD,
-        outbox: Any = None,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._max_iterations = max_iterations

@@ -280,6 +280,89 @@ class InMemoryStore:
                 del self.refresh[jti]
 
 
+class InMemoryTraceabilityRepository:
+    def __init__(self) -> None:
+        self.edges: list[tuple[str, str, str, str, str]] = []
+
+    async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
+        upstream = [
+            {"type": source_type, "id": source_id, "origin": origin}
+            for source_type, source_id, _target_type, target_id, origin in self.edges
+            if target_id == artifact_id
+        ]
+        downstream = [
+            {"type": target_type, "id": target_id, "origin": origin}
+            for _source_type, source_id, target_type, target_id, origin in self.edges
+            if source_id == artifact_id
+        ]
+        return {"upstream": upstream, "downstream": downstream}
+
+    async def add_edge(
+        self,
+        source_type: str,
+        source_id: str,
+        target_type: str,
+        target_id: str,
+        origin: str = "llm",
+    ) -> None:
+        self.edges.append((source_type, source_id, target_type, target_id, origin))
+
+    async def add_feature_requirement_edges(self, feature_id: FeatureId, requirement_ids: list[Any]) -> None:
+        for req_id in requirement_ids:
+            self.edges.append(("feature", str(feature_id), "requirement", str(req_id), "llm"))
+
+    async def delete_by_entity_id(self, entity_id: str) -> None:
+        self.edges = [edge for edge in self.edges if edge[1] != entity_id and edge[3] != entity_id]
+
+
+class InMemoryOutbox:
+    def __init__(self) -> None:
+        self.jobs: list[tuple[str, dict[str, Any]]] = []
+
+    async def enqueue(self, job_type: str, payload: dict[str, Any]) -> None:
+        self.jobs.append((job_type, payload))
+
+
+class InMemoryUnitOfWork:
+    def __init__(
+        self,
+        *,
+        projects: InMemoryProjectRepository | None = None,
+        documents: InMemoryDocumentRepository | None = None,
+        features: InMemoryFeatureRepository | None = None,
+        requirements: InMemoryRequirementRepository | None = None,
+        diagrams: InMemoryActivityDiagramRepository | None = None,
+        chat: InMemoryChatRepository | None = None,
+        traceability: InMemoryTraceabilityRepository | None = None,
+        outbox: InMemoryOutbox | None = None,
+    ) -> None:
+        self.projects = projects or InMemoryProjectRepository()
+        self.documents = documents or InMemoryDocumentRepository()
+        self.features = features or InMemoryFeatureRepository()
+        self.requirements = requirements or InMemoryRequirementRepository()
+        self.diagrams = diagrams or InMemoryActivityDiagramRepository()
+        self.chat = chat or InMemoryChatRepository()
+        self.traceability = traceability or InMemoryTraceabilityRepository()
+        self.outbox = outbox or InMemoryOutbox()
+
+    async def __aenter__(self) -> InMemoryUnitOfWork:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+    async def rollback(self) -> None:
+        return None
+
+
 class InMemoryChatRepository:
     def __init__(self) -> None:
         self.messages: list[MensajeChat] = []

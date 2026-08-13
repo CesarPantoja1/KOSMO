@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
@@ -17,8 +19,28 @@ _BACKOFF_SECONDS = 5.0
 
 
 class OutboxStore:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        session: AsyncSession | None = None,
+    ) -> None:
+        if session_factory is None and session is None:
+            raise ValueError("Se requiere session_factory o session")
         self._session_factory = session_factory
+        self._session = session
+
+    @asynccontextmanager
+    async def _session_ctx(self) -> AsyncGenerator[AsyncSession]:
+        if self._session is not None:
+            yield self._session
+            return
+        assert self._session_factory is not None
+        async with self._session_factory() as session:
+            yield session
+
+    async def _commit(self, session: AsyncSession) -> None:
+        if self._session is None:
+            await session.commit()
 
     async def enqueue(self, job_type: str, payload: dict[str, Any]) -> None:
         model = OutboxJobModel(
@@ -27,11 +49,12 @@ class OutboxStore:
             payload=payload,
             status="pending",
         )
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             session.add(model)
-            await session.commit()
+            await self._commit(session)
 
     async def dequeue(self) -> OutboxJobModel | None:
+        assert self._session_factory is not None
         async with self._session_factory() as session:
             stmt = (
                 select(OutboxJobModel)
@@ -50,11 +73,13 @@ class OutboxStore:
             return model
 
     async def mark_done(self, job_id: str) -> None:
+        assert self._session_factory is not None
         async with self._session_factory() as session:
             await session.execute(update(OutboxJobModel).where(OutboxJobModel.id == job_id).values(status="done"))
             await session.commit()
 
     async def mark_failed(self, job_id: str, *, error: str | None = None) -> None:
+        assert self._session_factory is not None
         async with self._session_factory() as session:
             stmt = select(OutboxJobModel).where(OutboxJobModel.id == job_id).with_for_update()
             result = await session.execute(stmt)

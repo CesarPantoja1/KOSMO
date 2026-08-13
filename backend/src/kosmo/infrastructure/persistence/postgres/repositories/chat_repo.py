@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -20,8 +22,28 @@ from kosmo.infrastructure.persistence.postgres.models import ChatMessageModel, P
 
 
 class SqlAlchemyChatRepository(ChatRepository):
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        session: AsyncSession | None = None,
+    ) -> None:
+        if session_factory is None and session is None:
+            raise ValueError("Se requiere session_factory o session")
         self._session_factory = session_factory
+        self._session = session
+
+    @asynccontextmanager
+    async def _session_ctx(self) -> AsyncGenerator[AsyncSession]:
+        if self._session is not None:
+            yield self._session
+            return
+        assert self._session_factory is not None
+        async with self._session_factory() as session:
+            yield session
+
+    async def _commit(self, session: AsyncSession) -> None:
+        if self._session is None:
+            await session.commit()
 
     async def save_message(
         self,
@@ -53,9 +75,9 @@ class SqlAlchemyChatRepository(ChatRepository):
             suggested_change=suggested_changes,
             error=message.error,
         )
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             session.add(model)
-            await session.commit()
+            await self._commit(session)
         return message
 
     async def get_history(
@@ -83,7 +105,7 @@ class SqlAlchemyChatRepository(ChatRepository):
 
         stmt = stmt.order_by(ChatMessageModel.created_at.desc()).limit(limit)
 
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             result = await session.execute(stmt)
             models = list(result.scalars().all())
 
@@ -141,9 +163,9 @@ class SqlAlchemyChatRepository(ChatRepository):
             origin=change.origin,
             user_version=change.user_version,
         )
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             session.add(model)
-            await session.commit()
+            await self._commit(session)
             return change
 
     async def list_plan_changes(
@@ -156,7 +178,7 @@ class SqlAlchemyChatRepository(ChatRepository):
             stmt = stmt.where(PlanChangeModel.phase == phase.value)
         stmt = stmt.order_by(PlanChangeModel.created_at, PlanChangeModel.id)
 
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             result = await session.execute(stmt)
             models = result.scalars().all()
 
@@ -181,34 +203,12 @@ class SqlAlchemyChatRepository(ChatRepository):
         change_id: PlanChangeId,
         status: EstadoPlanCambio,
         user_version: str | None = None,
-        *,
-        _session: AsyncSession | None = None,
     ) -> PlanCambio | None:
         stmt = select(PlanChangeModel).where(
             PlanChangeModel.project_id == str(project_id), PlanChangeModel.id == str(change_id)
         )
 
-        if _session is not None:
-            result = await _session.execute(stmt)
-            model = result.scalar_one_or_none()
-            if not model:
-                return None
-            model.status = status.value
-            if user_version is not None:
-                model.user_version = user_version
-            return PlanCambio(
-                id=PlanChangeId(model.id),
-                section=model.section,
-                description=model.description,
-                diff=DiffCambio(before=model.diff_before, after=model.diff_after),
-                status=EstadoPlanCambio(model.status),
-                origin=model.origin,
-                rationale=model.rationale,
-                user_version=model.user_version,
-                context_id=model.context_id,
-            )
-
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if not model:
@@ -218,7 +218,7 @@ class SqlAlchemyChatRepository(ChatRepository):
             if user_version is not None:
                 model.user_version = user_version
 
-            await session.commit()
+            await self._commit(session)
             return PlanCambio(
                 id=PlanChangeId(model.id),
                 section=model.section,
@@ -239,9 +239,9 @@ class SqlAlchemyChatRepository(ChatRepository):
         stmt = delete(PlanChangeModel).where(
             PlanChangeModel.project_id == str(project_id), PlanChangeModel.id == str(change_id)
         )
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             result = await session.execute(stmt)
-            await session.commit()
+            await self._commit(session)
             rc = getattr(result, "rowcount", 0)
             return bool(rc > 0)
 
@@ -253,9 +253,9 @@ class SqlAlchemyChatRepository(ChatRepository):
         stmt = delete(PlanChangeModel).where(PlanChangeModel.project_id == str(project_id))
         if phase:
             stmt = stmt.where(PlanChangeModel.phase == phase.value)
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             await session.execute(stmt)
-            await session.commit()
+            await self._commit(session)
 
 
 def _model_to_message(model: ChatMessageModel) -> MensajeChat:

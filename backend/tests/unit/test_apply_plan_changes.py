@@ -25,6 +25,7 @@ from tests.unit.fakes import (
     InMemoryFeatureRepository,
     InMemoryProjectRepository,
     InMemoryRequirementRepository,
+    InMemoryUnitOfWork,
 )
 
 _DEFAULT_MARKDOWN = "## Visión\n\nContenido de visión.\n\n## Alcance\n\nContenido de alcance original."
@@ -45,15 +46,17 @@ def _make_uc(
     chat_repo: ChatRepository,
     document_repo: DocumentRepository,
     feature_repo: FeatureRepository | None = None,
+    requirement_repo: InMemoryRequirementRepository | None = None,
     agent: object | None = None,
 ) -> ApplyPlanChangesUseCase:
-    return ApplyPlanChangesUseCase(
-        project_repo=project_repo,
-        chat_repo=chat_repo,
-        document_repo=document_repo,
-        feature_repo=feature_repo,
-        agent=agent,  # type: ignore[arg-type]
+    uow = InMemoryUnitOfWork(
+        projects=project_repo,  # type: ignore[arg-type]
+        chat=chat_repo,  # type: ignore[arg-type]
+        documents=document_repo,  # type: ignore[arg-type]
+        features=feature_repo or InMemoryFeatureRepository(),
+        requirements=requirement_repo or InMemoryRequirementRepository(),
     )
+    return ApplyPlanChangesUseCase(uow=uow, agent=agent)  # type: ignore[arg-type]
 
 
 class StubResolveAgent:
@@ -718,13 +721,7 @@ async def test_apply_resolves_failed_requirement_change_with_llm() -> None:
     await chat_repo.add_plan_change(project.id, SpecPhase.REQUISITOS, change)
 
     agent = StubResolveAgent("### REQ-1.1\n\nEl sistema debe procesar pagos con cualquier metodo.\n")
-    uc = ApplyPlanChangesUseCase(
-        project_repo=project_repo,
-        chat_repo=chat_repo,
-        document_repo=document_repo,
-        requirement_repo=requirement_repo,
-        agent=agent,  # type: ignore[arg-type]
-    )
+    uc = _make_uc(project_repo, chat_repo, document_repo, requirement_repo=requirement_repo, agent=agent)
 
     # Act
     result = await uc.execute(

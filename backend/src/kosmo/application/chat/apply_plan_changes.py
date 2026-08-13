@@ -6,21 +6,16 @@ from dataclasses import dataclass, field
 from unicodedata import normalize
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts import ChatRepository, EstadoPlanCambio, PlanCambio
+from kosmo.contracts import EstadoPlanCambio, PlanCambio
+from kosmo.contracts.persistence import UnitOfWork
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import PlanChangeResolutionContext
 from kosmo.contracts.pipeline.phase_outputs import ResolvedSection
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import DocumentNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
-from kosmo.contracts.sdd.repositories import (
-    DocumentRepository,
-    FeatureRepository,
-    ProjectRepository,
-    RequirementRepository,
-)
+from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff, collapse_whitespace, find_section
 
@@ -109,171 +104,132 @@ class ApplyPlanChangesOutput:
 
 
 class ApplyPlanChangesUseCase:
-    def __init__(
-        self,
-        project_repo: ProjectRepository,
-        chat_repo: ChatRepository,
-        document_repo: DocumentRepository,
-        feature_repo: FeatureRepository | None = None,
-        requirement_repo: RequirementRepository | None = None,
-        session_factory: async_sessionmaker[AsyncSession] | None = None,
-        agent: AgentPort | None = None,
-    ) -> None:
-        self._project_repo = project_repo
-        self._chat_repo = chat_repo
-        self._document_repo = document_repo
-        self._feature_repo = feature_repo
-        self._requirement_repo = requirement_repo
-        self._session_factory = session_factory
+    def __init__(self, uow: UnitOfWork, agent: AgentPort | None = None) -> None:
+        self._uow = uow
         self._agent = agent
 
     async def execute(self, input_data: ApplyPlanChangesInput) -> ApplyPlanChangesOutput:
-        project = await self._project_repo.by_id(input_data.project_id)
-        if project is None:
-            raise ProjectNotFoundError(
-                project_id=str(input_data.project_id),
-                instance=f"/api/v1/projects/{input_data.project_id}/plan/apply",
-            )
-
-        if input_data.phase not in {SpecPhase.DESCUBRIMIENTO, SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS}:
-            raise ValueError(f"Aplicación de cambios no soportada para la fase '{input_data.phase.value}'")
-
-        all_changes = await self._chat_repo.list_plan_changes(input_data.project_id, input_data.phase)
-        by_id = {c.id: c for c in all_changes}
-
-        matched: list[PlanCambio] = []
-        failed: list[FailedChange] = []
-        final_markdown = ""
-
-        for cid in input_data.change_ids:
-            change = by_id.get(cid)
-            if change is None:
-                failed.append(
-                    FailedChange(
-                        id=cid,
-                        reason=f"El cambio {cid} no pertenece al plan de esta fase",
-                        section="",
-                    )
+        # ponytail: una transaccion para todo el caso de uso; las llamadas LLM
+        # de resolucion ocurren con la conexion ociosa. Separar lectura/computo/
+        # escritura en fases cortas corresponde a FIX-02.
+        async with self._uow as uow:
+            project = await uow.projects.by_id(input_data.project_id)
+            if project is None:
+                raise ProjectNotFoundError(
+                    project_id=str(input_data.project_id),
+                    instance=f"/api/v1/projects/{input_data.project_id}/plan/apply",
                 )
+
+            if input_data.phase not in {SpecPhase.DESCUBRIMIENTO, SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS}:
+                raise ValueError(f"Aplicación de cambios no soportada para la fase '{input_data.phase.value}'")
+
+            all_changes = await uow.chat.list_plan_changes(input_data.project_id, input_data.phase)
+            by_id = {c.id: c for c in all_changes}
+
+            matched: list[PlanCambio] = []
+            failed: list[FailedChange] = []
+            final_markdown = ""
+
+            for cid in input_data.change_ids:
+                change = by_id.get(cid)
+                if change is None:
+                    failed.append(
+                        FailedChange(
+                            id=cid,
+                            reason=f"El cambio {cid} no pertenece al plan de esta fase",
+                            section="",
+                        )
+                    )
+                else:
+                    matched.append(change)
+
+            if input_data.phase == SpecPhase.DESCUBRIMIENTO:
+                applied, phase_failed, final_markdown, markdown_before = await self._apply_discovery_changes(
+                    uow, input_data.project_id, matched
+                )
+                if phase_failed and self._agent is not None:
+                    by_plan_id = {c.id: c for c in matched}
+                    failed_plan = [by_plan_id[fc.id] for fc in phase_failed if fc.id in by_plan_id]
+                    if failed_plan:
+                        final_markdown, llm_applied, llm_still = await self._resolve_failed_with_llm(
+                            input_data.project_id, failed_plan, final_markdown
+                        )
+                        applied.extend(llm_applied)
+                        phase_failed = [
+                            FailedChange(
+                                id=c.id,
+                                reason="El cambio no se pudo resolver de forma segura.",
+                                section=c.section or "",
+                            )
+                            for c in llm_still
+                        ]
+                if applied:
+                    await uow.documents.save_discovery(
+                        project_id=input_data.project_id,
+                        document=markdown_to_document(final_markdown),
+                    )
+                    for change in applied:
+                        await uow.chat.update_plan_change_status(
+                            project_id=input_data.project_id,
+                            change_id=change.id,
+                            status=EstadoPlanCambio.APPLIED,
+                        )
+                    await uow.documents.save_version(
+                        project_id=input_data.project_id,
+                        phase=input_data.phase,
+                        markdown=markdown_before,
+                        change_ids=[c.id for c in applied],
+                    )
+            elif input_data.phase == SpecPhase.REQUISITOS:
+                applied, phase_failed = await self._apply_requirement_changes(uow, matched)
+                if phase_failed and self._agent is not None:
+                    by_plan_id = {c.id: c for c in matched}
+                    failed_plan = [by_plan_id[fc.id] for fc in phase_failed if fc.id in by_plan_id]
+                    if failed_plan:
+                        llm_applied, llm_still = await self._resolve_requirement_failures_with_llm(
+                            uow, input_data.project_id, failed_plan
+                        )
+                        applied.extend(llm_applied)
+                        phase_failed = [
+                            FailedChange(
+                                id=c.id,
+                                reason="El cambio no se pudo resolver de forma segura.",
+                                section=c.section or "",
+                            )
+                            for c in llm_still
+                        ]
+                if applied:
+                    for change in applied:
+                        await uow.chat.update_plan_change_status(
+                            project_id=input_data.project_id,
+                            change_id=change.id,
+                            status=EstadoPlanCambio.APPLIED,
+                        )
             else:
-                matched.append(change)
-
-        if input_data.phase == SpecPhase.DESCUBRIMIENTO:
-            applied, phase_failed, final_markdown, markdown_before = await self._apply_discovery_changes(
-                input_data.project_id, matched
-            )
-            if phase_failed and self._agent is not None:
-                by_plan_id = {c.id: c for c in matched}
-                failed_plan = [by_plan_id[fc.id] for fc in phase_failed if fc.id in by_plan_id]
-                if failed_plan:
-                    final_markdown, llm_applied, llm_still = await self._resolve_failed_with_llm(
-                        input_data.project_id, failed_plan, final_markdown
-                    )
-                    applied.extend(llm_applied)
-                    phase_failed = [
-                        FailedChange(
-                            id=c.id,
-                            reason="El cambio no se pudo resolver de forma segura.",
-                            section=c.section or "",
+                applied, phase_failed = await self._apply_feature_changes(uow, input_data.project_id, matched)
+                if applied:
+                    for change in applied:
+                        await uow.chat.update_plan_change_status(
+                            project_id=input_data.project_id,
+                            change_id=change.id,
+                            status=EstadoPlanCambio.APPLIED,
                         )
-                        for c in llm_still
-                    ]
-            if applied and self._session_factory is not None:
-                await self._persist_with_uow(input_data.project_id, applied, final_markdown, markdown_before)
-        elif input_data.phase == SpecPhase.REQUISITOS:
-            applied, phase_failed = await self._apply_requirement_changes(matched)
-            if phase_failed and self._agent is not None:
-                by_plan_id = {c.id: c for c in matched}
-                failed_plan = [by_plan_id[fc.id] for fc in phase_failed if fc.id in by_plan_id]
-                if failed_plan:
-                    llm_applied, llm_still = await self._resolve_requirement_failures_with_llm(
-                        input_data.project_id, failed_plan
-                    )
-                    applied.extend(llm_applied)
-                    phase_failed = [
-                        FailedChange(
-                            id=c.id,
-                            reason="El cambio no se pudo resolver de forma segura.",
-                            section=c.section or "",
-                        )
-                        for c in llm_still
-                    ]
-            if applied and self._session_factory is not None:
-                await self._mark_changes_applied_uow(input_data.project_id, applied)
-        else:
-            applied, phase_failed = await self._apply_feature_changes(input_data.project_id, matched)
-            if applied and self._session_factory is not None:
-                await self._mark_changes_applied_uow(input_data.project_id, applied)
-        failed.extend(phase_failed)
+            failed.extend(phase_failed)
 
-        for fc in phase_failed:
-            _log.warning(
-                "plan.apply_change_failed",
-                change_id=str(fc.id),
-                reason=fc.reason,
-                section=fc.section,
+            for fc in phase_failed:
+                _log.warning(
+                    "plan.apply_change_failed",
+                    change_id=str(fc.id),
+                    reason=fc.reason,
+                    section=fc.section,
+                )
+
+            return ApplyPlanChangesOutput(
+                applied_count=len(applied),
+                failed_count=len(failed),
+                applied_changes=applied,
+                failed_changes=failed,
             )
-
-        if self._session_factory is None or not applied:
-            if input_data.phase == SpecPhase.DESCUBRIMIENTO and applied:
-                doc = markdown_to_document(final_markdown)  # type: ignore[reportPossiblyUnboundVariable]
-                await self._document_repo.save_discovery(project_id=input_data.project_id, document=doc)
-            for change in applied:
-                await self._chat_repo.update_plan_change_status(
-                    project_id=input_data.project_id,
-                    change_id=change.id,
-                    status=EstadoPlanCambio.APPLIED,
-                )
-            if input_data.phase == SpecPhase.DESCUBRIMIENTO and applied:
-                await self._document_repo.save_version(  # type: ignore[call-arg]
-                    project_id=input_data.project_id,
-                    phase=input_data.phase,
-                    markdown=markdown_before,  # type: ignore[reportPossiblyUnboundVariable]
-                    change_ids=[c.id for c in applied],
-                )
-
-        return ApplyPlanChangesOutput(
-            applied_count=len(applied),
-            failed_count=len(failed),
-            applied_changes=applied,
-            failed_changes=failed,
-        )
-
-    async def _persist_with_uow(
-        self, project_id: ProjectId, applied: list[PlanCambio], markdown: str, markdown_before: str
-    ) -> None:
-        async with self._session_factory() as session:  # type: ignore[reportOptionalMemberAccess]
-            await self._document_repo.save_discovery(
-                project_id=project_id,
-                document=markdown_to_document(markdown),
-                _session=session,  # type: ignore[call-arg]
-            )
-            for change in applied:
-                await self._chat_repo.update_plan_change_status(
-                    project_id=project_id,
-                    change_id=change.id,
-                    status=EstadoPlanCambio.APPLIED,
-                    _session=session,  # type: ignore[call-arg]
-                )
-            await self._document_repo.save_version(  # type: ignore[call-arg]
-                project_id=project_id,
-                phase=SpecPhase.DESCUBRIMIENTO,
-                markdown=markdown_before,
-                change_ids=[c.id for c in applied],
-                _session=session,  # type: ignore[call-arg]
-            )
-            await session.commit()
-
-    async def _mark_changes_applied_uow(self, project_id: ProjectId, applied: list[PlanCambio]) -> None:
-        async with self._session_factory() as session:  # type: ignore[reportOptionalMemberAccess]
-            for change in applied:
-                await self._chat_repo.update_plan_change_status(
-                    project_id=project_id,
-                    change_id=change.id,
-                    status=EstadoPlanCambio.APPLIED,
-                    _session=session,  # type: ignore[call-arg]
-                )
-            await session.commit()
 
     def _locate_section(self, markdown: str, change: PlanCambio) -> tuple[str, int, int] | None:
         if change.section:
@@ -349,12 +305,12 @@ class ApplyPlanChangesUseCase:
 
     async def _resolve_requirement_failures_with_llm(
         self,
+        uow: UnitOfWork,
         project_id: ProjectId,
         failed: list[PlanCambio],
     ) -> tuple[list[PlanCambio], list[PlanCambio]]:
         agent = self._agent
-        requirement_repo = self._requirement_repo
-        if agent is None or not failed or requirement_repo is None:
+        if agent is None or not failed:
             return [], failed
 
         grouped: dict[str, list[PlanCambio]] = {}
@@ -363,14 +319,15 @@ class ApplyPlanChangesUseCase:
             if fid:
                 grouped.setdefault(fid, []).append(c)
 
-        newly_applied: list[PlanCambio] = []
-        still_failed: list[PlanCambio] = []
+        # La sesion compartida no es concurrente: lecturas secuenciales antes del gather
+        markdowns: dict[str, str | None] = {}
+        for fid in grouped:
+            markdowns[fid] = await uow.requirements.by_feature_id(FeatureId(fid))
 
-        async def _resolve_one(fid: str, changes: list[PlanCambio]) -> tuple[str, list[PlanCambio]]:
-            fid_typed = FeatureId(fid)
-            markdown = await requirement_repo.by_feature_id(fid_typed)
+        async def _resolve_one(fid: str, changes: list[PlanCambio]) -> tuple[str, str | None]:
+            markdown = markdowns[fid]
             if markdown is None:
-                return fid, changes
+                return fid, None
             new_text = await llm_resolve_markdown(
                 agent,
                 project_id,
@@ -378,24 +335,28 @@ class ApplyPlanChangesUseCase:
                 markdown,
                 changes,
             )
-            if new_text is None:
-                return fid, changes
-            await requirement_repo.save(fid_typed, new_text)
-            return fid, []
+            return fid, new_text
 
         results = await asyncio.gather(*[_resolve_one(fid, changes) for fid, changes in grouped.items()])
+        resolved_by_fid = dict(results)
+
+        newly_applied: list[PlanCambio] = []
+        still_failed: list[PlanCambio] = []
         for fid, changes in grouped.items():
-            _resolved_fid, still = next((r for r in results if r[0] == fid), (fid, changes))
-            newly_applied.extend(c for c in changes if c not in still)
-            still_failed.extend(still)
+            new_text = resolved_by_fid[fid]
+            if new_text is None:
+                still_failed.extend(changes)
+                continue
+            await uow.requirements.save(FeatureId(fid), new_text)
+            newly_applied.extend(changes)
 
         still_failed.extend(c for c in failed if _feature_id_from_change(c) is None)
         return newly_applied, still_failed
 
     async def _apply_discovery_changes(
-        self, project_id: ProjectId, changes: list[PlanCambio]
+        self, uow: UnitOfWork, project_id: ProjectId, changes: list[PlanCambio]
     ) -> tuple[list[PlanCambio], list[FailedChange], str, str]:
-        document = await self._document_repo.get_discovery(project_id)
+        document = await uow.documents.get_discovery(project_id)
         if document is None:
             raise DocumentNotFoundError(
                 document_type="discovery",
@@ -466,7 +427,7 @@ class ApplyPlanChangesUseCase:
 
         if not applied and failed:
             try:
-                previous_md = await self._document_repo.get_latest_version(project_id, SpecPhase.DESCUBRIMIENTO)
+                previous_md = await uow.documents.get_latest_version(project_id, SpecPhase.DESCUBRIMIENTO)
                 if previous_md is not None and previous_md != markdown_before:
                     from kosmo.domain.sdd.discovery_diff import diff_discovery_versions
 
@@ -486,11 +447,8 @@ class ApplyPlanChangesUseCase:
         return applied, failed, markdown, markdown_before
 
     async def _apply_feature_changes(
-        self, project_id: ProjectId, changes: list[PlanCambio]
+        self, uow: UnitOfWork, project_id: ProjectId, changes: list[PlanCambio]
     ) -> tuple[list[PlanCambio], list[FailedChange]]:
-        if self._feature_repo is None:
-            raise ValueError("La aplicación de cambios de características no está configurada.")
-
         applied: list[PlanCambio] = []
         failed: list[FailedChange] = []
         for change in changes:
@@ -504,11 +462,11 @@ class ApplyPlanChangesUseCase:
                     )
                 )
                 continue
-            feature = await self._feature_repo.by_id(FeatureId(change.context_id)) if change.context_id else None
+            feature = await uow.features.by_id(FeatureId(change.context_id)) if change.context_id else None
             if feature is None and not change.context_id:
                 candidates = [
                     item
-                    for item in await self._feature_repo.list_by_project(project_id)
+                    for item in await uow.features.list_by_project(project_id)
                     if change.diff.before in getattr(item, attribute)
                 ]
                 feature = candidates[0] if len(candidates) == 1 else None
@@ -534,17 +492,13 @@ class ApplyPlanChangesUseCase:
             setattr(feature, attribute, replacement)
             if attribute == "title":
                 feature.slug = replacement.lower().replace(" ", "-")
-            await self._feature_repo.save(feature)
+            await uow.features.save(feature)
             applied.append(change)
         return applied, failed
 
     async def _apply_requirement_changes(
-        self,
-        changes: list[PlanCambio],
+        self, uow: UnitOfWork, changes: list[PlanCambio]
     ) -> tuple[list[PlanCambio], list[FailedChange]]:
-        if self._requirement_repo is None:
-            raise ValueError("La aplicación de cambios de requisitos no está configurada.")
-
         grouped: dict[str, list[PlanCambio]] = {}
         for c in changes:
             fid = _feature_id_from_change(c)
@@ -559,7 +513,7 @@ class ApplyPlanChangesUseCase:
         failed: list[FailedChange] = []
         for fid, f_changes in grouped.items():
             fid_typed = FeatureId(fid)
-            markdown = await self._requirement_repo.by_feature_id(fid_typed)
+            markdown = await uow.requirements.by_feature_id(fid_typed)
             if markdown is None:
                 for c in f_changes:
                     failed.append(
@@ -588,7 +542,7 @@ class ApplyPlanChangesUseCase:
                     applied.append(change)
 
             if any(a.id == c.id for c in f_changes for a in applied):
-                await self._requirement_repo.save(fid_typed, markdown)
+                await uow.requirements.save(fid_typed, markdown)
 
         return applied, failed
 

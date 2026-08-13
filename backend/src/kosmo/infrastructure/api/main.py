@@ -288,7 +288,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
         SqlAlchemyActivityDiagramRepository,
     )
-    from kosmo.infrastructure.persistence.postgres.repositories.document_repo import SqlAlchemyDocumentRepository
     from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import SqlAlchemyFeatureRepository
     from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import SqlAlchemyRequirementRepository
 
@@ -311,14 +310,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     )
 
     from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
+    from kosmo.infrastructure.persistence.postgres.uow import SqlAlchemyUnitOfWork
 
     app.state.apply_consistency_impacts = ApplyConsistencyImpactsUseCase(
-        project_repo=SqlAlchemyProjectRepository(session_factory),
-        feature_repo=SqlAlchemyFeatureRepository(session_factory),
-        requirement_repo=SqlAlchemyRequirementRepository(session_factory),
-        diagram_repo=SqlAlchemyActivityDiagramRepository(session_factory),
-        traceability_repo=app.state.traceability_repo,
-        document_repo=SqlAlchemyDocumentRepository(session_factory),
+        uow=SqlAlchemyUnitOfWork(session_factory),
         agent=pipeline_components.agent,
     )
 
