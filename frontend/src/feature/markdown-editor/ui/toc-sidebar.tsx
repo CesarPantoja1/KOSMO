@@ -27,35 +27,37 @@ export function TocSidebar({ headings, activeId }: Props) {
 
 	return (
 		<aside
-			className='sticky top-0 h-full shrink-0 flex flex-col bg-base-100 transition-all duration-300 pt-1'
-			style={{ width: isOpen ? 280 : 48 }}
+			className='sticky top-0 h-full shrink-0 flex flex-col bg-neutral-50 border-r border-neutral-200 transition-all duration-300 pt-1'
+			style={{ width: isOpen ? 260 : 44 }}
 		>
 			{isOpen ? (
 				<>
-					<div className='mb-6 flex items-center justify-between px-4 shrink-0'>
-						<h2 className='text-lg font-semibold uppercase tracking-wide'>Contenido</h2>
-						<button onClick={() => setIsOpen(false)} className='cursor-pointer'>
+					<div className='mb-4 flex items-center justify-between px-4 pt-2 shrink-0'>
+						<h2 className='text-xs font-semibold uppercase tracking-wider text-neutral-500'>Contenido</h2>
+						<button
+							onClick={() => setIsOpen(false)}
+							className='cursor-pointer text-neutral-400 hover:text-neutral-700 transition-colors'
+						>
 							<CloseMarkdownContent />
 						</button>
 					</div>
 
-					<nav className='space-y-1 px-4 flex-1 overflow-y-auto'>
+					<nav className='space-y-0.5 px-3 flex-1 overflow-y-auto pb-4'>
 						{headings.length === 0 ? (
-							<p className='text-sm text-neutral-500'>Sin secciones</p>
+							<p className='text-xs text-neutral-400 px-1'>Sin secciones</p>
 						) : (
 							headings.map((heading, index) => (
 								<button
 									key={index}
 									onClick={() => handleScroll(heading.id)}
 									className={clsx(
-										'block w-full rounded-md px-2 py-1 text-left text-sm transition-colors cursor-pointer',
-										'hover:bg-neutral-800',
+										'block w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors cursor-pointer',
 										activeId === heading.id
-											? 'bg-neutral-800 text-white'
-											: 'text-neutral-400',
+											? 'bg-primary-50 text-primary-600 font-medium'
+											: 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800',
 									)}
 									style={{
-										paddingLeft: `${heading.depth * 12}px`,
+										paddingLeft: `${(heading.depth - 1) * 12 + 8}px`,
 									}}
 								>
 									{heading.text}
@@ -65,8 +67,11 @@ export function TocSidebar({ headings, activeId }: Props) {
 					</nav>
 				</>
 			) : (
-				<div className='flex justify-center'>
-					<button onClick={() => setIsOpen(true)} className='cursor-pointer'>
+				<div className='flex justify-center pt-2'>
+					<button
+						onClick={() => setIsOpen(true)}
+						className='cursor-pointer text-neutral-400 hover:text-neutral-700 transition-colors'
+					>
 						<OpenMarkdownContent />
 					</button>
 				</div>

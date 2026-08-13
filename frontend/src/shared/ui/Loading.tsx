@@ -23,17 +23,17 @@ const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => 
 	}, [messages]);
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
-			<div className='w-full max-w-2xl rounded-xl bg-base-50 p-10 shadow-2xl outline outline-base-800'>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/40'>
+			<div className='w-full max-w-lg rounded-xl bg-neutral-0 p-10 shadow-xl'>
 				<div className='flex flex-col items-center gap-8 text-center'>
-					<div className='space-y-3'>
-						<h2 className='text-2xl font-semibold text-black'>{title}</h2>
-						<p className='text-base text-base-700'>{description}</p>
+					<div className='space-y-2'>
+						<h2 className='text-xl font-semibold text-neutral-800'>{title}</h2>
+						<p className='text-sm text-neutral-500'>{description}</p>
 					</div>
 					<div className='animate-spin-custom'>
-						<Load color='text-ai' />
+						<Load color='text-ai-500' />
 					</div>
-					<span className='font-mono text-sm text-ai'>{messages[messageIndex]}</span>
+					<span className='text-sm text-neutral-400'>{messages[messageIndex]}</span>
 				</div>
 			</div>
 		</div>

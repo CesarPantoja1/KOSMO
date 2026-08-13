@@ -213,7 +213,7 @@ export const PlanPage = () => {
 	if (isLoading) {
 		return (
 			<div className='flex h-full items-center justify-center'>
-				<div className='h-8 w-8 animate-spin rounded-full border-4 border-base-300 border-t-primary-100' />
+				<div className='h-7 w-7 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
 			</div>
 		);
 	}
@@ -222,8 +222,8 @@ export const PlanPage = () => {
 		return (
 			<div className='page-container'>
 				<div className='page-header'>
-					<h2 className='text-base-800 text-3xl font-bold'>Requisitos EARS</h2>
-					<p className='text-base-600 text-lg'>
+					<h2 className='text-neutral-800 text-3xl font-bold'>Criterios de aceptación</h2>
+					<p className='text-neutral-500 text-base'>
 						No hay cambios pendientes para revisar.
 					</p>
 				</div>
@@ -247,12 +247,12 @@ export const PlanPage = () => {
 				/>
 			)}
 
-			<div className='page-container'>
-			<div className='page-header'>
-				<h2 className='text-base-800 text-3xl font-bold'>Requisitos EARS</h2>
-				<p className='text-base-600 text-lg'>
-					Revisa los cambios propuestos antes de aplicarlos — {label}
-				</p>
+		<div className='page-container'>
+		<div className='page-header'>
+			<h2 className='text-neutral-800 text-3xl font-bold'>Criterios de aceptación</h2>
+			<p className='text-neutral-500 text-base'>
+				Revisa los cambios propuestos antes de aplicarlos — {label}
+			</p>
 
 				<div className='flex-1 min-h-0 mb-2'>
 					<MarkdownDiff

@@ -20,12 +20,12 @@ const ModalConfirmLeave = ({
 	return (
 		<div className='warning-popup' onClick={onCancel}>
 			<div
-				className='bg-base-50 rounded-lg shadow-xl py-7 px-12 w-full max-w-lg mx-4'
+				className='bg-neutral-0 rounded-xl shadow-lg py-8 px-10 w-full max-w-md mx-4 border border-neutral-200'
 				onClick={(e) => e.stopPropagation()}
 			>
-				<h3 className='text-xl font-semibold text-base-950 mb-4 text-center'>{title}</h3>
-				<p className='text-base-950 text-center mb-6'>{description}</p>
-				<div className='flex justify-center gap-5 mt-9'>
+				<h3 className='text-lg font-semibold text-neutral-800 mb-2 text-center'>{title}</h3>
+				<p className='text-neutral-500 text-sm text-center mb-6'>{description}</p>
+				<div className='flex justify-center gap-3 mt-6'>
 					<button className='btn btn-secondary' onClick={onCancel}>
 						{cancelText}
 					</button>

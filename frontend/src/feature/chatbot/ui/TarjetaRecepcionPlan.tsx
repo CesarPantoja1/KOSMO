@@ -77,71 +77,71 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 	const displayAfter = wasNormalized ? normalizedAfter : suggestion.diff_after;
 
 	return (
-		<div className='mt-2 flex flex-col gap-3 rounded-lg border border-base-300 bg-white p-4 shadow-sm'>
+		<div className='mt-2 flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm'>
 			{/* Header: sección + badge de estado */}
 			<div className='flex items-start justify-between gap-2'>
 				<div className='flex items-center gap-2 flex-wrap'>
-					<h4 className='text-sm font-semibold text-base-950'>{suggestion.section}</h4>
+					<h4 className='text-sm font-semibold text-neutral-800'>{suggestion.section}</h4>
 					{isPureAddition && (
-						<span className='rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800'>
+						<span className='rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-medium text-success-700'>
 							Nuevo
 						</span>
 					)}
 					{isModification && (
-						<span className='rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800'>
+						<span className='rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-medium text-warning-700'>
 							Modificar
 						</span>
 					)}
 					{isDeletion && (
-						<span className='rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800'>
+						<span className='rounded-full bg-error-50 px-2 py-0.5 text-[10px] font-medium text-error-700'>
 							Eliminar
 						</span>
 					)}
 				</div>
 				{status === 'added' && (
-					<span className='flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-100'>
+					<span className='flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-500'>
 						<Check size={12} /> Agregado
 					</span>
 				)}
 				{status === 'applied' && (
-					<span className='flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-100'>
+					<span className='flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-500'>
 						<Check size={12} /> Aplicado
 					</span>
 				)}
 				{status === 'discarded' && (
-					<span className='flex shrink-0 items-center gap-1 rounded-full bg-base-200 px-2 py-0.5 text-xs font-medium text-base-600'>
-						<Close size={12} color='text-base-600' /> Descartado
+					<span className='flex shrink-0 items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500'>
+						<Close size={12} color='text-neutral-500' /> Descartado
 					</span>
 				)}
 			</div>
 
 			{/* Rationale */}
 			{suggestion.rationale && (
-				<p className='text-xs italic text-base-600'>{suggestion.rationale}</p>
+				<p className='text-xs italic text-neutral-500'>{suggestion.rationale}</p>
 			)}
 
 			{/* Diff */}
-			<div className='flex flex-col gap-1.5 overflow-hidden rounded-md border border-base-300 text-xs'>
+			<div className='flex flex-col gap-1.5 overflow-hidden rounded-md border border-neutral-200 text-xs'>
 				{isDeletion && suggestion.diff_before && (
-					<div className='border-l-2 border-red-500 bg-red-50 p-2.5 text-red-800 [&_pre]:!bg-red-100 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
-						<div className='mb-1 font-mono text-[10px] font-semibold text-red-600 uppercase tracking-wider'>
+					<div className='border-l-2 border-error-500 bg-error-50 p-2.5 text-error-700 [&_pre]:!bg-error-50 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
+						<div className='mb-1 font-mono text-[10px] font-semibold text-error-500 uppercase tracking-wider'>
 							- Eliminar
 						</div>
 						<MarkdownText content={suggestion.diff_before} />
 					</div>
 				)}
 				{hasDiffBefore && (
-					<div className='border-l-2 border-status-error bg-status-error/5 p-2.5 text-status-error [&_pre]:!bg-status-error/10 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
-						<div className='mb-1 font-mono text-[10px] font-semibold text-status-error/80 uppercase tracking-wider'>
+					<div className='border-l-2 border-error-500 bg-error-50 p-2.5 text-error-700 [&_pre]:!bg-error-50 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
+						<div className='mb-1 font-mono text-[10px] font-semibold text-error-500 uppercase tracking-wider'>
 							- Anterior
 						</div>
 						<MarkdownText content={suggestion.diff_before} />
 					</div>
 				)}
 				{!isDeletion && displayAfter && (
-					<div className='border-l-2 border-primary-100 bg-primary-50 p-2.5 text-primary-900 [&_pre]:!bg-primary-100/15 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
+					<div className='border-l-2 border-primary-500 bg-primary-50 p-2.5 text-primary-900 [&_pre]:!bg-primary-100 [&_code]:!bg-transparent [&_pre]:my-1 [&_p]:my-0.5'>
 						{isModification && (
-							<div className='mb-1 font-mono text-[10px] font-semibold text-primary-600 uppercase tracking-wider'>
+							<div className='mb-1 font-mono text-[10px] font-semibold text-primary-500 uppercase tracking-wider'>
 								+ Propuesto
 							</div>
 						)}
@@ -161,7 +161,7 @@ export const TarjetaRecepcionPlan = ({ suggestion, messageId, onAction }: Props)
 							</button>
 							<button className='btn-chat btn-primary' onClick={handleAdd}>
 								<Plus size={13} color='' />
-								Descartar Agregar al plan
+								Agregar al plan
 							</button>
 						</>
 					)}
