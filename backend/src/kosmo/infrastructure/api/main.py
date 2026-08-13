@@ -197,7 +197,7 @@ def _make_outbox_handler(pipeline: Any) -> Any:
             from kosmo.contracts.sdd.document import SpecPhase
 
             try:
-                await agent._reflect_and_consolidate(  # type: ignore[reportPrivateUsage]
+                await agent.reflect_and_consolidate(
                     session_id=AgentMemoryId(payload["session_id"]),
                     phase=SpecPhase(payload["phase"]),
                     session_type=payload["session_type"],

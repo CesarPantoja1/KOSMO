@@ -1,6 +1,6 @@
 import pytest
 
-from kosmo.application.pipeline.kosmo_agent import _parse_tool_call
+from kosmo.application.pipeline.tool_resolver import _parse_tool_call
 
 
 @pytest.mark.unit
