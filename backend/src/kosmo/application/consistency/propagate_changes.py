@@ -6,7 +6,7 @@ import structlog
 
 from kosmo.contracts import ChatRepository, ConsistencyEvaluator
 from kosmo.contracts.chat import PlanCambio
-from kosmo.contracts.consistency import PhasePropagationInfo
+from kosmo.contracts.consistency import DOWNSTREAM_TARGETS, PhasePropagationInfo
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
@@ -18,13 +18,6 @@ from kosmo.contracts.sdd.repositories import (
 )
 
 _log = structlog.get_logger(__name__)
-
-_PROPAGATION_TARGETS: dict[SpecPhase, list[SpecPhase]] = {
-    SpecPhase.DESCUBRIMIENTO: [SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO],
-    SpecPhase.CARACTERISTICAS: [SpecPhase.DESCUBRIMIENTO, SpecPhase.REQUISITOS, SpecPhase.MODELO],
-    SpecPhase.REQUISITOS: [SpecPhase.CARACTERISTICAS, SpecPhase.DESCUBRIMIENTO, SpecPhase.MODELO],
-    SpecPhase.MODELO: [SpecPhase.REQUISITOS, SpecPhase.CARACTERISTICAS, SpecPhase.DESCUBRIMIENTO],
-}
 
 
 @dataclass(frozen=True)
@@ -69,7 +62,7 @@ class PropagateChangesUseCase:
             input_data.project_id, input_data.source_phase, input_data.applied_change_ids
         )
 
-        targets = _PROPAGATION_TARGETS.get(input_data.source_phase, [])
+        targets = DOWNSTREAM_TARGETS.get(input_data.source_phase, [])
         affected_phases: list[PhasePropagationInfo] = []
 
         for target_spec in targets:

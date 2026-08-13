@@ -17,6 +17,11 @@ from kosmo.application.chat.process_chat_modification import (
     ProcessChatModificationOutput,
     ProcessChatModificationUseCase,
 )
+from kosmo.application.chat.process_chat_regeneration import (
+    ProcessChatRegenerationInput,
+    ProcessChatRegenerationOutput,
+    ProcessChatRegenerationUseCase,
+)
 from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextInput,
     ValidatePhaseContextOutput,
@@ -35,6 +40,9 @@ __all__ = [
     "ProcessChatModificationInput",
     "ProcessChatModificationOutput",
     "ProcessChatModificationUseCase",
+    "ProcessChatRegenerationInput",
+    "ProcessChatRegenerationOutput",
+    "ProcessChatRegenerationUseCase",
     "ValidatePhaseContextInput",
     "ValidatePhaseContextOutput",
     "ValidatePhaseContextUseCase",

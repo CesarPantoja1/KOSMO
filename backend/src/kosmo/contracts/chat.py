@@ -41,6 +41,17 @@ class SugerenciaCambio:
 
 
 @dataclass(frozen=True)
+class ModificacionChat:
+    applied: bool
+    modified_section: str | None = None
+    change_description: str | None = None
+    modified_document: str | None = None
+    before: str | None = None
+    after: str | None = None
+    clarification_message: str | None = None
+
+
+@dataclass(frozen=True)
 class PlanCambio:
     id: PlanChangeId
     section: str
@@ -60,6 +71,7 @@ class MensajeChat:
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     suggested_changes: list[SugerenciaCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    modification: ModificacionChat | None = None
     error: str | None = None
 
     def __init__(
@@ -69,6 +81,7 @@ class MensajeChat:
         content: str,
         timestamp: datetime | None = None,
         suggested_changes: list[SugerenciaCambio] | None = None,
+        modification: ModificacionChat | None = None,
         error: str | None = None,
         *,
         suggested_change: SugerenciaCambio | None = None,
@@ -82,6 +95,7 @@ class MensajeChat:
         object.__setattr__(self, "content", content)
         object.__setattr__(self, "timestamp", timestamp or datetime.now(UTC))
         object.__setattr__(self, "suggested_changes", normalized_changes)
+        object.__setattr__(self, "modification", modification)
         object.__setattr__(self, "error", error)
 
     @property

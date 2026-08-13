@@ -7,6 +7,7 @@ from starlette.requests import Request
 
 from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
 from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
+from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
 from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.config import Settings
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
@@ -65,6 +66,7 @@ async def test_build_app_components_reuses_registry_instances() -> None:
         assert components.modelo.diagram_repo is components.repos.diagrams
         assert components.pipeline.chat_repo is components.repos.chat
         assert components.pipeline.traceability_repo is components.repos.traceability
+        assert components.discovery.consistency_evaluator is components.pipeline.consistency_evaluator
 
         # Assert: auth deshabilitado no crea componentes de autenticacion
         assert components.auth is None
@@ -86,6 +88,7 @@ async def test_app_container_exposes_typed_components() -> None:
         # Assert: los campos del contenedor tienen tipos concretos (no Any)
         assert isinstance(components, AppContainer)
         assert isinstance(components.pipeline.process_chat_message, ProcessChatMessageUseCase)
+        assert isinstance(components.pipeline.process_chat_regeneration, ProcessChatRegenerationUseCase)
         assert isinstance(components.discovery.apply_plan_changes, ApplyPlanChangesUseCase)
         assert isinstance(components.consistency.apply_consistency_impacts, ApplyConsistencyImpactsUseCase)
         assert components.projects.create_project is not None

@@ -6,7 +6,6 @@ from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
 from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
 from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
-from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
 from kosmo.application.consistency.evaluate_project_consistency import EvaluateProjectConsistencyUseCase
 from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 from kosmo.application.discovery import (
@@ -90,13 +89,7 @@ def build_discovery_components(
     pipeline: PipelineComponents,
     uow: SqlAlchemyUnitOfWork,
 ) -> DiscoveryComponents:
-    consistency_evaluator: ConsistencyEvaluator = EvaluateConsistencyUseCase(
-        agent=pipeline.agent,
-        feature_repo=repos.features,
-        requirement_repo=repos.requirements,
-        diagram_repo=repos.diagrams,
-        document_repo=repos.documents,
-    )
+    consistency_evaluator: ConsistencyEvaluator = pipeline.consistency_evaluator
 
     propagate_uc = PropagateChangesUseCase(
         project_repo=repos.projects,

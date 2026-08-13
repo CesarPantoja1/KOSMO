@@ -11,7 +11,7 @@ from ulid import ULID
 from kosmo.application.consistency.enrich_impact import enrich_impact_items, impact_item_to_dict
 from kosmo.contracts import ConsistencyEvaluator
 from kosmo.contracts.chat import PlanCambio
-from kosmo.contracts.consistency import ConsistencyStatus
+from kosmo.contracts.consistency import DOWNSTREAM_TARGETS, ConsistencyStatus
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId
@@ -26,13 +26,6 @@ _log = structlog.get_logger(__name__)
 
 _ImpactItemDict = dict[str, object]
 _ImpactList = list[_ImpactItemDict]
-
-_CASCADE_TARGETS: dict[SpecPhase, list[SpecPhase]] = {
-    SpecPhase.DESCUBRIMIENTO: [SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO],
-    SpecPhase.CARACTERISTICAS: [SpecPhase.DESCUBRIMIENTO, SpecPhase.REQUISITOS, SpecPhase.MODELO],
-    SpecPhase.REQUISITOS: [SpecPhase.CARACTERISTICAS, SpecPhase.DESCUBRIMIENTO, SpecPhase.MODELO],
-    SpecPhase.MODELO: [SpecPhase.REQUISITOS, SpecPhase.CARACTERISTICAS, SpecPhase.DESCUBRIMIENTO],
-}
 
 
 @dataclass(frozen=True)
@@ -74,7 +67,7 @@ class CascadingConsistencyUseCase:
             )
 
         source_api = SPEC_TO_API_PHASE[source_phase]
-        targets = _CASCADE_TARGETS[source_phase]
+        targets = DOWNSTREAM_TARGETS[source_phase]
 
         async def _eval_and_enrich(target_spec: SpecPhase) -> _ImpactList:
             try:
@@ -158,7 +151,7 @@ class CascadingConsistencyUseCase:
             return
 
         source_api = SPEC_TO_API_PHASE[source_phase]
-        targets = _CASCADE_TARGETS[source_phase]
+        targets = DOWNSTREAM_TARGETS[source_phase]
 
         # Phase 1: show all phases immediately
         for target_spec in targets:

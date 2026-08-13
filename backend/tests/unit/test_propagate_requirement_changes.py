@@ -117,13 +117,8 @@ async def test_successful_propagation_with_impacts(
         )
     )
 
-    assert len(output.affected_phases) == 3
-
-    feat = next(p for p in output.affected_phases if p.phase == "features")
-    assert feat.affected_count == 2
-
-    disc = next(p for p in output.affected_phases if p.phase == "discovery")
-    assert disc.affected_count == 2
+    # Assert: trazabilidad solo hacia la derecha, desde requisitos solo el modelo
+    assert len(output.affected_phases) == 1
 
     mod = next(p for p in output.affected_phases if p.phase == "model")
     assert mod.affected_count == 1

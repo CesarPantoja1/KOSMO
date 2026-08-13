@@ -54,6 +54,7 @@ async def test_propagate_requirement_changes_router_returns_affected_phases() ->
     evaluator = FakeConsistencyEvaluator()
     evaluator.set_affected_ids("caracteristicas", ["feat_01"])
     evaluator.set_affected_ids("descubrimiento", ["prj_test"])
+    evaluator.set_affected_ids("modelo", ["feat_01"])
 
     uc = PropagateChangesUseCase(
         project_repo=project_repo,
@@ -78,13 +79,13 @@ async def test_propagate_requirement_changes_router_returns_affected_phases() ->
         request=mock_req,
     )
 
-    # Assert
+    # Assert: trazabilidad solo hacia la derecha, desde requisitos solo el modelo
     assert isinstance(result, PhaseNotificationList)
     phases_by_name = {p.phase: p for p in result.affected_phases}
-    assert "features" in phases_by_name
-    assert "discovery" in phases_by_name
-    assert phases_by_name["features"].affected_count == 1
-    assert phases_by_name["discovery"].affected_count == 1
+    assert "features" not in phases_by_name
+    assert "discovery" not in phases_by_name
+    assert "model" in phases_by_name
+    assert phases_by_name["model"].affected_count == 1
 
 
 @pytest.mark.asyncio

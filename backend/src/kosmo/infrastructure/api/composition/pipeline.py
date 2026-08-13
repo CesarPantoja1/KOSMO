@@ -6,13 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
 from kosmo.application.chat.process_chat_modification import ProcessChatModificationUseCase
+from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
 from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
+from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.config import Settings
 from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.chat import ChatRepository
-from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.consistency import ConsistencyEvaluator, TraceabilityRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.domain.pipeline.context_builder import ContextBuilder
@@ -49,6 +51,8 @@ class PipelineComponents:
     validate_phase_context: ValidatePhaseContextUseCase
     process_chat_message: ProcessChatMessageUseCase
     process_chat_modification: ProcessChatModificationUseCase
+    process_chat_regeneration: ProcessChatRegenerationUseCase
+    consistency_evaluator: ConsistencyEvaluator
     chat_repo: ChatRepository
     traceability_repo: TraceabilityRepository
     outbox: OutboxStore
@@ -160,6 +164,25 @@ def build_pipeline_components(
         llm_client=llm_client,
     )
 
+    consistency_evaluator: ConsistencyEvaluator = EvaluateConsistencyUseCase(
+        agent=agent,
+        feature_repo=repos.features,
+        requirement_repo=repos.requirements,
+        diagram_repo=repos.diagrams,
+        document_repo=repos.documents,
+    )
+
+    process_chat_regeneration = ProcessChatRegenerationUseCase(
+        agent=agent,
+        chat_repo=repos.chat,
+        project_repo=repos.projects,
+        document_repo=repos.documents,
+        feature_repo=repos.features,
+        requirement_repo=repos.requirements,
+        diagram_repo=repos.diagrams,
+        evaluator=consistency_evaluator,
+    )
+
     consolidate_patterns = ConsolidateKnowledgePatterns(
         memory=agent_memory,
         pattern_store=pattern_store,
@@ -176,6 +199,8 @@ def build_pipeline_components(
         validate_phase_context=validate_phase_context,
         process_chat_message=process_chat_message,
         process_chat_modification=process_chat_modification,
+        process_chat_regeneration=process_chat_regeneration,
+        consistency_evaluator=consistency_evaluator,
         chat_repo=repos.chat,
         traceability_repo=repos.traceability,
         outbox=outbox,

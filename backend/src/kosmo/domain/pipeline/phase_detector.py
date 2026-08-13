@@ -17,6 +17,9 @@ _PHASE_KEYWORDS: dict[str, list[str]] = {
         "modelo de negocio",
         "estrategia",
         "objetivo general",
+        "público objetivo",
+        "publico objetivo",
+        "segmento de clientes",
     ],
     "caracteristicas": [
         "característica",

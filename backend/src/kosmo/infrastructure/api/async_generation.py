@@ -7,86 +7,73 @@ from typing import Any
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from kosmo.contracts.chat import ChatRepository, ChatRole, MensajeChat, SugerenciaCambio
+from kosmo.contracts.chat import ModificacionChat
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ChatMessageId, ProjectId
-from kosmo.domain.sdd.id_generator import IdGenerator
+from kosmo.contracts.sdd.ids import ProjectId
 
 
-def _suggested_changes_list(scs: list[SugerenciaCambio]) -> list[dict[str, Any]] | None:
-    if not scs:
+def _modification_dict(modification: ModificacionChat | None) -> dict[str, object] | None:
+    if modification is None:
         return None
-    return [
-        {
-            "section": sc.section,
-            "description": sc.description,
-            "diff": {"before": sc.diff.before, "after": sc.diff.after},
-            "rationale": sc.rationale,
-        }
-        for sc in scs
-    ]
+    return {
+        "applied": modification.applied,
+        "modified_section": modification.modified_section,
+        "change_description": modification.change_description,
+        "modified_document": modification.modified_document,
+        "before": modification.before,
+        "after": modification.after,
+        "undo_version_id": None,
+        "clarification_message": modification.clarification_message,
+    }
 
 
-async def sse_chat_response(
+async def sse_regeneration_response(
     content: str,
-    phase: SpecPhase,
-    skill_name: str,
-    context: Any,
-    pid: ProjectId,
+    document_id: str,
+    document_type: SpecPhase,
+    pid: ProjectId | None,
     context_id: str | None,
-    chat_repo: ChatRepository,
-    agent: Any,
+    regen_uc: Any,
     validate_uc: Any,
 ) -> StreamingResponse:
+    from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationInput
     from kosmo.application.chat.validate_phase_context import (
         ValidatePhaseContextInput,
     )
 
-    validation = await validate_uc.execute(ValidatePhaseContextInput(content=content, current_phase=phase))
+    validation = await validate_uc.execute(ValidatePhaseContextInput(content=content, current_phase=document_type))
     if not validation.is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=validation.redirect_message or "Mensaje fuera de fase",
         )
 
-    history = await chat_repo.get_history(pid, phase, context_id=context_id)
-    prior_messages = list(history.messages) if history else []
-
-    user_msg = MensajeChat(
-        id=ChatMessageId(IdGenerator.generate("chat_message")),
-        role=ChatRole.USER,
-        content=content,
+    output = await regen_uc.execute(
+        ProcessChatRegenerationInput(
+            content=content,
+            document_id=document_id,
+            document_type=document_type,
+            project_id=pid,
+            context_id=context_id,
+        )
     )
-    await chat_repo.save_message(pid, phase, user_msg, context_id=context_id)
 
-    messages = prior_messages + [user_msg]
+    msg = output.message
+    msg_data = {
+        "type": "message",
+        "id": str(msg.id),
+        "role": "assistant",
+        "content": msg.content,
+        "modification": _modification_dict(output.modification),
+        "consistency": output.downstream_impact,
+        "timestamp": msg.timestamp.isoformat(),
+    }
 
-    async def event_stream() -> Any:
-        try:
-            async for chunk in agent.execute_conversation_stream(
-                skill_name=skill_name,
-                messages=messages,
-                context=context,
-                project_id=pid,
-            ):
-                if isinstance(chunk, MensajeChat):
-                    await chat_repo.save_message(pid, phase, chunk, context_id=context_id)
-                    msg_data = {
-                        "type": "message",
-                        "id": str(chunk.id),
-                        "role": "assistant",
-                        "content": chunk.content,
-                        "suggested_changes": _suggested_changes_list(chunk.suggested_changes),
-                        "timestamp": chunk.timestamp.isoformat(),
-                    }
-                    yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
-                else:
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
-        except Exception:
-            yield f"data: {json.dumps({'type': 'error', 'content': 'Error interno'}, ensure_ascii=False)}\n\n"
+    async def event_stream() -> AsyncGenerator[str]:
+        yield f"data: {json.dumps(msg_data, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
-        event_stream(),  # type: ignore[reportArgumentType]
+        event_stream(),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )

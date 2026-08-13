@@ -590,6 +590,33 @@ class SendChatRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4000, description="Mensaje del usuario")
 
 
+class ModificationResultView(BaseModel):
+    """Resultado de la modificacion aplicada por el chat (aplicacion instantanea)."""
+
+    applied: bool = Field(description="True si la modificación fue aplicada al documento")
+    modified_section: str | None = Field(default=None, description="Nombre de la sección o atributo modificado")
+    change_description: str | None = Field(default=None, description="Descripción breve del cambio aplicado")
+    modified_document: str | None = Field(
+        default=None,
+        description="Markdown completo actualizado. En el chat de Características contiene el nuevo título.",
+    )
+    before: str | None = Field(default=None, description="Contenido previo de la sección o atributo modificado")
+    after: str | None = Field(default=None, description="Contenido posterior de la sección o atributo modificado")
+    undo_version_id: str | None = Field(
+        default=None, description="Versión previa al cambio (reservado para el endpoint de undo)"
+    )
+    clarification_message: str | None = Field(
+        default=None, description="Mensaje solicitando detalle cuando la instrucción es ambigua (applied=false)"
+    )
+
+
+class RedirectInfoView(BaseModel):
+    """Redirección cuando el cambio pertenece a otra fase (fuente de verdad a la izquierda)."""
+
+    target_phase: str = Field(description="Fase destino del cambio")
+    redirect_message: str = Field(description="Explicación de por qué el cambio pertenece a esa fase")
+
+
 class ChatMessage(BaseModel):
     """Respuesta con un mensaje individual del chat."""
 
@@ -599,6 +626,9 @@ class ChatMessage(BaseModel):
     created_at: datetime = Field(description="Fecha y hora del mensaje.")
     change_suggestions: list[ChangeSuggestion] | None = Field(
         default=None, description="Sugerencias de cambio asociadas"
+    )
+    modification: ModificationResultView | None = Field(
+        default=None, description="Modificación aplicada (solo mensajes del asistente)"
     )
 
     @classmethod
@@ -616,12 +646,66 @@ class ChatMessage(BaseModel):
                 )
                 for sc in msg.suggested_changes
             ]
+        modification = None
+        if msg.modification is not None:
+            modification = ModificationResultView(
+                applied=msg.modification.applied,
+                modified_section=msg.modification.modified_section,
+                change_description=msg.modification.change_description,
+                modified_document=msg.modification.modified_document,
+                before=msg.modification.before,
+                after=msg.modification.after,
+                clarification_message=msg.modification.clarification_message,
+            )
         return cls(
             id=str(msg.id),
             role=str(msg.role),
             content=msg.content,
             created_at=msg.timestamp,
             change_suggestions=suggestions,
+            modification=modification,
+        )
+
+
+class ChatResponse(BaseModel):
+    """Respuesta del chat con modificación aplicada, consistencia o redirección."""
+
+    message: ChatMessage = Field(description="Mensaje del asistente")
+    modification: ModificationResultView | None = Field(
+        default=None, description="Presente si el chat aplicó un cambio al documento"
+    )
+    redirect: RedirectInfoView | None = Field(default=None, description="Presente si el cambio pertenece a otra fase")
+    consistency: list[dict[str, object]] | None = Field(
+        default=None,
+        description="Impactos de consistencia en las fases a la derecha (solo si se aplicó un cambio)",
+    )
+
+    @classmethod
+    def from_regeneration(cls, output: Any) -> "ChatResponse":
+        message = ChatMessage.from_domain(output.message)
+        return cls(
+            message=message,
+            modification=message.modification,
+            consistency=output.downstream_impact or None,
+        )
+
+    @classmethod
+    def from_redirect(cls, target_phase: str, redirect_message: str) -> "ChatResponse":
+        from kosmo.contracts.chat import ChatRole
+        from kosmo.contracts.sdd.ids import ChatMessageId
+        from kosmo.domain.sdd.id_generator import IdGenerator
+
+        redirect_msg = MensajeChat(
+            id=ChatMessageId(IdGenerator.generate("chat_message")),
+            role=ChatRole.ASSISTANT,
+            content=redirect_message,
+        )
+        return cls(
+            message=ChatMessage.from_domain(redirect_msg),
+            redirect=RedirectInfoView(
+                target_phase=target_phase,
+                redirect_message=redirect_message,
+            ),
         )
 
 

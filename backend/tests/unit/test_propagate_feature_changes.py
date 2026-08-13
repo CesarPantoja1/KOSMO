@@ -65,7 +65,7 @@ def _make_uc(
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_propagate_feature_reports_all_three_directions() -> None:
+async def test_propagate_feature_reports_downstream_directions_only() -> None:
     # Arrange
     project = _make_project()
     project_repo = InMemoryProjectRepository()
@@ -119,17 +119,17 @@ async def test_propagate_feature_reports_all_three_directions() -> None:
         )
     )
 
-    # Assert
+    # Assert: trazabilidad solo hacia la derecha, nunca hacia descubrimiento
     phases_by_name = {p.phase: p for p in result.affected_phases}
-    assert len(result.affected_phases) == 3
-    assert "discovery" in phases_by_name
+    assert len(result.affected_phases) == 2
+    assert "discovery" not in phases_by_name
     assert "requirements" in phases_by_name
     assert "model" in phases_by_name
 
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_propagate_feature_upstream_only_when_no_requirements_or_diagrams() -> None:
+async def test_propagate_feature_never_evaluates_upstream() -> None:
     # Arrange
     project = _make_project()
     project_repo = InMemoryProjectRepository()
@@ -163,9 +163,8 @@ async def test_propagate_feature_upstream_only_when_no_requirements_or_diagrams(
         )
     )
 
-    # Assert
-    assert len(result.affected_phases) == 1
-    assert result.affected_phases[0].phase == "discovery"
+    # Assert: el descubrimiento no se evalúa al modificar características
+    assert len(result.affected_phases) == 0
 
 
 @pytest.mark.asyncio

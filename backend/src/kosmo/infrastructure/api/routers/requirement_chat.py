@@ -5,35 +5,32 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
-from kosmo.application.chat.process_chat_message import (
-    ProcessChatMessageInput,
-    ProcessChatMessageUseCase,
+from kosmo.application.chat.process_chat_regeneration import (
+    ProcessChatRegenerationInput,
+    ProcessChatRegenerationUseCase,
 )
 from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextInput,
     ValidatePhaseContextUseCase,
 )
-from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.application.requirements import (
     GetRequirementChatHistoryInput,
     GetRequirementChatHistoryUseCase,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.chat import ChatRepository
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
+    DocumentNotFoundError,
     FeatureNotFoundError,
     LLMInvocationError,
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId
-from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
-    ChatMessage,
-    ContextRedirectResponse,
+    ChatResponse,
     SendChatRequest,
 )
 
@@ -43,8 +40,8 @@ router = APIRouter(
 )
 
 
-def _process_requirement_chat(request: Request) -> ProcessChatMessageUseCase:
-    return get_container(request).pipeline.process_chat_message
+def _chat_regeneration_uc(request: Request) -> ProcessChatRegenerationUseCase:
+    return get_container(request).pipeline.process_chat_regeneration
 
 
 def _get_requirement_chat_history(request: Request) -> GetRequirementChatHistoryUseCase:
@@ -55,22 +52,18 @@ def _validate_phase_context(request: Request) -> ValidatePhaseContextUseCase:
     return get_container(request).pipeline.validate_phase_context
 
 
-def _context_builder(request: Request) -> ContextBuilder:
-    return get_container(request).pipeline.context_builder
-
-
 @router.post(
     "",
-    summary="Enviar mensaje al chat de Requisitos",
+    summary="Enviar mensaje al chat de Requisitos (aplicación instantánea)",
     description=(
-        "Procesa un mensaje del usuario en el contexto de un requisito "
-        "específico, validando que la solicitud corresponda al ámbito de la fase. "
-        "Si el mensaje corresponde a otra fase, devuelve una redirección."
+        "Procesa el mensaje y aplica el cambio inmediatamente sobre el documento "
+        "de requisitos, verificando la consistencia en el Modelo. "
+        "Si el cambio pertenece a otra fase, devuelve una redirección."
     ),
-    response_model=ChatMessage | ContextRedirectResponse,
+    response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_200_OK: {"description": "Mensaje procesado o redirección."},
+        status.HTTP_200_OK: {"description": "Mensaje procesado, modificación aplicada o redirección."},
         status.HTTP_400_BAD_REQUEST: {"description": "Error de validación o tamaño de mensaje."},
         status.HTTP_401_UNAUTHORIZED: {"description": "Token inválido."},
         status.HTTP_404_NOT_FOUND: {"description": "Característica o requisito no encontrado."},
@@ -81,12 +74,9 @@ async def process_requirement_chat_message(
     feature_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
-    chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_process_requirement_chat)],
+    regen_uc: Annotated[ProcessChatRegenerationUseCase, Depends(_chat_regeneration_uc)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
-    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
-) -> ChatMessage | ContextRedirectResponse:
-    fid = FeatureId(feature_id)
-
+) -> ChatResponse:
     validation = await validate_uc.execute(
         ValidatePhaseContextInput(
             content=payload.content,
@@ -95,20 +85,19 @@ async def process_requirement_chat_message(
     )
 
     if not validation.is_valid:
-        return ContextRedirectResponse(
-            message=validation.redirect_message or "Este cambio no pertenece a la fase de Requisitos.",
+        return ChatResponse.from_redirect(
             target_phase=validation.target_phase or "",
+            redirect_message=validation.redirect_message or "Este cambio no pertenece a la fase de Requisitos.",
         )
 
     try:
-        context = await ctx_builder.build_requirement_chat_context(fid)
-        output = await chat_uc.execute(
-            ProcessChatMessageInput(
-                project_id=context.feature.project_id,
-                phase=SpecPhase.REQUISITOS,
+        output = await regen_uc.execute(
+            ProcessChatRegenerationInput(
                 content=payload.content,
-                context=context,
-                context_id=str(fid),
+                document_id=feature_id,
+                document_type=SpecPhase.REQUISITOS,
+                project_id=None,
+                context_id=feature_id,
                 instance=f"/api/v1/features/{feature_id}/requirements/chat",
             )
         )
@@ -120,7 +109,7 @@ async def process_requirement_chat_message(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    except (FeatureNotFoundError, ProjectNotFoundError) as exc:
+    except (DocumentNotFoundError, FeatureNotFoundError, ProjectNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.problem.detail,
@@ -131,7 +120,7 @@ async def process_requirement_chat_message(
             detail=exc.problem.detail,
         ) from exc
 
-    return ChatMessage.from_domain(output.message)
+    return ChatResponse.from_regeneration(output)
 
 
 @router.get(
@@ -180,17 +169,6 @@ async def get_requirement_chat_history(
     return ChatHistoryResponse.from_domain(output.history)
 
 
-def _agent_dep(request: Request) -> KOSMOAgent:
-    container = get_container(request)
-    agent = container.pipeline.agent
-    assert isinstance(agent, KOSMOAgent)
-    return agent
-
-
-def _chat_repo_dep(request: Request) -> ChatRepository:
-    return get_container(request).pipeline.chat_repo
-
-
 @router.post(
     "/stream",
     summary="Enviar mensaje al chat de Requisitos con streaming SSE",
@@ -206,23 +184,16 @@ async def stream_requirement_chat_message(
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
-    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
-    agent: Annotated[KOSMOAgent, Depends(_agent_dep)],
-    chat_repo: Annotated[ChatRepository, Depends(_chat_repo_dep)],
+    regen_uc: Annotated[ProcessChatRegenerationUseCase, Depends(_chat_regeneration_uc)],
 ) -> StreamingResponse:
-    from kosmo.infrastructure.api.async_generation import sse_chat_response
+    from kosmo.infrastructure.api.async_generation import sse_regeneration_response
 
-    fid = FeatureId(feature_id)
-    context = await ctx_builder.build_requirement_chat_context(fid)
-
-    return await sse_chat_response(
+    return await sse_regeneration_response(
         content=payload.content,
-        phase=SpecPhase.REQUISITOS,
-        skill_name="requirements_chat",
-        context=context,
-        pid=context.feature.project_id,
-        context_id=str(fid),
-        chat_repo=chat_repo,
-        agent=agent,
+        document_id=feature_id,
+        document_type=SpecPhase.REQUISITOS,
+        pid=None,
+        context_id=feature_id,
+        regen_uc=regen_uc,
         validate_uc=validate_uc,
     )

@@ -1896,7 +1896,9 @@ components:
       type: object
       description: >-
         Respuesta del chat. Contiene el mensaje y, alternativamente, la
-        modificacion aplicada o la redireccion a otra fase.
+        modificacion aplicada o la redireccion a otra fase. Cuando se aplica
+        una modificacion, incluye los impactos de consistencia detectados en
+        las fases a la derecha (trazabilidad descendente).
       properties:
         message:
           $ref: "#/components/schemas/ChatMessageView"
@@ -1906,6 +1908,15 @@ components:
         redirect:
           $ref: "#/components/schemas/RedirectInfo"
           description: Presente si el cambio pertenece a otra fase
+        consistency:
+          type: array
+          nullable: true
+          description: >-
+            Impactos de consistencia en las fases a la derecha
+            (Descubrimiento -> Caracteristicas -> Requisitos -> Modelo).
+            Solo presente cuando applied=true.
+          items:
+            $ref: "#/components/schemas/ImpactItemView"
       required: [message]
 
     ChatHistoryResponse:

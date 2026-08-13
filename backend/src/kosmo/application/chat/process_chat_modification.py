@@ -54,6 +54,70 @@ class ProcessChatModificationOutput:
     clarification_message: str | None = None
 
 
+async def fetch_current_content(
+    *,
+    document_repo: DocumentRepository,
+    feature_repo: FeatureRepository,
+    requirement_repo: RequirementRepository,
+    document_id: str,
+    document_type: SpecPhase,
+) -> str:
+    if document_type == SpecPhase.DESCUBRIMIENTO:
+        doc = await document_repo.get_discovery(ProjectId(document_id))
+        if doc is None:
+            raise DocumentNotFoundError(document_type="descubrimiento")
+        return document_to_markdown(doc)
+
+    if document_type == SpecPhase.CARACTERISTICAS:
+        feature = await feature_repo.by_id(FeatureId(document_id))
+        if feature is None:
+            raise FeatureNotFoundError(feature_id=document_id)
+        return f"Titulo: {feature.title}\nDescripcion: {feature.description}"
+
+    if document_type == SpecPhase.REQUISITOS:
+        feature = await feature_repo.by_id(FeatureId(document_id))
+        if feature is None:
+            raise FeatureNotFoundError(feature_id=document_id)
+        markdown = await requirement_repo.by_feature_id(FeatureId(document_id))
+        if not markdown:
+            raise DocumentNotFoundError(document_type="requisitos")
+        return markdown
+
+    raise ValueError(f"Tipo de documento no soportado: {document_type.value}")
+
+
+async def persist_modification(
+    *,
+    document_repo: DocumentRepository,
+    feature_repo: FeatureRepository,
+    requirement_repo: RequirementRepository,
+    document_id: str,
+    document_type: SpecPhase,
+    modified_content: str,
+) -> None:
+    if document_type == SpecPhase.DESCUBRIMIENTO:
+        doc = markdown_to_document(modified_content)
+        await document_repo.save_discovery(ProjectId(document_id), doc)
+
+    elif document_type == SpecPhase.CARACTERISTICAS:
+        feature = await feature_repo.by_id(FeatureId(document_id))
+        if feature is None:
+            raise FeatureNotFoundError(feature_id=document_id)
+        updated = Feature(
+            id=feature.id,
+            number=feature.number,
+            title=modified_content,
+            slug=feature.slug,
+            description=feature.description,
+            project_id=feature.project_id,
+            origin=feature.origin,
+        )
+        await feature_repo.save(updated)
+
+    elif document_type == SpecPhase.REQUISITOS:
+        await requirement_repo.save(FeatureId(document_id), modified_content)
+
+
 class ProcessChatModificationUseCase:
     def __init__(
         self,
@@ -69,7 +133,10 @@ class ProcessChatModificationUseCase:
         self._llm_client = llm_client
 
     async def execute(self, input_data: ProcessChatModificationInput) -> ProcessChatModificationOutput:
-        current_content = await self._fetch_current_content(
+        current_content = await fetch_current_content(
+            document_repo=self._document_repo,
+            feature_repo=self._feature_repo,
+            requirement_repo=self._requirement_repo,
             document_id=input_data.document_id,
             document_type=input_data.document_type,
         )
@@ -99,7 +166,10 @@ class ProcessChatModificationUseCase:
         modified_section = str(parsed.get("modified_section", ""))
         change_description = str(parsed.get("change_description", ""))
 
-        await self._persist_modification(
+        await persist_modification(
+            document_repo=self._document_repo,
+            feature_repo=self._feature_repo,
+            requirement_repo=self._requirement_repo,
             document_id=input_data.document_id,
             document_type=input_data.document_type,
             modified_content=modified_document,
@@ -111,53 +181,6 @@ class ProcessChatModificationUseCase:
             modified_section=modified_section,
             change_description=change_description,
         )
-
-    async def _fetch_current_content(self, *, document_id: str, document_type: SpecPhase) -> str:
-        if document_type == SpecPhase.DESCUBRIMIENTO:
-            doc = await self._document_repo.get_discovery(ProjectId(document_id))
-            if doc is None:
-                raise DocumentNotFoundError(document_type="descubrimiento")
-            return document_to_markdown(doc)
-
-        if document_type == SpecPhase.CARACTERISTICAS:
-            feature = await self._feature_repo.by_id(FeatureId(document_id))
-            if feature is None:
-                raise FeatureNotFoundError(feature_id=document_id)
-            return f"Titulo: {feature.title}\nDescripcion: {feature.description}"
-
-        if document_type == SpecPhase.REQUISITOS:
-            feature = await self._feature_repo.by_id(FeatureId(document_id))
-            if feature is None:
-                raise FeatureNotFoundError(feature_id=document_id)
-            markdown = await self._requirement_repo.by_feature_id(FeatureId(document_id))
-            if not markdown:
-                raise DocumentNotFoundError(document_type="requisitos")
-            return markdown
-
-        raise ValueError(f"Tipo de documento no soportado: {document_type.value}")
-
-    async def _persist_modification(self, *, document_id: str, document_type: SpecPhase, modified_content: str) -> None:
-        if document_type == SpecPhase.DESCUBRIMIENTO:
-            doc = markdown_to_document(modified_content)
-            await self._document_repo.save_discovery(ProjectId(document_id), doc)
-
-        elif document_type == SpecPhase.CARACTERISTICAS:
-            feature = await self._feature_repo.by_id(FeatureId(document_id))
-            if feature is None:
-                raise FeatureNotFoundError(feature_id=document_id)
-            updated = Feature(
-                id=feature.id,
-                number=feature.number,
-                title=modified_content,
-                slug=feature.slug,
-                description=feature.description,
-                project_id=feature.project_id,
-                origin=feature.origin,
-            )
-            await self._feature_repo.save(updated)
-
-        elif document_type == SpecPhase.REQUISITOS:
-            await self._requirement_repo.save(FeatureId(document_id), modified_content)
 
     @staticmethod
     def _parse_response(text: str) -> dict[str, object]:

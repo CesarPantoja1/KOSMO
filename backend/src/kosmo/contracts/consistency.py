@@ -32,6 +32,22 @@ class ConsistencyStatus(StrEnum):
     ANALISIS_FALLIDO = "analisis_fallido"
 
 
+# Trazabilidad solo hacia la derecha: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo
+DOWNSTREAM_TARGETS: dict[SpecPhase, list[SpecPhase]] = {
+    SpecPhase.DESCUBRIMIENTO: [SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO],
+    SpecPhase.CARACTERISTICAS: [SpecPhase.REQUISITOS, SpecPhase.MODELO],
+    SpecPhase.REQUISITOS: [SpecPhase.MODELO],
+    SpecPhase.MODELO: [],
+}
+
+PHASE_ORDER: dict[SpecPhase, int] = {
+    SpecPhase.DESCUBRIMIENTO: 0,
+    SpecPhase.CARACTERISTICAS: 1,
+    SpecPhase.REQUISITOS: 2,
+    SpecPhase.MODELO: 3,
+}
+
+
 @dataclass(frozen=True)
 class ArtefactoAfectado:
     artifact_id: str

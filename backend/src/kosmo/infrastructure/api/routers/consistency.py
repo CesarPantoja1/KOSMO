@@ -61,6 +61,7 @@ async def evaluate_consistency_stream(
     uc: Annotated[CascadingConsistencyUseCase, Depends(_cascade_uc)],
 ) -> StreamingResponse:
     source_phase = _resolve_origin_phase(request.phase_origin)
+    _resolve_targets(request.phase_origin, request.phase_destination)
     changes = _changes_to_plan(request.changes)
 
     generator = uc.execute_stream(
@@ -85,7 +86,7 @@ async def evaluate_consistency(
 ) -> dict[str, Any]:
     source_phase = _resolve_origin_phase(request.phase_origin)
     changes = _changes_to_plan(request.changes)
-    targets = _resolve_targets(request.phase_destination)
+    targets = _resolve_targets(request.phase_origin, request.phase_destination)
     target_specs = [_to_spec_phase(t) for t in targets]
 
     output = await uc.execute(
@@ -121,6 +122,7 @@ def _resolve_origin_phase(phase_name: str) -> SpecPhase:
         "discovery": SpecPhase.DESCUBRIMIENTO,
         "features": SpecPhase.CARACTERISTICAS,
         "requirements": SpecPhase.REQUISITOS,
+        "model": SpecPhase.MODELO,
     }
     if phase_name not in reverse:
         raise HTTPException(
@@ -130,12 +132,6 @@ def _resolve_origin_phase(phase_name: str) -> SpecPhase:
     return reverse[phase_name]
 
 
-def _resolve_targets(phase_destination: str | None) -> list[str]:
-    if phase_destination:
-        return [phase_destination]
-    return ["features", "requirements", "model"]
-
-
 def _to_spec_phase(api_phase: str) -> SpecPhase:
     reverse = {
         "discovery": SpecPhase.DESCUBRIMIENTO,
@@ -143,7 +139,32 @@ def _to_spec_phase(api_phase: str) -> SpecPhase:
         "requirements": SpecPhase.REQUISITOS,
         "model": SpecPhase.MODELO,
     }
-    return reverse.get(api_phase, SpecPhase.CARACTERISTICAS)
+    if api_phase not in reverse:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fase destino desconocida: '{api_phase}'.",
+        )
+    return reverse[api_phase]
+
+
+def _resolve_targets(phase_origin: str, phase_destination: str | None) -> list[str]:
+    from kosmo.contracts.consistency import DOWNSTREAM_TARGETS, PHASE_ORDER
+
+    origin = _resolve_origin_phase(phase_origin)
+
+    if phase_destination:
+        destination = _to_spec_phase(phase_destination)
+        if PHASE_ORDER.get(destination, -1) <= PHASE_ORDER.get(origin, -1):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    "La dirección de evaluación no está permitida: la trazabilidad se verifica "
+                    "solo hacia la derecha (Descubrimiento → Características → Requisitos → Modelo)."
+                ),
+            )
+        return [phase_destination]
+
+    return [SPEC_TO_API_PHASE[spec] for spec in DOWNSTREAM_TARGETS.get(origin, [])]
 
 
 def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:

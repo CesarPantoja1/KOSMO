@@ -93,12 +93,12 @@ async def test_propagate_feature_changes_endpoint_returns_affected_phases() -> N
         uc=uc,
     )
 
-    # Assert
+    # Assert: trazabilidad solo hacia la derecha
     assert isinstance(result, PhaseNotificationList)
     phases_by_name = {p.phase: p for p in result.affected_phases}
-    assert "discovery" in phases_by_name
+    assert "discovery" not in phases_by_name
     assert "requirements" in phases_by_name
-    assert phases_by_name["discovery"].affected_count == 1
+    assert phases_by_name["requirements"].affected_count == 1
 
 
 @pytest.mark.asyncio
