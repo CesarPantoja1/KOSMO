@@ -1,9 +1,9 @@
 'use client';
 
 import { deletePlanChange, usePlanStore } from '@/entities/plan';
+import { useProjectStore } from '@/entities/project';
 import { ArrowRight, toast } from '@/shared/ui';
 import Trash from '@/shared/ui/icons/Trash';
-import { useAppStore } from 'app/store/app.store';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ChevronIcon } from './icon/ChevronIcon';
@@ -18,7 +18,7 @@ export function FloatingPlan({ phase, navigateTo, contextId }: Props) {
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
 
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
 	const planByPhase = usePlanStore((s) => s.planByPhase);
 	const removeFromPlan = usePlanStore((s) => s.removeFromPlan);
 

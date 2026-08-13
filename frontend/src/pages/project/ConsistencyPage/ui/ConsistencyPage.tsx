@@ -2,8 +2,9 @@
 
 import { applyConsistencyImpacts, useConsistencyStore } from '@/entities/consistency';
 import type { DownstreamProposal } from '@/entities/consistency';
-import { ModalConfirmLeave, toast } from '@/shared/ui';
+import { ModalConfirm, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ConsistencyDiffCard } from './ConsistencyDiffCard';
@@ -34,7 +35,7 @@ function groupByPhase(items: DownstreamProposal[]): [string, DownstreamProposal[
 
 const ConsistencyPage = () => {
 	const router = useRouter();
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
 	const initializeProject = useAppStore((s) => s.initializeProject);
 
 	const report = useConsistencyStore((s) => s.report);
@@ -252,7 +253,7 @@ const ConsistencyPage = () => {
 			</div>
 
 			{showConfirmLeave && (
-				<ModalConfirmLeave
+				<ModalConfirm
 					onCancel={handleCancelLeave}
 					onConfirm={handleConfirmLeave}
 					title='Cambios de consistencia pendientes'
@@ -263,7 +264,7 @@ const ConsistencyPage = () => {
 			)}
 
 			{showConfirmApply && (
-				<ModalConfirmLeave
+				<ModalConfirm
 					onCancel={handleCancelApply}
 					onConfirm={handleConfirmApply}
 					title='Aplicar cambios seleccionados'

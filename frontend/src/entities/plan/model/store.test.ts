@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { usePlanStore } from './store';
+import { usePlanStore, clearPlanStore } from './store';
 import type { PlanChange } from './types';
 
 const makePlanChange = (overrides: Partial<PlanChange> & Pick<PlanChange, 'id'>): PlanChange => ({
@@ -16,7 +16,7 @@ const makePlanChange = (overrides: Partial<PlanChange> & Pick<PlanChange, 'id'>)
 
 describe('usePlanStore — Plan de Cambios por Fase (T9)', () => {
 	beforeEach(() => {
-		usePlanStore.getState().resetPlan();
+		clearPlanStore();
 	});
 
 	it('debe inicializar planByPhase como un objeto vacío', () => {
@@ -83,12 +83,12 @@ describe('usePlanStore — Plan de Cambios por Fase (T9)', () => {
 		expect(usePlanStore.getState().planByPhase['discovery']).toEqual([]);
 	});
 
-	it('debe resetear todos los planes de todas las fases (resetPlan)', () => {
+	it('debe resetear todos los planes de todas las fases (clearPlanStore)', () => {
 		const change = makePlanChange({ id: 'chg_01' });
 		usePlanStore.getState().addToPlan('discovery', change);
 		usePlanStore.getState().addToPlan('requirements', change);
 
-		usePlanStore.getState().resetPlan();
+		clearPlanStore();
 
 		expect(usePlanStore.getState().planByPhase).toEqual({});
 	});

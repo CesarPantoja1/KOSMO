@@ -1,7 +1,7 @@
 // MODELS
 export type { RequirementsResponse, RequirementChatResponse } from './model/types';
 // STORE
-export { useRequirementsStore } from './model/store';
+export { useRequirementsStore, clearRequirementsStore } from './model/store';
 
 // API
 export {

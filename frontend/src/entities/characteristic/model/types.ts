@@ -44,3 +44,12 @@ export interface CreateCharacteristicResponse {
 	is_consistent: boolean;
 	inconsistency_reason?: string;
 }
+
+export interface CreateCharacteristicParams {
+	title: string;
+	description: string;
+	titleMaxLength: number;
+	descriptionMaxLength: number;
+	origin?: string;
+	force?: boolean;
+}

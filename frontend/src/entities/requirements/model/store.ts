@@ -2,11 +2,23 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
 	getRequirementChatHistory,
+	getRequirements as getRequirementsApi,
+	saveRequirements as saveRequirementsApi,
+	generateRequirements as generateRequirementsApi,
 	sendRequirementChatMessage as sendRequirementChatMessageApi,
 } from '../api/api';
 import type { RequirementChatResponse } from './types';
 
 interface RequirementsStore {
+	currentRequirements: Record<string, string>;
+	setCurrentRequirements: (featureId: string, content: string) => void;
+	getRequirements: (projectId: string, featureId: string) => Promise<string>;
+	saveRequirements: (projectId: string, featureId: string, content: string) => Promise<void>;
+	generateRequirements: (
+		projectId: string,
+		featureId: string,
+	) => Promise<string>;
+
 	hasRequirements: Record<string, boolean>;
 	setHasRequirements: (id: string, has: boolean) => void;
 	resetRequirements: () => void;
@@ -23,12 +35,45 @@ interface RequirementsStore {
 export const useRequirementsStore = create<RequirementsStore>()(
 	persist(
 		(set, get) => ({
+			currentRequirements: {},
+			setCurrentRequirements: (featureId, content) =>
+				set((state) => ({
+					currentRequirements: { ...state.currentRequirements, [featureId]: content },
+				})),
+			getRequirements: async (projectId, featureId) => {
+				const data = await getRequirementsApi(projectId, featureId);
+				const content = data.document_markdown;
+				if (content) {
+					set((state) => ({
+						currentRequirements: { ...state.currentRequirements, [featureId]: content },
+						hasRequirements: { ...state.hasRequirements, [featureId]: true },
+					}));
+				}
+				return content;
+			},
+			saveRequirements: async (projectId, featureId, content) => {
+				await saveRequirementsApi(projectId, featureId, content);
+				set((state) => ({
+					currentRequirements: { ...state.currentRequirements, [featureId]: content },
+					hasRequirements: { ...state.hasRequirements, [featureId]: true },
+				}));
+			},
+			generateRequirements: async (projectId, featureId) => {
+				const data = await generateRequirementsApi(projectId, featureId);
+				const content = data.document_markdown;
+				set((state) => ({
+					currentRequirements: { ...state.currentRequirements, [featureId]: content },
+					hasRequirements: { ...state.hasRequirements, [featureId]: true },
+				}));
+				return content;
+			},
+
 			hasRequirements: {},
 			setHasRequirements: (id, has) =>
 				set((state) => ({
 					hasRequirements: { ...state.hasRequirements, [id]: has },
 				})),
-			resetRequirements: () => set({ hasRequirements: {} }),
+			resetRequirements: () => set({ hasRequirements: {}, currentRequirements: {} }),
 
 			chatHistories: {},
 			loadChatHistory: async (featureId) => {
@@ -98,7 +143,15 @@ export const useRequirementsStore = create<RequirementsStore>()(
 		}),
 		{
 			name: 'kosmo-requirements-store',
-			partialize: (state) => ({ hasRequirements: state.hasRequirements }),
+			partialize: (state) => ({
+				hasRequirements: state.hasRequirements,
+				currentRequirements: state.currentRequirements,
+			}),
 		},
 	),
 );
+
+export const clearRequirementsStore = () => {
+	useRequirementsStore.persist.clearStorage();
+	useRequirementsStore.setState({ hasRequirements: {}, currentRequirements: {}, chatHistories: {} });
+};

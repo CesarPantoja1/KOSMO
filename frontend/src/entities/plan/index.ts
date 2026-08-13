@@ -10,7 +10,7 @@ export type {
 } from './model/types';
 
 // STORE
-export { isUsingMocks, usePlanStore } from './model/store';
+export { isUsingMocks, usePlanStore, clearPlanStore } from './model/store';
 
 // HOOKS
 export { usePlanActions } from './model/usePlanActions';

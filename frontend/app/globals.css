@@ -62,8 +62,8 @@
 
 	/* --- Wizard (Paleta dedicada para el stepper/navegación de fases) --- */
 	--color-wizard-active: #f59e0b;
-	--color-wizard-active-light: #fef3c7;
-	--color-wizard-active-ring: rgba(245, 158, 11, 0.2);
+	--color-wizard-active-light: #f59e0b33;
+	--color-wizard-active-ring: #f59e0b55;
 	--color-wizard-active-glow: rgba(245, 158, 11, 0.3);
 	--color-wizard-completed: #10b981;
 	--color-wizard-completed-light: #d1fae5;
@@ -71,9 +71,9 @@
 	--color-wizard-pending-light: #f1f5f9;
 	--color-wizard-connector-done: #10b981;
 	--color-wizard-connector-pending: #e2e8f0;
-	--color-wizard-label-active: #92400e;
-	--color-wizard-label-completed: #065f46;
-	--color-wizard-label-pending: #94a3b8;
+	--color-wizard-label-active: #d97706;
+	--color-wizard-label-completed: #059669;
+	--color-wizard-label-pending: #cbd5e1;
 
 	/* --- Error --- */
 	--color-error-50: #fef2f2;
@@ -182,12 +182,14 @@
 }
 
 @keyframes wizard-glow {
-	0%,
 	100% {
-		box-shadow: 0 0 0 2px var(--color-wizard-active-ring);
+		box-shadow: 0 0 0 0px var(--color-wizard-active-ring);
 	}
 	50% {
 		box-shadow: 0 0 0 3px var(--color-wizard-active-ring);
+	}
+	0% {
+		box-shadow: 0 0 0 0px var(--color-wizard-active-ring);
 	}
 }
 

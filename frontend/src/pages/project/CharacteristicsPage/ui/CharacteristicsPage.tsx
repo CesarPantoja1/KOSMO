@@ -5,12 +5,14 @@ import {
 	deleteFeature,
 	type CharacteristicChatResponse,
 } from '@/entities/characteristic';
+import { useDiscoveryStore } from '@/entities/discovery';
 import { usePlanActions, usePlanStore } from '@/entities/plan';
 import { Chatbot, FloatingPlan } from '@/feature';
 import type { ChatMessage } from '@/feature/chatbot';
-import { Ai, Loading, ModalConfirmLeave, Plus, toast } from '@/shared/ui';
+import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
@@ -42,7 +44,9 @@ const CharacteristicsPage = () => {
 	const [isGeneratingCharacteristics, setIsGeneratingCharacteristics] = useState(false);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
+	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
+	const hasDiscovery = currentDiscovery !== null;
 
 	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
 	const sendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
@@ -142,7 +146,7 @@ const CharacteristicsPage = () => {
 				<div className='page-header'>
 					{/* Header row */}
 					<div className='flex flex-col gap-4'>
-						<div className='flex flex-row justify-between items-start gap-4'>
+						<div className='flex justify-between items-start gap-4'>
 							<div className='flex flex-col gap-1'>
 								<h2 className='text-neutral-800 text-3xl font-bold'>Funcionalidades</h2>
 								<p className='text-neutral-500 text-base'>
@@ -194,26 +198,49 @@ const CharacteristicsPage = () => {
 						{!isLoading && !isGeneratingCharacteristics && !hasCharacteristics && (
 							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 								<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
-									<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
-										<Ai color='text-ai-500' size={48} />
-									</div>
-									<div className='flex flex-col gap-2'>
-										<h3 className='text-xl font-semibold text-neutral-800'>
-											Aún no hay funcionalidades definidas
-										</h3>
-										<p className='text-neutral-500 text-base'>
-											El asistente analizará el descubrimiento del proyecto y generará las
-											funcionalidades principales de tu aplicación.
-										</p>
-									</div>
-									<button
-										onClick={handleGenerateCharacteristics}
-										disabled={isGeneratingCharacteristics}
-										className='btn btn-ai'
-									>
-										<Ai size={18} color='' />
-										Generar funcionalidades
-									</button>
+									{!hasDiscovery ? (
+										<>
+											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
+												<Ai color='text-neutral-400' size={48} />
+											</div>
+											<div className='flex flex-col gap-2'>
+												<h3 className='text-xl font-semibold text-neutral-800'>
+													No hay descubrimiento del proyecto
+												</h3>
+												<p className='text-neutral-500 text-base'>
+													Primero debes generar el documento de descubrimiento para poder
+													definir las funcionalidades de tu proyecto.
+												</p>
+											</div>
+											<Link href='/proyecto/descubrimiento' className='btn btn-secondary'>
+												<ArrowLeft color='' size={18} />
+												Ir a Descubrimiento
+											</Link>
+										</>
+									) : (
+										<>
+											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
+												<Ai color='text-ai-500' size={48} />
+											</div>
+											<div className='flex flex-col gap-2'>
+												<h3 className='text-xl font-semibold text-neutral-800'>
+													Aún no hay funcionalidades definidas
+												</h3>
+												<p className='text-neutral-500 text-base'>
+													El asistente analizará el descubrimiento del proyecto y generará
+													las funcionalidades principales de tu aplicación.
+												</p>
+											</div>
+											<button
+												onClick={handleGenerateCharacteristics}
+												disabled={isGeneratingCharacteristics}
+												className='btn btn-ai'
+											>
+												<Ai size={18} color='' />
+												Generar funcionalidades
+											</button>
+										</>
+									)}
 								</div>
 							</div>
 						)}
@@ -275,7 +302,7 @@ const CharacteristicsPage = () => {
 			</div>
 
 			{confirmDeleteId && (
-				<ModalConfirmLeave
+				<ModalConfirm
 					title='Eliminar funcionalidad'
 					description='¿Estás seguro de eliminar esta funcionalidad? Esta acción no se puede deshacer.'
 					cancelText='Cancelar'
@@ -288,4 +315,4 @@ const CharacteristicsPage = () => {
 	);
 };
 
-export { CharacteristicsPage };
+export default CharacteristicsPage;

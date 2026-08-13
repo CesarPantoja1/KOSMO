@@ -6,10 +6,6 @@ describe('useAppStore — Estado general de la aplicación', () => {
 		useAppStore.getState().resetProjectState();
 	});
 
-	it('debe inicializar currentProject como null', () => {
-		expect(useAppStore.getState().currentProject).toBeNull();
-	});
-
 	it('debe inicializar hasUnsavedChanges como false', () => {
 		expect(useAppStore.getState().hasUnsavedChanges).toBe(false);
 	});
@@ -18,15 +14,13 @@ describe('useAppStore — Estado general de la aplicación', () => {
 		expect(useAppStore.getState().pendingNavigationPath).toBeNull();
 	});
 
-	it('debe limpiar el estado del proyecto al llamar resetProjectState', () => {
-		useAppStore.getState().setCurrentProject({ id: 'proj_01', name: 'Test' } as never);
+	it('debe limpiar el estado al llamar resetProjectState', () => {
 		useAppStore.getState().setHasUnsavedChanges(true);
 		useAppStore.getState().setPendingNavigationPath('/alguna-ruta');
 
 		useAppStore.getState().resetProjectState();
 
 		const state = useAppStore.getState();
-		expect(state.currentProject).toBeNull();
 		expect(state.hasUnsavedChanges).toBe(false);
 		expect(state.pendingNavigationPath).toBeNull();
 	});

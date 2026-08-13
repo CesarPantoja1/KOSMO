@@ -18,6 +18,7 @@ import {
 import { MarkdownDiff } from '@/feature';
 import { toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -30,7 +31,7 @@ interface CharWithDiff {
 
 export const PlanPage = () => {
 	const router = useRouter();
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
 	const planByPhase = usePlanStore((s) => s.planByPhase);
 	const clearPlan = usePlanStore((s) => s.clearPlan);
 	const updatePlanChangeStatus = usePlanStore((s) => s.updatePlanChangeStatus);

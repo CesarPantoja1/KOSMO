@@ -6,6 +6,7 @@ import { EditorContent } from './editor-content';
 import { TocSidebar } from './toc-sidebar';
 
 import { useHeadings } from '../hooks/use-headings';
+import type { SaveStatus } from './save-indicator';
 
 export interface MarkdownEditorHandle {
 	readonly isDirty: boolean;
@@ -17,6 +18,10 @@ interface Props {
 	isMaximized?: boolean;
 	onMaximize?: () => void;
 	onMinimize?: () => void;
+	saveStatus?: SaveStatus;
+	saveMessage?: string;
+	savedMessage?: string;
+	errorMessage?: string;
 }
 
 function slugify(text: string) {
@@ -29,15 +34,17 @@ function slugify(text: string) {
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 	function MarkdownEditor(
-		{ markdown, onChange, isMaximized, onMaximize, onMinimize },
+		{ markdown, onChange, isMaximized, onMaximize, onMinimize, saveStatus = 'idle', saveMessage, savedMessage, errorMessage },
 		ref,
 	) {
 		const [localMarkdown, setLocalMarkdown] = useState(markdown);
+		const [headingsMarkdown, setHeadingsMarkdown] = useState(markdown);
 		const [activeId, setActiveId] = useState('');
 		const prevMarkdownRef = useRef(markdown);
+		const localMarkdownRef = useRef(localMarkdown);
 		const isDirtyRef = useRef(false);
 
-		const headings = useHeadings(localMarkdown);
+		const headings = useHeadings(headingsMarkdown);
 
 		useEffect(() => {
 			if (markdown !== prevMarkdownRef.current) {
@@ -45,6 +52,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 				prevMarkdownRef.current = markdown;
 			}
 		}, [markdown]);
+
+		useEffect(() => {
+			if (saveStatus === 'saved') {
+				setHeadingsMarkdown(localMarkdownRef.current);
+			}
+		}, [saveStatus]);
+
+		useEffect(() => {
+			localMarkdownRef.current = localMarkdown;
+		}, [localMarkdown]);
 
 		useEffect(() => {
 			isDirtyRef.current = localMarkdown !== markdown;
@@ -121,6 +138,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 						isMaximized={isMaximized}
 						onMaximize={onMaximize}
 						onMinimize={onMinimize}
+						saveStatus={saveStatus}
+						saveMessage={saveMessage}
+						savedMessage={savedMessage}
+						errorMessage={errorMessage}
 					/>
 				</section>
 			</div>

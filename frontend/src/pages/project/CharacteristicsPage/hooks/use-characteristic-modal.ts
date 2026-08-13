@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSuggestCharacteristics } from '@/entities/characteristic';
-import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import type { SuggestCharacteristic } from '@/entities/characteristic';
 
 interface UseCharacteristicModalReturn {
@@ -17,7 +17,7 @@ interface UseCharacteristicModalReturn {
 export function useCharacteristicModal(
 	onApply: (selected: SuggestCharacteristic) => void,
 ): UseCharacteristicModalReturn {
-	const projectId = useAppStore((s) => s.currentProject?.id);
+	const projectId = useProjectStore((s) => s.currentProject?.id);
 	const [alternatives, setAlternatives] = useState<SuggestCharacteristic[]>([]);
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 	const [isLoading, setIsLoading] = useState(true);

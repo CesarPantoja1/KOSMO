@@ -3,32 +3,11 @@
 import { useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { addCharacteristic } from '@/entities/characteristic';
+import { useCharacteristicStore } from '@/entities/characteristic';
 import { toast } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
-
-const characteristicSchema = z.object({
-	title: z
-		.string()
-		.max(50, 'Máximo 50 caracteres')
-		.regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]*$/, 'Solo se permiten letras y espacios'),
-	description: z
-		.string()
-		.max(500, 'Máximo 500 caracteres')
-		.regex(
-			/^[a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s.,:;\-()¿?¡!]*$/,
-			'Solo se permiten letras, números y signos de puntuación básicos',
-		),
-});
-
-type CharacteristicFormData = z.infer<typeof characteristicSchema>;
-
-interface FieldError {
-	title: string;
-	description: string;
-}
+import { CharacteristicFormData, characteristicSchema, FieldError } from '../model/types';
 
 interface UseCreateCharacteristicReturn {
 	titleValue: string;
@@ -39,8 +18,6 @@ interface UseCreateCharacteristicReturn {
 	descRef: React.Ref<HTMLTextAreaElement>;
 	titleCount: number;
 	descCount: number;
-	titleOver: boolean;
-	descOver: boolean;
 	fieldErrors: FieldError;
 	showSuggestionsModal: boolean;
 	openSuggestionsModal: () => void;
@@ -64,11 +41,10 @@ function validateField(value: string, maxLength: number): string {
 	return '';
 }
 
-export function useCreateCharacteristic(
-	onCreated?: () => void,
-): UseCreateCharacteristicReturn {
-	const projectId = useAppStore((s) => s.currentProject?.id);
+export function useCreateCharacteristic(): UseCreateCharacteristicReturn {
+	const projectId = useProjectStore((s) => s.currentProject?.id);
 	const router = useRouter();
+	const storeAddCharacteristic = useCharacteristicStore((s) => s.addCharacteristic);
 	const {
 		control,
 		handleSubmit: formSubmit,
@@ -106,8 +82,6 @@ export function useCreateCharacteristic(
 
 	const titleCount = titleValue.length;
 	const descCount = descValue.length;
-	const titleOver = titleCount > 50;
-	const descOver = descCount > 500;
 
 	const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const sanitizedValue = e.target.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g, '');
@@ -142,14 +116,14 @@ export function useCreateCharacteristic(
 		if (!projectId) return;
 		setIsValidating(true);
 		try {
-			const result = await addCharacteristic(projectId, {
+			const result = await storeAddCharacteristic(projectId, {
 				title: data.title,
 				description: data.description,
 			});
 			setIsValidating(false);
 
 			if (result.is_saved) {
-				onCreated?.();
+				router.push('/proyecto/caracteristicas');
 			} else {
 				setConsistencyInfo({
 					origin: result.origin || '',
@@ -170,7 +144,7 @@ export function useCreateCharacteristic(
 	const handleForceCreate = async () => {
 		if (!projectId || !consistencyInfo) return;
 		try {
-			const result = await addCharacteristic(projectId, {
+			const result = await storeAddCharacteristic(projectId, {
 				title: titleValue,
 				description: descValue,
 				origin: consistencyInfo.origin,
@@ -178,7 +152,7 @@ export function useCreateCharacteristic(
 			});
 			if (result.is_saved) {
 				setShowConsistencyModal(false);
-				onCreated?.();
+				router.push('/proyecto/caracteristicas');
 			}
 		} catch (err) {
 			toast.error('No se pudo forzar la creación.');
@@ -204,8 +178,6 @@ export function useCreateCharacteristic(
 		descRef,
 		titleCount,
 		descCount,
-		titleOver,
-		descOver,
 		fieldErrors,
 		showSuggestionsModal,
 		openSuggestionsModal: () => setShowSuggestionsModal(true),

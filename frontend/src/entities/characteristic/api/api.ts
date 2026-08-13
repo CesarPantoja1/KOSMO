@@ -11,73 +11,28 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- Mock data ---
 
-const mockCharacteristics: CharacteristicResponse[] = [
-	{
-		id: '1',
-		project_id: 'mock-project-1',
-		number: 1,
-		title: 'Administración de Perfiles y Permisos de Usuario',
-		slug: 'administracion-de-perfiles-y-permisos-de-usuario',
-		description:
-			'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-		origin: '',
-		display_id: 'C01',
-	},
-	{
-		id: '2',
-		project_id: 'mock-project-1',
-		number: 2,
-		title: 'Gestión de Inventario',
-		slug: 'gestion-de-inventario',
-		description:
-			'Control de stock, entradas y salidas de productos, alertas de inventario bajo y registro de movimientos con trazabilidad.',
-		origin: '',
-		display_id: 'C02',
-	},
-	{
-		id: '3',
-		project_id: 'mock-project-1',
-		number: 3,
-		title: 'Módulo de Ventas',
-		slug: 'modulo-de-ventas',
-		description:
-			'Registro de ventas con cálculo automático de impuestos, descuentos y múltiples métodos de pago. Genera facturas electrónicas y tickets.',
-		origin: '',
-		display_id: 'C03',
-	},
-	{
-		id: '4',
-		project_id: 'mock-project-1',
-		number: 4,
-		title: 'Reportes y Dashboard',
-		slug: 'reportes-y-dashboard',
-		description:
-			'Visualización de indicadores clave como ventas diarias, productos más vendidos, márgenes de ganancia y tendencias de consumo.',
-		origin: '',
-		display_id: 'C04',
-	},
-];
+const mockCharacteristics: CharacteristicResponse[] = [];
 
 const mockSuggestions: SuggestCharacteristic[] = [
 	{
-		number: 1,
-		title: 'Notificaciones y Alertas',
-		description:
-			'Sistema de notificaciones push y por correo electrónico para alertar sobre eventos críticos como stock bajo, ventas grandes o vencimiento de productos.',
-		origin: '',
-	},
-	{
 		number: 2,
-		title: 'Gestión de Clientes y Proveedores',
+		title: 'Gestión de Inventario',
 		description:
-			'Registro y administración de clientes y proveedores con historial de compras, créditos, estados de cuenta y datos de contacto.',
+			'Control de stock, entradas y salidas de productos, alertas de inventario bajo y registro de movimientos con trazabilidad.',
 		origin: '',
 	},
 	{
 		number: 3,
-		title: 'Módulo de Caja Diaria',
+		title: 'Módulo de Ventas',
 		description:
-			'Apertura y cierre de caja, control de ingresos y egresos, arqueo de caja y conciliación con ventas del día.',
+			'Registro de ventas con cálculo automático de impuestos, descuentos y múltiples métodos de pago. Genera facturas electrónicas y tickets.',
+		origin: '',
+	},
+	{
+		number: 4,
+		title: 'Reportes y Dashboard',
+		description:
+			'Visualización de indicadores clave como ventas diarias, productos más vendidos, márgenes de ganancia y tendencias de consumo.',
 		origin: '',
 	},
 ];
@@ -96,17 +51,19 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 		content:
 			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
 		created_at: new Date().toISOString(),
-		change_suggestions: [{
-			id: 'mock-change-1',
-			section: 'Descripción de la característica',
-			description: 'Refinar la descripción para mayor claridad.',
-			diff_before:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-			diff_after:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
-			rationale:
-				'Se mejoró la claridad y precisión de la descripción de la característica.',
-		}],
+		change_suggestions: [
+			{
+				id: 'mock-change-1',
+				section: 'Descripción de la característica',
+				description: 'Refinar la descripción para mayor claridad.',
+				diff_before:
+					'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+				diff_after:
+					'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
+				rationale:
+					'Se mejoró la claridad y precisión de la descripción de la característica.',
+			},
+		],
 	},
 	{
 		id: 'mock-chat-3',
@@ -114,17 +71,19 @@ const mockChatResponses: CharacteristicChatResponse[] = [
 		content:
 			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
 		created_at: new Date().toISOString(),
-		change_suggestions: [{
-			id: 'mock-change-1',
-			section: 'Descripción de la característica',
-			description: 'Refinar la descripción para mayor claridad.',
-			diff_before:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-			diff_after:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
-			rationale:
-				'Se mejoró la claridad y precisión de la descripción de la característica.',
-		}],
+		change_suggestions: [
+			{
+				id: 'mock-change-1',
+				section: 'Descripción de la característica',
+				description: 'Refinar la descripción para mayor claridad.',
+				diff_before:
+					'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+				diff_after:
+					'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
+				rationale:
+					'Se mejoró la claridad y precisión de la descripción de la característica.',
+			},
+		],
 	},
 ];
 
@@ -135,7 +94,7 @@ let mockStore = [...mockCharacteristics];
 const mockGetCharacteristics = async (
 	_projectId: string,
 ): Promise<CharacteristicResponse[]> => {
-	await delay(800);
+	await delay(3000);
 	return [...mockStore];
 };
 
@@ -143,13 +102,26 @@ const mockGenerateCharacteristics = async (
 	_projectId: string,
 ): Promise<CharacteristicResponse[]> => {
 	await delay(2000);
-	return [...mockStore];
+	return [
+		...mockStore,
+		{
+			id: '1',
+			project_id: 'mock-project-1',
+			number: 1,
+			title: 'Administración de Perfiles y Permisos de Usuario',
+			slug: 'administracion-de-perfiles-y-permisos-de-usuario',
+			description:
+				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+			origin: '',
+			display_id: 'C01',
+		},
+	];
 };
 
 const mockGetSuggestCharacteristics = async (
 	_projectId: string,
 ): Promise<SuggestCharacteristic[]> => {
-	await delay(800);
+	await delay(5000);
 	return [...mockSuggestions];
 };
 
@@ -170,7 +142,12 @@ const mockAddCharacteristic = async (
 		display_id: `C${String(nextNum).padStart(2, '0')}`,
 	};
 	mockStore = [...mockStore, newChar];
-	return { is_saved: true, feature: newChar, origin: newChar.origin, is_consistent: true };
+	return {
+		is_saved: true,
+		feature: newChar,
+		origin: '',
+		is_consistent: true,
+	};
 };
 
 const mockSendChatMessage = async (

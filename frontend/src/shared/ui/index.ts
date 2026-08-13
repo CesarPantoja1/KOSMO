@@ -1,7 +1,9 @@
 // components
 export { default as Loading } from './Loading';
 export { MarkdownText } from './markdown-text';
-export { default as ModalConfirmLeave } from './ModalConfirmLeave';
+export { ModalConfirm } from './ModalConfirm';
+export { CharacterCounter } from './CharacterCounter';
+export { ConsistencyProgress } from './ConsistencyProgress';
 
 // icons
 export { default as Ai } from './icons/Ai';
