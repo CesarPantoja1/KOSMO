@@ -33,6 +33,8 @@ function groupByPhase(items: DownstreamProposal[]): [string, DownstreamProposal[
 	return Array.from(groups.entries());
 }
 
+const ITEMS_PER_PAGE = 20;
+
 const ConsistencyPage = () => {
 	const router = useRouter();
 	const currentProject = useProjectStore((s) => s.currentProject);
@@ -54,9 +56,19 @@ const ConsistencyPage = () => {
 	const [applying, setApplying] = useState(false);
 	const [showConfirmApply, setShowConfirmApply] = useState(false);
 
+	const [currentPage, setCurrentPage] = useState(1);
+
+	const paginatedImpacts = useMemo(() => {
+		if (!report) return [];
+		const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+		return report.downstream_impact.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+	}, [report, currentPage]);
+
+	const totalPages = report ? Math.ceil(report.downstream_impact.length / ITEMS_PER_PAGE) : 1;
+
 	const phaseGroups = useMemo(
-		() => (report ? groupByPhase(report.downstream_impact) : []),
-		[report],
+		() => groupByPhase(paginatedImpacts),
+		[paginatedImpacts],
 	);
 
 	if (!currentProject) {
@@ -217,6 +229,30 @@ const ConsistencyPage = () => {
 								))}
 							</div>
 						))}
+
+						{totalPages > 1 && (
+							<div className='flex items-center justify-center gap-4 py-8'>
+								<button
+									type='button'
+									disabled={currentPage === 1}
+									onClick={() => setCurrentPage((p) => p - 1)}
+									className='btn btn-secondary px-4 py-2 text-sm disabled:opacity-50'
+								>
+									Anterior
+								</button>
+								<span className='text-sm text-neutral-600 font-medium'>
+									Página {currentPage} de {totalPages}
+								</span>
+								<button
+									type='button'
+									disabled={currentPage === totalPages}
+									onClick={() => setCurrentPage((p) => p + 1)}
+									className='btn btn-secondary px-4 py-2 text-sm disabled:opacity-50'
+								>
+									Siguiente
+								</button>
+							</div>
+						)}
 					</div>
 				</div>
 
@@ -227,7 +263,7 @@ const ConsistencyPage = () => {
 						onClick={handleRejectAll}
 						className='btn btn-destructive'
 					>
-						Rechazar todos
+						Rechazar todos ({report.downstream_impact.length})
 					</button>
 					<div className='flex items-center gap-3'>
 						<button
@@ -235,7 +271,7 @@ const ConsistencyPage = () => {
 							onClick={handleMarkAll}
 							className='btn btn-warning'
 						>
-							Marcar todos
+							Marcar todos ({report.downstream_impact.length})
 						</button>
 						<button
 							type='button'
