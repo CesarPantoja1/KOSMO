@@ -136,9 +136,7 @@ class ProcessChatModificationUseCase:
 
         raise ValueError(f"Tipo de documento no soportado: {document_type.value}")
 
-    async def _persist_modification(
-        self, *, document_id: str, document_type: SpecPhase, modified_content: str
-    ) -> None:
+    async def _persist_modification(self, *, document_id: str, document_type: SpecPhase, modified_content: str) -> None:
         if document_type == SpecPhase.DESCUBRIMIENTO:
             doc = markdown_to_document(modified_content)
             await self._document_repo.save_discovery(ProjectId(document_id), doc)

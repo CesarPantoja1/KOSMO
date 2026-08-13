@@ -227,8 +227,7 @@ async def test_process_chat_modification_updates_requirements(
     await requirement_repo.save(feature.id, req_md)
 
     modified = (
-        "## REQ-1.1\nSistema shall calcular montos con dos decimales.\n\n"
-        "## REQ-1.2\nSistema shall mostrar totales."
+        "## REQ-1.1\nSistema shall calcular montos con dos decimales.\n\n## REQ-1.2\nSistema shall mostrar totales."
     )
 
     llm_response = {
