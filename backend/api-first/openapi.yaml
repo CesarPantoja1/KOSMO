@@ -1,1495 +1,79 @@
-openapi: "3.1.0"
+openapi: 3.1.0
 info:
   title: KOSMO API
   version: "0.1.0"
   description: >-
-    API de KOSMO — plataforma low-code para generación y refinamiento de
-    artefactos de producto asistida por IA. Sigue arquitectura hexagonal
-    (Ports & Adapters), autenticación PKCE (RFC 7636) con JWT RS256, y
-    errores RFC 7807 (Problem Detail).
+    API de KOSMO - plataforma low-code de spec-driven development asistida por IA.
+    Ciclo completo: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo -> Codigo.
+
+    Convenciones:
+    - Autenticacion PKCE (RFC 7636) con JWT RS256 (bearerAuth).
+    - Errores RFC 7807 (application/problem+json) con type URN, trace_id y violations.
+    - Fechas ISO-8601 UTC con sufijo Z.
+    - Las fases siguen el orden Descubrimiento -> Caracteristicas -> Requisitos -> Modelo.
+      La consistencia solo se evalua hacia la derecha (downstream).
+
+    Los endpoints de generacion de codigo estan marcados con x-status: planned;
+    el frontend puede integrarse contra ellos mientras el backend los implementa.
   contact:
     name: KOSMO Team
+    email: dev@kosmo.app
   license:
-    name: Proprietary
+    name: MIT
 servers:
   - url: http://localhost:8000
     description: Desarrollo local
-  - url: https://kosmo-backend.onrender.com
-    description: Producción
-
 tags:
   - name: health
     description: Disponibilidad del servidor
   - name: auth
-    description: Autenticación PKCE (RFC 7636) con JWT RS256
+    description: Autenticacion PKCE (RFC 7636) con JWT RS256
   - name: projects
-    description: Gestión de proyectos
+    description: Gestion de proyectos
   - name: discovery
-    description: Fase de Descubrimiento — documento de visión de producto
+    description: Fase de Descubrimiento - documento de vision de producto
   - name: features
-    description: Fase de Características
+    description: Fase de Caracteristicas
   - name: requirements
     description: Fase de Requisitos (EARS)
   - name: modelo
-    description: Fase de Modelo — diagramas de actividad PlantUML
-  - name: plan
-    description: Plan de cambios colaborativo asistido por IA
+    description: Fase de Modelo - diagramas de actividad PlantUML
   - name: consistency
-    description: Trazabilidad y consistencia entre fases
-  - name: knowledge
-    description: Consolidación de patrones de conocimiento
+    description: Evaluacion de consistencia downstream entre fases
   - name: schemas
-    description: Introspección de esquemas JSON
-  - name: traceability
-    description: Navegación y validación de dirección de trazabilidad entre fases
-  - name: documents
-    description: Modificación directa de documentos sin fase de plan intermedio
+    description: Introspeccion de esquemas JSON para formularios dinamicos
   - name: implementation
-    description: Generación de código fuente por Feature vía OpenCode
-
-# ── Security ──────────────────────────────────────────────────────────
+    description: Generacion de codigo por Feature via OpenCode (planificada)
 security:
   - bearerAuth: []
 
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: JWT RS256 emitido por /auth/token o /auth/refresh
-
-  # ── Schemas ───────────────────────────────────────────────────────────
-
-  schemas:
-    # ═══ Genéricos / Infraestructura ═══
-
-    HttpErrorResponse:
-      type: object
-      properties:
-        detail:
-          type: string
-          description: Mensaje descriptivo del error de infraestructura
-          example: "Error interno del servidor. Por favor contacte al soporte."
-
-    ProblemDetail:
-      type: object
-      description: Error RFC 7807 devuelto en cualquier respuesta 4xx/5xx
-      properties:
-        type:
-          type: string
-          description: URN que identifica el tipo de error (ej. urn:kosmo:features:not-found)
-          example: "urn:kosmo:projects:not-found"
-        title:
-          type: string
-          description: Título corto traducible
-          example: "Proyecto no encontrado"
-        status:
-          type: integer
-          description: Código HTTP
-          example: 404
-        detail:
-          type: string
-          description: Descripción detallada para tooltip/log
-          example: "El proyecto prj_01KTABCDEFGHIJKLMNOP no existe"
-        instance:
-          type: string
-          description: Ruta exacta que falló
-          example: "/api/v1/projects/prj_01KTABCDEFGHIJKLMNOP"
-        trace_id:
-          type: string
-          description: ULID hex de correlación (mismo que X-Trace-Id)
-          example: "01KT05JRA7466PPYQXYTX"
-        violations:
-          type: array
-          items:
-            $ref: "#/components/schemas/Violation"
-
-    Violation:
-      type: object
-      properties:
-        loc:
-          type: array
-          items:
-            type: string
-          description: Ruta al campo inválido
-        msg:
-          type: string
-          description: Mensaje de validación
-        input:
-          description: Valor recibido que falló la validación
-
-    # ═══ Auth ═══
-
-    RegisterRequest:
-      type: object
-      required: [email, password]
-      additionalProperties: false
-      properties:
-        email:
-          type: string
-          format: email
-          description: Email único del nuevo usuario
-          example: "usuario@ejemplo.com"
-        password:
-          type: string
-          minLength: 12
-          maxLength: 128
-          format: password
-          description: Contraseña en texto plano (12-128 chars). Se procesa con Argon2id.
-          example: "M1ContraseñaSegura!"
-
-    AuthorizeRequest:
-      type: object
-      required: [email, password, code_challenge]
-      additionalProperties: false
-      properties:
-        email:
-          type: string
-          format: email
-          example: "usuario@ejemplo.com"
-        password:
-          type: string
-          format: password
-          example: "M1ContraseñaSegura!"
-        code_challenge:
-          type: string
-          minLength: 43
-          maxLength: 128
-          description: SHA-256 del code_verifier en Base64URL sin padding
-          example: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
-        code_challenge_method:
-          type: string
-          enum: [S256]
-          default: S256
-          description: Método de transformación PKCE. Solo se acepta S256.
-        scopes:
-          type: array
-          items:
-            type: string
-          description: "Permisos solicitados. Valores reconocidos: profile:read, profile:write, agent:run, agent:read, admin."
-          example: ["profile:read", "agent:run"]
-
-    AuthorizationCodeResponse:
-      type: object
-      properties:
-        authorization_code:
-          type: string
-          description: Código opaco de un solo uso, expira en 5 min
-          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-        expires_in:
-          type: integer
-          minimum: 1
-          maximum: 600
-          description: Segundos hasta expiración (máx 600)
-          example: 300
-
-    TokenExchangeRequest:
-      type: object
-      required: [grant_type, code, code_verifier]
-      additionalProperties: false
-      properties:
-        grant_type:
-          type: string
-          enum: [authorization_code]
-          description: Debe ser exactamente "authorization_code"
-        code:
-          type: string
-          description: Código devuelto por /authorize
-        code_verifier:
-          type: string
-          minLength: 43
-          maxLength: 128
-          description: Secreto original usado para generar el challenge
-
-    TokenRefreshRequest:
-      type: object
-      required: [grant_type, refresh_token]
-      additionalProperties: false
-      properties:
-        grant_type:
-          type: string
-          enum: [refresh_token]
-        refresh_token:
-          type: string
-          description: "JWT refresh emitido previamente. Rotación: un solo uso, se emite par nuevo."
-
-    TokenView:
-      type: object
-      properties:
-        token:
-          type: string
-          description: JWT firmado RS256
-        jti:
-          type: string
-          description: JWT ID — identificador único del token
-          example: "ati-01HXYAZABCDEFGHIJKLMNOP"
-        expires_at:
-          type: string
-          format: date-time
-          description: "ISO-8601 UTC con sufijo Z (TTL access: 15min, refresh: 7d)"
-          example: "2026-07-27T18:30:00Z"
-
-    TokenPairResponse:
-      type: object
-      properties:
-        access:
-          $ref: "#/components/schemas/TokenView"
-        refresh:
-          $ref: "#/components/schemas/TokenView"
-        token_type:
-          type: string
-          enum: [Bearer]
-          example: "Bearer"
-
-    LogoutRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        refresh_token:
-          type: string
-          description: Opcional. Si se envía, se revocan ambos tokens.
-          nullable: true
-
-    PrincipalView:
-      type: object
-      properties:
-        subject:
-          type: string
-          description: ID del usuario (claim sub del JWT). Formato usr_ + ULID.
-          example: "usr-01HXYAZABCDEFGHIJKLMNOP"
-        scopes:
-          type: array
-          items:
-            type: string
-          example: ["agent:run", "profile:read"]
-
-    UserPublic:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID del usuario (usr_ + ULID)
-          example: "usr-01HXYAZABCDEFGHIJKLMNOP"
-        email:
-          type: string
-          format: email
-          example: "usuario@ejemplo.com"
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-06-15T10:30:00Z"
-
-    OAuthErrorResponse:
-      type: object
-      description: Error RFC 6749 §5.2 para endpoints OAuth
-      properties:
-        error:
-          type: string
-          description: Código máquina-legible (invalid_grant, invalid_token, account_locked, email_already_registered)
-          example: "invalid_grant"
-        error_description:
-          type: string
-          description: Descripción legible para humanos
-          example: "Credenciales inválidas"
-
-    # ═══ Projects ═══
-
-    CreateProjectRequest:
-      type: object
-      required: [name]
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
-          description: Nombre del proyecto
-          example: "Mi Proyecto"
-        description:
-          type: string
-          maxLength: 2000
-          default: ""
-          description: Descripción del proyecto
-          example: "Proyecto de ejemplo para KOSMO"
-
-    ProjectResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID del proyecto (prj_ + ULID)
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-        name:
-          type: string
-          example: "Mi Proyecto"
-        slug:
-          type: string
-          example: "mi-proyecto"
-        description:
-          type: string
-          example: "Proyecto de ejemplo para KOSMO"
-        owner_id:
-          type: string
-          example: "usr_01HXYAZABCDEFGHIJKLMNOP"
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:00:00Z"
-        updated_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:00:00Z"
-
-    # ═══ Discovery ═══
-
-    DiscoveryResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID del documento de descubrimiento
-          example: "doc_prj_01KTABCDEFGHIJKLMNOP"
-        project_id:
-          type: string
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-        content:
-          type: string
-          description: Contenido del documento en formato Markdown
-          example: "## Visión\n..."
-
-    RefineDiscoveryRequest:
-      type: object
-      required: [instructions]
-      additionalProperties: false
-      properties:
-        instructions:
-          type: string
-          minLength: 1
-          maxLength: 500
-          description: Instrucciones de refinamiento para la IA
-          example: "Haz que la visión del producto sea más concisa y enfocada en los resultados."
-
-    SaveDiscoveryRequest:
-      type: object
-      required: [content]
-      additionalProperties: false
-      properties:
-        content:
-          type: string
-          description: Contenido Markdown completo del documento de descubrimiento
-
-    # ═══ Features ═══
-
-    FeatureResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID de la característica (feat_ + ULID)
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        project_id:
-          type: string
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-        number:
-          type: integer
-          description: Número secuencial
-          example: 1
-        title:
-          type: string
-          example: "Gestión de catálogo de productos"
-        slug:
-          type: string
-          example: "gestion-de-catalogo-de-productos"
-        description:
-          type: string
-          example: "Permite a los usuarios administrar el catálogo..."
-        origin:
-          type: string
-          description: Justificación de existencia y trazabilidad a Descubrimiento
-          example: "Se deriva de la meta Gestión financiera. Se traza a Metas del producto."
-        display_id:
-          type: string
-          description: Identificador visible para el usuario (C01, C02...)
-          example: "C01"
-        implementation_status:
-          type: string
-          enum: [pending, in_progress, implemented, requires_review, failed]
-          nullable: true
-          description: Estado de implementación de código. null si nunca se intentó generar.
-
-    FeatureSuggestionItem:
-      type: object
-      properties:
-        title:
-          type: string
-        description:
-          type: string
-        origin:
-          type: string
-          default: ""
-
-    FeatureSuggestionResponse:
-      type: object
-      properties:
-        number:
-          type: integer
-          example: 4
-        title:
-          type: string
-        description:
-          type: string
-        origin:
-          type: string
-
-    SaveSelectedFeaturesRequest:
-      type: object
-      required: [features]
-      additionalProperties: false
-      properties:
-        features:
-          type: array
-          items:
-            $ref: "#/components/schemas/FeatureSuggestionItem"
-
-    CreateCharacteristicRequest:
-      type: object
-      required: [title]
-      additionalProperties: false
-      properties:
-        title:
-          type: string
-          minLength: 1
-          maxLength: 50
-          example: "Gestión de catálogo de productos"
-        description:
-          type: string
-          maxLength: 500
-          default: ""
-          example: "Permite a los usuarios administrar el catálogo de productos del sistema."
-
-    # ═══ Requirements ═══
-
-    GenerateRequirementsRequest:
-      type: object
-      required: [project_id]
-      additionalProperties: false
-      properties:
-        project_id:
-          type: string
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-
-    RequirementsResponse:
-      type: object
-      properties:
-        feature_id:
-          type: string
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        feature_number:
-          type: integer
-          example: 1
-        document_markdown:
-          type: string
-          description: Contenido de requisitos en formato Markdown/EARS
-        total:
-          type: integer
-          description: Cantidad de requisitos generados
-          example: 5
-
-    RequirementsDocumentResponse:
-      type: object
-      properties:
-        document_markdown:
-          type: string
-          description: Documento Markdown completo de requisitos
-        total:
-          type: integer
-          example: 5
-
-    SaveRequirementsRequest:
-      type: object
-      required: [project_id, markdown]
-      additionalProperties: false
-      properties:
-        project_id:
-          type: string
-        markdown:
-          type: string
-          description: Contenido Markdown completo de requisitos
-
-    RefineRequirementsRequest:
-      type: object
-      required: [project_id, instructions]
-      additionalProperties: false
-      properties:
-        project_id:
-          type: string
-        instructions:
-          type: string
-          minLength: 1
-          maxLength: 500
-          description: Instrucciones de refinamiento para la IA
-          example: "Agrega criterios de aceptación para el manejo de errores de red."
-
-    SaveRequirementsOkResponse:
-      type: object
-      properties:
-        feature_id:
-          type: string
-        message:
-          type: string
-          example: "ok"
-
-    # ═══ Modelo ═══
-
-    GenerateDiagramRequest:
-      type: object
-      required: [project_id]
-      additionalProperties: false
-      properties:
-        project_id:
-          type: string
-
-    DiagramResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          description: ID del diagrama (dgr_ + ULID)
-          example: "dgr_01HXYAZABCDEFGHIJKLMNOP"
-        feature_id:
-          type: string
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        diagram_syntax:
-          type: string
-          description: Código PlantUML del diagrama de actividad
-          example: "@startuml\n...\n@enduml"
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:00:00Z"
-        updated_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:00:00Z"
-
-    # ═══ Chat (Sprint 4) ═══
-
-    SendChatRequest:
-      type: object
-      required: [content]
-      additionalProperties: false
-      properties:
-        content:
-          type: string
-          minLength: 1
-          maxLength: 4000
-          description: Mensaje del usuario para el chat asistido por IA
-          example: "Amplía el alcance del producto a la región LATAM"
-
-    ChatMessage:
-      type: object
-      description: Mensaje individual del chat
-      properties:
-        id:
-          type: string
-          description: ID del mensaje (msg_ + ULID)
-          example: "msg_01HXYAZABCDEFGHIJKLMNOP"
-        role:
-          type: string
-          enum: [user, assistant, system]
-          description: Rol del emisor del mensaje
-        content:
-          type: string
-          description: Contenido textual del mensaje
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:05:00Z"
-        change_suggestion:
-          $ref: "#/components/schemas/ChangeSuggestion"
-          description: Sugerencia de cambio asociada (solo en respuestas del asistente)
-          nullable: true
-
-    ChangeSuggestion:
-      type: object
-      description: Sugerencia de cambio generada por la IA en una respuesta del chat
-      properties:
-        id:
-          type: string
-          description: ID de la sugerencia (chg_ + ULID)
-          example: "chg_01HXYAZABCDEFGHIJKLMNOP"
-        section:
-          type: string
-          description: Sección del documento afectada
-          example: "2 Alcance del producto"
-        description:
-          type: string
-          description: Descripción corta del cambio propuesto
-          example: "Ampliar alcance a LATAM"
-        diff_before:
-          type: string
-          description: Contenido actual de la sección
-        diff_after:
-          type: string
-          description: Contenido sugerido por la IA
-        rationale:
-          type: string
-          description: Justificación del cambio propuesto
-          nullable: true
-
-    ChatHistoryResponse:
-      type: object
-      properties:
-        phase:
-          type: string
-          description: Fase a la que pertenece el historial
-          enum: [discovery, features, requirements]
-          example: "discovery"
-        context:
-          type: string
-          description: Contexto específico dentro de la fase (project_id, feature_id, requirement_id)
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-        messages:
-          type: array
-          items:
-            $ref: "#/components/schemas/ChatMessage"
-
-    ChatStreamEvent:
-      type: object
-      description: Evento SSE de streaming de tokens
-      properties:
-        token:
-          type: string
-          description: Fragmento de texto del token generado
-        finished:
-          type: boolean
-          description: true cuando el stream ha terminado
-          default: false
-        change_suggestion:
-          $ref: "#/components/schemas/ChangeSuggestion"
-          description: Sugerencia de cambio final (solo en el último evento si aplica)
-          nullable: true
-
-    ChatErrorResponse:
-      type: object
-      description: Error mostrado como burbuja de error en el chat
-      properties:
-        error:
-          type: string
-          description: Mensaje de error amigable
-          example: "No se pudo procesar la solicitud. Intenta nuevamente."
-        retryable:
-          type: boolean
-          description: Indica si el usuario puede reintentar
-          default: true
-
-    ContextRedirectResponse:
-      type: object
-      description: Redirección cuando el mensaje no corresponde al ámbito de la fase actual
-      properties:
-        message:
-          type: string
-          description: Mensaje indicando la fase correcta
-          example: "Este cambio pertenece a la fase de Descubrimiento. Ve a esa fase para realizarlo."
-        target_phase:
-          type: string
-          enum: [discovery, features, requirements]
-          example: "discovery"
-
-    # ═══ Plan de Cambios (Sprint 4) ═══
-
-    PlanChange:
-      type: object
-      description: Elemento del plan de cambios
-      properties:
-        id:
-          type: string
-          description: ID del cambio (chg_ + ULID)
-          example: "chg_01HXYAZABCDEFGHIJKLMNOP"
-        section:
-          type: string
-          description: Sección del documento o atributo afectado
-          example: "2 Alcance del producto"
-        diff_before:
-          type: string
-          description: Contenido antes del cambio
-        diff_after:
-          type: string
-          description: Contenido sugerido después del cambio
-        status:
-          type: string
-          enum: [pending, added, conflict, applied, discarded]
-          description: Estado del cambio en el plan
-        origin:
-          type: string
-          enum: [chat, manual, propagation]
-          description: Origen del cambio
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase en la que se originó el cambio
-        context:
-          type: string
-          description: Contexto específico (project_id, feature_id, requirement_id)
-        rationale:
-          type: string
-          description: Justificación del cambio
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:05:00Z"
-
-    PlanState:
-      type: object
-      description: Estado actual del plan de cambios para una fase/contexto
-      properties:
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-        context:
-          type: string
-        changes:
-          type: array
-          items:
-            $ref: "#/components/schemas/PlanChange"
-        pending_count:
-          type: integer
-          description: Cantidad de cambios con estado pending o added
-          example: 3
-        conflict_count:
-          type: integer
-          description: Cantidad de cambios con estado conflict
-          example: 1
-
-    AddPlanChangeRequest:
-      type: object
-      required: [change_id, section, description, diff_before, diff_after]
-      additionalProperties: false
-      properties:
-        change_id:
-          type: string
-          description: ID de la sugerencia (chg_ + ULID)
-          example: "chg_01HXYAZABCDEFGHIJKLMNOP"
-        section:
-          type: string
-          description: Sección del documento afectada
-          example: "2 Alcance del producto"
-        description:
-          type: string
-          description: Descripción corta del cambio propuesto
-          example: "Ampliar alcance a LATAM"
-        diff_before:
-          type: string
-          description: Contenido actual de la sección
-        diff_after:
-          type: string
-          description: Contenido sugerido por la IA
-        rationale:
-          type: string
-          description: Justificación del cambio propuesto
-          nullable: true
-
-    CollisionCheckRequest:
-      type: object
-      required: [phase, section, current_content]
-      additionalProperties: false
-      properties:
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase del documento
-          example: "discovery"
-        section:
-          type: string
-          description: Nombre exacto de la seccion editada manualmente
-          example: "2 Alcance del producto"
-        current_content:
-          type: string
-          description: Contenido actual de la seccion tras la edicion manual
-          example: "### Incluido\n- Viajes LATAM\n### Excluido\n- Viajes intercontinentales"
-
-    CollisionCheckResult:
-      type: object
-      description: Resultado de la verificacion de colision por edicion manual
-      properties:
-        has_collision:
-          type: boolean
-          description: true si al menos un cambio pendiente colisiono con la edicion
-        collisions:
-          type: array
-          items:
-            $ref: "#/components/schemas/PlanChange"
-          description: Cambios que fueron marcados como CONFLICT durante esta verificacion
-
-    ApplyBatchRequest:
-      type: object
-      required: [phase, change_ids]
-      additionalProperties: false
-      properties:
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase a la cual aplicar los cambios
-          example: "discovery"
-        context:
-          type: string
-          description: Contexto específico de los cambios (opcional para Descubrimiento)
-          nullable: true
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        change_ids:
-          type: array
-          items:
-            type: string
-          description: IDs de los cambios a aplicar
-          example: ["chg_01HXYAZABCDEFGHIJKLMNOP", "chg_01HXYAZQQQQQQQQQQQQQ"]
-
-    BatchResult:
-      type: object
-      description: Resultado de la aplicación de un lote de cambios
-      properties:
-        applied_count:
-          type: integer
-          description: Número de cambios aplicados exitosamente
-          example: 2
-        failed_count:
-          type: integer
-          description: Número de cambios que fallaron
-          example: 1
-        applied:
-          type: array
-          items:
-            $ref: "#/components/schemas/AppliedChangeItem"
-          description: Cambios aplicados exitosamente
-        failed:
-          type: array
-          items:
-            $ref: "#/components/schemas/FailedChangeItem"
-          description: Cambios que fallaron, con el motivo
-        propagation:
-          $ref: "#/components/schemas/PhaseNotification"
-          description: Fases notificadas tras la aplicación (si el cambio requiere propagación)
-          nullable: true
-
-    AppliedChangeItem:
-      type: object
-      description: Cambio aplicado exitosamente en el lote
-      properties:
-        change_id:
-          type: string
-          description: ID del cambio aplicado
-        section:
-          type: string
-          description: Sección del documento o atributo afectado
-
-    FailedChangeItem:
-      type: object
-      description: Cambio que falló al aplicarse en el lote
-      properties:
-        change_id:
-          type: string
-          description: ID del cambio que falló
-        section:
-          type: string
-          description: Sección del documento o atributo afectado
-        error:
-          type: string
-          description: Motivo del fallo
-
-    PhaseNotification:
-      type: object
-      description: Notificación de fases afectadas por propagación de cambios
-      properties:
-        affected_phases:
-          type: array
-          items:
-            $ref: "#/components/schemas/PhaseNotificationItem"
-          description: Fases notificadas con sus artefactos desactualizados
-
-    PhaseNotificationItem:
-      type: object
-      description: Detalle de una fase afectada por propagación
-      properties:
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase afectada
-        affected_count:
-          type: integer
-          description: Cantidad de artefactos afectados en esta fase
-          example: 3
-        affected_ids:
-          type: array
-          items:
-            type: string
-          description: IDs de los artefactos afectados
-          example: ["feat_01HXYAZA...", "feat_01HXYAZB..."]
-
-    # ═══ Propagación bidireccional (Sprint 4 - HU18) ═══
-
-    PropagateFeatureChangesRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        applied_change_ids:
-          type: array
-          items:
-            type: string
-          description: IDs de los cambios aplicados en la característica
-          example: ["chg_01HXYAZABCDEFGHIJKLMNOP", "chg_01HXYAZQQQQQQQQQQQQQ"]
-
-    # ═══ Consistencia (Sprint 4) ═══
-
-    ConsistencyReport:
-      type: object
-      description: Reporte de análisis de consistencia entre fases
-      properties:
-        id:
-          type: string
-          description: ID del reporte (cnr_ + ULID)
-          example: "cnr_01HXYAZABCDEFGHIJKLMNOP"
-        phase_origin:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase donde se originaron los cambios
-        own_changes:
-          type: array
-          items:
-            $ref: "#/components/schemas/PlanChange"
-          description: Cambios propios del usuario que se están evaluando
-        upstream_impact:
-          type: array
-          items:
-            $ref: "#/components/schemas/ImpactItem"
-          description: Impacto detectado en fases anteriores (upstream)
-          nullable: true
-        downstream_impact:
-          type: array
-          items:
-            $ref: "#/components/schemas/ImpactItem"
-          description: Impacto detectado en fases posteriores (downstream)
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          example: "2026-07-27T17:10:00Z"
-
-    ImpactItem:
-      type: object
-      description: Artefacto afectado por propagación de cambios
-      properties:
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-        artifact_id:
-          type: string
-          description: ID del artefacto afectado
-        artifact_type:
-          type: string
-          description: Tipo de artefacto (ej. feature, requirement, diagram)
-        artifact_label:
-          type: string
-          description: Etiqueta visible del artefacto (ej. C01, REQ-1.1)
-        section:
-          type: string
-          description: Sección o atributo afectado dentro del artefacto
-        rationale:
-          type: string
-          description: Justificación de por qué el artefacto queda desactualizado
-        diff_suggestion:
-          $ref: "#/components/schemas/ChangeSuggestion"
-          description: Diff sugerido para actualizar el artefacto
-          nullable: true
-
-    EvaluateConsistencyRequest:
-      type: object
-      required: [phase_origin, changes]
-      additionalProperties: false
-      properties:
-        phase_origin:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase de origen de los cambios
-        phase_destination:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase destino a evaluar. Si se omite, evalúa todas las fases adyacentes.
-          nullable: true
-        changes:
-          type: array
-          items:
-            type: object
-            properties:
-              section:
-                type: string
-              diff_before:
-                type: string
-              diff_after:
-                type: string
-          description: Cambios a evaluar para consistencia
-
-    ConsistencyStatus:
-      type: object
-      description: Estado de consistencia de una fase o artefacto
-      properties:
-        is_stale:
-          type: boolean
-          description: true si el artefacto está desactualizado respecto a sus dependencias
-        stale_since:
-          type: string
-          format: date-time
-          description: Timestamp desde que está desactualizado
-          nullable: true
-        affected_by:
-          type: array
-          items:
-            type: object
-            properties:
-              origin_phase:
-                type: string
-              origin_artifact_id:
-                type: string
-              origin_artifact_label:
-                type: string
-          description: Artefactos cuyos cambios causaron la desactualización
-          nullable: true
-
-    CheckConsistencyRequest:
-      type: object
-      required: [content]
-      additionalProperties: false
-      properties:
-        content:
-          type: object
-          description: Contenido nuevo a validar contra el documento fuente
-          additionalProperties: true
-
-    InconsistencyResult:
-      type: object
-      description: Resultado de verificación de consistencia en guardado manual
-      properties:
-        is_consistent:
-          type: boolean
-          description: false si se detectó contradicción flagrante
-        reason:
-          type: string
-          description: Motivo de la inconsistencia (solo si is_consistent = false)
-          nullable: true
-          example: "La descripción contradice la Visión del Descubrimiento: el documento define el producto como B2C y esta característica asume modelo B2B."
-        conflicting_section:
-          type: string
-          description: Sección del documento fuente con la que hay conflicto
-          nullable: true
-
-    # ═══ Regeneración (Sprint 4) ═══
-
-    RegenerateRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Fase del documento a regenerar
-        artifact_id:
-          type: string
-          description: ID opcional del artefacto específico a regenerar (requisito individual, característica, etc.)
-          nullable: true
-
-    RegenerationResult:
-      type: object
-      properties:
-        artifact_id:
-          type: string
-          description: ID del artefacto regenerado
-        content:
-          type: string
-          description: Nuevo contenido generado por la IA
-        phase:
-          type: string
-          enum: [discovery, features, requirements, model]
-
-    # ═══ Knowledge ═══
-
-    ConsolidateKnowledgeRequest:
-      type: object
-      required: [project_id]
-      additionalProperties: false
-      properties:
-        project_id:
-          type: string
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-
-    KnowledgePattern:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "kpt_01HXYAZABCDEFGHIJKLMNOP"
-        pattern_type:
-          type: string
-          description: Tipo de patrón extraído
-        content:
-          type: string
-          description: Contenido del patrón
-        confidence:
-          type: number
-          format: float
-          minimum: 0
-          maximum: 1
-          description: Nivel de confianza del patrón
-          example: 0.85
-
-    ConsolidateKnowledgeResponse:
-      type: object
-      properties:
-        patterns:
-          type: array
-          items:
-            $ref: "#/components/schemas/KnowledgePattern"
-        total:
-          type: integer
-          example: 5
-
-    # ═══ Health ═══
-
-    HealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: "ok"
-
-    # ═══ Traceability (Sprint 5 - HU-20) ═══
-
-    EditDirectionResponse:
-      type: object
-      description: Resultado de validación de dirección de edición en trazabilidad
-      properties:
-        allowed:
-          type: boolean
-          description: true si la edición es válida en el nivel actual
-          example: false
-        redirect_to_level:
-          type: string
-          enum: [discovery, features, requirements, model]
-          nullable: true
-          description: Nivel al que debe redirigirse (solo si allowed=false)
-          example: "features"
-        source_entity_id:
-          type: string
-          nullable: true
-          description: ID de la entidad fuente en el nivel izquierdo
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        source_entity_label:
-          type: string
-          nullable: true
-          description: Etiqueta visible de la entidad fuente (ej. C01)
-          example: "C01"
-        message:
-          type: string
-          description: Mensaje explicativo para el usuario
-          example: "Los requisitos no se editan directamente. Ve a la característica 'C01 - Registrar gastos' para modificarlos."
-
-    # ═══ Documents (Sprint 5 - HU-20) ═══
-
-    DocumentModifyRequest:
-      type: object
-      required: [document_type, document_id, instruction]
-      additionalProperties: false
-      properties:
-        document_type:
-          type: string
-          enum: [discovery, features, requirements, model]
-          description: Tipo de documento a modificar
-          example: "discovery"
-        document_id:
-          type: string
-          description: ID del documento a modificar
-          example: "doc_prj_01KTABCDEFGHIJKLMNOP"
-        instruction:
-          type: string
-          minLength: 1
-          maxLength: 2000
-          description: Instrucción textual del cambio deseado
-          example: "Cambia el público objetivo a pequeñas y medianas empresas"
-
-    DocumentModifyResponse:
-      type: object
-      description: Resultado de una modificación directa de documento
-      properties:
-        document_id:
-          type: string
-          description: ID del documento modificado
-          example: "doc_prj_01KTABCDEFGHIJKLMNOP"
-        content:
-          type: string
-          description: Contenido completo del documento actualizado
-        highlighted_section:
-          type: string
-          nullable: true
-          description: Nombre de la sección modificada, para resaltar en la UI
-          example: "2 Público objetivo"
-        message:
-          type: string
-          description: Mensaje de confirmación para el usuario
-          example: "Documento actualizado. Sección 'Público objetivo' modificada."
-
-    # ═══ Implementation (Sprint 5 - HU-21) ═══
-
-    MissingArtifact:
-      type: object
-      description: Artefacto requerido que falta para iniciar la generación de código
-      properties:
-        type:
-          type: string
-          enum: [requirements, diagram]
-          description: Tipo de artefacto faltante
-          example: "requirements"
-        label:
-          type: string
-          description: Etiqueta legible del artefacto faltante
-          example: "Requisitos EARS"
-
-    ImplementationReadinessResponse:
-      type: object
-      description: Verificación de si una Feature está lista para generación de código
-      properties:
-        is_ready:
-          type: boolean
-          description: true si la feature tiene todos los artefactos requeridos
-          example: false
-        has_requirements:
-          type: boolean
-          description: true si la feature tiene requisitos EARS generados
-          example: true
-        has_diagram:
-          type: boolean
-          description: true si la feature tiene diagrama de actividad generado
-          example: false
-        missing_artifacts:
-          type: array
-          items:
-            $ref: "#/components/schemas/MissingArtifact"
-          description: Lista de artefactos que faltan para alcanzar is_ready
-
-    ImplementationStatusResponse:
-      type: object
-      description: Estado actual de la implementación de código de una Feature
-      properties:
-        feature_id:
-          type: string
-          description: ID de la feature
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        status:
-          type: string
-          enum: [pending, in_progress, implemented, requires_review, failed]
-          description: Estado de la implementación
-          example: "in_progress"
-        started_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: Momento en que inició la generación (ISO-8601 UTC)
-          example: "2026-08-11T14:30:00Z"
-        completed_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: Momento en que finalizó la generación (ISO-8601 UTC)
-          example: null
-        retry_count:
-          type: integer
-          minimum: 0
-          maximum: 3
-          description: Número de reintentos de corrección ejecutados
-          example: 0
-        current_step:
-          type: string
-          nullable: true
-          description: Paso actual del pipeline (solo si status=in_progress)
-          example: "Generando plan de implementación"
-
-    ValidationErrorItem:
-      type: object
-      description: Error de validación determinística extraído de la salida de un comando
-      properties:
-        file:
-          type: string
-          nullable: true
-          description: Archivo donde ocurrió el error
-          example: "src/app/expenses/page.tsx"
-        line:
-          type: integer
-          nullable: true
-          description: Número de línea del error
-          example: 42
-        column:
-          type: integer
-          nullable: true
-          description: Número de columna del error
-          example: 10
-        message:
-          type: string
-          description: Mensaje descriptivo del error
-          example: "Type 'string' is not assignable to type 'number'."
-        severity:
-          type: string
-          enum: [error, warning]
-          description: Severidad del error
-          example: "error"
-        rule:
-          type: string
-          nullable: true
-          description: Regla de linter asociada (ej. nombre de regla de eslint)
-          example: "@typescript-eslint/no-explicit-any"
-
-    ValidationRunResult:
-      type: object
-      description: Resultado de la ejecución de un paso del pipeline de validación
-      properties:
-        command:
-          type: string
-          description: Comando ejecutado
-          example: "tsc --noEmit"
-        is_success:
-          type: boolean
-          description: true si el comando terminó sin errores
-          example: true
-        exit_code:
-          type: integer
-          description: Código de salida del proceso
-          example: 0
-        errors:
-          type: array
-          items:
-            $ref: "#/components/schemas/ValidationErrorItem"
-          description: Errores encontrados (vacío si is_success=true)
-        duration_ms:
-          type: integer
-          description: Duración de la ejecución en milisegundos
-          example: 1234
-
-    ImplementationStreamEvent:
-      type: object
-      description: Evento SSE emitido durante el streaming de progreso de generación
-      properties:
-        event:
-          type: string
-          enum:
-            [preparing, plan_progress, plan_complete, build_progress, build_complete,
-             validation_progress, validation_result, complete, error]
-          description: Tipo de evento de progreso
-          example: "plan_progress"
-        step:
-          type: string
-          nullable: true
-          description: Paso del pipeline en el que se encuentra la generación
-          example: "Analizando código existente"
-        message:
-          type: string
-          description: Mensaje descriptivo del estado actual
-          example: "El agente está analizando la estructura del workspace"
-        details:
-          nullable: true
-          description: Datos adicionales según el tipo de evento
-          example: null
-
-    TraceabilityEdge:
-      type: object
-      description: Arista de trazabilidad entre un requisito y los archivos que lo implementan
-      properties:
-        requirement_id:
-          type: string
-          description: ID del requisito (formato feature_id:REQ-N.M)
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP:REQ-1.1"
-        requirement_label:
-          type: string
-          description: Etiqueta visible del requisito
-          example: "REQ-1.1"
-        source_file:
-          type: string
-          description: Ruta del archivo de código fuente que implementa el requisito
-          example: "src/app/expenses/page.tsx"
-        test_file:
-          type: string
-          nullable: true
-          description: Ruta del archivo de test asociado al requisito
-          example: "tests/expenses.test.ts"
-
-    ImplementationTraceabilityResponse:
-      type: object
-      description: Trazabilidad completa entre una Feature, sus requisitos y los archivos generados
-      properties:
-        feature_id:
-          type: string
-          description: ID de la feature
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        feature_label:
-          type: string
-          description: Etiqueta visible de la feature
-          example: "C01"
-        edges:
-          type: array
-          items:
-            $ref: "#/components/schemas/TraceabilityEdge"
-          description: Aristas de trazabilidad Feature→Requirement→Archivo→Test
-
-    WorkspaceResponse:
-      type: object
-      description: Información del workspace de implementación de un proyecto
-      properties:
-        project_id:
-          type: string
-          description: ID del proyecto
-          example: "prj_01KTABCDEFGHIJKLMNOP"
-        workspace_dir:
-          type: string
-          nullable: true
-          description: Ruta absoluta al directorio del workspace
-          example: "/workspaces/prj_01KTABCDEFGHIJKLMNOP"
-        status:
-          type: string
-          enum: [not_created, creating, ready, in_use]
-          description: Estado del workspace
-          example: "ready"
-        files_count:
-          type: integer
-          description: Cantidad de archivos en el workspace
-          example: 45
-        created_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: Momento de creación del workspace (ISO-8601 UTC)
-          example: "2026-08-11T10:00:00Z"
-
 paths:
-  # ── Health ──────────────────────────────────────────────────────────
-
   /health:
     get:
       tags: [health]
-      summary: Health check
-      description: Verificación de disponibilidad del servidor. No verifica conectividad con DB o Redis.
+      summary: Verificar disponibilidad del servidor
       operationId: health_check
+      security: []
       responses:
         "200":
           description: Servidor activo
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthResponse"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required: [status]
 
-  # ── Auth ────────────────────────────────────────────────────────────
+  # ══════════════════════════════ AUTH ══════════════════════════════
 
   /api/v1/auth/register:
     post:
       tags: [auth]
-      summary: Registrar nuevo usuario
-      description: Crea una cuenta de usuario con email y contraseña. La contraseña se procesa con Argon2id.
-      operationId: register_user
+      summary: Crear cuenta de usuario
+      operationId: auth_register
       security: []
       requestBody:
         required: true
@@ -1499,19 +83,13 @@ paths:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
         "201":
-          description: Usuario registrado exitosamente
+          description: Usuario creado
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserPublic"
         "409":
-          description: El email ya está registrado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OAuthErrorResponse"
-        "429":
-          description: "Demasiados intentos de registro desde esta IP (rate limit: 3/min)"
+          description: Email ya registrado
           content:
             application/problem+json:
               schema:
@@ -1520,12 +98,8 @@ paths:
   /api/v1/auth/authorize:
     post:
       tags: [auth]
-      summary: Iniciar flujo PKCE — obtener authorization_code
-      description: >-
-        Primer paso del flujo PKCE. Valida credenciales y devuelve un
-        authorization_code opaco de un solo uso. El cliente debe intercambiarlo
-        por tokens en /token.
-      operationId: authorize
+      summary: Iniciar flujo PKCE y obtener codigo de autorizacion
+      operationId: auth_authorize
       security: []
       requestBody:
         required: true
@@ -1535,38 +109,23 @@ paths:
               $ref: "#/components/schemas/AuthorizeRequest"
       responses:
         "200":
-          description: Código de autorización emitido
+          description: Codigo de autorizacion emitido
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthorizationCodeResponse"
         "401":
-          description: Credenciales inválidas
+          description: Credenciales invalidas o cuenta bloqueada
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthErrorResponse"
-        "423":
-          description: Cuenta bloqueada por intentos fallidos (10 fallos en 15 min)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OAuthErrorResponse"
-        "429":
-          description: "Demasiados intentos de autorización desde esta IP (rate limit: 10/min)"
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/auth/token:
     post:
       tags: [auth]
-      summary: Intercambiar authorization_code por token pair
-      description: >-
-        Segundo paso del flujo PKCE. Intercambia el código de autorización
-        por un par de tokens JWT RS256 (access + refresh).
-      operationId: exchange_token
+      summary: Intercambiar codigo de autorizacion por par de tokens JWT
+      operationId: auth_token
       security: []
       requestBody:
         required: true
@@ -1576,33 +135,23 @@ paths:
               $ref: "#/components/schemas/TokenExchangeRequest"
       responses:
         "200":
-          description: Token pair emitido
+          description: Par de tokens emitido
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenPairResponse"
         "400":
-          description: grant_type inválido o code_verifier no coincide (PKCE mismatch)
+          description: Error OAuth (codigo invalido, PKCE mismatch, etc.)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthErrorResponse"
-        "429":
-          description: "Demasiados intentos de intercambio desde esta IP (rate limit: 5/min)"
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/auth/refresh:
     post:
       tags: [auth]
-      summary: Renovar token pair con refresh_token
-      description: >-
-        Rotación de tokens: consume el refresh_token actual, emite un par nuevo
-        y revoca el JTI del refresh consumido. Si se detecta reutilización,
-        toda la familia de tokens queda revocada.
-      operationId: refresh_token
+      summary: Renovar par de tokens con refresh token (Token Rotation)
+      operationId: auth_refresh
       security: []
       requestBody:
         required: true
@@ -1612,30 +161,23 @@ paths:
               $ref: "#/components/schemas/TokenRefreshRequest"
       responses:
         "200":
-          description: Nuevo token pair emitido
+          description: Nuevo par de tokens emitido
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenPairResponse"
-        "400":
-          description: Token inválido, expirado o reutilizado
+        "401":
+          description: Refresh token invalido, expirado o reutilizado
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthErrorResponse"
-        "429":
-          description: "Demasiados intentos de refresh desde esta IP (rate limit: 30/min)"
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/auth/me:
     get:
       tags: [auth]
       summary: Obtener identidad del usuario autenticado
-      description: Devuelve el subject y scopes extraídos del access token.
-      operationId: get_me
+      operationId: auth_me
       responses:
         "200":
           description: Identidad del usuario
@@ -1644,7 +186,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PrincipalView"
         "401":
-          description: Token ausente, inválido o expirado
+          description: Token ausente, invalido o expirado
           content:
             application/problem+json:
               schema:
@@ -1653,31 +195,31 @@ paths:
   /api/v1/auth/logout:
     post:
       tags: [auth]
-      summary: Cerrar sesión
-      description: Revoca el access token del header y opcionalmente el refresh token del body.
-      operationId: logout
+      summary: Cerrar sesion activa (revocar tokens)
+      operationId: auth_logout
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/LogoutRequest"
       responses:
         "200":
-          description: Sesión cerrada exitosamente
+          description: Sesion cerrada
         "401":
-          description: Token ausente, inválido o expirado
+          description: Token invalido
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ── Projects ────────────────────────────────────────────────────────
+  # ══════════════════════════════ PROJECTS ══════════════════════════════
 
   /api/v1/projects:
     post:
       tags: [projects]
       summary: Crear proyecto
-      operationId: create_project
+      operationId: project_create
       requestBody:
         required: true
         content:
@@ -1691,16 +233,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProjectResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
     get:
       tags: [projects]
       summary: Listar proyectos del usuario
-      operationId: list_projects
+      operationId: project_list
       responses:
         "200":
           description: Lista de proyectos
@@ -1710,26 +246,14 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ProjectResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/projects/{project_id}:
     get:
       tags: [projects]
-      summary: Obtener proyecto por ID
-      operationId: get_project
+      summary: Obtener proyecto por id
+      operationId: project_get
       parameters:
-        - name: project_id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: ID del proyecto (prj_ + ULID)
-          example: "prj_01KTABCDEFGHIJKLMNOP"
+        - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
           description: Proyecto encontrado
@@ -1737,12 +261,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProjectResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
           description: Proyecto no encontrado
           content:
@@ -1750,59 +268,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ── Discovery ───────────────────────────────────────────────────────
+  # ══════════════════════════════ DISCOVERY ══════════════════════════════
 
   /api/v1/projects/{project_id}/discovery:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [discovery]
       summary: Generar documento de descubrimiento con IA
-      description: >-
-        Genera el documento de visión de producto en 7 secciones obligatorias
-        usando IA. Rate limit: 20 requests/hora por proyecto.
-      operationId: generate_discovery
+      operationId: discovery_generate
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       responses:
-        "201":
-          description: Documento generado exitosamente
+        "200":
+          description: Documento generado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DiscoveryResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                type: object
+                properties:
+                  project_id:
+                    type: string
+                  content:
+                    type: string
+                required: [project_id, content]
         "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "429":
-          description: Rate limit excedido
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al invocar el servicio de IA
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
     get:
       tags: [discovery]
       summary: Obtener documento de descubrimiento
-      operationId: get_discovery
+      operationId: discovery_get
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
           description: Documento de descubrimiento
@@ -1810,23 +305,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiscoveryResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Documento no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
     put:
       tags: [discovery]
-      summary: Guardar documento de descubrimiento manualmente
-      description: Persiste manualmente el documento sin invocar IA.
-      operationId: save_discovery
+      summary: Guardar documento de descubrimiento
+      operationId: discovery_save
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       requestBody:
         required: true
         content:
@@ -1840,30 +326,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiscoveryResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/projects/{project_id}/discovery/refine:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [discovery]
       summary: Refinar documento de descubrimiento con IA
-      description: >-
-        Aplica instrucciones de refinamiento sobre el documento actual.
-        El documento se conserva intacto si la IA falla.
-        Rate limit: 20 requests/hora por proyecto.
-      operationId: refine_discovery
+      operationId: discovery_refine
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       requestBody:
         required: true
         content:
@@ -1878,50 +348,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/DiscoveryResponse"
         "400":
-          description: Instrucciones inválidas (longitud > 500)
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "401":
-          description: Token ausente, inválido o expirado
+          description: Instrucciones invalidas (mas de 500 caracteres)
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto o documento no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar el servicio de IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-
-  # ═══ Chat de Descubrimiento (Sprint 4 - HU14) ═══
 
   /api/v1/projects/{project_id}/discovery/chat:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [discovery]
-      summary: Enviar mensaje al chat de Descubrimiento
+      summary: Enviar mensaje al chat de Descubrimiento (aplicacion instantanea)
       description: >-
-        Envía un mensaje al asistente IA en el contexto del documento de
-        Descubrimiento. La IA responde con una sugerencia de cambio no
-        destructiva (el documento original no se modifica hasta que el
-        usuario aplique el plan). Soporta streaming vía SSE (Accept: text/event-stream).
-      operationId: send_discovery_chat
+        Procesa el mensaje y aplica el cambio inmediatamente sobre el documento
+        cuando corresponde. Si el cambio pertenece a otra fase (giro de negocio),
+        responde con una redireccion hacia esa fase.
+      operationId: discovery_chat_send
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       requestBody:
         required: true
         content:
@@ -1930,192 +381,145 @@ paths:
               $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Respuesta del chat con sugerencia de cambio opcional
+          description: Mensaje procesado, modificacion aplicada o redireccion
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ChatMessage"
-            text/event-stream:
-              schema:
-                $ref: "#/components/schemas/ChatStreamEvent"
-        "401":
-          description: Token ausente, inválido o expirado
+                $ref: "#/components/schemas/ChatResponse"
+        "400":
+          description: Error de validacion
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto no encontrado
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error de conexión con la IA
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ChatErrorResponse"
-
-  /api/v1/projects/{project_id}/discovery/chat/history:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     get:
       tags: [discovery]
       summary: Obtener historial del chat de Descubrimiento
-      operationId: get_discovery_chat_history
+      operationId: discovery_chat_history
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/CursorBefore"
       responses:
         "200":
-          description: Historial de mensajes del chat
+          description: Historial del chat
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatHistoryResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
 
-  # ═══ Regeneración de Descubrimiento (Sprint 4 - HU17) ═══
-
-  /api/v1/projects/{project_id}/discovery/regenerate:
-    parameters:
-      - name: project_id
-        in: path
+  /api/v1/projects/{project_id}/discovery/chat/undo:
+    post:
+      x-status: planned
+      tags: [discovery]
+      summary: Deshacer la ultima modificacion del chat de Descubrimiento
+      description: >-
+        Restaura la version previa al cambio (undo_version_id devuelto en la
+        modificacion). El documento queda como estaba antes del mensaje del chat.
+      operationId: discovery_chat_undo
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
         required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UndoChatRequest"
+      responses:
+        "200":
+          description: Documento restaurado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoveryResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/discovery/chat/stream:
     post:
       tags: [discovery]
-      summary: Regenerar documento de Descubrimiento desde artefactos actuales
+      summary: Chat de Descubrimiento con streaming SSE
       description: >-
-        Regenera el documento de Descubrimiento vía IA a partir del estado actual
-        de las características, requisitos y modelos. Útil cuando cambios en fases
-        posteriores dejan el documento desactualizado (propagación entrante).
-
-        API-first — pendiente de implementación (HU17).
-      operationId: regenerate_discovery
+        Genera la respuesta en tiempo real (SSE). Emite eventos token por
+        fragmento y, al final, un evento message con la respuesta completa y
+        la modificacion aplicada o la redireccion.
+      operationId: discovery_chat_stream
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Documento regenerado exitosamente
+          description: Stream de eventos SSE
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/RegenerationResult"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/ChatStreamEvent"
         "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar la IA para regeneración
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ── Features ─────────────────────────────────────────────────────────
+  # ══════════════════════════════ FEATURES ══════════════════════════════
 
   /api/v1/projects/{project_id}/features:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [features]
-      summary: Generar características con IA
-      description: >-
-        Genera características del producto a partir del documento de
-        Descubrimiento. Rate limit: 20 requests/hora por proyecto.
-      operationId: generate_features
-      responses:
-        "201":
-          description: Características generadas
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/FeatureResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto o documento de Descubrimiento no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al invocar el servicio de IA
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-    get:
-      tags: [features]
-      summary: Listar características del proyecto
-      operationId: list_features
+      summary: Generar caracteristicas con IA
+      operationId: features_generate
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: Lista de características
+          description: Caracteristicas generadas
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/FeatureResponse"
-        "401":
-          description: Token ausente, inválido o expirado
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [features]
+      summary: Listar caracteristicas del proyecto
+      operationId: features_list
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Lista de caracteristicas
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeatureResponse"
 
   /api/v1/projects/{project_id}/features/suggest:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [features]
-      summary: Sugerir nuevas características
-      description: Sugiere 3 características adicionales evitando duplicar las existentes.
-      operationId: suggest_features
+      summary: Sugerir nuevas caracteristicas con IA
+      operationId: features_suggest
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
           description: Sugerencias generadas
@@ -2125,38 +529,26 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/FeatureSuggestionResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Documento de Descubrimiento no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar el servicio de IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/projects/{project_id}/features/manual:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [features]
-      summary: Crear característica manualmente
-      operationId: create_characteristic
+      summary: Crear caracteristica manualmente
+      description: >-
+        Crea una caracteristica. Si no se indica origin, la IA lo deriva del
+        descubrimiento y verifica coherencia; ante inconsistencia devuelve
+        is_saved=false con la razon.
+      operationId: features_create_manual
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       requestBody:
         required: true
         content:
@@ -2164,38 +556,26 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateCharacteristicRequest"
       responses:
-        "201":
-          description: Característica creada
+        "200":
+          description: Resultado de la creacion
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FeatureResponse"
+                $ref: "#/components/schemas/CreateCharacteristicResult"
         "400":
-          description: Datos inválidos (título > 50 chars, descripción > 500 chars)
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "401":
-          description: Token ausente, inválido o expirado
+          description: Datos invalidos
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/projects/{project_id}/features/save:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     post:
       tags: [features]
-      summary: Guardar características seleccionadas
-      operationId: save_selected_features
+      summary: Guardar caracteristicas seleccionadas
+      operationId: features_save_selected
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       requestBody:
         required: true
         content:
@@ -2204,184 +584,50 @@ paths:
               $ref: "#/components/schemas/SaveSelectedFeaturesRequest"
       responses:
         "201":
-          description: Características guardadas
+          description: Caracteristicas guardadas
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/FeatureResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Chat de Características (Sprint 4 - HU15) ═══
-
-  /api/v1/features/{feature_id}/chat:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica (feat_ + ULID o slug)
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    post:
+  /api/v1/projects/{project_id}/features/{feature_id}:
+    delete:
       tags: [features]
-      summary: Enviar mensaje al chat de Características
-      description: >-
-        Envía un mensaje al asistente IA en el contexto de una característica
-        específica. La IA valida que la solicitud corresponda al ámbito de la
-        fase; si no, redirige. Soporta streaming vía SSE.
-      operationId: send_feature_chat
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SendChatRequest"
+      summary: Eliminar caracteristica y sus artefactos
+      operationId: features_delete
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FeatureId"
       responses:
         "200":
-          description: Respuesta del chat con sugerencia opcional
+          description: Caracteristica eliminada
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/ChatMessage"
-                  - $ref: "#/components/schemas/ContextRedirectResponse"
-            text/event-stream:
-              schema:
-                $ref: "#/components/schemas/ChatStreamEvent"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: deleted
+                  feature_id:
+                    type: string
+                required: [status, feature_id]
         "404":
-          description: Característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error de conexión con la IA
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ChatErrorResponse"
-
-  /api/v1/features/{feature_id}/chat/history:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    get:
-      tags: [features]
-      summary: Obtener historial del chat de la característica
-      operationId: get_feature_chat_history
-      responses:
-        "200":
-          description: Historial de mensajes del chat
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ChatHistoryResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/features/{feature_id}/chat/stream:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    post:
-      tags: [features]
-      summary: Enviar mensaje al chat de Características (SSE streaming)
-      description: >-
-        Variante del chat de características que transmite la respuesta del
-        agente token por token mediante Server-Sent Events.
-      operationId: stream_feature_chat
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SendChatRequest"
-      responses:
-        "200":
-          description: Stream SSE de la respuesta del agente
-          content:
-            text/event-stream:
-              schema:
-                $ref: "#/components/schemas/ChatStreamEvent"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ═══ Consistencia y Propagación desde Características (Sprint 4 - HU18) ═══
-  # NOTA: La evaluación de consistencia completa se realiza a nivel proyecto
-  #       en POST /api/v1/projects/{project_id}/consistency/evaluate
-  #       pasando phase_origin=features. Estas rutas cubren operaciones
-  #       específicas de la fase de Características.
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/projects/{project_id}/features/{feature_id}/propagate:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
-      tags: [consistency]
-      summary: Propagar cambios desde Características (bidireccional)
+      tags: [features]
+      summary: Propagar cambios de caracteristica (downstream)
       description: >-
-        Evalúa el impacto de los cambios aplicados en una característica en
-        tres direcciones: upstream hacia Descubrimiento, downstream hacia
-        Requisitos y Modelo. Retorna las fases afectadas para que el wizard
-        actualice sus insignias de advertencia.
-
-        Implementado. Usa PropagateFeatureChangesUseCase.
-      operationId: propagate_feature_changes
+        Evalua el impacto de los cambios aplicados en la caracteristica hacia
+        las fases a la derecha (Requisitos, Modelo) y devuelve las fases afectadas.
+      operationId: features_propagate
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -2390,197 +636,164 @@ paths:
               $ref: "#/components/schemas/PropagateFeatureChangesRequest"
       responses:
         "200":
-          description: Fases afectadas por la propagación
+          description: Fases afectadas downstream
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PhaseNotification"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/PhaseNotificationList"
         "404":
-          description: Proyecto o característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/projects/{project_id}/features/{feature_id}/consistency/check:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
-      tags: [consistency]
-      summary: Verificar consistencia antes de guardado manual
-      description: >-
-        Verifica que el contenido editado manualmente no contradiga
-        flagrantemente el documento de Descubrimiento. Invoca al agente IA
-        con el nuevo contenido y el documento fuente. Si hay inconsistencia,
-        el guardado debe rechazarse mostrando un modal explicativo.
-
-        API-first — pendiente de implementación (HU18/T7).
-      operationId: check_feature_consistency
+      tags: [features]
+      summary: Verificar consistencia antes de guardar
+      operationId: features_check_consistency
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CheckConsistencyRequest"
+              $ref: "#/components/schemas/CheckConsistencyRequestView"
       responses:
         "200":
-          description: Resultado de la verificación
+          description: Resultado de verificacion
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InconsistencyResult"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto o característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/InconsistencyResultView"
 
-  /api/v1/projects/{project_id}/features/{feature_id}/regenerate:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+  # ══════════════════════════════ FEATURE CHAT ══════════════════════════════
+
+  /api/v1/features/{feature_id}/chat:
     post:
-      tags: [consistency]
-      summary: Regenerar característica desde Descubrimiento actualizado
-      description: >-
-        Regenera el contenido de la característica vía IA a partir del estado
-        actual del documento de Descubrimiento. Útil cuando el Descubrimiento
-        fue modificado y la característica quedó desactualizada.
-
-        API-first — pendiente de implementación (HU18).
-      operationId: regenerate_feature
-      responses:
-        "200":
-          description: Característica regenerada
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RegenerationResult"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto o característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al invocar la IA
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ═══ Delete característica ═══
-
-  /api/v1/projects/{project_id}/features/{feature_id}:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica a eliminar
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    delete:
       tags: [features]
-      summary: Eliminar característica
+      summary: Enviar mensaje al chat de Caracteristicas (aplicacion instantanea)
       description: >-
-        Elimina una característica y todos sus artefactos asociados
-        (requisitos, diagrama de actividad). La operación es irreversible.
-      operationId: delete_feature
+        Procesa el mensaje y aplica el cambio inmediatamente sobre la caracteristica
+        (titulo, descripcion u origen). Si el cambio pertenece a otra fase,
+        responde con una redireccion.
+      operationId: feature_chat_send
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Característica eliminada exitosamente
+          description: Mensaje procesado, modificacion aplicada o redireccion
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "deleted"
-                  feature_id:
-                    type: string
-                    example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-        "401":
-          description: Token ausente, inválido o expirado
+                $ref: "#/components/schemas/ChatResponse"
+        "400":
+          description: Error de validacion
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto o característica no encontrada
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ── Requirements ─────────────────────────────────────────────────────
+  /api/v1/features/{feature_id}/chat/history:
+    get:
+      tags: [features]
+      summary: Obtener historial del chat de Caracteristicas
+      operationId: feature_chat_history
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+        - $ref: "#/components/parameters/CursorBefore"
+      responses:
+        "200":
+          description: Historial del chat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatHistoryResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/features/{feature_id}/chat/undo:
+    post:
+      x-status: planned
+      tags: [features]
+      summary: Deshacer la ultima modificacion del chat de Caracteristicas
+      description: >-
+        Restaura el valor previo (titulo, descripcion u origen) usando el
+        undo_version_id devuelto en la modificacion.
+      operationId: feature_chat_undo
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UndoChatRequest"
+      responses:
+        "200":
+          description: Caracteristica restaurada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/features/{feature_id}/chat/stream:
+    post:
+      tags: [features]
+      summary: Chat de Caracteristicas con streaming SSE
+      description: >-
+        Genera la respuesta en tiempo real (SSE). Emite eventos token por
+        fragmento y, al final, un evento message con la modificacion aplicada
+        o la redireccion.
+      operationId: feature_chat_stream
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendChatRequest"
+      responses:
+        "200":
+          description: Stream de eventos SSE
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ChatStreamEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Error al invocar el LLM
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ══════════════════════════════ REQUIREMENTS ══════════════════════════════
 
   /api/v1/features/{feature_id}/requirements/generate:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica (feat_ + ULID o slug)
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
       tags: [requirements]
-      summary: Generar requisitos EARS
-      description: Genera requisitos usando el estándar EARS para la característica.
-      operationId: generate_requirements
+      summary: Generar requisitos EARS con IA
+      operationId: requirements_generate
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -2593,69 +806,39 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RequirementsResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/GenerateRequirementsResponse"
         "404":
-          description: Proyecto, característica o documento no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar el servicio de IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/features/{feature_id}/requirements:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-      - name: project_id
-        in: query
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     get:
       tags: [requirements]
-      summary: Obtener requisitos de una característica
-      operationId: get_requirements
+      summary: Obtener requisitos de una caracteristica
+      operationId: requirements_get
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+        - $ref: "#/components/parameters/ProjectIdQuery"
       responses:
         "200":
-          description: Documento de requisitos
+          description: Documento de requisitos en Markdown
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/RequirementsDocumentResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto o característica no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
     put:
       tags: [requirements]
-      summary: Guardar/actualizar requisitos
-      operationId: save_requirements
+      summary: Guardar requisitos manualmente
+      operationId: requirements_save
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -2668,36 +851,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SaveRequirementsOkResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                type: object
+                properties:
+                  feature_id:
+                    type: string
+                  message:
+                    type: string
+                    example: ok
+                required: [feature_id, message]
         "404":
-          description: Proyecto o característica no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/features/{feature_id}/requirements/refine:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
       tags: [requirements]
       summary: Refinar requisitos EARS con IA
-      description: >-
-        Refina requisitos aplicando instrucciones del usuario mediante IA.
-        Requiere que la característica tenga requisitos generados.
-      operationId: refine_requirements
+      operationId: requirements_refine
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -2710,46 +881,55 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RequirementsResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/RefineRequirementsResponse"
         "404":
-          description: Proyecto, característica o requisitos no encontrados
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar la IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Chat de Requisitos (Sprint 4 - HU16) ═══
-
-  /api/v1/features/{feature_id}/requirements/chat:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica propietaria del chat (feat_ + ULID)
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
+  /api/v1/features/{feature_id}/requirements/propagate:
     post:
       tags: [requirements]
-      summary: Enviar mensaje al chat de Requisitos
+      summary: Propagar cambios de requisitos (downstream)
       description: >-
-        Envía un mensaje al asistente IA en el contexto de los requisitos
-        de una característica específica. La IA valida el ámbito de la fase
-        y responde con sugerencias formateadas en sintaxis Gherkin
-        (Dado-Cuando-Entonces). Soporta streaming vía SSE (Accept: text/event-stream).
-      operationId: send_requirement_chat
+        Evalua el impacto de los cambios aplicados en los requisitos hacia la
+        fase a la derecha (Modelo) y devuelve las fases afectadas.
+      operationId: requirements_propagate
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropagateRequirementsRequest"
+      responses:
+        "200":
+          description: Fases afectadas downstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhaseNotificationList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ══════════════════════════════ REQUIREMENT CHAT ══════════════════════════════
+
+  /api/v1/features/{feature_id}/requirements/chat:
+    post:
+      tags: [requirements]
+      summary: Enviar mensaje al chat de Requisitos (aplicacion instantanea)
+      description: >-
+        Procesa el mensaje y aplica el cambio inmediatamente sobre el documento
+        de requisitos. Si el cambio pertenece a otra fase, responde con una
+        redireccion.
+      operationId: requirement_chat_send
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -2758,93 +938,82 @@ paths:
               $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Respuesta del chat con sugerencia en formato Gherkin
+          description: Mensaje procesado, modificacion aplicada o redireccion
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/ChatMessage"
-                  - $ref: "#/components/schemas/ContextRedirectResponse"
-            text/event-stream:
-              schema:
-                $ref: "#/components/schemas/ChatStreamEvent"
-        "401":
-          description: Token ausente, inválido o expirado
+                $ref: "#/components/schemas/ChatResponse"
+        "400":
+          description: Error de validacion
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Característica no encontrada
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-        "422":
-          description: El agente retornó formato inválido (no Gherkin válido)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ChatErrorResponse"
-        "502":
-          description: Error de conexión con la IA
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ChatErrorResponse"
 
   /api/v1/features/{feature_id}/requirements/chat/history:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     get:
       tags: [requirements]
-      summary: Obtener historial del chat de requisitos
-      description: >-
-        Devuelve el historial de mensajes del chat de requisitos para una
-        característica específica, ordenado cronológicamente.
-      operationId: get_requirement_chat_history
+      summary: Obtener historial del chat de Requisitos
+      operationId: requirement_chat_history
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+        - $ref: "#/components/parameters/CursorBefore"
       responses:
         "200":
-          description: Historial de mensajes del chat
+          description: Historial del chat
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatHistoryResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Característica no encontrada
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/features/{feature_id}/requirements/chat/undo:
+    post:
+      x-status: planned
+      tags: [requirements]
+      summary: Deshacer la ultima modificacion del chat de Requisitos
+      description: >-
+        Restaura la version previa al cambio (undo_version_id devuelto en la
+        modificacion). El documento de requisitos queda como estaba antes.
+      operationId: requirement_chat_undo
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UndoChatRequest"
+      responses:
+        "200":
+          description: Documento de requisitos restaurado
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/RequirementsDocumentResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/features/{feature_id}/requirements/chat/stream:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
       tags: [requirements]
-      summary: Enviar mensaje al chat de Requisitos (SSE streaming)
+      summary: Chat de Requisitos con streaming SSE
       description: >-
-        Variante del chat de requisitos que transmite la respuesta del agente
-        token por token mediante Server-Sent Events.
-      operationId: stream_requirement_chat
+        Genera la respuesta en tiempo real (SSE). Emite eventos token por
+        fragmento y, al final, un evento message con la modificacion aplicada
+        o la redireccion.
+      operationId: requirement_chat_stream
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -2853,642 +1022,29 @@ paths:
               $ref: "#/components/schemas/SendChatRequest"
       responses:
         "200":
-          description: Stream SSE de la respuesta del agente
+          description: Stream de eventos SSE
           content:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/ChatStreamEvent"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ═══ Consistencia y Propagación desde Requisitos (Sprint 4 - HU19) ═══
-  # NOTA: La evaluación de consistencia completa se realiza a nivel proyecto
-  #       en POST /api/v1/projects/{project_id}/consistency/evaluate
-  #       pasando phase_origin=requirements. Estas rutas cubren operaciones
-  #       específicas de la fase de Requisitos.
-
-  /api/v1/features/{feature_id}/requirements/propagate:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica propietaria de los requisitos
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    post:
-      tags: [consistency]
-      summary: Propagar cambios desde Requisitos (bidireccional)
-      description: >-
-        Evalúa el impacto de los cambios aplicados en los requisitos de una
-        característica en ambas direcciones: upstream hacia Características y
-        Descubrimiento, downstream hacia Modelo. Retorna las fases afectadas
-        para que el wizard actualice sus insignias de advertencia.
-
-        API-first — pendiente de implementación (HU19).
-      operationId: propagate_requirement_changes
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PropagateFeatureChangesRequest"
-      responses:
-        "200":
-          description: Fases afectadas por la propagación
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PhaseNotification"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/features/{feature_id}/requirements/regenerate:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica propietaria de los requisitos
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    post:
-      tags: [consistency]
-      summary: Regenerar requisitos desde característica padre actualizada
-      description: >-
-        Regenera los requisitos vía IA a partir del estado actual de la
-        característica padre. Útil cuando la característica fue modificada
-        y los requisitos quedaron desactualizados.
-
-        API-first — pendiente de implementación (HU19).
-      operationId: regenerate_requirements
-      responses:
-        "200":
-          description: Requisitos regenerados
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RegenerationResult"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Característica no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar la IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ═══ Plan de Cambios (Sprint 4 - HU14, HU15, HU16) ═══
-
-  /api/v1/projects/{project_id}/plan:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    get:
-      tags: [plan]
-      summary: Obtener estado del plan de cambios
-      description: >-
-        Devuelve todos los cambios acumulados en el plan para una fase y
-        contexto específicos.
-      operationId: get_plan_state
-      parameters:
-        - name: phase
-          in: query
-          schema:
-            type: string
-            enum: [discovery, features, requirements, model]
-          description: Fase cuyos cambios se consultan
-          example: "discovery"
-        - name: context
-          in: query
-          schema:
-            type: string
-          description: Contexto específico (feature_id o requirement_id). Opcional para Descubrimiento.
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-      responses:
-        "200":
-          description: Estado actual del plan
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PlanState"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-    delete:
-      tags: [plan]
-      summary: Descartar plan de cambios completo
-      description: >-
-        Descarta todos los cambios pendientes del plan para una fase y
-        contexto. Requiere confirmación del usuario en el frontend.
-      operationId: discard_plan
-      parameters:
-        - name: phase
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [discovery, features, requirements, model]
-          description: Fase cuyo plan se descarta
-        - name: context
-          in: query
-          schema:
-            type: string
-          description: Contexto específico (opcional para Descubrimiento)
-      responses:
-        "200":
-          description: Plan descartado exitosamente
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/plan/changes:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
-      tags: [plan]
-      summary: Agregar cambio al plan
-      description: Agrega una sugerencia de cambio (proveniente del chat u otro origen) al plan de cambios.
-      operationId: add_plan_change
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AddPlanChangeRequest"
-      responses:
-        "200":
-          description: Cambio agregado al plan
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PlanState"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/plan/changes/{change_id}:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: change_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del cambio a quitar
-        example: "chg_01HXYAZABCDEFGHIJKLMNOP"
-    delete:
-      tags: [plan]
-      summary: Quitar cambio del plan
-      description: Remueve un cambio individual del plan sin aplicarlo.
-      operationId: remove_plan_change
-      responses:
-        "200":
-          description: Cambio removido del plan
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PlanState"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto o cambio no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/plan/collision-check:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
-      tags: [plan]
-      summary: Verificar colision de edicion manual con cambios pendientes
-      description: >-
-        Detecta si una edicion manual del usuario colisiona con cambios pendientes
-        en el plan. Compara el contenido actual de una seccion contra el diff.before
-        de cada PlanChange activo en esa seccion. Si el fragmento original ya no esta
-        presente, marca el cambio como CONFLICT y retorna las colisiones detectadas.
-      operationId: check_collision
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CollisionCheckRequest"
-      responses:
-        "200":
-          description: Resultado de la verificacion de colisiones
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CollisionCheckResult"
-        "401":
-          description: Token ausente, invalido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/plan/apply:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
-      tags: [plan]
-      summary: Aplicar lote de cambios (todas las fases)
-      description: >-
-        Aplica atómicamente un batch de cambios aceptados sobre los documentos
-        y artefactos del proyecto. Soporta las fases Descubrimiento (modifica
-        documento Markdown), Características (modifica atributos: título,
-        descripción, origen) y Requisitos. Al finalizar, propaga notificaciones
-        a fases adyacentes según la fase de origen. Soporta error parcial:
-        cambios fallidos se reportan individualmente con sección y motivo.
-      operationId: apply_batch
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ApplyBatchRequest"
-      responses:
-        "200":
-          description: Lote aplicado (posiblemente con errores parciales)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BatchResult"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al evaluar consistencia post-aplicación
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ═══ Consistencia de proyecto (Sprint 4 - HU17, HU18, HU19) ═══
-  # NOTA: El endpoint evaluate soporta cualquier par origen→destino
-  #       pasando phase_origin y phase_destination.
-  #       - HU17: phase_origin=discovery → evalúa downstream (features, requirements, model)
-  #       - HU18: phase_origin=features → bidireccional (discovery upstream, requirements+model downstream)
-  #       - HU19: phase_origin=requirements → bidireccional (features+discovery upstream, model downstream)
-
-  /api/v1/projects/{project_id}/consistency/evaluate:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
-      tags: [consistency]
-      summary: Evaluar consistencia entre fases (bidireccional)
-      description: >-
-        Evalúa el impacto de cambios entre cualquier par de fases del proyecto.
-        Soporta análisis upstream y downstream según el phase_origin indicado.
-        El agente analiza qué artefactos heredan conceptos modificados y genera
-        sugerencias de actualización con trazabilidad explícita.
-
-        Implementado. Usa EvaluateProjectConsistencyUseCase.
-      operationId: evaluate_consistency
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EvaluateConsistencyRequest"
-      responses:
-        "200":
-          description: Reporte de consistencia
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConsistencyReport"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "502":
-          description: Error al invocar la IA
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/consistency/evaluate/stream:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
-      tags: [consistency]
-      summary: Evaluar consistencia con progreso en cascada (SSE streaming)
-      description: >-
-        Variante streaming de la evaluación de consistencia. Transmite el
-        progreso del análisis por cada fase destino mediante Server-Sent Events.
-        Útil para mostrar indicadores de progreso en el frontend cuando hay
-        múltiples fases destino a evaluar.
-
-        Implementado. Usa CascadingConsistencyUseCase.
-      operationId: evaluate_consistency_stream
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EvaluateConsistencyRequest"
-      responses:
-        "200":
-          description: Stream SSE del progreso de evaluación
-          content:
-            text/event-stream:
-              schema:
-                type: object
-                properties:
-                  phase:
-                    type: string
-                    description: Fase que se está evaluando
-                  status:
-                    type: string
-                    enum: [evaluating, completed, failed]
-                  report:
-                    $ref: "#/components/schemas/ConsistencyReport"
-                    description: Reporte parcial (solo en evento completed)
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/consistency/apply:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
-      tags: [consistency]
-      summary: Aplicar impactos de consistencia
-      description: >-
-        Aplica las acciones sugeridas por el análisis de consistencia sobre
-        requisitos, características y diagramas. Permite aceptar o rechazar
-        cambios individuales tras la revisión en el PanelEvaluacionImpacto.
-
-        Implementado. Usa ApplyConsistencyImpactsUseCase.
-      operationId: apply_consistency_impacts
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                impacts:
-                  type: array
-                  items:
-                    type: object
-                  description: Lista de impactos a aplicar
-      responses:
-        "200":
-          description: Impactos aplicados (con detalle de éxitos y fallos)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  applied:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        target_id:
-                          type: string
-                        artifact_type:
-                          type: string
-                  failed:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        target_id:
-                          type: string
-                        artifact_type:
-                          type: string
-                        reason:
-                          type: string
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/consistency/status:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    get:
-      tags: [consistency]
-      summary: Obtener estado de consistencia del proyecto
-      description: >-
-        Devuelve el estado de actualización de cada fase del proyecto,
-        indicando cuáles tienen artefactos desactualizados y por qué.
-      operationId: get_consistency_status
-      parameters:
-        - name: phase
-          in: query
-          schema:
-            type: string
-            enum: [discovery, features, requirements, model]
-          description: Filtrar por fase específica. Si se omite, devuelve todas.
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-          description: Número de página (20 resultados por página)
-        - name: page_size
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
-          description: Cantidad de resultados por página
-      responses:
-        "200":
-          description: Estado de consistencia por fase
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties:
-                  $ref: "#/components/schemas/ConsistencyStatus"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ── Modelo ──────────────────────────────────────────────────────────
+  # ══════════════════════════════ MODELO ══════════════════════════════
 
   /api/v1/features/{feature_id}/diagram/generate:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
       tags: [modelo]
-      summary: Generar diagrama de actividad
-      description: Genera un diagrama de actividad PlantUML para la característica.
-      operationId: generate_diagram
+      summary: Generar diagrama de actividad PlantUML
+      operationId: diagram_generate
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
@@ -3502,515 +1058,1325 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiagramResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto, característica o requisitos no encontrados
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar el servicio de IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/features/{feature_id}/diagram:
-    parameters:
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la característica
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-      - name: project_id
-        in: query
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     get:
       tags: [modelo]
       summary: Obtener diagrama de actividad
-      operationId: get_diagram
+      operationId: diagram_get
+      parameters:
+        - $ref: "#/components/parameters/FeatureId"
+        - $ref: "#/components/parameters/ProjectIdQuery"
       responses:
         "200":
-          description: Diagrama de actividad
+          description: Diagrama existente
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiagramResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto, característica o diagrama no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
 
-  # ── Knowledge ───────────────────────────────────────────────────────
-
-  /api/v1/knowledge/consolidate:
+  /api/v1/features/{feature_id}/diagram/propagate:
     post:
-      tags: [knowledge]
-      summary: Consolidar patrones de conocimiento
-      description: Extrae patrones del proyecto usando IA para alimentar la base de conocimiento.
-      operationId: consolidate_knowledge
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConsolidateKnowledgeRequest"
-      responses:
-        "200":
-          description: Patrones consolidados
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConsolidateKnowledgeResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ── Traceability (Sprint 5 - HU-20) ──────────────────────────────────
-
-  /api/v1/traceability/edit-direction:
-    get:
-      tags: [traceability]
-      summary: Validar dirección de edición en trazabilidad
-      description: >-
-        Verifica si la edición de una entidad es válida en el nivel actual del
-        flujo de trazabilidad. Si no lo es, indica el nivel correcto y la
-        entidad fuente hacia la cual redirigir.
-      operationId: check_edit_direction
+      tags: [modelo]
+      summary: Regenerar diagrama tras cambios upstream
+      operationId: diagram_propagate
       parameters:
-        - name: entity_type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [requirement, feature, diagram]
-          description: Tipo de entidad que se intenta editar
-          example: "requirement"
-        - name: entity_id
-          in: query
-          required: true
-          schema:
-            type: string
-          description: ID de la entidad que se intenta editar
-          example: "req_01HXYAZABCDEFGHIJKLMNOP"
-      responses:
-        "200":
-          description: Resultado de la validación de dirección
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EditDirectionResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Entidad no encontrada
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  # ── Documents (Sprint 5 - HU-20) ─────────────────────────────────────
-
-  /api/v1/documents/modify-direct:
-    post:
-      tags: [documents]
-      summary: Modificar documento directamente sin fase de plan
-      description: >-
-        Recibe una instrucción textual y modifica directamente el documento
-        indicado sin pasar por la fase de planificación del chat. La IA
-        interpreta la intención, identifica la sección afectada, aplica el
-        cambio y retorna el documento actualizado con la sección resaltada.
-
-        Si la instrucción es ambigua (ej. "Cambia eso" sin especificar),
-        retorna 400 solicitando más detalles.
-      operationId: modify_document_direct
+        - $ref: "#/components/parameters/FeatureId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DocumentModifyRequest"
+              $ref: "#/components/schemas/GenerateDiagramRequest"
       responses:
         "200":
-          description: Documento modificado exitosamente
+          description: Diagrama regenerado
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DocumentModifyResponse"
-        "400":
-          description: Instrucción ambigua o inválida — se requiere más detalle
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/DiagramResponse"
         "404":
-          description: Documento no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "502":
-          description: Error al invocar el servicio de IA
+          description: Error al invocar el LLM
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  # ── Implementation (Sprint 5 - HU-21) ────────────────────────────────
+  # ══════════════════════════════ CONSISTENCY ══════════════════════════════
 
-  /api/v1/projects/{project_id}/features/{feature_id}/implementation/readiness:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la feature
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    get:
-      tags: [implementation]
-      summary: Verificar si una feature está lista para generación de código
+  /api/v1/projects/{project_id}/consistency/evaluate:
+    post:
+      tags: [consistency]
+      summary: Evaluar consistencia entre fases (solo downstream)
       description: >-
-        Verifica que la feature tenga todos los artefactos requeridos para
-        iniciar la generación de código: requisitos EARS y diagrama de
-        actividad. Retorna qué artefactos faltan en caso de no estar lista.
-      operationId: check_implementation_readiness
+        Evalua el impacto de cambios sobre las fases a la derecha segun el orden
+        Descubrimiento -> Caracteristicas -> Requisitos -> Modelo. Si se solicita
+        evaluar hacia la izquierda (upstream), devuelve 422.
+      operationId: consistency_evaluate
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluateConsistencyRequestView"
       responses:
         "200":
-          description: Resultado de la verificación de readiness
+          description: Reporte de consistencia
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ImplementationReadinessResponse"
-        "401":
-          description: Token ausente, inválido o expirado
+                $ref: "#/components/schemas/ConsistencyReportView"
+        "422":
+          description: Direccion de evaluacion no permitida (upstream)
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto o feature no encontrado
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/consistency/evaluate/stream:
+    post:
+      tags: [consistency]
+      summary: Evaluar consistencia con streaming SSE
+      description: >-
+        Igual que /evaluate pero con progreso en tiempo real (SSE). Aplica la
+        misma restriccion downstream-only.
+      operationId: consistency_evaluate_stream
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluateConsistencyRequestView"
+      responses:
+        "200":
+          description: Stream SSE con progreso y reporte final
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ConsistencyStreamEvent"
+        "422":
+          description: Direccion de evaluacion no permitida (upstream)
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/consistency/apply:
+    post:
+      tags: [consistency]
+      summary: Aplicar impactos de consistencia
+      description: >-
+        Aplica las acciones sugeridas sobre requisitos, caracteristicas y
+        diagramas (artefactos downstream).
+      operationId: consistency_apply
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyImpactsRequestView"
+      responses:
+        "200":
+          description: Resultado de aplicacion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyImpactsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ══════════════════════════════ SCHEMAS ══════════════════════════════
+
+  /api/v1/schemas:
+    get:
+      tags: [schemas]
+      summary: Listar nombres de esquemas disponibles
+      operationId: schemas_list
+      responses:
+        "200":
+          description: Lista de nombres de esquemas
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+
+  /api/v1/schemas/{name}:
+    get:
+      tags: [schemas]
+      summary: Obtener JSON Schema de un DTO
+      operationId: schemas_get
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: "Nombre del DTO (ej: RegisterRequest)"
+      responses:
+        "200":
+          description: JSON Schema del DTO
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ══════════════════════════════ IMPLEMENTATION (planned) ══════════════════════════════
 
   /api/v1/projects/{project_id}/features/{feature_id}/implementation/stream:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la feature a implementar
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
     post:
+      x-status: planned
       tags: [implementation]
-      summary: Iniciar generación de código con streaming SSE de progreso
+      summary: Generar implementacion de la Feature con OpenCode (SSE)
       description: >-
-        Inicia el pipeline completo de generación de código para una feature:
-        preparación de contexto → planificación (OpenCode Plan Agent) →
-        generación (OpenCode Build Agent) → validación determinística
-        (typecheck, lint, tests, build) → commit/rollback → trazabilidad.
-
-        El progreso se transmite en tiempo real mediante Server-Sent Events.
-        Soporta hasta 3 reintentos automáticos con corrección de errores.
-
-        Requiere que la feature tenga requisitos EARS y diagrama de actividad.
-        El workspace del proyecto no debe estar bloqueado por otra generación.
-      operationId: start_implementation_stream
+        Orquesta el flujo completo: preparacion de workspace -> plan (OpenCode
+        Plan Agent) -> build (OpenCode Build Agent) -> validacion deterministica
+        (tsc, eslint, vitest, build) -> commit y trazabilidad. Emite progreso por SSE.
+      operationId: implementation_stream
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FeatureId"
       responses:
         "200":
-          description: Stream SSE del progreso de generación
+          description: Stream SSE de progreso de generacion
           content:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/ImplementationStreamEvent"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
         "404":
-          description: Proyecto o feature no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
         "409":
-          description: >-
-            Feature no lista (faltan requisitos o diagrama) o workspace
-            bloqueado por otra generación en curso
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/features/{feature_id}/implementation/status:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-      - name: feature_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID de la feature
-        example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-    get:
-      tags: [implementation]
-      summary: Obtener estado de implementación de una feature
-      description: >-
-        Devuelve el estado actual de la generación de código para una feature
-        específica, incluyendo timestamp de inicio/fin, contador de reintentos
-        y paso actual del pipeline si está en progreso.
-      operationId: get_implementation_status
-      responses:
-        "200":
-          description: Estado de implementación de la feature
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ImplementationStatusResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto o feature no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-
-  /api/v1/projects/{project_id}/implementation/traceability:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    get:
-      tags: [implementation]
-      summary: Obtener trazabilidad de implementación del proyecto
-      description: >-
-        Devuelve el mapeo completo Feature→Requirement→Archivo→Test para
-        todas las features implementadas del proyecto. Permite filtrar por
-        una feature específica mediante query parameter.
-      operationId: get_implementation_traceability
-      parameters:
-        - name: feature_id
-          in: query
-          schema:
-            type: string
-          description: ID de la feature para filtrar. Si se omite, devuelve todas.
-          example: "feat_01HXYAZABCDEFGHIJKLMNOP"
-      responses:
-        "200":
-          description: Trazabilidad de implementación
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ImplementationTraceabilityResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          description: Proyecto no encontrado
+          description: Workspace bloqueado (otra implementacion en curso)
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/projects/{project_id}/implementation/workspace:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
     get:
+      x-status: planned
       tags: [implementation]
-      summary: Obtener información del workspace de implementación
-      description: >-
-        Devuelve el estado y metadatos del workspace de código del proyecto:
-        ruta, estado (no creado, creando, listo, en uso) y cantidad de archivos.
-      operationId: get_workspace
+      summary: Obtener estado del workspace de codigo del proyecto
+      operationId: implementation_workspace
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: Información del workspace
+          description: Estado del workspace
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkspaceResponse"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/WorkspaceView"
         "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
 
-  /api/v1/projects/{project_id}/implementation/validate:
-    parameters:
-      - name: project_id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: ID del proyecto
-        example: "prj_01KTABCDEFGHIJKLMNOP"
-    post:
+  /api/v1/projects/{project_id}/features/{feature_id}/implementation/status:
+    get:
+      x-status: planned
       tags: [implementation]
-      summary: Re-ejecutar pipeline de validación sobre workspace existente
-      description: >-
-        Ejecuta el pipeline de validación determinística (typecheck, lint,
-        tests, build) sobre el workspace actual del proyecto sin disparar
-        una nueva generación. Útil para verificar el estado después de
-        cambios manuales o correcciones.
-      operationId: revalidate_workspace
+      summary: Obtener estado de implementacion de una Feature
+      operationId: implementation_status
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FeatureId"
       responses:
         "200":
-          description: Resultados de la validación (un resultado por paso)
+          description: Estado de la implementacion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImplementationStatusView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/implementation/validate:
+    post:
+      x-status: planned
+      tags: [implementation]
+      summary: Re-ejecutar pipeline de validacion del workspace
+      operationId: implementation_validate
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Resultado de la validacion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationRunResultView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/implementation/traceability:
+    get:
+      x-status: planned
+      tags: [implementation]
+      summary: Obtener trazabilidad Feature -> Requisito -> Archivo -> Test
+      operationId: implementation_traceability
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Aristas de trazabilidad del proyecto
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ValidationRunResult"
-        "401":
-          description: Token ausente, inválido o expirado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                  $ref: "#/components/schemas/TraceabilityEdgeView"
         "404":
-          description: Proyecto no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "409":
-          description: Workspace no existe o no está en estado ready
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          $ref: "#/components/responses/NotFound"
 
-  # ── Schemas Introspection ────────────────────────────────────────────
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT RS256 emitido por /auth/token o /auth/refresh
 
-  /api/v1/schemas:
-    get:
-      tags: [schemas]
-      summary: Listar nombres de esquemas disponibles
-      operationId: list_schemas
-      responses:
-        "200":
-          description: Lista de nombres de DTOs disponibles para introspección
-          content:
-            application/json:
-              schema:
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Identificador del proyecto (prj_ + ULID)
+    FeatureId:
+      name: feature_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Identificador o slug de la caracteristica
+    ProjectIdQuery:
+      name: project_id
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Identificador del proyecto
+    CursorBefore:
+      name: before
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Cursor ISO-8601 para paginacion hacia atras
+
+  responses:
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+  schemas:
+    ProblemDetail:
+      type: object
+      description: Error RFC 7807 (application/problem+json)
+      properties:
+        type:
+          type: string
+          description: URN del error (ej. urn:kosmo:projects:not-found)
+          example: urn:kosmo:projects:not-found
+        title:
+          type: string
+          description: Mensaje corto
+        status:
+          type: integer
+          description: Codigo HTTP
+        detail:
+          type: string
+          description: Descripcion larga
+        instance:
+          type: string
+          description: Ruta que fallo
+        trace_id:
+          type: string
+          description: Identificador de correlacion (X-Trace-Id)
+        violations:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: string
+                description: Ruta al campo invalido
+              msg:
+                type: string
+              input:
+                description: Valor recibido
+      required: [type, title, status, detail]
+
+    # ── Auth ──
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+      required: [email, password]
+
+    AuthorizeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+        code_challenge:
+          type: string
+          minLength: 43
+          maxLength: 128
+        code_challenge_method:
+          type: string
+          enum: [S256]
+          default: S256
+        scopes:
+          type: array
+          items:
+            type: string
+          default: []
+      required: [email, password, code_challenge]
+
+    TokenExchangeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        grant_type:
+          type: string
+          enum: [authorization_code]
+        code:
+          type: string
+        code_verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+      required: [grant_type, code, code_verifier]
+
+    TokenRefreshRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        grant_type:
+          type: string
+          enum: [refresh_token]
+        refresh_token:
+          type: string
+      required: [grant_type, refresh_token]
+
+    LogoutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        refresh_token:
+          type: string
+          nullable: true
+      required: [refresh_token]
+
+    UserPublic:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+      required: [id, email, created_at]
+
+    AuthorizationCodeResponse:
+      type: object
+      properties:
+        authorization_code:
+          type: string
+        expires_in:
+          type: integer
+          minimum: 1
+          maximum: 600
+      required: [authorization_code, expires_in]
+
+    TokenView:
+      type: object
+      properties:
+        token:
+          type: string
+        jti:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required: [token, jti, expires_at]
+
+    TokenPairResponse:
+      type: object
+      properties:
+        access:
+          $ref: "#/components/schemas/TokenView"
+        refresh:
+          $ref: "#/components/schemas/TokenView"
+        token_type:
+          type: string
+          enum: [Bearer]
+      required: [access, refresh, token_type]
+
+    PrincipalView:
+      type: object
+      properties:
+        subject:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+      required: [subject, scopes]
+
+    OAuthErrorResponse:
+      type: object
+      description: Error compatible con RFC 6749 seccion 5.2
+      properties:
+        error:
+          type: string
+          description: Codigo de error (invalid_grant, invalid_token, account_locked, email_already_registered)
+        error_description:
+          type: string
+      required: [error, error_description]
+
+    # ── Projects ──
+
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          default: ""
+      required: [name]
+
+    ProjectResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        owner_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, slug, description, owner_id, created_at, updated_at]
+
+    # ── Discovery ──
+
+    DiscoveryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        content:
+          type: string
+          description: Documento en formato Markdown
+      required: [id, project_id, content]
+
+    SaveDiscoveryRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          description: Documento en formato Markdown
+      required: [content]
+
+    RefineDiscoveryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        instructions:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required: [instructions]
+
+    # ── Features ──
+
+    FeatureResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        number:
+          type: integer
+        title:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        origin:
+          type: string
+        display_id:
+          type: string
+          example: C01
+      required: [id, project_id, number, title, slug, description, origin, display_id]
+
+    FeatureSuggestionResponse:
+      type: object
+      properties:
+        number:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        origin:
+          type: string
+      required: [number, title, description, origin]
+
+    SaveSelectedFeaturesRequest:
+      type: object
+      properties:
+        features:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              origin:
+                type: string
+                default: ""
+            required: [title, description]
+      required: [features]
+
+    CreateCharacteristicRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 500
+          default: ""
+        origin:
+          type: string
+          default: ""
+        force:
+          type: boolean
+          default: false
+      required: [title]
+
+    CreateCharacteristicResult:
+      type: object
+      properties:
+        is_saved:
+          type: boolean
+        feature:
+          $ref: "#/components/schemas/FeatureResponse"
+          description: Presente solo si is_saved=true
+        origin:
+          type: string
+        is_consistent:
+          type: boolean
+        inconsistency_reason:
+          type: string
+          description: Presente solo si is_saved=false por inconsistencia
+      required: [is_saved, origin, is_consistent]
+
+    PropagateFeatureChangesRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        applied_change_ids:
+          type: array
+          items:
+            type: string
+          default: []
+      required: [applied_change_ids]
+
+    CheckConsistencyRequestView:
+      type: object
+      additionalProperties: false
+      properties:
+        content:
+          type: object
+          description: Contenido nuevo a validar contra el documento fuente
+      required: [content]
+
+    InconsistencyResultView:
+      type: object
+      properties:
+        is_consistent:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+        conflicting_section:
+          type: string
+          nullable: true
+      required: [is_consistent]
+
+    # ── Chat (aplicacion instantanea, sin plan) ──
+
+    PhaseNotificationView:
+      type: object
+      properties:
+        phase:
+          type: string
+          description: Fase afectada
+        affected_count:
+          type: integer
+        affected_ids:
+          type: array
+          items:
+            type: string
+      required: [phase, affected_count, affected_ids]
+
+    PhaseNotificationList:
+      type: object
+      properties:
+        affected_phases:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhaseNotificationView"
+      required: [affected_phases]
+
+    SendChatRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required: [content]
+
+    ModificationResult:
+      type: object
+      description: >-
+        Resultado de la modificacion aplicada por el chat. Incluye el diff
+        aplicado (before/after) para que el frontend ofrezca aceptar (no hacer
+        nada, ya esta aplicado) o deshacer via el endpoint /chat/undo con el
+        undo_version_id.
+      properties:
+        applied:
+          type: boolean
+        modified_section:
+          type: string
+          nullable: true
+        change_description:
+          type: string
+          nullable: true
+        modified_document:
+          type: string
+          nullable: true
+          description: >-
+            Markdown completo modificado. En el chat de Caracteristicas contiene
+            el nuevo titulo.
+        before:
+          type: string
+          nullable: true
+          description: Contenido previo de la seccion o atributo modificado
+        after:
+          type: string
+          nullable: true
+          description: Contenido posterior de la seccion o atributo modificado
+        undo_version_id:
+          type: string
+          nullable: true
+          description: >-
+            Version previa al cambio. Se envia a POST .../chat/undo para
+            deshacer la modificacion. Presente solo si applied=true.
+        clarification_message:
+          type: string
+          nullable: true
+          description: Presente cuando applied=false (instruccion ambigua)
+      required: [applied]
+
+    UndoChatRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        version_id:
+          type: string
+          description: undo_version_id devuelto por la modificacion a deshacer
+      required: [version_id]
+
+    RedirectInfo:
+      type: object
+      description: Redireccion cuando el cambio pertenece a otra fase
+      properties:
+        target_phase:
+          type: string
+          description: Fase destino (descubrimiento, caracteristicas, requisitos, modelo)
+        redirect_message:
+          type: string
+          description: Explicacion de por que el cambio pertenece a esa fase
+      required: [target_phase, redirect_message]
+
+    ChatMessageView:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        modification:
+          $ref: "#/components/schemas/ModificationResult"
+          description: Modificacion aplicada (solo mensajes del asistente)
+      required: [id, role, content, created_at]
+
+    ChatResponse:
+      type: object
+      description: >-
+        Respuesta del chat. Contiene el mensaje y, alternativamente, la
+        modificacion aplicada o la redireccion a otra fase.
+      properties:
+        message:
+          $ref: "#/components/schemas/ChatMessageView"
+        modification:
+          $ref: "#/components/schemas/ModificationResult"
+          description: Presente si el chat aplico un cambio
+        redirect:
+          $ref: "#/components/schemas/RedirectInfo"
+          description: Presente si el cambio pertenece a otra fase
+      required: [message]
+
+    ChatHistoryResponse:
+      type: object
+      properties:
+        phase:
+          type: string
+        context:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessageView"
+        has_more:
+          type: boolean
+          default: false
+        next_cursor:
+          type: string
+          nullable: true
+      required: [phase, context, messages]
+
+    ChatStreamEvent:
+      oneOf:
+        - type: object
+          description: Fragmento de texto en tiempo real
+          properties:
+            type:
+              type: string
+              const: token
+            content:
+              type: string
+          required: [type, content]
+        - type: object
+          description: Mensaje final con modificacion aplicada o redireccion
+          properties:
+            type:
+              type: string
+              const: message
+            content:
+              type: string
+            modification:
+              $ref: "#/components/schemas/ModificationResult"
+            redirect:
+              $ref: "#/components/schemas/RedirectInfo"
+          required: [type, content]
+
+    # ── Requirements ──
+
+    GenerateRequirementsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+      required: [project_id]
+
+    EARSRequirementView:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        statement:
+          type: string
+        pattern:
+          type: string
+          description: Patron EARS (ubiquitous, event_driven, state_driven, optional, unwanted, complex)
+        acceptance_criteria:
+          type: array
+          items:
+            type: object
+      required: [id, title, statement, pattern]
+
+    GenerateRequirementsResponse:
+      type: object
+      properties:
+        project_id:
+          type: string
+        feature_id:
+          type: string
+        feature_number:
+          type: integer
+        document_markdown:
+          type: string
+        total:
+          type: integer
+        requirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/EARSRequirementView"
+      required: [project_id, feature_id, feature_number, document_markdown, total, requirements]
+
+    RequirementsDocumentResponse:
+      type: object
+      properties:
+        document_markdown:
+          type: string
+          nullable: true
+        total:
+          type: integer
+      required: [document_markdown, total]
+
+    SaveRequirementsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+        markdown:
+          type: string
+      required: [project_id, markdown]
+
+    RefineRequirementsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+        instructions:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required: [project_id, instructions]
+
+    RefineRequirementsResponse:
+      type: object
+      properties:
+        feature_id:
+          type: string
+        feature_number:
+          type: integer
+        document_markdown:
+          type: string
+        total:
+          type: integer
+      required: [feature_id, feature_number, document_markdown, total]
+
+    PropagateRequirementsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+        applied_change_ids:
+          type: array
+          items:
+            type: string
+          default: []
+      required: [project_id, applied_change_ids]
+
+    # ── Modelo ──
+
+    GenerateDiagramRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+      required: [project_id]
+
+    DiagramResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        feature_id:
+          type: string
+        diagram_syntax:
+          type: string
+          description: Codigo PlantUML
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, feature_id, diagram_syntax, created_at, updated_at]
+
+    # ── Consistency ──
+
+    ChangeInputView:
+      type: object
+      properties:
+        section:
+          type: string
+        diff_before:
+          type: string
+        diff_after:
+          type: string
+        description:
+          type: string
+          default: ""
+      required: [section, diff_before, diff_after]
+
+    EvaluateConsistencyRequestView:
+      type: object
+      additionalProperties: false
+      properties:
+        phase_origin:
+          type: string
+          description: Fase de origen (descubrimiento, caracteristicas, requisitos, modelo)
+        phase_destination:
+          type: string
+          nullable: true
+          description: >-
+            Fase destino a evaluar. Debe estar a la derecha de phase_origin
+            (Descubrimiento -> Caracteristicas -> Requisitos -> Modelo).
+            Si se omite, se evaluan todas las fases a la derecha.
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeInputView"
+      required: [phase_origin, changes]
+
+    ImpactItemView:
+      type: object
+      properties:
+        phase:
+          type: string
+        artifact_id:
+          type: string
+        artifact_type:
+          type: string
+        artifact_label:
+          type: string
+        section:
+          type: string
+          default: ""
+        rationale:
+          type: string
+          default: ""
+        diff_suggestion:
+          type: object
+          nullable: true
+      required: [phase, artifact_id, artifact_type, artifact_label]
+
+    ConsistencyReportView:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID del reporte (cnr_ + ULID)
+        phase_origin:
+          type: string
+        own_changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeInputView"
+        downstream_impact:
+          type: array
+          description: Impacto en fases a la derecha
+          items:
+            $ref: "#/components/schemas/ImpactItemView"
+        created_at:
+          type: string
+          format: date-time
+      required: [id, phase_origin, own_changes, downstream_impact, created_at]
+
+    ConsistencyStreamEvent:
+      oneOf:
+        - type: object
+          description: Progreso de evaluacion
+          properties:
+            type:
+              type: string
+              const: progress
+            message:
+              type: string
+          required: [type, message]
+        - type: object
+          description: Reporte final
+          properties:
+            type:
+              type: string
+              const: report
+            report:
+              $ref: "#/components/schemas/ConsistencyReportView"
+          required: [type, report]
+
+    ApplyImpactsRequestView:
+      type: object
+      additionalProperties: false
+      properties:
+        impacts:
+          type: array
+          items:
+            type: object
+            properties:
+              artifact_type:
+                type: string
+                description: EARSRequirement, Feature, ActivityDiagram, DiscoveryDocument
+              target_id:
+                type: string
+              action:
+                type: string
+                description: update o delete
+              field:
+                type: string
+                default: description
+              before:
+                type: string
+                default: ""
+              after:
+                type: string
+                default: ""
+            required: [artifact_type, target_id]
+      required: [impacts]
+
+    ApplyImpactsResponse:
+      type: object
+      properties:
+        applied:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: string
+              artifact_type:
+                type: string
+            required: [target_id, artifact_type]
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: string
+              artifact_type:
+                type: string
+              reason:
+                type: string
+            required: [target_id, artifact_type, reason]
+      required: [applied, failed]
+
+    # ── Implementation (codegen, planificada) ──
+
+    FeatureImplementationStatus:
+      type: string
+      enum: [pending, in_progress, implemented, failed, needs_update]
+      description: Estado de implementacion de una Feature
+
+    WorkspaceStatus:
+      type: string
+      enum: [not_created, ready, in_use, validating]
+      description: Estado del workspace de codigo del proyecto
+
+    ImplementationStreamEvent:
+      oneOf:
+        - type: object
+          description: Progreso del plan de implementacion
+          properties:
+            type:
+              type: string
+              const: plan_progress
+            message:
+              type: string
+          required: [type, message]
+        - type: object
+          description: Progreso de generacion de codigo
+          properties:
+            type:
+              type: string
+              const: build_progress
+            message:
+              type: string
+          required: [type, message]
+        - type: object
+          description: Resultado de un paso de validacion
+          properties:
+            type:
+              type: string
+              const: validation
+            step:
+              type: string
+              description: typecheck, lint, tests, build
+            success:
+              type: boolean
+            errors:
+              type: array
+              items:
+                type: string
+          required: [type, step, success]
+        - type: object
+          description: Fin del flujo de implementacion
+          properties:
+            type:
+              type: string
+              const: complete
+            status:
+              type: string
+              enum: [success, failed]
+            errors:
+              type: array
+              items:
+                type: string
+              default: []
+          required: [type, status]
+
+    WorkspaceView:
+      type: object
+      properties:
+        project_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/WorkspaceStatus"
+        workspace_dir:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+      required: [project_id, status]
+
+    ImplementationStatusView:
+      type: object
+      properties:
+        feature_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/FeatureImplementationStatus"
+        last_validated_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_errors:
+          type: array
+          items:
+            type: string
+          default: []
+      required: [feature_id, status]
+
+    ValidationRunResultView:
+      type: object
+      properties:
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              step:
+                type: string
+                description: typecheck, lint, tests, build
+              success:
+                type: boolean
+              duration_ms:
+                type: integer
+              errors:
                 type: array
                 items:
                   type: string
+            required: [step, success, duration_ms]
+        all_passed:
+          type: boolean
+      required: [steps, all_passed]
 
-  /api/v1/schemas/{name}:
-    parameters:
-      - name: name
-        in: path
-        required: true
-        schema:
+    TraceabilityEdgeView:
+      type: object
+      properties:
+        source_type:
           type: string
-        description: Nombre del esquema (ej. DiscoveryResponse)
-    get:
-      tags: [schemas]
-      summary: Obtener JSON Schema de un DTO
-      operationId: get_schema
-      responses:
-        "200":
-          description: JSON Schema del DTO solicitado
-          content:
-            application/json:
-              schema:
-                type: object
-        "404":
-          description: Esquema no encontrado
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+          description: feature, requirement, file, test
+        source_id:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        origin:
+          type: string
+          description: llm, codegen
+      required: [source_type, source_id, target_type, target_id]
