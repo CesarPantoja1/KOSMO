@@ -858,3 +858,33 @@ class ConsistencyReportView(BaseModel):
     upstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases anteriores")
     downstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases posteriores")
     created_at: str = Field(description="Timestamp ISO-8601 UTC")
+
+
+# ═══ Modificación directa de documentos vía chat (Sprint 5 - HU-20) ═══
+
+
+class DocumentModifyRequestView(BaseModel):
+    """Payload para solicitar la modificación directa de un documento vía chat sin plan."""
+
+    model_config = ConfigDict(extra="forbid")
+    document_type: Literal["discovery", "features", "requirements", "model"] = Field(
+        description="Tipo de documento a modificar"
+    )
+    document_id: str = Field(description="ID del documento o característica a modificar")
+    instruction: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Instrucción textual del cambio deseado",
+    )
+
+
+class DocumentModifyResponseView(BaseModel):
+    """Respuesta con el resultado de una modificación directa de documento."""
+
+    document_id: str = Field(description="ID del documento modificado")
+    content: str = Field(description="Contenido completo del documento actualizado")
+    highlighted_section: str | None = Field(
+        default=None,
+        description="Nombre de la sección modificada, para resaltar en la UI",
+    )
+    message: str = Field(description="Mensaje de confirmación para el usuario")

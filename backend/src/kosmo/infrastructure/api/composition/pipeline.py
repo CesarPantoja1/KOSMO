@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
+from kosmo.application.chat.process_chat_modification import ProcessChatModificationUseCase
 from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
@@ -47,6 +48,7 @@ class PipelineComponents:
     pattern_store: KnowledgePatternStore
     validate_phase_context: ValidatePhaseContextUseCase
     process_chat_message: ProcessChatMessageUseCase
+    process_chat_modification: ProcessChatModificationUseCase
     chat_repo: ChatRepository
     traceability_repo: TraceabilityRepository
     outbox: OutboxStore
@@ -151,6 +153,13 @@ def build_pipeline_components(
         project_repo=repos.projects,
     )
 
+    process_chat_modification = ProcessChatModificationUseCase(
+        document_repo=repos.documents,
+        feature_repo=repos.features,
+        requirement_repo=repos.requirements,
+        llm_client=llm_client,
+    )
+
     consolidate_patterns = ConsolidateKnowledgePatterns(
         memory=agent_memory,
         pattern_store=pattern_store,
@@ -166,6 +175,7 @@ def build_pipeline_components(
         pattern_store=pattern_store,
         validate_phase_context=validate_phase_context,
         process_chat_message=process_chat_message,
+        process_chat_modification=process_chat_modification,
         chat_repo=repos.chat,
         traceability_repo=repos.traceability,
         outbox=outbox,

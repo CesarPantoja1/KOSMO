@@ -16,6 +16,7 @@ from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
+from kosmo.infrastructure.api.routers.documents import router as documents_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
@@ -92,6 +93,10 @@ _OPENAPI_TAGS = [
             "de cualquier DTO expuesto por la API para generación dinámica de formularios, "
             "validaciones y tipos TypeScript."
         ),
+    },
+    {
+        "name": "documents",
+        "description": "Modificación directa de documentos sin fase de plan intermedio.",
     },
 ]
 
@@ -294,6 +299,7 @@ app.include_router(modelo_router)
 app.include_router(consistency_router)
 app.include_router(schemas_router)
 app.include_router(knowledge_router)
+app.include_router(documents_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
