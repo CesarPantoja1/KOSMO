@@ -111,10 +111,10 @@ const mockChecklistResponses: ConsistencyReportResponse[] = [
 // MOCK IMPLEMENTATION
 
 const mockCheckConsistency = async ({
-	project_id,
-	phase_origin,
-	phase_destination,
-	changes,
+	project_id: _project_id,
+	phase_origin: _phase_origin,
+	phase_destination: _phase_destination,
+	changes: _changes,
 }: ConsistencyCheck): Promise<ConsistencyReportResponse> => {
 	await delay(5000);
 	return mockChecklistResponses[

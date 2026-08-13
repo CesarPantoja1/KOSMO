@@ -13,7 +13,6 @@ import {
 import type { PlanChange } from '@/entities/plan';
 import { applyPlanChanges, discardPlan, usePlanStore } from '@/entities/plan';
 import { ArrowLeft, toast } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';

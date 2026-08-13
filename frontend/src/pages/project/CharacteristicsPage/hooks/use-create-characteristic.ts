@@ -154,7 +154,7 @@ export function useCreateCharacteristic(): UseCreateCharacteristicReturn {
 				setShowConsistencyModal(false);
 				router.push('/proyecto/caracteristicas');
 			}
-		} catch (err) {
+		} catch {
 			toast.error('No se pudo forzar la creación.');
 		}
 	};

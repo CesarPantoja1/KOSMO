@@ -23,7 +23,7 @@ interface ModelingStore {
 
 export const useModelingStore = create<ModelingStore>()(
 	persist(
-		(set, get) => ({
+		(set, _get) => ({
 			currentDiagrams: {},
 			setCurrentDiagrams: (featureId, content) =>
 				set((state) => ({

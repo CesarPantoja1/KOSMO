@@ -7,7 +7,8 @@ from kosmo.application.traceability.manage_traceability_navigation import (
     TraceabilityNavigationInput,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.infrastructure.api.dependencies.auth import get_current_user
+from kosmo.contracts.auth import Principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import TraceabilityNavigationOutputView
 
@@ -23,7 +24,7 @@ async def check_traceability_navigation(
     entity_id: str,
     level: SpecPhase,
     use_case: Annotated[ManageTraceabilityNavigationUseCase, Depends(_manage_traceability_navigation)],
-    _user: Annotated[object, Depends(get_current_user)],
+    _principal: Annotated[Principal, Depends(get_principal)],
 ) -> TraceabilityNavigationOutputView:
     """Verifica si la edición está permitida en este nivel o sugiere redirección."""
     input_data = TraceabilityNavigationInput(entity_id=entity_id, level=level)

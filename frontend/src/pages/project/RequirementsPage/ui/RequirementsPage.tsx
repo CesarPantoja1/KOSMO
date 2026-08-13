@@ -80,7 +80,7 @@ const RequirementsPage = () => {
 		selectedIdRef.current = selectedId;
 		console.log('id actual es ' + selectedIdRef.current);
 		console.log('id actual es ' + markdown);
-	}, [selectedId]);
+	}, [selectedId, markdown]);
 
 	useEffect(() => {
 		setHasUnsavedChanges(hasUnsavedChanges);
@@ -94,7 +94,8 @@ const RequirementsPage = () => {
 
 	useEffect(() => {
 		if (!hasUnsavedChanges && pendingCharSwitch) {
-			setPendingCharSwitch(null);
+			const timer = setTimeout(() => setPendingCharSwitch(null), 0);
+			return () => clearTimeout(timer);
 		}
 	}, [hasUnsavedChanges, pendingCharSwitch]);
 
@@ -131,7 +132,7 @@ const RequirementsPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedId, currentProject]);
+	}, [selectedId, currentProject, currentRequirements, getRequirements]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
@@ -189,7 +190,7 @@ const RequirementsPage = () => {
 			await saveRequirements(currentProject.id, selectedId, markdown);
 			setSavedContent(markdown);
 			setSaveStatus('saved');
-		} catch (err) {
+		} catch {
 			setSaveStatus('error');
 			toast.error('Error al guardar los requisitos');
 		}
@@ -205,7 +206,7 @@ const RequirementsPage = () => {
 			} else {
 				setIsEditable(true);
 			}
-		} catch (err) {
+		} catch {
 			toast.error('Error al verificar permisos de edición');
 		} finally {
 			setIsCheckingTraceability(false);

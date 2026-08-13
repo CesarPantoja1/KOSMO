@@ -111,7 +111,7 @@ const ModelingPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedId, currentProject]);
+	}, [selectedId, currentProject, currentDiagrams, storeGetDiagram]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;

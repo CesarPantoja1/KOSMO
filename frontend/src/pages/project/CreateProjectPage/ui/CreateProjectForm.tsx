@@ -20,7 +20,6 @@ const CreateProjectForm = () => {
 	const {
 		control,
 		handleSubmit,
-		formState: { isValid },
 	} = useForm<ProjectFormData>({
 		mode: 'onSubmit',
 		resolver: zodResolver(projectSchema),

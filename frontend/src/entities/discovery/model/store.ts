@@ -28,7 +28,7 @@ interface DiscoveryStore {
 
 export const useDiscoveryStore = create<DiscoveryStore>()(
 	persist(
-		(set, get) => ({
+		(set, _get) => ({
 			currentDiscovery: null,
 			chatHistory: [],
 

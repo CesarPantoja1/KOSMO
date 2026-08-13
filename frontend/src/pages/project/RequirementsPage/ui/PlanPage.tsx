@@ -17,7 +17,6 @@ import {
 } from '@/entities/requirements';
 import { MarkdownDiff } from '@/feature';
 import { toast } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -102,7 +101,7 @@ export const PlanPage = () => {
 		};
 
 		loadData();
-	}, [currentProject, router]);
+	}, [currentProject, router, changes]);
 
 	const currentItem = items[currentIndex] ?? null;
 

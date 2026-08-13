@@ -17,7 +17,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const projects = useProjectStore((s) => s.projects);
 	const getProjectsStore = useProjectStore((s) => s.getProjects);
 
-	const [avatarOpen, setAvatarOpen] = useState(false);
 	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 	const router = useRouter();
 
