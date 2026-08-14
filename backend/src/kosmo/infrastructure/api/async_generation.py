@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -10,6 +10,10 @@ from fastapi.responses import StreamingResponse
 from kosmo.contracts.chat import ModificacionChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
+
+if TYPE_CHECKING:
+    from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
+    from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 
 
 def _modification_dict(modification: ModificacionChat | None) -> dict[str, object] | None:
@@ -33,8 +37,8 @@ async def sse_regeneration_response(
     document_type: SpecPhase,
     pid: ProjectId | None,
     context_id: str | None,
-    regen_uc: Any,
-    validate_uc: Any,
+    regen_uc: ProcessChatRegenerationUseCase,
+    validate_uc: ValidatePhaseContextUseCase,
 ) -> StreamingResponse:
     from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationInput
     from kosmo.application.chat.validate_phase_context import (

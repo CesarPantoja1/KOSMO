@@ -141,10 +141,10 @@ def build_pipeline_components(
     agent = KOSMOAgent(
         llm_client=llm_client,
         skill_registry=skill_registry,
-        memory=agent_memory,  # type: ignore[reportArgumentType]
+        memory=agent_memory,
         embedding_generator=embedding_generator,
         knowledge_tools=knowledge_tools,
-        pattern_store=pattern_store,  # type: ignore[reportArgumentType]
+        pattern_store=pattern_store,
         outbox=outbox,
     )
 
