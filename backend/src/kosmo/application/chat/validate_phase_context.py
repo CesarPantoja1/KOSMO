@@ -28,7 +28,8 @@ class ValidatePhaseContextUseCase:
         return ValidatePhaseContextOutput(
             is_valid=False,
             redirect_message=(
-                f"Este cambio pertenece a la fase de {phase_label(target_phase)}. Ve a esa fase para realizarlo."
+                f"Este cambio pertenece a la fase de {phase_label(target_phase)}. "
+                "Modifícalo directamente en el documento de esa fase."
             ),
             target_phase=target_phase,
         )

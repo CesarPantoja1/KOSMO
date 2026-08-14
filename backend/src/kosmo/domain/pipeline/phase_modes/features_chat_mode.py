@@ -6,6 +6,8 @@ from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS, FEATURE_LEVEL_PRO
 from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 from kosmo.domain.pipeline.prompts.shared_rules import (
     CONVERSATIONAL_NULL_RULE,
+    NO_EM_DASH_RULE,
+    SERVER_APPLIES_RULE,
     formatting_rules,
     phase_isolation_rule,
 )
@@ -29,10 +31,9 @@ def _build_chat_system_prompt() -> str:
         + "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
         "incluye el change_suggestion junto con tu respuesta conversacional. No preguntes "
         "'¿quieres que lo agregue?' ni esperes confirmacion. No fragmentes la respuesta.\n"
-        "- Genera una sugerencia cuando el usuario solicite un cambio. El servidor evita "
-        "duplicados activos al agregarla al plan; no afirmes que un cambio fue aplicado "
-        "si no recibes esa confirmación explícita.\n"
-        "- NIVEL DE USUARIO. PROHIBIDO: "
+        + SERVER_APPLIES_RULE
+        + NO_EM_DASH_RULE
+        + "- NIVEL DE USUARIO. PROHIBIDO: "
         f"{terms_tecnicos}.\n"
         "- SIN TERMINOLOGIA DE NEGOCIO ABSTRACTA. PROHIBIDO: "
         f"{terms_negocio}.\n"

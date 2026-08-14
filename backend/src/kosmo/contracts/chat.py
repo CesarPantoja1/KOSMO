@@ -38,6 +38,8 @@ class SugerenciaCambio:
     description: str
     diff: DiffCambio
     rationale: str | None = None
+    applied: bool = True
+    not_applied_reason: str | None = None
 
 
 @dataclass(frozen=True)

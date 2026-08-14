@@ -15,7 +15,7 @@ def phase_isolation_rule(*, example: str = "") -> str:
     return (
         "- El chat de una fase NO puede modificar documentos de otras fases. Si el usuario "
         f"pide cambios que pertenecen a otra fase{example}, indica amablemente que debe "
-        "dirigirse al chat de la fase correspondiente.\n"
+        "modificar directamente el documento de esa fase.\n"
     )
 
 
@@ -30,3 +30,13 @@ DIFF_SEMANTICS_RULE = (
     "realmente se modifica. Si el cambio es puramente agregar contenido sin modificar nada "
     "existente, diff_before debe ser cadena vacía ('').\n"
 )
+
+
+SERVER_APPLIES_RULE = (
+    "- Genera una sugerencia cuando el usuario solicite un cambio. El servidor aplica el "
+    "cambio inmediatamente; no afirmes que un cambio fue aplicado si no recibes esa "
+    "confirmación explícita.\n"
+)
+
+
+NO_EM_DASH_RULE = "- No uses el guion largo (—) en el texto. Usa punto, coma o dos puntos en su lugar.\n"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -11,12 +12,29 @@ from tenacity import (
     wait_exponential,
 )
 
-from kosmo.contracts.chat import ChatRepository, ChatRole, MensajeChat
+from kosmo.contracts.chat import (
+    ChatRepository,
+    ChatRole,
+    MensajeChat,
+    ModificacionChat,
+    SugerenciaCambio,
+)
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ChatMessageId, ProjectId
-from kosmo.contracts.sdd.repositories import ProjectRepository
+from kosmo.contracts.sdd.repositories import (
+    DocumentRepository,
+    FeatureRepository,
+    ProjectRepository,
+    RequirementRepository,
+)
+from kosmo.domain.sdd.chat_edit_applier import (
+    apply_feature_attribute,
+    apply_markdown_suggestion,
+    check_fragment_terms,
+)
+from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 if TYPE_CHECKING:
@@ -25,6 +43,14 @@ if TYPE_CHECKING:
 _MAX_CONTENT_LENGTH = 4000
 
 _log = structlog.get_logger(__name__)
+
+_FEATURE_ATTRIBUTES: dict[str, str] = {
+    "titulo": "title",
+    "título": "title",
+    "descripcion": "description",
+    "descripción": "description",
+    "origen": "origin",
+}
 
 
 @dataclass(frozen=True)
@@ -44,6 +70,13 @@ class ProcessChatMessageOutput:
 
 
 class ProcessChatMessageUseCase:
+    """Chat conversacional por fase con aplicacion instantanea de sugerencias.
+
+    El agente responde con el nivel de abstraccion de la fase (chat mode) y
+    cada sugerencia de cambio se aplica de inmediato y de forma deterministica.
+    Las sugerencias se devuelven como cards de visualizacion con su resultado.
+    """
+
     def __init__(
         self,
         chat_repo: ChatRepository,
@@ -51,11 +84,17 @@ class ProcessChatMessageUseCase:
         *,
         skill_registry: SkillRegistry | None = None,
         project_repo: ProjectRepository | None = None,
+        document_repo: DocumentRepository | None = None,
+        feature_repo: FeatureRepository | None = None,
+        requirement_repo: RequirementRepository | None = None,
     ) -> None:
         self._chat_repo = chat_repo
         self._agent = agent
         self._skill_registry = skill_registry
         self._project_repo = project_repo
+        self._document_repo = document_repo
+        self._feature_repo = feature_repo
+        self._requirement_repo = requirement_repo
 
     async def execute(self, input_data: ProcessChatMessageInput) -> ProcessChatMessageOutput:
         content = input_data.content.strip()
@@ -123,16 +162,155 @@ class ProcessChatMessageUseCase:
                 instance=input_data.instance,
             ) from exc
 
+        cards = await self._apply_suggestions(
+            phase=input_data.phase,
+            project_id=input_data.project_id,
+            context=input_data.context,
+            suggestions=list(assistant_msg.suggested_changes),
+        )
+        modification = self._build_modification(cards)
+
+        final_msg = MensajeChat(
+            id=assistant_msg.id,
+            role=assistant_msg.role,
+            content=assistant_msg.content,
+            suggested_changes=cards,
+            modification=modification,
+        )
+
         await self._chat_repo.save_message(
             project_id=input_data.project_id,
             phase=input_data.phase,
-            message=assistant_msg,
+            message=final_msg,
             context_id=input_data.context_id,
         )
 
         return ProcessChatMessageOutput(
             project_id=input_data.project_id,
-            message=assistant_msg,
+            message=final_msg,
+        )
+
+    async def _apply_suggestions(
+        self,
+        *,
+        phase: SpecPhase,
+        project_id: ProjectId,
+        context: Any,
+        suggestions: list[SugerenciaCambio],
+    ) -> list[SugerenciaCambio]:
+        applied: list[SugerenciaCambio] = []
+        for sc in suggestions:
+            reason = await self._apply_suggestion(phase, project_id, context, sc)
+            applied.append(
+                SugerenciaCambio(
+                    id=sc.id,
+                    section=sc.section,
+                    description=sc.description,
+                    diff=sc.diff,
+                    rationale=sc.rationale,
+                    applied=reason is None,
+                    not_applied_reason=reason,
+                )
+            )
+        return applied
+
+    async def _apply_suggestion(
+        self,
+        phase: SpecPhase,
+        project_id: ProjectId,
+        context: Any,
+        sc: SugerenciaCambio,
+    ) -> str | None:
+        if phase == SpecPhase.DESCUBRIMIENTO:
+            return await self._apply_discovery_suggestion(project_id, context, sc)
+        if phase == SpecPhase.CARACTERISTICAS:
+            return await self._apply_feature_suggestion(context, sc)
+        if phase == SpecPhase.REQUISITOS:
+            return await self._apply_requirement_suggestion(context, sc)
+        return f"Fase no soportada para cambios: {phase.value}"
+
+    async def _apply_discovery_suggestion(
+        self,
+        project_id: ProjectId,
+        context: Any,
+        sc: SugerenciaCambio,
+    ) -> str | None:
+        if self._document_repo is None:
+            return "Repositorio de documentos no configurado."
+
+        terms = check_fragment_terms(SpecPhase.DESCUBRIMIENTO, sc.diff.after)
+        if terms:
+            return "El cambio contiene terminología prohibida: " + ", ".join(sorted(set(terms))[:5]) + "."
+
+        current_md = document_to_markdown(context.current_document)
+        new_md = apply_markdown_suggestion(
+            current_md,
+            section=sc.section or None,
+            diff_before=sc.diff.before,
+            diff_after=sc.diff.after,
+        )
+        if new_md is None or new_md == current_md:
+            return "No se encontró el fragmento a reemplazar; el documento pudo haber cambiado."
+
+        await self._document_repo.save_discovery(project_id, markdown_to_document(new_md))
+        return None
+
+    async def _apply_feature_suggestion(self, context: Any, sc: SugerenciaCambio) -> str | None:
+        if self._feature_repo is None:
+            return "Repositorio de características no configurado."
+
+        attr = _FEATURE_ATTRIBUTES.get(sc.section.strip().lower())
+        if attr is None:
+            return f"Atributo desconocido: {sc.section}."
+
+        terms = check_fragment_terms(SpecPhase.CARACTERISTICAS, sc.diff.after)
+        if terms:
+            return "El cambio contiene terminología prohibida: " + ", ".join(sorted(set(terms))[:5]) + "."
+
+        feature = context.feature
+        current = str(getattr(feature, attr))
+        new_value = apply_feature_attribute(current, diff_before=sc.diff.before, diff_after=sc.diff.after)
+        if new_value is None:
+            return "No se encontró el fragmento a reemplazar en el atributo."
+
+        await self._feature_repo.save(dataclasses.replace(feature, **{attr: new_value}))
+        return None
+
+    async def _apply_requirement_suggestion(self, context: Any, sc: SugerenciaCambio) -> str | None:
+        if self._requirement_repo is None:
+            return "Repositorio de requisitos no configurado."
+
+        current_md = context.requirements_markdown
+        if not current_md:
+            return "No hay markdown de requisitos para aplicar el cambio."
+
+        new_md = apply_markdown_suggestion(
+            current_md,
+            section=None,
+            diff_before=sc.diff.before,
+            diff_after=sc.diff.after,
+        )
+        if new_md is None or new_md == current_md:
+            return "No se encontró el fragmento a reemplazar; el requisito pudo haber cambiado."
+
+        await self._requirement_repo.save(context.feature.id, new_md)
+        return None
+
+    @staticmethod
+    def _build_modification(cards: list[SugerenciaCambio]) -> ModificacionChat | None:
+        if not cards:
+            return None
+
+        applied = [c for c in cards if c.applied]
+        if not applied:
+            reasons = [c.not_applied_reason for c in cards if c.not_applied_reason]
+            return ModificacionChat(applied=False, clarification_message="; ".join(reasons))
+
+        sections = ", ".join(sorted({c.section for c in applied if c.section}))
+        return ModificacionChat(
+            applied=True,
+            modified_section=sections or None,
+            change_description="Se aplicaron los cambios sugeridos.",
         )
 
     async def _invoke_agent_with_retry(

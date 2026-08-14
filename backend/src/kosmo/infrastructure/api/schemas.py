@@ -581,6 +581,10 @@ class ChangeSuggestion(BaseModel):
     diff_before: str = Field(description="Contenido actual de la sección")
     diff_after: str = Field(description="Contenido sugerido por la IA")
     rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
+    applied: bool = Field(default=True, description="True si el servidor aplicó el cambio al instante")
+    not_applied_reason: str | None = Field(
+        default=None, description="Razón por la que el cambio no se pudo aplicar (solo si applied=false)"
+    )
 
 
 class SendChatRequest(BaseModel):
@@ -643,6 +647,8 @@ class ChatMessage(BaseModel):
                     diff_before=sc.diff.before,
                     diff_after=sc.diff.after,
                     rationale=sc.rationale,
+                    applied=sc.applied,
+                    not_applied_reason=sc.not_applied_reason,
                 )
                 for sc in msg.suggested_changes
             ]
@@ -687,6 +693,17 @@ class ChatResponse(BaseModel):
             message=message,
             modification=message.modification,
             consistency=output.downstream_impact or None,
+            redirect=None,
+        )
+
+    @classmethod
+    def from_message(cls, output: Any) -> "ChatResponse":
+        message = ChatMessage.from_domain(output.message)
+        return cls(
+            message=message,
+            modification=message.modification,
+            consistency=None,
+            redirect=None,
         )
 
     @classmethod

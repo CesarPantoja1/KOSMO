@@ -12,7 +12,7 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
 
 if TYPE_CHECKING:
-    from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
+    from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
     from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 
 
@@ -31,16 +31,16 @@ def _modification_dict(modification: ModificacionChat | None) -> dict[str, objec
     }
 
 
-async def sse_regeneration_response(
+async def sse_chat_response(
     content: str,
-    document_id: str,
     document_type: SpecPhase,
-    pid: ProjectId | None,
+    pid: ProjectId,
     context_id: str | None,
-    regen_uc: ProcessChatRegenerationUseCase,
+    context: object,
+    chat_uc: ProcessChatMessageUseCase,
     validate_uc: ValidatePhaseContextUseCase,
 ) -> StreamingResponse:
-    from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationInput
+    from kosmo.application.chat.process_chat_message import ProcessChatMessageInput
     from kosmo.application.chat.validate_phase_context import (
         ValidatePhaseContextInput,
     )
@@ -52,12 +52,12 @@ async def sse_regeneration_response(
             detail=validation.redirect_message or "Mensaje fuera de fase",
         )
 
-    output = await regen_uc.execute(
-        ProcessChatRegenerationInput(
+    output = await chat_uc.execute(
+        ProcessChatMessageInput(
             content=content,
-            document_id=document_id,
-            document_type=document_type,
             project_id=pid,
+            phase=document_type,
+            context=context,
             context_id=context_id,
         )
     )
@@ -68,8 +68,21 @@ async def sse_regeneration_response(
         "id": str(msg.id),
         "role": "assistant",
         "content": msg.content,
-        "modification": _modification_dict(output.modification),
-        "consistency": output.downstream_impact,
+        "suggestions": [
+            {
+                "id": sc.id,
+                "section": sc.section,
+                "description": sc.description,
+                "diff_before": sc.diff.before,
+                "diff_after": sc.diff.after,
+                "rationale": sc.rationale,
+                "applied": sc.applied,
+                "not_applied_reason": sc.not_applied_reason,
+            }
+            for sc in msg.suggested_changes
+        ],
+        "modification": _modification_dict(msg.modification),
+        "consistency": None,
         "timestamp": msg.timestamp.isoformat(),
     }
 

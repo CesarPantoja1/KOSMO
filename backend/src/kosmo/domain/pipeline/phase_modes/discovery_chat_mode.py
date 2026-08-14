@@ -6,6 +6,8 @@ from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 from kosmo.domain.pipeline.prompts.shared_rules import (
     CONVERSATIONAL_NULL_RULE,
     DIFF_SEMANTICS_RULE,
+    NO_EM_DASH_RULE,
+    SERVER_APPLIES_RULE,
     formatting_rules,
 )
 
@@ -26,19 +28,21 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "protocolos, arquitectura, deployment, Docker, cloud, SQL, HTTP, REST, GraphQL, "
     "backend, frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes, AWS, GCP, "
     "Azure, plataforma, sistema informatico, aplicacion web.\n"
-    "- No uses formato de historia de usuario (Como... quiero... para...).\n"
-    "- Si el usuario te pide un cambio que YA existe como pendiente en el plan o "
-    "que ya fue aplicado al documento, indicale que ese cambio ya esta registrado y "
-    "NO generes una nueva sugerencia. Responde con change_suggestion en null.\n"
+    + NO_EM_DASH_RULE
+    + "- No uses formato de historia de usuario (Como... quiero... para...).\n"
+    "- Si el usuario te pide un cambio que ya fue aplicado al documento, indicale que ese "
+    "cambio ya esta registrado y NO generes una nueva sugerencia. Responde con "
+    "change_suggestion en null.\n"
     "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud fuera del nivel de "
     "negocio (ej. quiere un endpoint, un requisito, una caracteristica), reformulala "
     "en lenguaje de Descubrimiento. Por ejemplo: 'agrega un endpoint de pagos' -> "
     "'incluir la capacidad de procesar pagos en el Alcance'. 'crea la caracteristica "
     "de login' -> 'identificar la necesidad de autenticacion de usuarios en los "
     "Actores y el Alcance'. Solo si la solicitud es puramente tecnica e irreconciliable "
-    "(ej. 'configura la base de datos'), indica amablemente que ese cambio corresponde "
-    "al chat de Caracteristicas o Requisitos.\n"
-    "- NUNCA categorices una nueva funcionalidad o regla de negocio automaticamente "
+    "(ej. 'configura la base de datos'), indica amablemente que ese cambio debe realizarse "
+    "directamente en el documento de Caracteristicas o de Requisitos.\n"
+    + SERVER_APPLIES_RULE
+    + "- NUNCA categorices una nueva funcionalidad o regla de negocio automaticamente "
     "como 'Futuro potencial' a menos que el usuario indique explicitamente que es "
     "para una version futura o que esta fuera del alcance actual. Si el usuario "
     "pide agregarlo, asume que es para el alcance actual.\n\n"

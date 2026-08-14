@@ -5,9 +5,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
-from kosmo.application.chat.process_chat_regeneration import (
-    ProcessChatRegenerationInput,
-    ProcessChatRegenerationUseCase,
+from kosmo.application.chat.process_chat_message import (
+    ProcessChatMessageInput,
+    ProcessChatMessageUseCase,
 )
 from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextInput,
@@ -26,6 +26,7 @@ from kosmo.application.discovery import (
     SaveDiscoveryUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
@@ -33,6 +34,7 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
@@ -68,8 +70,12 @@ def _refine_discovery(request: Request) -> RefineDiscoveryUseCase:
     return get_container(request).discovery.refine_discovery
 
 
-def _chat_regeneration_uc(request: Request) -> ProcessChatRegenerationUseCase:
-    return get_container(request).pipeline.process_chat_regeneration
+def _chat_uc(request: Request) -> ProcessChatMessageUseCase:
+    return get_container(request).pipeline.process_chat_message
+
+
+def _context_builder(request: Request) -> ContextBuilder:
+    return get_container(request).pipeline.context_builder
 
 
 def _validate_phase_context(request: Request) -> ValidatePhaseContextUseCase:
@@ -287,8 +293,9 @@ async def process_chat_message(
     project_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
-    regen_uc: Annotated[ProcessChatRegenerationUseCase, Depends(_chat_regeneration_uc)],
+    chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
+    context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> ChatResponse:
     validation = await validate_uc.execute(
         ValidatePhaseContextInput(
@@ -304,12 +311,13 @@ async def process_chat_message(
         )
 
     try:
-        output = await regen_uc.execute(
-            ProcessChatRegenerationInput(
+        ctx = await context_builder.build_discovery_chat_context(ProjectId(project_id))
+        output = await chat_uc.execute(
+            ProcessChatMessageInput(
                 content=payload.content,
-                document_id=project_id,
-                document_type=SpecPhase.DESCUBRIMIENTO,
                 project_id=ProjectId(project_id),
+                phase=SpecPhase.DESCUBRIMIENTO,
+                context=ctx,
                 context_id=None,
                 instance=f"/api/v1/projects/{project_id}/discovery/chat",
             )
@@ -324,13 +332,18 @@ async def process_chat_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.problem.detail,
         ) from exc
+    except PhaseTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=exc.problem.detail,
+        ) from exc
     except LLMInvocationError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=exc.problem.detail,
         ) from exc
 
-    return ChatResponse.from_regeneration(output)
+    return ChatResponse.from_message(output)
 
 
 @router.get(
@@ -389,16 +402,18 @@ async def stream_chat_message(
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
-    regen_uc: Annotated[ProcessChatRegenerationUseCase, Depends(_chat_regeneration_uc)],
+    chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
+    context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> StreamingResponse:
-    from kosmo.infrastructure.api.async_generation import sse_regeneration_response
+    from kosmo.infrastructure.api.async_generation import sse_chat_response
 
-    return await sse_regeneration_response(
+    ctx = await context_builder.build_discovery_chat_context(ProjectId(project_id))
+    return await sse_chat_response(
         content=payload.content,
-        document_id=project_id,
         document_type=SpecPhase.DESCUBRIMIENTO,
         pid=ProjectId(project_id),
         context_id=None,
-        regen_uc=regen_uc,
+        context=ctx,
+        chat_uc=chat_uc,
         validate_uc=validate_uc,
     )

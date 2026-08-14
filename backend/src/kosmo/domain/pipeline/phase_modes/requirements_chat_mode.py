@@ -6,6 +6,8 @@ from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
 from kosmo.domain.pipeline.prompts.shared_rules import (
     CONVERSATIONAL_NULL_RULE,
     DIFF_SEMANTICS_RULE,
+    NO_EM_DASH_RULE,
+    SERVER_APPLIES_RULE,
     formatting_rules,
     phase_isolation_rule,
 )
@@ -24,9 +26,9 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     + formatting_rules("requisitos, atributos y conceptos")
     + "- UNA SOLA INTERACCIÓN: responde en un único mensaje. Si el usuario pide un cambio, "
     "incluye el change_suggestion junto con tu respuesta conversacional.\n"
-    "- El servidor evita duplicados activos al agregarla al plan; no afirmes que un cambio "
-    "fue aplicado si no recibes esa confirmación explícita.\n"
-    "- NIVEL DE SOFTWARE. PROHIBIDO: API, base de datos, microservicio, endpoint, servidor, "
+    + SERVER_APPLIES_RULE
+    + NO_EM_DASH_RULE
+    + "- NIVEL DE SOFTWARE. PROHIBIDO: API, base de datos, microservicio, endpoint, servidor, "
     "lenguaje de programación, framework, protocolo, arquitectura, deployment, Docker, cloud, "
     "SQL, HTTP, REST, GraphQL, backend, frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes.\n"
     "- SIN TERMINOLOGIA DE NEGOCIO ABSTRACTA. PROHIBIDO: propuesta de valor, modelo de negocio, "
@@ -36,7 +38,8 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     + phase_isolation_rule()
     + "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia de negocio o de "
     "usuario, reformúlala en lenguaje de requisitos de software. Solo si la solicitud es "
-    "puramente ajena al nivel de software, indica amablemente que corresponde a otra fase.\n\n"
+    "puramente ajena al nivel de software, indica amablemente que debe modificar directamente "
+    "el documento de la fase correspondiente.\n\n"
     "COMPORTAMIENTO:\n"
     "- Si el usuario pide una modificación al requisito actual, genera una o varias sugerencias de "
     "cambio en el campo change_suggestions (lista). Cada sugerencia representa una modificación "

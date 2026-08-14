@@ -155,6 +155,9 @@ def build_pipeline_components(
         agent=agent,
         skill_registry=skill_registry,
         project_repo=repos.projects,
+        document_repo=repos.documents,
+        feature_repo=repos.features,
+        requirement_repo=repos.requirements,
     )
 
     process_chat_modification = ProcessChatModificationUseCase(
