@@ -407,6 +407,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/CursorBefore"
+        - $ref: "#/components/parameters/SessionIdQuery"
       responses:
         "200":
           description: Historial del chat
@@ -417,41 +418,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/projects/{project_id}/discovery/chat/undo:
-    post:
-      x-status: planned
-      tags: [discovery]
-      summary: Deshacer la ultima modificacion del chat de Descubrimiento
-      description: >-
-        Restaura la version previa al cambio (undo_version_id devuelto en la
-        modificacion). El documento queda como estaba antes del mensaje del chat.
-      operationId: discovery_chat_undo
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UndoChatRequest"
-      responses:
-        "200":
-          description: Documento restaurado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DiscoveryResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/projects/{project_id}/discovery/chat/stream:
     post:
       tags: [discovery]
       summary: Chat de Descubrimiento con streaming SSE
       description: >-
-        Genera la respuesta en tiempo real (SSE). Emite eventos token por
-        fragmento y, al final, un evento message con la respuesta completa y
-        la modificacion aplicada o la redireccion.
+        Genera la respuesta en tiempo real (SSE). Emite un evento start, luego
+        eventos chunk con los fragmentos de texto, y al final un evento message
+        con la respuesta completa, las cards de cambio aplicadas y la modificacion.
       operationId: discovery_chat_stream
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -617,33 +591,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/projects/{project_id}/features/{feature_id}/propagate:
-    post:
-      tags: [features]
-      summary: Propagar cambios de caracteristica (downstream)
-      description: >-
-        Evalua el impacto de los cambios aplicados en la caracteristica hacia
-        las fases a la derecha (Requisitos, Modelo) y devuelve las fases afectadas.
-      operationId: features_propagate
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/FeatureId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PropagateFeatureChangesRequest"
-      responses:
-        "200":
-          description: Fases afectadas downstream
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PhaseNotificationList"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/projects/{project_id}/features/{feature_id}/consistency/check:
     post:
       tags: [features]
@@ -715,6 +662,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/FeatureId"
         - $ref: "#/components/parameters/CursorBefore"
+        - $ref: "#/components/parameters/SessionIdQuery"
       responses:
         "200":
           description: Historial del chat
@@ -725,41 +673,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/features/{feature_id}/chat/undo:
-    post:
-      x-status: planned
-      tags: [features]
-      summary: Deshacer la ultima modificacion del chat de Caracteristicas
-      description: >-
-        Restaura el valor previo (titulo, descripcion u origen) usando el
-        undo_version_id devuelto en la modificacion.
-      operationId: feature_chat_undo
-      parameters:
-        - $ref: "#/components/parameters/FeatureId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UndoChatRequest"
-      responses:
-        "200":
-          description: Caracteristica restaurada
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FeatureResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/features/{feature_id}/chat/stream:
     post:
       tags: [features]
       summary: Chat de Caracteristicas con streaming SSE
       description: >-
-        Genera la respuesta en tiempo real (SSE). Emite eventos token por
-        fragmento y, al final, un evento message con la modificacion aplicada
-        o la redireccion.
+        Genera la respuesta en tiempo real (SSE). Emite un evento start, luego
+        eventos chunk con los fragmentos de texto, y al final un evento message
+        con las cards de cambio aplicadas.
       operationId: feature_chat_stream
       parameters:
         - $ref: "#/components/parameters/FeatureId"
@@ -891,32 +812,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
 
-  /api/v1/features/{feature_id}/requirements/propagate:
-    post:
-      tags: [requirements]
-      summary: Propagar cambios de requisitos (downstream)
-      description: >-
-        Evalua el impacto de los cambios aplicados en los requisitos hacia la
-        fase a la derecha (Modelo) y devuelve las fases afectadas.
-      operationId: requirements_propagate
-      parameters:
-        - $ref: "#/components/parameters/FeatureId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PropagateRequirementsRequest"
-      responses:
-        "200":
-          description: Fases afectadas downstream
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PhaseNotificationList"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   # ══════════════════════════════ REQUIREMENT CHAT ══════════════════════════════
 
   /api/v1/features/{feature_id}/requirements/chat:
@@ -966,6 +861,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/FeatureId"
         - $ref: "#/components/parameters/CursorBefore"
+        - $ref: "#/components/parameters/SessionIdQuery"
       responses:
         "200":
           description: Historial del chat
@@ -976,41 +872,14 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/features/{feature_id}/requirements/chat/undo:
-    post:
-      x-status: planned
-      tags: [requirements]
-      summary: Deshacer la ultima modificacion del chat de Requisitos
-      description: >-
-        Restaura la version previa al cambio (undo_version_id devuelto en la
-        modificacion). El documento de requisitos queda como estaba antes.
-      operationId: requirement_chat_undo
-      parameters:
-        - $ref: "#/components/parameters/FeatureId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UndoChatRequest"
-      responses:
-        "200":
-          description: Documento de requisitos restaurado
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RequirementsDocumentResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/features/{feature_id}/requirements/chat/stream:
     post:
       tags: [requirements]
       summary: Chat de Requisitos con streaming SSE
       description: >-
-        Genera la respuesta en tiempo real (SSE). Emite eventos token por
-        fragmento y, al final, un evento message con la modificacion aplicada
-        o la redireccion.
+        Genera la respuesta en tiempo real (SSE). Emite un evento start, luego
+        eventos chunk con los fragmentos de texto, y al final un evento message
+        con las cards de cambio aplicadas.
       operationId: requirement_chat_stream
       parameters:
         - $ref: "#/components/parameters/FeatureId"
@@ -1207,6 +1076,301 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ══════════════════════════════ CONSISTENCY GATE (fresca, con snapshot hash) ══════════════════════════════
+
+  /api/v1/projects/{project_id}/consistency/status:
+    get:
+      tags: [consistency]
+      summary: Estado de consistencia pendiente por fase
+      description: >-
+        Badges por fase calculados sobre las evaluaciones no resueltas
+        (deterministico, sin LLM). El frontend lo usa para el gate estricto.
+      operationId: consistency_status
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Conteos por fase
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsistencyStatusView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/consistency/review:
+    get:
+      tags: [consistency]
+      summary: Vista de revision de consistencia por fase (gate)
+      description: >-
+        Cards frescas por artefacto destino. Las sugerencias cuya entrada cambio
+        se descartan automaticamente y no se muestran.
+      operationId: consistency_review
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: target_phase
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [features, requirements, model]
+          description: Fase destino a revisar
+      responses:
+        "200":
+          description: Cards agrupadas por artefacto destino
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsistencyReviewView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/consistency/evaluations/{evaluation_id}/apply:
+    post:
+      tags: [consistency]
+      summary: Aplicar una sugerencia de consistencia
+      description: >-
+        Aplica con guardrail de frescura: si la entrada cambio desde la
+        evaluacion, devuelve 409 y re-evalua automaticamente. Nunca escribe
+        a ciegas.
+      operationId: consistency_apply_evaluation
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: evaluation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la evaluacion (cev_)
+      responses:
+        "200":
+          description: Sugerencia aplicada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyEvaluationResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: La sugerencia ya no aplica al estado actual
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/consistency/evaluations/{evaluation_id}/discard:
+    post:
+      tags: [consistency]
+      summary: Descartar una sugerencia de consistencia
+      description: >-
+        Descartada para este snapshot: si la fuente vuelve a cambiar, aparece
+        una sugerencia nueva (dato derivado nuevo).
+      operationId: consistency_discard_evaluation
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: evaluation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la evaluacion (cev_)
+      responses:
+        "200":
+          description: Sugerencia descartada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyEvaluationResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: La sugerencia ya fue procesada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/projects/{project_id}/consistency/review/bulk:
+    post:
+      tags: [consistency]
+      summary: Resolver en lote las sugerencias de una fase
+      description: >-
+        Aplica o descarta todas las sugerencias frescas de la fase destino en
+        un solo clic (resolucion del gate estricto).
+      operationId: consistency_bulk_resolve
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkResolveRequestView"
+      responses:
+        "200":
+          description: Resultado del lote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resolved:
+                    type: integer
+                  skipped:
+                    type: integer
+                required: [resolved, skipped]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/consistency/activity:
+    get:
+      tags: [consistency]
+      summary: Feed de actividad de consistencia (solo lectura)
+      description: Historial de sugerencias aplicadas o descartadas con su origen.
+      operationId: consistency_activity
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Entradas de actividad
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsistencyActivityView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ══════════════════════════════ CHAT SESSIONS ══════════════════════════════
+
+  /api/v1/projects/{project_id}/chat-sessions:
+    get:
+      tags: [chat-sessions]
+      summary: Listar sesiones de chat de una fase
+      description: >-
+        Hilos de conversacion persistidos de una fase, del mas reciente al mas
+        antiguo, con conteo de mensajes y fecha del ultimo.
+      operationId: chat_sessions_list
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: phase
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [discovery, features, requirements, model]
+        - name: context_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Contexto opcional (id de caracteristica)
+      responses:
+        "200":
+          description: Lista de sesiones
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSessionListView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [chat-sessions]
+      summary: Crear una sesion de chat nueva con contexto limpio
+      description: >-
+        Crea un hilo nuevo para la fase indicada. Las sesiones anteriores se
+        conservan y pueden listarse y consultarse por su id.
+      operationId: chat_sessions_create
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChatSessionRequestView"
+      responses:
+        "201":
+          description: Sesion creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSessionView"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ══════════════════════════════ DOCUMENTS ══════════════════════════════
+
+  /api/v1/documents/modify-direct:
+    post:
+      tags: [documents]
+      summary: Modificar documento directamente sin fase de plan
+      description: >-
+        Recibe una instruccion textual y modifica directamente el documento
+        indicado. La IA interpreta la intencion, identifica la seccion afectada
+        y aplica el cambio.
+      operationId: documents_modify_direct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentModifyRequestView"
+      responses:
+        "200":
+          description: Documento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentModifyResponseView"
+        "400":
+          description: Instruccion ambigua o invalida
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Error al invocar el LLM
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/documents/revert:
+    post:
+      tags: [documents]
+      summary: Revertir a una version anterior del documento
+      description: Restaura una version previa del documento de descubrimiento.
+      operationId: documents_revert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevertDocumentRequest"
+      responses:
+        "200":
+          description: Documento restaurado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  version_id:
+                    type: string
+                required: [status, version_id]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ══════════════════════════════ SCHEMAS ══════════════════════════════
 
   /api/v1/schemas:
@@ -1389,6 +1553,13 @@ components:
       schema:
         type: string
       description: Cursor ISO-8601 para paginacion hacia atras
+    SessionIdQuery:
+      name: session_id
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Hilo de conversacion (cht_). Si se omite, contexto legacy de la fase.
 
   responses:
     NotFound:
@@ -1743,17 +1914,6 @@ components:
           description: Presente solo si is_saved=false por inconsistencia
       required: [is_saved, origin, is_consistent]
 
-    PropagateFeatureChangesRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        applied_change_ids:
-          type: array
-          items:
-            type: string
-          default: []
-      required: [applied_change_ids]
-
     CheckConsistencyRequestView:
       type: object
       additionalProperties: false
@@ -1778,29 +1938,6 @@ components:
 
     # ── Chat (aplicacion instantanea, sin plan) ──
 
-    PhaseNotificationView:
-      type: object
-      properties:
-        phase:
-          type: string
-          description: Fase afectada
-        affected_count:
-          type: integer
-        affected_ids:
-          type: array
-          items:
-            type: string
-      required: [phase, affected_count, affected_ids]
-
-    PhaseNotificationList:
-      type: object
-      properties:
-        affected_phases:
-          type: array
-          items:
-            $ref: "#/components/schemas/PhaseNotificationView"
-      required: [affected_phases]
-
     SendChatRequest:
       type: object
       additionalProperties: false
@@ -1809,15 +1946,20 @@ components:
           type: string
           minLength: 1
           maxLength: 4000
+        session_id:
+          type: string
+          nullable: true
+          description: >-
+            Hilo de conversacion (cht_). Si es null, se usa el contexto actual
+            de la fase (comportamiento legacy).
       required: [content]
 
     ModificationResult:
       type: object
       description: >-
-        Resultado de la modificacion aplicada por el chat. Incluye el diff
-        aplicado (before/after) para que el frontend ofrezca aceptar (no hacer
-        nada, ya esta aplicado) o deshacer via el endpoint /chat/undo con el
-        undo_version_id.
+        Resultado de la modificacion aplicada por el chat. El cambio ya esta
+        aplicado; para deshacerlo se edita de nuevo por chat o se usa
+        POST /documents/revert (versionado del documento).
       properties:
         applied:
           type: boolean
@@ -1841,26 +1983,11 @@ components:
           type: string
           nullable: true
           description: Contenido posterior de la seccion o atributo modificado
-        undo_version_id:
-          type: string
-          nullable: true
-          description: >-
-            Version previa al cambio. Se envia a POST .../chat/undo para
-            deshacer la modificacion. Presente solo si applied=true.
         clarification_message:
           type: string
           nullable: true
           description: Presente cuando applied=false (instruccion ambigua)
       required: [applied]
-
-    UndoChatRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        version_id:
-          type: string
-          description: undo_version_id devuelto por la modificacion a deshacer
-      required: [version_id]
 
     RedirectInfo:
       type: object
@@ -1887,18 +2014,51 @@ components:
         created_at:
           type: string
           format: date-time
+        change_suggestions:
+          type: array
+          nullable: true
+          description: Cards de cambio generadas por la IA (visualizacion, no interactivas)
+          items:
+            $ref: "#/components/schemas/ChangeSuggestionView"
         modification:
           $ref: "#/components/schemas/ModificationResult"
           description: Modificacion aplicada (solo mensajes del asistente)
       required: [id, role, content, created_at]
 
+    ChangeSuggestionView:
+      type: object
+      description: Card de cambio aplicada por el chat
+      properties:
+        id:
+          type: string
+        section:
+          type: string
+          description: Seccion o atributo afectado
+        description:
+          type: string
+        diff_before:
+          type: string
+        diff_after:
+          type: string
+        rationale:
+          type: string
+          nullable: true
+        applied:
+          type: boolean
+          description: True si el servidor aplico el cambio al instante
+        not_applied_reason:
+          type: string
+          nullable: true
+          description: Razon por la que no se pudo aplicar (solo si applied=false)
+      required: [id, section, description, diff_before, diff_after, applied]
+
     ChatResponse:
       type: object
       description: >-
-        Respuesta del chat. Contiene el mensaje y, alternativamente, la
-        modificacion aplicada o la redireccion a otra fase. Cuando se aplica
-        una modificacion, incluye los impactos de consistencia detectados en
-        las fases a la derecha (trazabilidad descendente).
+        Respuesta del chat. Contiene el mensaje con las cards de cambio aplicadas
+        (visualizacion) y, alternativamente, la modificacion aplicada o la
+        redireccion a otra fase. La consistencia downstream se resuelve aparte
+        via /consistency/status y /consistency/review (gate por fase).
       properties:
         message:
           $ref: "#/components/schemas/ChatMessageView"
@@ -1908,15 +2068,6 @@ components:
         redirect:
           $ref: "#/components/schemas/RedirectInfo"
           description: Presente si el cambio pertenece a otra fase
-        consistency:
-          type: array
-          nullable: true
-          description: >-
-            Impactos de consistencia en las fases a la derecha
-            (Descubrimiento -> Caracteristicas -> Requisitos -> Modelo).
-            Solo presente cuando applied=true.
-          items:
-            $ref: "#/components/schemas/ImpactItemView"
       required: [message]
 
     ChatHistoryResponse:
@@ -1941,27 +2092,281 @@ components:
     ChatStreamEvent:
       oneOf:
         - type: object
+          description: Inicio del stream
+          properties:
+            type:
+              type: string
+              const: start
+          required: [type]
+        - type: object
           description: Fragmento de texto en tiempo real
           properties:
             type:
               type: string
-              const: token
+              const: chunk
             content:
               type: string
           required: [type, content]
         - type: object
-          description: Mensaje final con modificacion aplicada o redireccion
+          description: Mensaje final con las cards de cambio aplicadas
           properties:
             type:
               type: string
               const: message
+            id:
+              type: string
+            role:
+              type: string
             content:
               type: string
+            suggestions:
+              type: array
+              items:
+                $ref: "#/components/schemas/ChangeSuggestionView"
             modification:
               $ref: "#/components/schemas/ModificationResult"
-            redirect:
-              $ref: "#/components/schemas/RedirectInfo"
-          required: [type, content]
+            timestamp:
+              type: string
+              format: date-time
+          required: [type, id, role, content]
+
+    # ── Chat sessions ──
+
+    CreateChatSessionRequestView:
+      type: object
+      additionalProperties: false
+      properties:
+        phase:
+          type: string
+          enum: [discovery, features, requirements, model]
+        context_id:
+          type: string
+          nullable: true
+          description: id de caracteristica para features/requirements; null para discovery
+      required: [phase]
+
+    ChatSessionView:
+      type: object
+      properties:
+        id:
+          type: string
+        session_id:
+          type: string
+          description: Alias de id (cht_)
+        phase:
+          type: string
+        context_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        message_count:
+          type: integer
+          default: 0
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+      required: [id, phase, created_at]
+
+    ChatSessionListView:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatSessionView"
+      required: [sessions]
+
+    # ── Consistency gate ──
+
+    ConsistencyPhaseCounts:
+      type: object
+      properties:
+        pending:
+          type: integer
+          description: Sugerencias completadas sin resolver
+        evaluating:
+          type: integer
+          description: Evaluaciones en curso
+        failed:
+          type: integer
+          description: Analisis fallidos (reintentables)
+      required: [pending, evaluating, failed]
+
+    ConsistencyStatusView:
+      type: object
+      properties:
+        phases:
+          type: object
+          properties:
+            features:
+              $ref: "#/components/schemas/ConsistencyPhaseCounts"
+            requirements:
+              $ref: "#/components/schemas/ConsistencyPhaseCounts"
+            model:
+              $ref: "#/components/schemas/ConsistencyPhaseCounts"
+          required: [features, requirements, model]
+      required: [phases]
+
+    ReviewCardDiff:
+      type: object
+      properties:
+        field:
+          type: string
+        before:
+          type: string
+        after:
+          type: string
+      required: [field, before, after]
+
+    ReviewCardView:
+      type: object
+      description: >-
+        Sugerencia fresca (validada contra el estado actual). Agrupar por
+        target_artifact_id en la UI; cada card muestra su origen.
+      properties:
+        evaluation_id:
+          type: string
+        source_phase:
+          type: string
+        target_phase:
+          type: string
+        target_artifact_id:
+          type: string
+        artifact_type:
+          type: string
+        target_display_id:
+          type: string
+        target_title:
+          type: string
+        section:
+          type: string
+        rationale:
+          type: string
+        action:
+          type: string
+          enum: [update, delete, keep, create]
+        diff:
+          $ref: "#/components/schemas/ReviewCardDiff"
+        status:
+          type: string
+          enum: [evaluating, completed, failed]
+        failure_reason:
+          type: string
+          nullable: true
+      required: [evaluation_id, source_phase, target_phase, target_artifact_id, artifact_type, status]
+
+    ConsistencyReviewView:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewCardView"
+      required: [cards]
+
+    BulkResolveRequestView:
+      type: object
+      additionalProperties: false
+      properties:
+        action:
+          type: string
+          enum: [apply, discard]
+        target_phase:
+          type: string
+          enum: [features, requirements, model]
+      required: [action, target_phase]
+
+    ApplyEvaluationResult:
+      type: object
+      properties:
+        evaluation_id:
+          type: string
+        applied:
+          type: boolean
+        discarded:
+          type: boolean
+        target_id:
+          type: string
+        project_id:
+          type: string
+      required: [evaluation_id, project_id]
+
+    ActivityItemView:
+      type: object
+      properties:
+        evaluation_id:
+          type: string
+        status:
+          type: string
+          enum: [applied, discarded]
+        source_phase:
+          type: string
+        target_phase:
+          type: string
+        target_artifact_id:
+          type: string
+        target_title:
+          type: string
+        failure_reason:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required: [evaluation_id, status, source_phase, target_phase, target_artifact_id]
+
+    ConsistencyActivityView:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItemView"
+      required: [items]
+
+    # ── Documents ──
+
+    DocumentModifyRequestView:
+      type: object
+      additionalProperties: false
+      properties:
+        document_type:
+          type: string
+          enum: [discovery, features, requirements, model]
+        document_id:
+          type: string
+        instruction:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required: [document_type, document_id, instruction]
+
+    DocumentModifyResponseView:
+      type: object
+      properties:
+        document_id:
+          type: string
+        content:
+          type: string
+        highlighted_section:
+          type: string
+          nullable: true
+        message:
+          type: string
+      required: [document_id, content, message]
+
+    RevertDocumentRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+        version_id:
+          type: string
+      required: [project_id, version_id]
 
     # ── Requirements ──
 
@@ -2054,19 +2459,6 @@ components:
         total:
           type: integer
       required: [feature_id, feature_number, document_markdown, total]
-
-    PropagateRequirementsRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        project_id:
-          type: string
-        applied_change_ids:
-          type: array
-          items:
-            type: string
-          default: []
-      required: [project_id, applied_change_ids]
 
     # ── Modelo ──
 
