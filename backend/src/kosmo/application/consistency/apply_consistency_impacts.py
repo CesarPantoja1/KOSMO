@@ -109,6 +109,9 @@ class ApplyConsistencyImpactsUseCase:
         before: str,
         after: str,
     ) -> str | None:
+        # Row-lock del artefacto destino: el diff se computa contra el contenido
+        # leido bajo lock, por lo que dos applies concurrentes se serializan y
+        # el segundo falla deterministamente si el contenido ya cambio (D2).
         feature_id = FeatureId(target_id)
 
         if artifact_type == "EARSRequirement":
@@ -134,7 +137,7 @@ class ApplyConsistencyImpactsUseCase:
         return f"Tipo de artefacto desconocido: {artifact_type}"
 
     async def _update_discovery(self, uow: UnitOfWork, project_id: ProjectId, before: str, after: str) -> str | None:
-        document = await uow.documents.get_discovery(project_id)
+        document = await uow.documents.get_discovery(project_id, for_update=True)
         if document is None:
             return "El documento de Descubrimiento no existe"
 
@@ -157,7 +160,7 @@ class ApplyConsistencyImpactsUseCase:
         before: str,
         after: str,
     ) -> str | None:
-        markdown = await uow.requirements.by_feature_id(feature_id)
+        markdown = await uow.requirements.by_feature_id(feature_id, for_update=True)
         if markdown is None:
             return "El documento de requisitos no existe"
 
@@ -192,7 +195,7 @@ class ApplyConsistencyImpactsUseCase:
     async def _update_feature(
         self, uow: UnitOfWork, feature_id: FeatureId, field: str, before: str, after: str
     ) -> str | None:
-        feature = await uow.features.by_id(feature_id)
+        feature = await uow.features.by_id(feature_id, for_update=True)
         if feature is None:
             return "La caracteristica no existe"
 
@@ -213,7 +216,7 @@ class ApplyConsistencyImpactsUseCase:
         return None
 
     async def _delete_feature(self, uow: UnitOfWork, feature_id: FeatureId) -> str | None:
-        feature = await uow.features.by_id(feature_id)
+        feature = await uow.features.by_id(feature_id, for_update=True)
         if feature is None:
             return "La caracteristica no existe"
 
@@ -236,7 +239,7 @@ class ApplyConsistencyImpactsUseCase:
         return None
 
     async def _update_diagram(self, uow: UnitOfWork, feature_id: FeatureId, before: str, after: str) -> str | None:
-        diagram = await uow.diagrams.by_feature_id(feature_id)
+        diagram = await uow.diagrams.by_feature_id(feature_id, for_update=True)
         if diagram is None:
             return "El diagrama no existe"
 

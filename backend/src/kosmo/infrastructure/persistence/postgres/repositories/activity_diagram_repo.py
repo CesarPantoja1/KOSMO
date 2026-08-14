@@ -60,9 +60,16 @@ class SqlAlchemyActivityDiagramRepository(ActivityDiagramRepository):
             await self._commit(session)
             return diagram
 
-    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
+    async def by_feature_id(
+        self,
+        feature_id: FeatureId,
+        *,
+        for_update: bool = False,
+    ) -> DiagramaActividad | None:
         async with self._session_ctx() as session:
             stmt = select(ActivityDiagramModel).where(ActivityDiagramModel.feature_id == str(feature_id))
+            if for_update:
+                stmt = stmt.with_for_update()
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
 

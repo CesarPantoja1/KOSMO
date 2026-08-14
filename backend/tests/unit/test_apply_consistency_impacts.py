@@ -254,3 +254,120 @@ async def test_apply_failed_impact_does_not_block_subsequent_impacts() -> None:
     doc = await document_repo.get_discovery(project.id)
     assert doc is not None
     assert "Contenido de alcance actualizado." in document_to_markdown(doc)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_apply_locks_discovery_document_row() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    document_repo.discovery_docs[str(project.id)] = markdown_to_document(_DEFAULT_MARKDOWN)
+    uc = _make_uc(project_repo, document_repo)
+
+    # Act
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "DiscoveryDocument",
+                "target_id": str(project.id),
+                "action": "update",
+                "field": "content",
+                "before": "Contenido de alcance original.",
+                "after": "Contenido de alcance actualizado.",
+            }
+        ],
+    )
+
+    # Assert — la lectura del artefacto destino se hace con lock
+    assert len(result.applied) == 1
+    assert str(project.id) in document_repo.locked_project_ids
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_apply_locks_feature_row() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature(project.id))
+    uc = _make_uc(project_repo, document_repo, feature_repo=feature_repo)
+
+    # Act
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "Feature",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "description",
+                "before": "Descripción original.",
+                "after": "Descripción actualizada.",
+            }
+        ],
+    )
+
+    # Assert
+    assert len(result.applied) == 1
+    assert "feat_01" in feature_repo.locked_feature_ids
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_apply_locks_requirement_and_diagram_rows() -> None:
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature(project.id))
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(
+        FeatureId("feat_01"),
+        "### REQ-1.1 Procesamiento de pagos\n\nEl sistema debe procesar pagos.\n",
+    )
+    diagram_repo = InMemoryActivityDiagramRepository()
+    uc = _make_uc(
+        project_repo,
+        document_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+    )
+
+    # Act — dos impactos, cada uno sobre su artefacto destino
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "EARSRequirement",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "content",
+                "before": "El sistema debe procesar pagos.",
+                "after": "El sistema debe procesar pagos con tarjeta.",
+            },
+            {
+                "artifact_type": "ActivityDiagram",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "estructura UML",
+                "before": "@startuml",
+                "after": "@enduml",
+            },
+        ],
+    )
+
+    # Assert — requisitos aplicado; diagrama sin datos existentes falla con lock registrado
+    assert len(result.applied) == 1
+    assert len(result.failed) == 1
+    assert "feat_01" in requirement_repo.locked_feature_ids
+    assert "feat_01" in diagram_repo.locked_feature_ids

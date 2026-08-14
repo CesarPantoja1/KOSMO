@@ -63,8 +63,16 @@ class InMemoryDocumentRepository:
         self.versions: dict[str, str] = {}
         self._latest_version: dict[tuple[str, str], str] = {}
         self._version_counter = 0
+        self.locked_project_ids: list[str] = []
 
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
+    async def get_discovery(
+        self,
+        project_id: ProjectId,
+        *,
+        for_update: bool = False,
+    ) -> RichTextDocument | None:
+        if for_update:
+            self.locked_project_ids.append(str(project_id))
         return self.discovery_docs.get(str(project_id))
 
     async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
@@ -102,8 +110,11 @@ class InMemoryDocumentRepository:
 class InMemoryFeatureRepository:
     def __init__(self) -> None:
         self.features: dict[str, Feature] = {}
+        self.locked_feature_ids: list[str] = []
 
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
+    async def by_id(self, feature_id: FeatureId, *, for_update: bool = False) -> Feature | None:
+        if for_update:
+            self.locked_feature_ids.append(str(feature_id))
         return self.features.get(str(feature_id))
 
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
@@ -132,23 +143,34 @@ class InMemoryFeatureRepository:
 class InMemoryRequirementRepository:
     def __init__(self) -> None:
         self._requirements: dict[str, str] = {}
+        self.locked_feature_ids: list[str] = []
 
     async def save(self, feature_id: FeatureId, markdown: str) -> None:
         self._requirements[str(feature_id)] = markdown
 
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
+    async def by_feature_id(self, feature_id: FeatureId, *, for_update: bool = False) -> str | None:
+        if for_update:
+            self.locked_feature_ids.append(str(feature_id))
         return self._requirements.get(str(feature_id))
 
 
 class InMemoryActivityDiagramRepository:
     def __init__(self) -> None:
         self._diagrams: dict[str, DiagramaActividad] = {}
+        self.locked_feature_ids: list[str] = []
 
     async def save(self, diagram: DiagramaActividad) -> DiagramaActividad:
         self._diagrams[str(diagram.feature_id)] = diagram
         return diagram
 
-    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
+    async def by_feature_id(
+        self,
+        feature_id: FeatureId,
+        *,
+        for_update: bool = False,
+    ) -> DiagramaActividad | None:
+        if for_update:
+            self.locked_feature_ids.append(str(feature_id))
         return self._diagrams.get(str(feature_id))
 
     async def exists(self, feature_id: FeatureId) -> bool:

@@ -37,9 +37,9 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
         if self._session is None:
             await session.commit()
 
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
+    async def by_id(self, feature_id: FeatureId, *, for_update: bool = False) -> Feature | None:
         async with self._session_ctx() as session:
-            model = await session.get(FeatureModel, str(feature_id))
+            model = await session.get(FeatureModel, str(feature_id), with_for_update=for_update)
             if model is None:
                 return None
             return self._to_entity(model)

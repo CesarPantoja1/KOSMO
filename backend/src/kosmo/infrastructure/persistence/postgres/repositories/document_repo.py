@@ -39,9 +39,16 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         if self._session is None:
             await session.commit()
 
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
+    async def get_discovery(
+        self,
+        project_id: ProjectId,
+        *,
+        for_update: bool = False,
+    ) -> RichTextDocument | None:
         async with self._session_ctx() as session:
             stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
+            if for_update:
+                stmt = stmt.with_for_update()
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if model is None:

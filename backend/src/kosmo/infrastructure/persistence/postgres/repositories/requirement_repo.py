@@ -35,9 +35,9 @@ class SqlAlchemyRequirementRepository(RequirementRepository):
         if self._session is None:
             await session.commit()
 
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
+    async def by_feature_id(self, feature_id: FeatureId, *, for_update: bool = False) -> str | None:
         async with self._session_ctx() as session:
-            model = await session.get(RequirementModel, str(feature_id))
+            model = await session.get(RequirementModel, str(feature_id), with_for_update=for_update)
             if model is None:
                 return None
             return model.markdown
