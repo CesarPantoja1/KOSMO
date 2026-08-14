@@ -4,6 +4,11 @@ from kosmo.contracts.pipeline.phase_contexts import FeatureChatContext
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS, FEATURE_LEVEL_PROHIBITED_TERMS, PROHIBITED_TERMS
 from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
+from kosmo.domain.pipeline.prompts.shared_rules import (
+    CONVERSATIONAL_NULL_RULE,
+    formatting_rules,
+    phase_isolation_rule,
+)
 
 
 def _build_chat_system_prompt() -> str:
@@ -20,12 +25,8 @@ def _build_chat_system_prompt() -> str:
         "- Cada cambio propuesto debe conservar trazabilidad con las secciones del Descubrimiento.\n"
         f"- Secciones validas del Descubrimiento para trazabilidad:\n{sections_list}\n\n"
         "REGLAS:\n"
-        "- Responde siempre en espanol con tildes correctas.\n"
-        "- Separa las ideas en parrafos cortos. Usa saltos de linea entre parrafos.\n"
-        "- Usa listas con guiones (-) o numeradas (1.) para enumerar elementos.\n"
-        "- Usa **negritas** para nombres de atributos y conceptos clave.\n"
-        "- NO escribas toda la respuesta en un solo bloque de texto.\n"
-        "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
+        + formatting_rules("atributos y conceptos")
+        + "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
         "incluye el change_suggestion junto con tu respuesta conversacional. No preguntes "
         "'¿quieres que lo agregue?' ni esperes confirmacion. No fragmentes la respuesta.\n"
         "- Genera una sugerencia cuando el usuario solicite un cambio. El servidor evita "
@@ -35,10 +36,8 @@ def _build_chat_system_prompt() -> str:
         f"{terms_tecnicos}.\n"
         "- SIN TERMINOLOGIA DE NEGOCIO ABSTRACTA. PROHIBIDO: "
         f"{terms_negocio}.\n"
-        "- El chat de una fase NO puede modificar documentos de otras fases. Si el usuario pide "
-        "cambios que pertenecen a otra fase (ej. modificar el Descubrimiento), indica amablemente "
-        "que debe dirigirse al chat de la fase correspondiente.\n"
-        "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia tecnica, "
+        + phase_isolation_rule(example=" (ej. modificar el Descubrimiento)")
+        + "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia tecnica, "
         "reformulala en lenguaje de usuario para la caracteristica.\n\n"
         "REGLAS DE CONTENIDO POR ATRIBUTO:\n"
         "- TITULO: maximo seis palabras. Se redacta como una accion que el usuario desea "
@@ -59,10 +58,7 @@ def _build_chat_system_prompt() -> str:
         "  * diff_after: contenido sugerido para reemplazar el fragmento, redactado segun "
         "las reglas de contenido del atributo correspondiente.\n"
         "  * rationale: justificacion del cambio conectandolo con la seccion relevante del "
-        "Descubrimiento.\n"
-        "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
-        "change_suggestion en null y responde de forma conversacional.\n\n"
-        "FORMATO DE SALIDA (JSON):\n"
+        "Descubrimiento.\n" + CONVERSATIONAL_NULL_RULE + "FORMATO DE SALIDA (JSON):\n"
         "{\n"
         '  "content": "<tu respuesta conversacional>",\n'
         '  "change_suggestion": null | {\n'
