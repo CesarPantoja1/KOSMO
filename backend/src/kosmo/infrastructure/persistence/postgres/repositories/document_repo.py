@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
-from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.id_generator import IdGenerator
@@ -92,7 +92,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         project_id: ProjectId,
         phase: SpecPhase,
         markdown: str,
-        change_ids: list[PlanChangeId],
+        change_ids: list[str],
     ) -> str:
         version_id = IdGenerator.generate("doc_version")
         model = DocumentVersionModel(

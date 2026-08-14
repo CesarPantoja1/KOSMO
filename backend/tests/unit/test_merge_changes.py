@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts.chat import DiffCambio, PlanCambio
-from kosmo.contracts.sdd.ids import PlanChangeId
+from kosmo.contracts.chat import AppliedChange, DiffCambio
 from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange
 from kosmo.domain.sdd.plan_diffs import merge_changes_with_diffs
 
 
-def _plan_change(section: str, description: str) -> PlanCambio:
-    return PlanCambio(
-        id=PlanChangeId("chg_01"),
+def _plan_change(section: str, description: str) -> AppliedChange:
+    return AppliedChange(
+        id="chg_01",
         section=section,
         description=description,
         diff=DiffCambio(before="antes", after="después"),

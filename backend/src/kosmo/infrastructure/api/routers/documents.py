@@ -8,6 +8,7 @@ from kosmo.application.chat.process_chat_modification import (
     ProcessChatModificationInput,
     ProcessChatModificationUseCase,
 )
+from kosmo.application.discovery.revert_document import revert_to_version
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
@@ -15,6 +16,8 @@ from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
 )
+from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
@@ -106,3 +109,35 @@ async def modify_document_direct(
         highlighted_section=output.modified_section,
         message=f"Documento actualizado.{section_info}",
     )
+
+
+def _document_repo(request: Request) -> DocumentRepository:
+    return get_container(request).discovery.document_repo
+
+
+@router.post(
+    "/revert",
+    summary="Revertir a una versión anterior del documento",
+    description="Restaura una versión previa del documento de descubrimiento.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Versión no encontrada."},
+    },
+)
+async def revert_document(
+    project_id: Annotated[str, Body(..., embed=True)],
+    version_id: Annotated[str, Body(..., embed=True)],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    doc_repo: Annotated[DocumentRepository, Depends(_document_repo)],
+) -> dict[str, str]:
+    result = await revert_to_version(
+        document_repo=doc_repo,
+        project_id=ProjectId(project_id),
+        version_id=version_id,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Versión no encontrada",
+        )
+    return {"status": "ok", "version_id": version_id}

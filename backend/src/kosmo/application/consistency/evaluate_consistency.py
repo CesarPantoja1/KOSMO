@@ -3,7 +3,7 @@ from __future__ import annotations
 import structlog
 from ulid import ULID
 
-from kosmo.contracts.chat import PlanCambio
+from kosmo.contracts.chat import AppliedChange
 from kosmo.contracts.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
@@ -75,7 +75,7 @@ class EvaluateConsistencyUseCase:
         source_phase: SpecPhase,
         target_phase: SpecPhase,
         project_id: ProjectId,
-        applied_changes: list[PlanCambio],
+        applied_changes: list[AppliedChange],
     ) -> ConsistencyEvaluationOutput:
         report_id = f"cnr_{ULID().hex}"
         artifacts = await self._fetch_downstream_artifacts(target_phase, project_id)
@@ -302,8 +302,8 @@ class EvaluateConsistencyUseCase:
         self,
         source_phase: SpecPhase,
         project_id: ProjectId,
-        plan_changes: list[PlanCambio],
-    ) -> list[PlanCambio]:
+        plan_changes: list[AppliedChange],
+    ) -> list[AppliedChange]:
         if source_phase != SpecPhase.DESCUBRIMIENTO:
             return plan_changes
 

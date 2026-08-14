@@ -4,29 +4,16 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import structlog
-from ulid import ULID
 
-from kosmo.application.chat.apply_plan_changes import llm_resolve_markdown
-from kosmo.contracts.chat import DiffCambio, PlanCambio
 from kosmo.contracts.persistence import UnitOfWork
-from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
 
 _log = structlog.get_logger(__name__)
-
-
-def _impact_to_plan_change(field: str, before: str, after: str) -> PlanCambio:
-    return PlanCambio(
-        id=PlanChangeId(f"chg_{ULID().hex}"),
-        section=field,
-        description="Aplicación de impacto de consistencia",
-        diff=DiffCambio(before=before, after=after),
-    )
 
 
 @dataclass(frozen=True)
@@ -49,9 +36,8 @@ class ApplyConsistencyImpactsOutput:
 
 
 class ApplyConsistencyImpactsUseCase:
-    def __init__(self, uow: UnitOfWork, agent: AgentPort | None = None) -> None:
+    def __init__(self, uow: UnitOfWork) -> None:
         self._uow = uow
-        self._agent = agent
 
     async def execute(
         self,
@@ -154,17 +140,6 @@ class ApplyConsistencyImpactsUseCase:
 
         markdown = document_to_markdown(document)
         result = apply_change_diff(markdown, before=before, after=after)
-        if result is None and self._agent is not None and (before.strip() or after.strip()):
-            change = _impact_to_plan_change("descubrimiento", before, after)
-            resolved = await llm_resolve_markdown(
-                self._agent,
-                project_id,
-                "Documento de Descubrimiento",
-                markdown,
-                [change],
-            )
-            if resolved is not None:
-                result = resolved
         if result is None:
             return "El texto original no se encontro en el documento de Descubrimiento"
 
@@ -175,24 +150,18 @@ class ApplyConsistencyImpactsUseCase:
         return None
 
     async def _apply_requirement(
-        self, uow: UnitOfWork, project_id: ProjectId, feature_id: FeatureId, before: str, after: str
+        self,
+        uow: UnitOfWork,
+        project_id: ProjectId,  # noqa: ARG002
+        feature_id: FeatureId,
+        before: str,
+        after: str,
     ) -> str | None:
         markdown = await uow.requirements.by_feature_id(feature_id)
         if markdown is None:
             return "El documento de requisitos no existe"
 
         result = apply_change_diff(markdown, before=before, after=after)
-        if result is None and self._agent is not None and (before.strip() or after.strip()):
-            change = _impact_to_plan_change("requisitos", before, after)
-            resolved = await llm_resolve_markdown(
-                self._agent,
-                project_id,
-                f"Requisitos de {feature_id}",
-                markdown,
-                [change],
-            )
-            if resolved is not None:
-                result = resolved
         if result is None:
             return "El texto original no se encontro en los requisitos"
 

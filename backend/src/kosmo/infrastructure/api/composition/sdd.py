@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
-from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
 from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
 from kosmo.application.consistency.evaluate_project_consistency import EvaluateProjectConsistencyUseCase
@@ -15,7 +13,6 @@ from kosmo.application.consistency.manage_consistency import (
     GetConsistencyReviewUseCase,
     GetConsistencyStatusUseCase,
 )
-from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
     GetDiscoveryChatHistoryUseCase,
@@ -85,9 +82,6 @@ class DiscoveryComponents:
     save_discovery: SaveDiscoveryUseCase
     refine_discovery: RefineDiscoveryUseCase
     get_discovery_chat_history: GetDiscoveryChatHistoryUseCase
-    manage_plan_changes: ManagePlanChangesUseCase
-    apply_plan_changes: ApplyPlanChangesUseCase
-    propagate_changes: PropagateChangesUseCase
     consistency_evaluator: ConsistencyEvaluator
     document_repo: DocumentRepository
 
@@ -95,18 +89,8 @@ class DiscoveryComponents:
 def build_discovery_components(
     repos: RepositoryRegistry,
     pipeline: PipelineComponents,
-    uow: SqlAlchemyUnitOfWork,
 ) -> DiscoveryComponents:
     consistency_evaluator: ConsistencyEvaluator = pipeline.consistency_evaluator
-
-    propagate_uc = PropagateChangesUseCase(
-        project_repo=repos.projects,
-        feature_repo=repos.features,
-        requirement_repo=repos.requirements,
-        diagram_repo=repos.diagrams,
-        chat_repo=repos.chat,
-        consistency_evaluator=consistency_evaluator,
-    )
 
     return DiscoveryComponents(
         generate_discovery=GenerateDiscoveryUseCase(
@@ -126,15 +110,6 @@ def build_discovery_components(
             project_repo=repos.projects,
             chat_repo=repos.chat,
         ),
-        manage_plan_changes=ManagePlanChangesUseCase(
-            project_repo=repos.projects,
-            chat_repo=repos.chat,
-        ),
-        apply_plan_changes=ApplyPlanChangesUseCase(
-            uow=uow,
-            agent=pipeline.agent,
-        ),
-        propagate_changes=propagate_uc,
         consistency_evaluator=consistency_evaluator,
         document_repo=repos.documents,
     )
@@ -281,8 +256,6 @@ class ConsistencyComponents:
     evaluate_project_consistency: EvaluateProjectConsistencyUseCase
     cascade_consistency: CascadingConsistencyUseCase
     apply_consistency_impacts: ApplyConsistencyImpactsUseCase
-    propagate_feature_changes: PropagateChangesUseCase
-    propagate_requirement_changes: PropagateChangesUseCase
     delete_feature: DeleteFeatureUseCase
     consistency_status: GetConsistencyStatusUseCase
     consistency_review: GetConsistencyReviewUseCase
@@ -298,16 +271,6 @@ def build_consistency_components(
     evaluator: ConsistencyEvaluator,
     uow: SqlAlchemyUnitOfWork,
 ) -> ConsistencyComponents:
-    def _propagate() -> PropagateChangesUseCase:
-        return PropagateChangesUseCase(
-            project_repo=repos.projects,
-            feature_repo=repos.features,
-            requirement_repo=repos.requirements,
-            diagram_repo=repos.diagrams,
-            chat_repo=repos.chat,
-            consistency_evaluator=evaluator,
-        )
-
     apply_impacts = ApplyConsistencyImpactsUseCase(uow=uow)
 
     evaluation_repo = repos.consistency_evaluations
@@ -338,8 +301,6 @@ def build_consistency_components(
             evaluator=evaluator,
         ),
         apply_consistency_impacts=apply_impacts,
-        propagate_feature_changes=_propagate(),
-        propagate_requirement_changes=_propagate(),
         delete_feature=DeleteFeatureUseCase(
             project_repo=repos.projects,
             feature_repo=repos.features,

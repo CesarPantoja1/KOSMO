@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast
 from pydantic import BaseModel, model_validator
 
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, ChatSessionId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, ChatSessionId, ProjectId
 
 
 class ChatRole(StrEnum):
@@ -17,18 +17,21 @@ class ChatRole(StrEnum):
     SYSTEM = "system"
 
 
-class EstadoPlanCambio(StrEnum):
-    PENDING = "pending"
-    ADDED = "added"
-    CONFLICT = "conflict"
-    APPLIED = "applied"
-    DISCARDED = "discarded"
-
-
 @dataclass(frozen=True)
 class DiffCambio:
     before: str
     after: str
+
+
+@dataclass(frozen=True)
+class AppliedChange:
+    """Cambio aplicado sobre un artefacto, usado como entrada de las evaluaciones de consistencia."""
+
+    id: str
+    section: str
+    description: str = ""
+    diff: DiffCambio = field(default_factory=lambda: DiffCambio(before="", after=""))
+    rationale: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,19 +54,6 @@ class ModificacionChat:
     before: str | None = None
     after: str | None = None
     clarification_message: str | None = None
-
-
-@dataclass(frozen=True)
-class PlanCambio:
-    id: PlanChangeId
-    section: str
-    description: str
-    diff: DiffCambio
-    status: EstadoPlanCambio = EstadoPlanCambio.PENDING
-    origin: str = "Chat Descubrimiento"
-    rationale: str | None = None
-    user_version: str | None = None
-    context_id: str | None = None
 
 
 @dataclass(frozen=True, init=False)
@@ -193,39 +183,6 @@ class ChatRepository(Protocol):
         *,
         context_id: str | None = None,
     ) -> list[ChatSessionSummary]: ...
-
-    async def add_plan_change(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase,
-        change: PlanCambio,
-    ) -> PlanCambio: ...
-
-    async def list_plan_changes(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase | None = None,
-    ) -> list[PlanCambio]: ...
-
-    async def update_plan_change_status(
-        self,
-        project_id: ProjectId,
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None: ...
-
-    async def remove_plan_change(
-        self,
-        project_id: ProjectId,
-        change_id: PlanChangeId,
-    ) -> bool: ...
-
-    async def clear_plan(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase | None = None,
-    ) -> None: ...
 
 
 class SugerenciaCambioLLM(BaseModel):

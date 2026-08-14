@@ -11,10 +11,8 @@ from kosmo.contracts.chat import (
     ChatHistoryId,
     ChatSession,
     ChatSessionSummary,
-    EstadoPlanCambio,
     HistorialChat,
     MensajeChat,
-    PlanCambio,
 )
 from kosmo.contracts.consistency import (
     ConsistencyEvaluation,
@@ -27,7 +25,6 @@ from kosmo.contracts.sdd.ids import (
     ChatSessionId,
     ConsistencyEvaluationId,
     FeatureId,
-    PlanChangeId,
     ProjectId,
 )
 from kosmo.contracts.sdd.project import Project
@@ -426,7 +423,6 @@ class InMemoryUnitOfWork:
 class InMemoryChatRepository:
     def __init__(self) -> None:
         self.messages: list[MensajeChat] = []
-        self.plans: list[PlanCambio] = []
         self.sessions: list[ChatSession] = []
         self._message_sessions: list[tuple[MensajeChat, ChatSessionId | None]] = []
 
@@ -498,62 +494,6 @@ class InMemoryChatRepository:
             )
         return summaries
 
-    async def add_plan_change(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase,  # noqa: ARG002
-        change: PlanCambio,
-    ) -> PlanCambio:
-        self.plans.append(change)
-        return change
-
-    async def list_plan_changes(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase | None = None,  # noqa: ARG002
-    ) -> list[PlanCambio]:
-        return self.plans
-
-    async def update_plan_change_status(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None:
-        for idx, item in enumerate(self.plans):
-            if item.id == change_id:
-                updated = PlanCambio(
-                    id=item.id,
-                    section=item.section,
-                    description=item.description,
-                    diff=item.diff,
-                    status=status,
-                    origin=item.origin,
-                    rationale=item.rationale,
-                    user_version=user_version or item.user_version,
-                    context_id=item.context_id,
-                )
-                self.plans[idx] = updated
-                return updated
-        return None
-
-    async def remove_plan_change(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        change_id: PlanChangeId,
-    ) -> bool:
-        initial_len = len(self.plans)
-        self.plans = [p for p in self.plans if p.id != change_id]
-        return len(self.plans) < initial_len
-
-    async def clear_plan(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase | None = None,  # noqa: ARG002
-    ) -> None:
-        self.plans.clear()
-
 
 class FakeConsistencyEvaluator:
     def __init__(self) -> None:
@@ -572,7 +512,7 @@ class FakeConsistencyEvaluator:
         source_phase: SpecPhase,  # noqa: ARG002
         target_phase: SpecPhase,
         project_id: ProjectId,  # noqa: ARG002
-        applied_changes: list[PlanCambio],  # noqa: ARG002
+        applied_changes: list[object],  # noqa: ARG002
     ) -> Any:
         from kosmo.contracts.consistency import ConsistencyEvaluationOutput
 

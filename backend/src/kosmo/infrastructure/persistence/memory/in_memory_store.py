@@ -13,13 +13,11 @@ from kosmo.contracts.chat import (
     ChatRepository,
     ChatSession,
     ChatSessionSummary,
-    EstadoPlanCambio,
     HistorialChat,
     MensajeChat,
-    PlanCambio,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, ChatSessionId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, ChatSessionId, ProjectId
 
 
 class InMemoryAgentSessionStore(AgentMemoryPort):
@@ -242,7 +240,6 @@ class InMemoryKnowledgePatternStore:
 class InMemoryChatRepository(ChatRepository):
     def __init__(self) -> None:
         self._messages: dict[str, list[MensajeChat]] = {}
-        self._plan_changes: dict[str, list[PlanCambio]] = {}
         self._sessions: list[ChatSession] = []
 
     @staticmethod
@@ -318,58 +315,3 @@ class InMemoryChatRepository(ChatRepository):
             for s in self._sessions
             if s.phase == phase
         ]
-
-    async def add_plan_change(self, project_id: ProjectId, phase: SpecPhase, change: PlanCambio) -> PlanCambio:
-        key = f"{project_id}_{phase.value}"
-        changes = self._plan_changes.get(key, [])
-        changes.append(change)
-        self._plan_changes[key] = changes
-        return change
-
-    async def list_plan_changes(self, project_id: ProjectId, phase: SpecPhase | None = None) -> list[PlanCambio]:
-        results: list[PlanCambio] = []
-        for k, v in self._plan_changes.items():
-            if k.startswith(f"{project_id}_") and (phase is None or k == f"{project_id}_{phase.value}"):
-                results.extend(v)
-        return results
-
-    async def update_plan_change_status(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None:
-        for changes in self._plan_changes.values():
-            for i, c in enumerate(changes):
-                if c.id == change_id:
-                    updated = PlanCambio(
-                        id=c.id,
-                        section=c.section,
-                        description=c.description,
-                        diff=c.diff,
-                        status=status,
-                        origin=c.origin,
-                        rationale=c.rationale,
-                        user_version=user_version or c.user_version,
-                        context_id=c.context_id,
-                    )
-                    changes[i] = updated
-                    return updated
-        return None
-
-    async def remove_plan_change(self, project_id: ProjectId, change_id: PlanChangeId) -> bool:  # noqa: ARG002
-        for changes in self._plan_changes.values():
-            for i, c in enumerate(changes):
-                if c.id == change_id:
-                    changes.pop(i)
-                    return True
-        return False
-
-    async def clear_plan(self, project_id: ProjectId, phase: SpecPhase | None = None) -> None:
-        keys_to_clear: list[str] = []
-        for k in self._plan_changes:
-            if k.startswith(f"{project_id}_") and (phase is None or k == f"{project_id}_{phase.value}"):
-                keys_to_clear.append(k)
-        for k in keys_to_clear:
-            self._plan_changes[k] = []

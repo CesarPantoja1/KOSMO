@@ -198,31 +198,6 @@ class ChatSessionModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class PlanChangeModel(Base):
-    __tablename__ = "plan_changes"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    section: Mapped[str] = mapped_column(String(64), nullable=False)
-    description: Mapped[str] = mapped_column(Text(), nullable=False)
-    diff_before: Mapped[str] = mapped_column(Text(), nullable=False)
-    diff_after: Mapped[str] = mapped_column(Text(), nullable=False)
-    rationale: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        comment="pending | added | conflict | applied | discarded",
-    )
-    origin: Mapped[str] = mapped_column(String(64), nullable=False)
-    user_version: Mapped[str | None] = mapped_column(Text(), nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-
 class DocumentVersionModel(Base):
     __tablename__ = "document_versions"
 

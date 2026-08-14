@@ -4,8 +4,7 @@ import re
 
 from ulid import ULID
 
-from kosmo.contracts.chat import DiffCambio, PlanCambio
-from kosmo.contracts.sdd.ids import PlanChangeId
+from kosmo.contracts.chat import AppliedChange, DiffCambio
 from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange
 
 _section_header_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
@@ -112,15 +111,15 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", "", text).lower()
 
 
-def merge_changes_with_diffs(originals: list[PlanCambio], diffs: list[SectionChange]) -> list[PlanCambio]:
-    """Combina diffs de seccion con descripciones de cambios originales del plan."""
+def merge_changes_with_diffs(originals: list[AppliedChange], diffs: list[SectionChange]) -> list[AppliedChange]:
+    """Combina diffs de seccion con descripciones de cambios originales."""
     desc_by_section: dict[str, str] = {}
     for pc in originals:
         section = (pc.section or "").strip()
         if section and pc.description and pc.description != section:
             desc_by_section[section.lower()] = pc.description
 
-    result: list[PlanCambio] = []
+    result: list[AppliedChange] = []
     for sc in diffs:
         section_key = sc.section.strip().lower()
         description = desc_by_section.get(section_key)
@@ -139,8 +138,8 @@ def merge_changes_with_diffs(originals: list[PlanCambio], diffs: list[SectionCha
             else:
                 description = f"Seccion modificada: {sc.section}"
         result.append(
-            PlanCambio(
-                id=PlanChangeId(f"chg_diff_{ULID().hex}"),
+            AppliedChange(
+                id=f"chg_diff_{ULID().hex}",
                 section=sc.section,
                 description=description,
                 diff=DiffCambio(before=sc.before, after=sc.after),

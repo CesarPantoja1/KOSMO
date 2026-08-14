@@ -10,7 +10,6 @@ from kosmo.application.chat.chat_sessions import (
 )
 from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
 from kosmo.application.chat.process_chat_modification import ProcessChatModificationUseCase
-from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
 from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
@@ -55,7 +54,6 @@ class PipelineComponents:
     validate_phase_context: ValidatePhaseContextUseCase
     process_chat_message: ProcessChatMessageUseCase
     process_chat_modification: ProcessChatModificationUseCase
-    process_chat_regeneration: ProcessChatRegenerationUseCase
     consistency_evaluator: ConsistencyEvaluator
     chat_repo: ChatRepository
     traceability_repo: TraceabilityRepository
@@ -182,17 +180,6 @@ def build_pipeline_components(
         document_repo=repos.documents,
     )
 
-    process_chat_regeneration = ProcessChatRegenerationUseCase(
-        agent=agent,
-        chat_repo=repos.chat,
-        project_repo=repos.projects,
-        document_repo=repos.documents,
-        feature_repo=repos.features,
-        requirement_repo=repos.requirements,
-        diagram_repo=repos.diagrams,
-        evaluator=consistency_evaluator,
-    )
-
     consolidate_patterns = ConsolidateKnowledgePatterns(
         memory=agent_memory,
         pattern_store=pattern_store,
@@ -209,7 +196,6 @@ def build_pipeline_components(
         validate_phase_context=validate_phase_context,
         process_chat_message=process_chat_message,
         process_chat_modification=process_chat_modification,
-        process_chat_regeneration=process_chat_regeneration,
         consistency_evaluator=consistency_evaluator,
         chat_repo=repos.chat,
         traceability_repo=repos.traceability,

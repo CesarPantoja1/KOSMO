@@ -10,7 +10,7 @@ from ulid import ULID
 
 from kosmo.application.consistency.enrich_impact import enrich_impact_items, impact_item_to_dict
 from kosmo.contracts import ConsistencyEvaluator
-from kosmo.contracts.chat import PlanCambio
+from kosmo.contracts.chat import AppliedChange
 from kosmo.contracts.consistency import DOWNSTREAM_TARGETS, ConsistencyStatus
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
@@ -56,7 +56,7 @@ class CascadingConsistencyUseCase:
         self,
         project_id: ProjectId,
         source_phase: SpecPhase,
-        applied_changes: list[PlanCambio],
+        applied_changes: list[AppliedChange],
     ) -> CascadingConsistencyOutput:
         report_id = f"cnr_{ULID().hex}"
         project = await self._project_repo.by_id(project_id)
@@ -141,7 +141,7 @@ class CascadingConsistencyUseCase:
         self,
         project_id: ProjectId,
         source_phase: SpecPhase,
-        applied_changes: list[PlanCambio],
+        applied_changes: list[AppliedChange],
     ) -> AsyncGenerator[str]:
         report_id = f"cnr_{ULID().hex}"
         project = await self._project_repo.by_id(project_id)

@@ -22,14 +22,15 @@ from kosmo.application.consistency.manage_consistency import (
     GetConsistencyReviewUseCase,
     GetConsistencyStatusUseCase,
 )
-from kosmo.contracts import DiffCambio, PlanCambio
+from kosmo.contracts import DiffCambio
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.chat import AppliedChange
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import (
     ConsistencyEvaluationNotFoundError,
     ConsistencyStaleError,
 )
-from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, ProjectId
 from kosmo.infrastructure.api.async_generation import sse_consistency_response
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
@@ -215,7 +216,7 @@ async def evaluate_consistency_stream(
 ) -> StreamingResponse:
     source_phase = _resolve_origin_phase(request.phase_origin)
     _resolve_targets(request.phase_origin, request.phase_destination)
-    changes = _changes_to_plan(request.changes)
+    changes = _changes_to_applied(request.changes)
 
     generator = uc.execute_stream(
         project_id=ProjectId(project_id),
@@ -238,7 +239,7 @@ async def evaluate_consistency(
     uc: Annotated[EvaluateProjectConsistencyUseCase, Depends(_consistency_uc)],
 ) -> dict[str, Any]:
     source_phase = _resolve_origin_phase(request.phase_origin)
-    changes = _changes_to_plan(request.changes)
+    changes = _changes_to_applied(request.changes)
     targets = _resolve_targets(request.phase_origin, request.phase_destination)
     target_specs = [_to_spec_phase(t) for t in targets]
 
@@ -320,13 +321,12 @@ def _resolve_targets(phase_origin: str, phase_destination: str | None) -> list[s
     return [SPEC_TO_API_PHASE[spec] for spec in DOWNSTREAM_TARGETS.get(origin, [])]
 
 
-def _changes_to_plan(changes: list[ChangeInputView]) -> list[PlanCambio]:
-    result: list[PlanCambio] = []
+def _changes_to_applied(changes: list[ChangeInputView]) -> list[AppliedChange]:
+    result: list[AppliedChange] = []
     for c in changes:
-        change_id = PlanChangeId(f"chg_eval_{ULID().hex}")
         result.append(
-            PlanCambio(
-                id=change_id,
+            AppliedChange(
+                id=f"chg_eval_{ULID().hex}",
                 section=c.section,
                 description=c.description or c.section,
                 diff=DiffCambio(before=c.diff_before, after=c.diff_after),

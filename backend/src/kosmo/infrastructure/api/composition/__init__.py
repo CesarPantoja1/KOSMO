@@ -92,7 +92,7 @@ def build_app_components(settings: Settings) -> AppContainer:
     pipeline = build_pipeline_components(settings, session_factory, repos)
     uow = SqlAlchemyUnitOfWork(session_factory)
 
-    discovery = build_discovery_components(repos, pipeline, uow)
+    discovery = build_discovery_components(repos, pipeline)
     features = build_features_components(repos, pipeline, discovery.consistency_evaluator)
     requirements = build_requirements_components(repos, pipeline, uow)
     modelo = build_modelo_components(repos, pipeline)

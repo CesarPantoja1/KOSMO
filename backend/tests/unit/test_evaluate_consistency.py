@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 
 from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
-from kosmo.contracts import DiffCambio, EstadoPlanCambio, PlanCambio
+from kosmo.contracts import AppliedChange, DiffCambio
 from kosmo.contracts.consistency import ConsistencyEvaluationOutput
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId, UserId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -91,13 +91,12 @@ def _make_feature(feature_id: str, project_id: str, title: str, number: int = 1)
     )
 
 
-def _plan_change(cid: str, before: str = "old", after: str = "new") -> PlanCambio:
-    return PlanCambio(
-        id=PlanChangeId(cid),
+def _applied_change(cid: str, before: str = "old", after: str = "new") -> AppliedChange:
+    return AppliedChange(
+        id=cid,
         section="Alcance",
         description="Cambio de alcance",
         diff=DiffCambio(before=before, after=after),
-        status=EstadoPlanCambio.APPLIED,
     )
 
 
@@ -136,7 +135,7 @@ async def test_evaluate_identifies_affected_features() -> None:
     agent = StubConsistencyAgent(affected_ids=["feat_01"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_01", before="Alcance original", after="Alcance LATAM")
+    change = _applied_change("chg_01", before="Alcance original", after="Alcance LATAM")
 
     # Act
     result = await uc.evaluate(
@@ -171,7 +170,7 @@ async def test_evaluate_agent_failure_returns_empty() -> None:
     agent = StubConsistencyAgent(should_fail=True)
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_01")
+    change = _applied_change("chg_01")
 
     # Act
     result = await uc.evaluate(
@@ -201,7 +200,7 @@ async def test_evaluate_no_downstream_artifacts_returns_empty() -> None:
     agent = StubConsistencyAgent(affected_ids=["should_not_appear"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_01")
+    change = _applied_change("chg_01")
 
     # Act
     result = await uc.evaluate(
@@ -234,7 +233,7 @@ async def test_evaluate_filters_out_unknown_ids() -> None:
     agent = StubConsistencyAgent(affected_ids=["feat_04", "feat_fantasma"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_01")
+    change = _applied_change("chg_01")
 
     # Act
     result = await uc.evaluate(
@@ -267,7 +266,7 @@ async def test_evaluate_deduplicates_repeated_artifact_ids() -> None:
     agent = StubConsistencyAgent(affected_ids=["feat_01", "feat_01"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_01")
+    change = _applied_change("chg_01")
 
     # Act
     result = await uc.evaluate(
@@ -304,7 +303,7 @@ async def test_evaluate_fetch_source_content_for_features() -> None:
     agent = StubConsistencyAgent(affected_ids=["prj_005"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_01")
+    change = _applied_change("chg_01")
 
     _result = await uc.evaluate(
         source_phase=SpecPhase.CARACTERISTICAS,
@@ -338,7 +337,9 @@ async def test_evaluate_requirements_to_features_uses_correct_skill() -> None:
     agent = StubConsistencyAgent(affected_ids=["feat_r2f"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_r2f", before="procesar pagos con tarjeta", after="procesar pagos con cualquier método")
+    change = _applied_change(
+        "chg_r2f", before="procesar pagos con tarjeta", after="procesar pagos con cualquier método"
+    )
 
     # Act
     result = await uc.evaluate(
@@ -378,7 +379,7 @@ async def test_evaluate_fetch_source_content_for_requirements() -> None:
     agent = StubConsistencyAgent(affected_ids=["feat_srcr"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_srcr", before="procesar inventario", after="procesar inventario en tiempo real")
+    change = _applied_change("chg_srcr", before="procesar inventario", after="procesar inventario en tiempo real")
 
     # Act
     _result = await uc.evaluate(
@@ -431,7 +432,7 @@ async def test_evaluate_requirements_to_discovery_uses_upstream_skill() -> None:
     agent = StubConsistencyAgent(affected_ids=["prj_r2d"])
     uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
 
-    change = _plan_change("chg_r2d")
+    change = _applied_change("chg_r2d")
 
     # Act
     result = await uc.evaluate(

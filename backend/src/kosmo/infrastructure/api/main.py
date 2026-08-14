@@ -22,7 +22,6 @@ from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat
 from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
-from kosmo.infrastructure.api.routers.plan import router as plan_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirement_chat import router as requirement_chat_router
 from kosmo.infrastructure.api.routers.requirements import router as requirements_router
@@ -302,7 +301,6 @@ app.add_middleware(RequestLoggingMiddleware)
 if not settings.auth_disabled:
     app.include_router(auth_router)
 app.include_router(projects_router)
-app.include_router(plan_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
 app.include_router(feature_chat_router)

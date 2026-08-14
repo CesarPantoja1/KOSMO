@@ -3,16 +3,14 @@ from datetime import UTC, datetime
 import pytest
 
 from kosmo.contracts import (
+    AppliedChange,
     ChatHistoryId,
     ChatMessageId,
     ChatRepository,
     ChatRole,
     DiffCambio,
-    EstadoPlanCambio,
     HistorialChat,
     MensajeChat,
-    PlanCambio,
-    PlanChangeId,
     SugerenciaCambio,
 )
 from kosmo.contracts.sdd.document import SpecPhase
@@ -73,47 +71,36 @@ def test_mensaje_chat_immutability():
         msg.content = "Nuevo contenido"  # type: ignore[misc]
 
 
-def test_plan_cambio_default_values():
+def test_applied_change_values_and_immutability():
     diff = DiffCambio(before="nacional", after="LATAM")
-    cambio = PlanCambio(
-        id=PlanChangeId("chg_100"),
+    change = AppliedChange(
+        id="chg_100",
         section="§2 Alcance del producto",
         description="Ampliar alcance a LATAM",
         diff=diff,
+        rationale="Solicitud del usuario",
     )
 
-    assert cambio.id == "chg_100"
-    assert cambio.section == "§2 Alcance del producto"
-    assert cambio.description == "Ampliar alcance a LATAM"
-    assert cambio.diff.before == "nacional"
-    assert cambio.diff.after == "LATAM"
-    assert cambio.status == EstadoPlanCambio.PENDING
-    assert cambio.status == "pending"
-    assert cambio.origin == "Chat Descubrimiento"
-    assert cambio.rationale is None
-    assert cambio.user_version is None
-
-
-def test_plan_cambio_full_attributes_and_immutability():
-    diff = DiffCambio(before="v1", after="v2")
-    cambio = PlanCambio(
-        id=PlanChangeId("chg_101"),
-        section="§3 Monedas",
-        description="Soporte multimoneda",
-        diff=diff,
-        status=EstadoPlanCambio.CONFLICT,
-        origin="Chat Descubrimiento",
-        rationale="Cambiaste §2 de nacionales a LATAM.",
-        user_version="v1_manual",
-    )
-
-    assert cambio.status == EstadoPlanCambio.CONFLICT
-    assert cambio.origin == "Chat Descubrimiento"
-    assert cambio.rationale == "Cambiaste §2 de nacionales a LATAM."
-    assert cambio.user_version == "v1_manual"
+    assert change.id == "chg_100"
+    assert change.section == "§2 Alcance del producto"
+    assert change.description == "Ampliar alcance a LATAM"
+    assert change.diff.before == "nacional"
+    assert change.diff.after == "LATAM"
+    assert change.rationale == "Solicitud del usuario"
 
     with pytest.raises(AttributeError):
-        cambio.status = EstadoPlanCambio.APPLIED  # type: ignore[misc]
+        change.section = "Otro"  # type: ignore[misc]
+
+
+def test_applied_change_defaults():
+    change = AppliedChange(
+        id="chg_101",
+        section="§3 Monedas",
+        diff=DiffCambio(before="v1", after="v2"),
+    )
+
+    assert change.description == ""
+    assert change.rationale is None
 
 
 def test_historial_chat_empty_and_add_message():
@@ -173,7 +160,6 @@ def test_historial_chat_with_feature_context():
 class FakeChatRepository:
     def __init__(self) -> None:
         self.messages: list[MensajeChat] = []
-        self.plans: list[PlanCambio] = []
 
     async def save_message(
         self,
@@ -203,61 +189,6 @@ class FakeChatRepository:
         self.messages = list(history.messages)
         return history
 
-    async def add_plan_change(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase,
-        change: PlanCambio,
-    ) -> PlanCambio:
-        self.plans.append(change)
-        return change
-
-    async def list_plan_changes(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase | None = None,
-    ) -> list[PlanCambio]:
-        return self.plans
-
-    async def update_plan_change_status(
-        self,
-        project_id: ProjectId,
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None:
-        for idx, item in enumerate(self.plans):
-            if item.id == change_id:
-                updated = PlanCambio(
-                    id=item.id,
-                    section=item.section,
-                    description=item.description,
-                    diff=item.diff,
-                    status=status,
-                    origin=item.origin,
-                    rationale=item.rationale,
-                    user_version=user_version or item.user_version,
-                )
-                self.plans[idx] = updated
-                return updated
-        return None
-
-    async def remove_plan_change(
-        self,
-        project_id: ProjectId,
-        change_id: PlanChangeId,
-    ) -> bool:
-        initial_len = len(self.plans)
-        self.plans = [p for p in self.plans if p.id != change_id]
-        return len(self.plans) < initial_len
-
-    async def clear_plan(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase | None = None,
-    ) -> None:
-        self.plans.clear()
-
 
 @pytest.mark.asyncio
 async def test_chat_repository_protocol_implementation():
@@ -275,26 +206,3 @@ async def test_chat_repository_protocol_implementation():
     history = await repo.get_history(project_id, SpecPhase.DESCUBRIMIENTO)
     assert history is not None
     assert history.message_count == 1
-
-    change = PlanCambio(
-        id=PlanChangeId("chg_1"),
-        section="§1 Visión",
-        description="Ajuste de visión",
-        diff=DiffCambio(before="v1", after="v2"),
-    )
-    await repo.add_plan_change(project_id, SpecPhase.DESCUBRIMIENTO, change)
-    plans = await repo.list_plan_changes(project_id, SpecPhase.DESCUBRIMIENTO)
-    assert len(plans) == 1
-
-    updated = await repo.update_plan_change_status(
-        project_id,
-        PlanChangeId("chg_1"),
-        EstadoPlanCambio.APPLIED,
-    )
-    assert updated is not None
-    assert updated.status == EstadoPlanCambio.APPLIED
-
-    removed = await repo.remove_plan_change(project_id, PlanChangeId("chg_1"))
-    assert removed is True
-    plans_after = await repo.list_plan_changes(project_id)
-    assert len(plans_after) == 0

@@ -4,7 +4,6 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
-from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 from kosmo.application.features import (
     CheckFeatureConsistencyInput,
     CheckFeatureConsistencyUseCase,
@@ -25,7 +24,6 @@ from kosmo.application.features.list_features import (
     ListFeaturesUseCase,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     FeatureNotFoundError,
@@ -42,9 +40,6 @@ from kosmo.infrastructure.api.schemas import (
     FeatureResponse,
     FeatureSuggestionResponse,
     InconsistencyResultView,
-    PhaseNotificationList,
-    PhaseNotificationView,
-    PropagateFeatureChangesRequest,
     SaveSelectedFeaturesRequest,
 )
 
@@ -349,57 +344,6 @@ def _feature_to_response(f: Any) -> FeatureResponse:
         description=f.description,
         origin=f.origin,
         display_id=f.display_id,
-    )
-
-
-def _propagate_feature_changes(request: Request) -> PropagateChangesUseCase:
-    return get_container(request).consistency.propagate_feature_changes
-
-
-@router.post(
-    "/{feature_id}/propagate",
-    summary="Propagar cambios desde característica",
-    description=(
-        "Evalúa el impacto bidireccional de los cambios aplicados en una característica. "
-        "Notifica fases afectadas upstream (Descubrimiento) y downstream (Requisitos, Modelo) "
-        "para la actualización de insignias en el wizard."
-    ),
-    response_model=PhaseNotificationList,
-    status_code=status.HTTP_200_OK,
-)
-async def propagate_feature_changes(
-    project_id: str,
-    feature_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
-    request: Annotated[PropagateFeatureChangesRequest, Body(...)],
-    uc: Annotated[PropagateChangesUseCase, Depends(_propagate_feature_changes)],
-) -> PhaseNotificationList:
-    from kosmo.application.consistency.propagate_changes import (
-        PropagateChangesInput,
-    )
-    from kosmo.contracts.sdd.ids import PlanChangeId
-
-    try:
-        output = await uc.execute(
-            PropagateChangesInput(
-                project_id=ProjectId(project_id),
-                source_phase=SpecPhase.CARACTERISTICAS,
-                applied_change_ids=[PlanChangeId(cid) for cid in request.applied_change_ids],
-                feature_id=FeatureId(feature_id),
-            )
-        )
-    except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
-
-    return PhaseNotificationList(
-        affected_phases=[
-            PhaseNotificationView(
-                phase=p.phase,
-                affected_count=p.affected_count,
-                affected_ids=p.affected_ids,
-            )
-            for p in output.affected_phases
-        ]
     )
 
 

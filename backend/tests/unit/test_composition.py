@@ -5,9 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from starlette.requests import Request
 
-from kosmo.application.chat.apply_plan_changes import ApplyPlanChangesUseCase
 from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
-from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
 from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.config import Settings
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
@@ -88,8 +86,6 @@ async def test_app_container_exposes_typed_components() -> None:
         # Assert: los campos del contenedor tienen tipos concretos (no Any)
         assert isinstance(components, AppContainer)
         assert isinstance(components.pipeline.process_chat_message, ProcessChatMessageUseCase)
-        assert isinstance(components.pipeline.process_chat_regeneration, ProcessChatRegenerationUseCase)
-        assert isinstance(components.discovery.apply_plan_changes, ApplyPlanChangesUseCase)
         assert isinstance(components.consistency.apply_consistency_impacts, ApplyConsistencyImpactsUseCase)
         assert components.projects.create_project is not None
         assert components.pipeline.outbox is not None

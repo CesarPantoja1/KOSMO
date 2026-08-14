@@ -9,7 +9,7 @@ import structlog
 
 from kosmo.application.consistency.consistency_snapshot import fetch_snapshot_parts
 from kosmo.application.consistency.enrich_impact import enrich_impact_items, impact_item_to_dict
-from kosmo.contracts.chat import DiffCambio, PlanCambio
+from kosmo.contracts.chat import AppliedChange, DiffCambio
 from kosmo.contracts.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationRepository,
@@ -17,7 +17,7 @@ from kosmo.contracts.consistency import (
     ConsistencyEvaluator,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,
@@ -32,9 +32,9 @@ from kosmo.domain.sdd.traceability_tracer import trace_downstream_phases
 _log = structlog.get_logger(__name__)
 
 
-def _to_plan_change(raw: dict[str, object]) -> PlanCambio:
-    return PlanCambio(
-        id=PlanChangeId(IdGenerator.generate("plan_change")),
+def _to_applied_change(raw: dict[str, object]) -> AppliedChange:
+    return AppliedChange(
+        id=IdGenerator.generate("plan_change"),
         section=str(raw.get("section", "")),
         description=str(raw.get("description", "")),
         diff=DiffCambio(
@@ -92,7 +92,7 @@ async def run_consistency_evaluation(
         for c in cast(list[object], changes_raw if isinstance(changes_raw, list) else [])
         if isinstance(c, dict)
     ]
-    changes = [_to_plan_change(c) for c in raw_changes]
+    changes = [_to_applied_change(c) for c in raw_changes]
 
     project = await project_repo.by_id(project_id)
     if project is None:
