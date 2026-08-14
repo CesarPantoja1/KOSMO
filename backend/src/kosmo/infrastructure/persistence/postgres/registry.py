@@ -13,6 +13,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_rep
     SqlAlchemyActivityDiagramRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
+from kosmo.infrastructure.persistence.postgres.repositories.consistency_repo import (
+    SqlAlchemyConsistencyEvaluationRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
 )
@@ -40,6 +43,7 @@ class RepositoryRegistry:
     traceability: SqlAlchemyTraceabilityRepository
     users: SqlAlchemyUserRepository
     audit_sink: SqlAlchemyAuditEventSink
+    consistency_evaluations: SqlAlchemyConsistencyEvaluationRepository
 
     @classmethod
     def build(cls, session_factory: async_sessionmaker[AsyncSession]) -> RepositoryRegistry:
@@ -53,4 +57,5 @@ class RepositoryRegistry:
             traceability=SqlAlchemyTraceabilityRepository(session_factory),
             users=SqlAlchemyUserRepository(session_factory),
             audit_sink=SqlAlchemyAuditEventSink(session_factory),
+            consistency_evaluations=SqlAlchemyConsistencyEvaluationRepository(session_factory),
         )

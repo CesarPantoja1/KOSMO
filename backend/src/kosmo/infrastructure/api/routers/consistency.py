@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from ulid import ULID
@@ -13,10 +14,22 @@ from kosmo.application.consistency.evaluate_project_consistency import (
     EvaluateProjectConsistencyInput,
     EvaluateProjectConsistencyUseCase,
 )
+from kosmo.application.consistency.manage_consistency import (
+    ApplyConsistencyEvaluationUseCase,
+    BulkResolveConsistencyUseCase,
+    DiscardConsistencyEvaluationUseCase,
+    GetConsistencyActivityUseCase,
+    GetConsistencyReviewUseCase,
+    GetConsistencyStatusUseCase,
+)
 from kosmo.contracts import DiffCambio, PlanCambio
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
-from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts.sdd.errors import (
+    ConsistencyEvaluationNotFoundError,
+    ConsistencyStaleError,
+)
+from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, PlanChangeId, ProjectId
 from kosmo.infrastructure.api.async_generation import sse_consistency_response
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
@@ -46,6 +59,146 @@ def _cascade_uc(request: Request) -> CascadingConsistencyUseCase:
 
 def _apply_uc(request: Request) -> ApplyConsistencyImpactsUseCase:
     return get_container(request).consistency.apply_consistency_impacts
+
+
+def _status_uc(request: Request) -> GetConsistencyStatusUseCase:
+    return get_container(request).consistency.consistency_status
+
+
+def _review_uc(request: Request) -> GetConsistencyReviewUseCase:
+    return get_container(request).consistency.consistency_review
+
+
+def _apply_evaluation_uc(request: Request) -> ApplyConsistencyEvaluationUseCase:
+    return get_container(request).consistency.apply_consistency_evaluation
+
+
+def _discard_evaluation_uc(request: Request) -> DiscardConsistencyEvaluationUseCase:
+    return get_container(request).consistency.discard_consistency_evaluation
+
+
+def _bulk_uc(request: Request) -> BulkResolveConsistencyUseCase:
+    return get_container(request).consistency.bulk_resolve_consistency
+
+
+def _activity_uc(request: Request) -> GetConsistencyActivityUseCase:
+    return get_container(request).consistency.consistency_activity
+
+
+@router.get(
+    "/status",
+    summary="Estado de consistencia pendiente por fase",
+    description="Badges por fase calculados sobre las evaluaciones no resueltas del proyecto.",
+    status_code=status.HTTP_200_OK,
+)
+async def get_consistency_status(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[GetConsistencyStatusUseCase, Depends(_status_uc)],
+) -> dict[str, Any]:
+    return await uc.execute(project_id=ProjectId(project_id))
+
+
+@router.get(
+    "/review",
+    summary="Vista de revisión de consistencia por fase (gate)",
+    description="Cards frescas por artefacto destino. Las sugerencias obsoletas se descartan automáticamente.",
+    status_code=status.HTTP_200_OK,
+)
+async def get_consistency_review(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[GetConsistencyReviewUseCase, Depends(_review_uc)],
+    target_phase: Annotated[str, Query(description="Fase destino a revisar (features, requirements, model)")],
+) -> dict[str, Any]:
+    phase = _to_spec_phase(target_phase)
+    cards = await uc.execute(project_id=ProjectId(project_id), target_phase=phase)
+    return {"cards": [dataclasses.asdict(c) for c in cards]}
+
+
+@router.post(
+    "/evaluations/{evaluation_id}/apply",
+    summary="Aplicar una sugerencia de consistencia",
+    description="Aplica con guardrail de frescura: si la entrada cambió, devuelve 409 y re-evalúa.",
+    status_code=status.HTTP_200_OK,
+    responses={409: {"model": HttpErrorResponse, "description": "La sugerencia ya no aplica al estado actual"}},
+)
+async def apply_consistency_evaluation(
+    project_id: str,
+    evaluation_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[ApplyConsistencyEvaluationUseCase, Depends(_apply_evaluation_uc)],
+) -> dict[str, Any]:
+    try:
+        result = await uc.execute(ConsistencyEvaluationId(evaluation_id))
+        return {**result, "project_id": project_id}
+    except ConsistencyEvaluationNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.problem.detail) from exc
+    except ConsistencyStaleError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.problem.detail) from exc
+
+
+@router.post(
+    "/evaluations/{evaluation_id}/discard",
+    summary="Descartar una sugerencia de consistencia",
+    description="Descartada para este snapshot; si la fuente vuelve a cambiar, aparece una sugerencia nueva.",
+    status_code=status.HTTP_200_OK,
+)
+async def discard_consistency_evaluation(
+    project_id: str,
+    evaluation_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[DiscardConsistencyEvaluationUseCase, Depends(_discard_evaluation_uc)],
+) -> dict[str, Any]:
+    try:
+        result = await uc.execute(ConsistencyEvaluationId(evaluation_id))
+        return {**result, "project_id": project_id}
+    except ConsistencyEvaluationNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.problem.detail) from exc
+    except ConsistencyStaleError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.problem.detail) from exc
+
+
+class BulkResolveRequestView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str = Field(description="apply | discard")
+    target_phase: str = Field(description="Fase destino a resolver (features, requirements, model)")
+
+
+@router.post(
+    "/review/bulk",
+    summary="Resolver en lote las sugerencias de una fase",
+    description="Aplica o descarta todas las sugerencias frescas de la fase destino en un solo clic.",
+    status_code=status.HTTP_200_OK,
+)
+async def bulk_resolve_consistency(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Annotated[BulkResolveRequestView, Body(...)],
+    uc: Annotated[BulkResolveConsistencyUseCase, Depends(_bulk_uc)],
+) -> dict[str, Any]:
+    if request.action not in {"apply", "discard"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="action debe ser 'apply' o 'discard'.",
+        )
+    phase = _to_spec_phase(request.target_phase)
+    return await uc.execute(project_id=ProjectId(project_id), target_phase=phase, action=request.action)
+
+
+@router.get(
+    "/activity",
+    summary="Feed de actividad de consistencia",
+    description="Historial de sugerencias aplicadas o descartadas con su origen.",
+    status_code=status.HTTP_200_OK,
+)
+async def get_consistency_activity(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[GetConsistencyActivityUseCase, Depends(_activity_uc)],
+    limit: int = 50,
+) -> dict[str, Any]:
+    return {"items": await uc.execute(project_id=ProjectId(project_id), limit=limit)}
 
 
 @router.post(

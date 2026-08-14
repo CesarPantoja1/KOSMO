@@ -7,6 +7,14 @@ from kosmo.application.chat.manage_plan_changes import ManagePlanChangesUseCase
 from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
 from kosmo.application.consistency.evaluate_project_consistency import EvaluateProjectConsistencyUseCase
+from kosmo.application.consistency.manage_consistency import (
+    ApplyConsistencyEvaluationUseCase,
+    BulkResolveConsistencyUseCase,
+    DiscardConsistencyEvaluationUseCase,
+    GetConsistencyActivityUseCase,
+    GetConsistencyReviewUseCase,
+    GetConsistencyStatusUseCase,
+)
 from kosmo.application.consistency.propagate_changes import PropagateChangesUseCase
 from kosmo.application.discovery import (
     GenerateDiscoveryUseCase,
@@ -276,6 +284,12 @@ class ConsistencyComponents:
     propagate_feature_changes: PropagateChangesUseCase
     propagate_requirement_changes: PropagateChangesUseCase
     delete_feature: DeleteFeatureUseCase
+    consistency_status: GetConsistencyStatusUseCase
+    consistency_review: GetConsistencyReviewUseCase
+    apply_consistency_evaluation: ApplyConsistencyEvaluationUseCase
+    discard_consistency_evaluation: DiscardConsistencyEvaluationUseCase
+    bulk_resolve_consistency: BulkResolveConsistencyUseCase
+    consistency_activity: GetConsistencyActivityUseCase
 
 
 def build_consistency_components(
@@ -294,6 +308,20 @@ def build_consistency_components(
             consistency_evaluator=evaluator,
         )
 
+    apply_impacts = ApplyConsistencyImpactsUseCase(uow=uow)
+
+    evaluation_repo = repos.consistency_evaluations
+    apply_evaluation = ApplyConsistencyEvaluationUseCase(
+        evaluation_repo=evaluation_repo,
+        apply_uc=apply_impacts,
+        outbox=pipeline.outbox,
+        document_repo=repos.documents,
+        feature_repo=repos.features,
+        requirement_repo=repos.requirements,
+        diagram_repo=repos.diagrams,
+    )
+    discard_evaluation = DiscardConsistencyEvaluationUseCase(evaluation_repo=evaluation_repo)
+
     return ConsistencyComponents(
         evaluate_project_consistency=EvaluateProjectConsistencyUseCase(
             project_repo=repos.projects,
@@ -309,10 +337,7 @@ def build_consistency_components(
             diagram_repo=repos.diagrams,
             evaluator=evaluator,
         ),
-        apply_consistency_impacts=ApplyConsistencyImpactsUseCase(
-            uow=uow,
-            agent=pipeline.agent,
-        ),
+        apply_consistency_impacts=apply_impacts,
         propagate_feature_changes=_propagate(),
         propagate_requirement_changes=_propagate(),
         delete_feature=DeleteFeatureUseCase(
@@ -320,4 +345,20 @@ def build_consistency_components(
             feature_repo=repos.features,
             traceability_repo=repos.traceability,
         ),
+        consistency_status=GetConsistencyStatusUseCase(evaluation_repo=evaluation_repo),
+        consistency_review=GetConsistencyReviewUseCase(
+            evaluation_repo=evaluation_repo,
+            document_repo=repos.documents,
+            feature_repo=repos.features,
+            requirement_repo=repos.requirements,
+            diagram_repo=repos.diagrams,
+        ),
+        apply_consistency_evaluation=apply_evaluation,
+        discard_consistency_evaluation=discard_evaluation,
+        bulk_resolve_consistency=BulkResolveConsistencyUseCase(
+            evaluation_repo=evaluation_repo,
+            apply_uc=apply_evaluation,
+            discard_uc=discard_evaluation,
+        ),
+        consistency_activity=GetConsistencyActivityUseCase(evaluation_repo=evaluation_repo),
     )

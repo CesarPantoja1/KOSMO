@@ -19,6 +19,7 @@ from kosmo.contracts.chat import (
     ModificacionChat,
     SugerenciaCambio,
 )
+from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
@@ -87,6 +88,7 @@ class ProcessChatMessageUseCase:
         document_repo: DocumentRepository | None = None,
         feature_repo: FeatureRepository | None = None,
         requirement_repo: RequirementRepository | None = None,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._chat_repo = chat_repo
         self._agent = agent
@@ -95,6 +97,7 @@ class ProcessChatMessageUseCase:
         self._document_repo = document_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
+        self._outbox = outbox
 
     async def execute(self, input_data: ProcessChatMessageInput) -> ProcessChatMessageOutput:
         content = input_data.content.strip()
@@ -169,6 +172,10 @@ class ProcessChatMessageUseCase:
             suggestions=list(assistant_msg.suggested_changes),
         )
         modification = self._build_modification(cards)
+
+        applied_cards = [c for c in cards if c.applied]
+        if applied_cards:
+            await self._trigger_downstream_consistency(input_data, applied_cards)
 
         final_msg = MensajeChat(
             id=assistant_msg.id,
@@ -295,6 +302,30 @@ class ProcessChatMessageUseCase:
 
         await self._requirement_repo.save(context.feature.id, new_md)
         return None
+
+    async def _trigger_downstream_consistency(
+        self,
+        input_data: ProcessChatMessageInput,
+        applied_cards: list[SugerenciaCambio],
+    ) -> None:
+        if self._outbox is None:
+            return
+        await self._outbox.enqueue(
+            "consistency_evaluate",
+            {
+                "project_id": str(input_data.project_id),
+                "source_phase": input_data.phase.value,
+                "changes": [
+                    {
+                        "section": c.section,
+                        "description": c.description,
+                        "before": c.diff.before,
+                        "after": c.diff.after,
+                    }
+                    for c in applied_cards
+                ],
+            },
+        )
 
     @staticmethod
     def _build_modification(cards: list[SugerenciaCambio]) -> ModificacionChat | None:

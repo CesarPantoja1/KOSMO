@@ -33,6 +33,7 @@ from tests.unit.fakes import (
     InMemoryChatRepository,
     InMemoryDocumentRepository,
     InMemoryFeatureRepository,
+    InMemoryOutbox,
     InMemoryRequirementRepository,
 )
 
@@ -105,11 +106,13 @@ async def test_discovery_chat_applies_suggestion_and_returns_cards() -> None:
     chat_repo = InMemoryChatRepository()
     docs = InMemoryDocumentRepository()
     docs.discovery_docs["prj_01"] = doc
+    outbox = InMemoryOutbox()
     uc = ProcessChatMessageUseCase(
         chat_repo=chat_repo,
         agent=agent,  # type: ignore[reportArgumentType]
         skill_registry=_registry(SpecPhase.DESCUBRIMIENTO),
         document_repo=docs,
+        outbox=outbox,
     )
 
     # Act
@@ -130,6 +133,9 @@ async def test_discovery_chat_applies_suggestion_and_returns_cards() -> None:
     assert output.message.modification.applied is True
     assert "gastos en LATAM" in document_to_markdown(docs.discovery_docs["prj_01"])
     assert len(chat_repo.messages) == 2
+    assert len(outbox.jobs) == 1
+    assert outbox.jobs[0][0] == "consistency_evaluate"
+    assert outbox.jobs[0][1]["source_phase"] == "descubrimiento"
 
 
 @pytest.mark.unit
@@ -178,10 +184,12 @@ async def test_conversational_message_without_suggestions() -> None:
     ctx = DiscoveryChatContext(current_document=markdown_to_document(DISCOVERY_VALID))
     agent = _StubConversationAgent(_assistant_message(suggestions=[]))
     chat_repo = InMemoryChatRepository()
+    outbox = InMemoryOutbox()
     uc = ProcessChatMessageUseCase(
         chat_repo=chat_repo,
         agent=agent,  # type: ignore[reportArgumentType]
         skill_registry=_registry(SpecPhase.DESCUBRIMIENTO),
+        outbox=outbox,
     )
 
     # Act
@@ -197,6 +205,7 @@ async def test_conversational_message_without_suggestions() -> None:
     # Assert
     assert output.message.suggested_changes == []
     assert output.message.modification is None
+    assert outbox.jobs == []
 
 
 @pytest.mark.unit

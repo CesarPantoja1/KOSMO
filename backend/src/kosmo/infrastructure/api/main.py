@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
-from kosmo.infrastructure.api.composition import PipelineComponents, build_app_components
+from kosmo.infrastructure.api.composition import AppContainer, build_app_components
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
@@ -191,12 +191,12 @@ _GLOBAL_RESPONSES = {
 # Ciclo de vida y aplicación
 
 
-def _make_outbox_handler(pipeline: PipelineComponents) -> OutboxHandler:
+def _make_outbox_handler(container: AppContainer) -> OutboxHandler:
     async def handler(job_type: str, payload: dict[str, Any]) -> None:
         import structlog
 
         _log = structlog.get_logger("kosmo.outbox")
-        agent = pipeline.agent
+        agent = container.pipeline.agent
         if job_type == "reflect_and_consolidate":
             from kosmo.contracts.agent_memory import AgentMemoryId
             from kosmo.contracts.pipeline.phase_outputs import ValidationResult
@@ -217,6 +217,19 @@ def _make_outbox_handler(pipeline: PipelineComponents) -> OutboxHandler:
             except Exception:
                 _log.warning("outbox.handler_failed", job_type=job_type, exc_info=True)
                 raise
+        elif job_type == "consistency_evaluate":
+            from kosmo.application.consistency.run_consistency_evaluation import run_consistency_evaluation
+
+            await run_consistency_evaluation(
+                payload,
+                project_repo=container.repos.projects,
+                feature_repo=container.repos.features,
+                requirement_repo=container.repos.requirements,
+                diagram_repo=container.repos.diagrams,
+                document_repo=container.repos.documents,
+                evaluator=container.pipeline.consistency_evaluator,
+                evaluation_repo=container.repos.consistency_evaluations,
+            )
         else:
             _log.warning("outbox.unknown_job_type", job_type=job_type)
 
@@ -229,9 +242,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     components = build_app_components(settings)
     app.state.container = components
 
-    outbox_task = asyncio.create_task(
-        run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components.pipeline))
-    )
+    outbox_task = asyncio.create_task(run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components)))
 
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:

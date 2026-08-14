@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from kosmo.contracts.audit.events import AuditEvent
@@ -13,10 +14,14 @@ from kosmo.contracts.chat import (
     MensajeChat,
     PlanCambio,
 )
+from kosmo.contracts.consistency import (
+    ConsistencyEvaluation,
+    ConsistencyEvaluationStatus,
+)
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, PlanChangeId, ProjectId
 from kosmo.contracts.sdd.project import Project
 
 _MAX_FAILURES = 10
@@ -321,6 +326,53 @@ class InMemoryOutbox:
 
     async def enqueue(self, job_type: str, payload: dict[str, Any]) -> None:
         self.jobs.append((job_type, payload))
+
+
+class InMemoryConsistencyEvaluationRepository:
+    def __init__(self) -> None:
+        self._rows: dict[str, ConsistencyEvaluation] = {}
+        self._by_key: dict[tuple[str, str, str, str], ConsistencyEvaluation] = {}
+
+    async def save(self, evaluation: ConsistencyEvaluation) -> ConsistencyEvaluation:
+        key = (
+            str(evaluation.project_id),
+            evaluation.source_phase.value,
+            evaluation.target_phase.value,
+            evaluation.target_artifact_id,
+        )
+        existing = self._by_key.get(key)
+        stored = dataclasses.replace(evaluation, id=existing.id) if existing is not None else evaluation
+        self._by_key[key] = stored
+        self._rows[str(stored.id)] = stored
+        return stored
+
+    async def by_id(self, evaluation_id: ConsistencyEvaluationId) -> ConsistencyEvaluation | None:
+        return self._rows.get(str(evaluation_id))
+
+    async def list_unresolved(
+        self,
+        project_id: ProjectId,
+        target_phase: SpecPhase,
+    ) -> list[ConsistencyEvaluation]:
+        unresolved = {
+            ConsistencyEvaluationStatus.EVALUATING,
+            ConsistencyEvaluationStatus.COMPLETED,
+            ConsistencyEvaluationStatus.FAILED,
+        }
+        return [
+            e
+            for e in self._rows.values()
+            if str(e.project_id) == str(project_id) and e.target_phase == target_phase and e.status in unresolved
+        ]
+
+    async def list_for_activity(
+        self,
+        project_id: ProjectId,
+        *,
+        limit: int = 50,
+    ) -> list[ConsistencyEvaluation]:
+        resolved = {ConsistencyEvaluationStatus.APPLIED, ConsistencyEvaluationStatus.DISCARDED}
+        return [e for e in self._rows.values() if str(e.project_id) == str(project_id) and e.status in resolved][:limit]
 
 
 class InMemoryUnitOfWork:

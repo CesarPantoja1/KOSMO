@@ -7,7 +7,7 @@ from typing import Protocol
 
 from kosmo.contracts.chat import DiffCambio, PlanCambio
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId
+from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, ProjectId, RequirementId
 
 
 class TraceabilityRepository(Protocol):
@@ -30,6 +30,52 @@ class ConsistencyStatus(StrEnum):
     ANALIZADO_SIN_IMPACTO = "analizado_sin_impacto"
     ANALIZADO_CON_IMPACTO = "analizado_con_impacto"
     ANALISIS_FALLIDO = "analisis_fallido"
+
+
+class ConsistencyEvaluationStatus(StrEnum):
+    EVALUATING = "evaluating"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    APPLIED = "applied"
+    DISCARDED = "discarded"
+
+
+@dataclass(frozen=True)
+class ConsistencyEvaluation:
+    """Sugerencia de impacto fresca: solo es valida si su snapshot_hash coincide con el estado actual."""
+
+    id: ConsistencyEvaluationId
+    project_id: ProjectId
+    source_phase: SpecPhase
+    target_phase: SpecPhase
+    target_artifact_id: str
+    artifact_type: str
+    snapshot_hash: str
+    status: ConsistencyEvaluationStatus = ConsistencyEvaluationStatus.COMPLETED
+    result: dict[str, object] | None = None
+    source_changes: list[dict[str, object]] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    failure_reason: str | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+class ConsistencyEvaluationRepository(Protocol):
+    async def save(self, evaluation: ConsistencyEvaluation) -> ConsistencyEvaluation: ...
+
+    async def by_id(self, evaluation_id: ConsistencyEvaluationId) -> ConsistencyEvaluation | None: ...
+
+    async def list_unresolved(
+        self,
+        project_id: ProjectId,
+        target_phase: SpecPhase,
+    ) -> list[ConsistencyEvaluation]: ...
+
+    async def list_for_activity(
+        self,
+        project_id: ProjectId,
+        *,
+        limit: int = 50,
+    ) -> list[ConsistencyEvaluation]: ...
 
 
 # Trazabilidad solo hacia la derecha: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo

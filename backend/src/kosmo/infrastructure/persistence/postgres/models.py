@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector  # pyright: ignore[reportMissingTypeStubs]
-from sqlalchemy import DateTime, Integer, String, Text, func, text
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -235,9 +235,47 @@ class OutboxJobModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class ConsistencyEvaluationModel(Base):
+    __tablename__ = "consistency_evaluations"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "source_phase",
+            "target_phase",
+            "target_artifact_id",
+            name="uq_consistency_evaluations_natural",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    target_artifact_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="evaluating")
+    result: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    source_changes: Mapped[list[Any]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    failure_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class UserPreferenceModel(Base):
     __tablename__ = "user_preferences"
-
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     rule_text: Mapped[str] = mapped_column(Text(), nullable=False)
