@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
-from kosmo.infrastructure.api.composition import build_app_components
+from kosmo.infrastructure.api.composition import PipelineComponents, build_app_components
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
@@ -28,7 +28,7 @@ from kosmo.infrastructure.api.routers.requirements import router as requirements
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.routers.traceability import router as traceability_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
-from kosmo.infrastructure.persistence.postgres.outbox import run_outbox_worker
+from kosmo.infrastructure.persistence.postgres.outbox import OutboxHandler, run_outbox_worker
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
 
 # Metadatos OpenAPI
@@ -191,7 +191,7 @@ _GLOBAL_RESPONSES = {
 # Ciclo de vida y aplicación
 
 
-def _make_outbox_handler(pipeline: Any) -> Any:
+def _make_outbox_handler(pipeline: PipelineComponents) -> OutboxHandler:
     async def handler(job_type: str, payload: dict[str, Any]) -> None:
         import structlog
 

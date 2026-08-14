@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -16,6 +16,8 @@ _log = structlog.get_logger(__name__)
 
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = 5.0
+
+OutboxHandler = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 
 class OutboxStore:
@@ -98,7 +100,7 @@ class OutboxStore:
 
 async def run_outbox_worker(
     store: OutboxStore,
-    handler: Any,
+    handler: OutboxHandler,
     poll_interval: float = 2.0,
     *,
     max_attempts: int = _MAX_ATTEMPTS,

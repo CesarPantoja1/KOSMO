@@ -24,7 +24,7 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 
 if TYPE_CHECKING:
     from kosmo.contracts.chat import MensajeChat
@@ -138,3 +138,14 @@ class AgentPort(Protocol):
         history: list[MensajeChat] | None = None,
         project_id: ProjectId | None = None,
     ) -> DirectModificationResult: ...
+
+    async def reflect_and_consolidate(
+        self,
+        *,
+        session_id: AgentMemoryId,
+        phase: SpecPhase,
+        session_type: str,
+        is_completed: bool,
+        current_iteration: int,
+        validation: ValidationResult,
+    ) -> None: ...
