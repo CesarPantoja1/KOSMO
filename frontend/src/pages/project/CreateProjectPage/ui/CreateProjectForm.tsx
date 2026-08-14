@@ -1,6 +1,7 @@
 'use client';
 
 import { Ai, CharacterCounter, toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
@@ -62,8 +63,7 @@ const CreateProjectForm = () => {
 				setProjectState(project);
 				router.replace('/proyecto/descubrimiento');
 			} catch (err) {
-				const message = err instanceof Error ? err.message : 'Error al crear el proyecto';
-				toast.error(message);
+				toast.error(formatApiError(err, 'Error al crear el proyecto'));
 				setIsSubmitting(false);
 			}
 		},

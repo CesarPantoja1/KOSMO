@@ -1,4 +1,4 @@
-import { clearConsistencyStore } from '@/entities/consistency';
+import { useConsistencyGateStore } from '@/entities/consistency';
 import { clearDiscoveryStore, useDiscoveryStore } from '@/entities/discovery';
 import { getDiscovery } from '@/entities/discovery/api/api';
 import {
@@ -10,9 +10,10 @@ import { clearModelingStore, useModelingStore } from '@/entities/modeling';
 import { getDiagram } from '@/entities/modeling/api/api';
 import { clearRequirementsStore, useRequirementsStore } from '@/entities/requirements';
 import { getRequirements } from '@/entities/requirements/api/api';
+import { useChatSessionsStore } from '@/entities/chat';
+import { ApiError } from '@/shared/api';
 import { clearProjectStore } from '@/entities/project';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { clearProjectStoreExceptProjects } from '@/entities/project/model/store';
 
 interface AppState {
@@ -29,18 +30,17 @@ interface AppState {
 	initializeProject: (projectId: string) => Promise<void>;
 }
 
-export const useAppStore = create<AppState>()(
-	persist(
-		(set) => ({
-			initialized: false,
-			setInitialized: (v) => set({ initialized: v }),
-			resetProjectState: () => {
+export const useAppStore = create<AppState>()((set) => ({
+	initialized: false,
+	setInitialized: (v) => set({ initialized: v }),
+	resetProjectState: () => {
 				clearProjectStore();
 				clearDiscoveryStore();
 				clearCharacteristicStore();
 				clearModelingStore();
 				clearRequirementsStore();
-				clearConsistencyStore();
+				useChatSessionsStore.getState().reset();
+				useConsistencyGateStore.getState().reset();
 				set({
 					initialized: false,
 					hasUnsavedChanges: false,
@@ -54,7 +54,8 @@ export const useAppStore = create<AppState>()(
 				clearCharacteristicStore();
 				clearModelingStore();
 				clearRequirementsStore();
-				clearConsistencyStore();
+				useChatSessionsStore.getState().reset();
+				useConsistencyGateStore.getState().reset();
 				set({
 					initialized: false,
 					hasUnsavedChanges: false,
@@ -70,9 +71,17 @@ export const useAppStore = create<AppState>()(
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
 			initializeProject: async (projectId) => {
 				try {
-					const discovery = await getDiscovery(projectId);
-					if (!discovery) return;
-					useDiscoveryStore.getState().setCurrentDiscovery(discovery);
+					// El 404 es el caso normal cuando aún no existe el documento de descubrimiento
+					try {
+						const discovery = await getDiscovery(projectId);
+						if (discovery) {
+							useDiscoveryStore.getState().setCurrentDiscovery(discovery);
+						}
+					} catch (error) {
+						if (!(error instanceof ApiError && error.status === 404)) {
+							throw error;
+						}
+					}
 
 					const characteristics = await getCharacteristics(projectId);
 					if (!characteristics || characteristics.length === 0) return;
@@ -97,20 +106,14 @@ export const useAppStore = create<AppState>()(
 							}
 						}),
 					);
-				} catch (error) {
-					console.error('[initializeProject] Error:', error);
-				}
-			},
-		}),
-		{
-			name: 'kosmo-app-store',
-			partialize: () => ({}),
+			} catch (error) {
+				console.error('[initializeProject] Error:', error);
+			}
 		},
-	),
+	}),
 );
 
 export const clearAppStore = () => {
-	useAppStore.persist.clearStorage();
 	useAppStore.setState({
 		initialized: false,
 		hasUnsavedChanges: false,

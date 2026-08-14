@@ -9,6 +9,5 @@ export {
 	getDiscovery,
 	saveDiscovery,
 	generateDiscovery,
-	refineDiscovery,
 	sendChatMessage,
 } from './api/api';

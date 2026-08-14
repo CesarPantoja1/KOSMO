@@ -1,18 +1,21 @@
 'use client';
 
 import { useDiscoveryStore } from '@/entities/discovery';
+import { createAssistantError } from '@/entities/chat';
+import type { ChatMessage } from '@/entities/chat';
 import {
-	Chatbot,
+	ChatStreamPanel,
 	MarkdownEditor,
-	MarkdownEditorSkeleton,
 	type MarkdownEditorHandle,
 	type SaveStatus,
 } from '@/feature';
 import { Ai, ArrowRight, Loading, ModalConfirm, toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
+import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
 import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const generatingDiscoveryMessages = [
 	'Analizando información del proyecto...',
@@ -23,9 +26,7 @@ const generatingDiscoveryMessages = [
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
 	const currentProject = useProjectStore((s) => s.currentProject);
-	const [isLoading] = useState(false);
 	const [isGeneratingDiscovery, setIsGeneratingDiscovery] = useState(false);
-	const savedContentRef = useRef('');
 	const router = useRouter();
 	const isSavingRef = useRef(false);
 
@@ -36,43 +37,32 @@ const DiscoveryPage = () => {
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-	const [isChatLoading, setIsChatLoading] = useState(false);
-	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
 	const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
-	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
+	const appendUserMessage = useDiscoveryStore((s) => s.appendUserMessage);
+	const appendAssistantMessage = useDiscoveryStore((s) => s.appendAssistantMessage);
+	const loadChatHistory = useDiscoveryStore((s) => s.loadChatHistory);
+	const loadOlderChatHistory = useDiscoveryStore((s) => s.loadOlderChatHistory);
+	const historyHasMore = useDiscoveryStore((s) => s.historyHasMore);
 	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
 	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
 	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
 	const hasDiscovery = !!currentDiscovery?.content;
 	const [markdown, setMarkdown] = useState(currentDiscovery?.content ?? '');
+	const [savedContent, setSavedContent] = useState(currentDiscovery?.content ?? '');
 
 	// Sync markdown with store after Zustand persist hydration.
 	useEffect(() => {
-		if (
-			currentDiscovery?.content &&
-			currentDiscovery.content !== savedContentRef.current
-		) {
+		if (!currentDiscovery?.content || currentDiscovery.content === savedContent) return;
+		const timer = window.setTimeout(() => {
 			setMarkdown(currentDiscovery.content);
-			savedContentRef.current = currentDiscovery.content;
-		}
-	}, [currentDiscovery]);
-
-	useEffect(() => {
-		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
-	}, [markdown]);
-
-	useEffect(() => {
-		setHasUnsavedChanges(hasUnsavedChanges);
-	}, [hasUnsavedChanges, setHasUnsavedChanges]);
-
-	useEffect(() => {
-		if (!hasUnsavedChanges && pendingNavigationPath) {
-			setPendingNavigationPath(null);
-		}
-	}, [hasUnsavedChanges, pendingNavigationPath, setPendingNavigationPath]);
+			setSavedContent(currentDiscovery.content);
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [currentDiscovery, savedContent]);
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
@@ -82,8 +72,7 @@ const DiscoveryPage = () => {
 		try {
 			isSavingRef.current = true;
 			await saveDiscovery(currentProject.id, markdown);
-			savedContentRef.current = markdown;
-			setHasUnsavedChangesLocal(false);
+			setSavedContent(markdown);
 			setSaveStatus('saved');
 			return true;
 		} catch {
@@ -93,6 +82,11 @@ const DiscoveryPage = () => {
 			isSavingRef.current = false;
 		}
 	};
+
+	useUnsavedChanges({
+		isDirty: markdown !== savedContent,
+		onAutosave: doSave,
+	});
 
 	const handleNextLink = async () => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
@@ -110,11 +104,9 @@ const DiscoveryPage = () => {
 		try {
 			const data = await generateDiscovery(currentProject.id);
 			setMarkdown(data.content);
-			savedContentRef.current = data.content;
+			setSavedContent(data.content);
 		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : 'Error al generar el descubrimiento';
-			toast.error(message);
+			toast.error(formatApiError(err, 'Error al generar el descubrimiento'));
 		} finally {
 			setIsGeneratingDiscovery(false);
 		}
@@ -140,57 +132,46 @@ const DiscoveryPage = () => {
 		setPendingNavigationPath(null);
 	};
 
-	useEffect(() => {
-		if (hasUnsavedChanges) {
-			const handler = (e: BeforeUnloadEvent) => {
-				e.preventDefault();
-			};
-			window.addEventListener('beforeunload', handler);
-			return () => window.removeEventListener('beforeunload', handler);
-		}
-	}, [hasUnsavedChanges]);
-
-	useEffect(() => {
-		const handler = () => {
-			if (hasUnsavedChanges) {
-				setPendingNavigationPath(window.location.href);
-			}
-		};
-		window.addEventListener('popstate', handler);
-		return () => window.removeEventListener('popstate', handler);
-	}, [hasUnsavedChanges, setPendingNavigationPath]);
-
-	useEffect(() => {
-		if (markdown === savedContentRef.current) return;
-
-		const timer = setTimeout(() => {
-			doSave();
-		}, 3000);
-
-		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [markdown]);
-
 	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
-		setIsChatLoading(true);
-		try {
-			const response = await sendChatMessage(currentProject.id, content);
-			if (response.modification) {
-				const updated = await getDiscovery(currentProject.id);
-				setMarkdown(updated.content);
-				savedContentRef.current = updated.content;
-			}
-		} catch (err) {
-			const errorMessage =
-				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
-			toast.error(errorMessage);
-		} finally {
-			setIsChatLoading(false);
+		appendUserMessage(content);
+	};
+
+	const handleChatMessage = async (message: ChatMessage) => {
+		appendAssistantMessage(message);
+		if (message.modification?.applied && currentProject) {
+			const updated = await getDiscovery(currentProject.id);
+			setMarkdown(updated.content);
+			setSavedContent(updated.content);
 		}
 	};
 
-	const chatMessages = chatHistory;
+	const handleChatRedirect = (redirectMessage: string) => {
+		appendAssistantMessage(createAssistantError(redirectMessage));
+	};
+
+	const handleLoadHistory = useCallback(
+		(sessionId: string | null) => {
+			if (!currentProject) return;
+			void loadChatHistory(currentProject.id, sessionId);
+		},
+		[currentProject, loadChatHistory],
+	);
+
+	const handleLoadMore = useCallback(
+		async (sessionId: string | null) => {
+			if (!currentProject) return;
+			setLoadingMore(true);
+			try {
+				await loadOlderChatHistory(currentProject.id, sessionId);
+			} catch (err) {
+				toast.error(formatApiError(err, 'Error al cargar el historial.'));
+			} finally {
+				setLoadingMore(false);
+			}
+		},
+		[currentProject, loadOlderChatHistory],
+	);
 
 	return (
 		<>
@@ -240,11 +221,8 @@ const DiscoveryPage = () => {
 					</div>
 
 					<div className='flex-1 flex flex-col min-h-0'>
-						{/* Skeleton loading */}
-						{isLoading && <MarkdownEditorSkeleton />}
-
 						{/* Empty state */}
-						{!isLoading && !isGeneratingDiscovery && !hasDiscovery && (
+						{!isGeneratingDiscovery && !hasDiscovery && (
 							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 								<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
 									<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
@@ -268,7 +246,7 @@ const DiscoveryPage = () => {
 						)}
 
 						{/* Editor with content */}
-						{!isLoading && hasDiscovery && (
+						{hasDiscovery && (
 							<div className='w-full h-full relative'>
 								<MarkdownEditor
 									ref={editorRef}
@@ -278,7 +256,6 @@ const DiscoveryPage = () => {
 									onMaximize={() => setEditorMaximized(true)}
 									onMinimize={() => setEditorMaximized(false)}
 									saveStatus={saveStatus}
-									readOnly={isChatLoading}
 								/>
 							</div>
 						)}
@@ -293,12 +270,27 @@ const DiscoveryPage = () => {
 							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
 					}`}
 				>
-					<Chatbot
+					<ChatStreamPanel
 						placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
 						onClose={() => setIsChatbotOpen(false)}
-						messages={chatMessages}
-						onSendMessage={handleSendChat}
-						isLoading={isChatLoading}
+						messages={chatHistory}
+						streamUrl={
+							currentProject
+								? `/api/v1/projects/${currentProject.id}/discovery/chat/stream`
+								: null
+						}
+						projectId={currentProject?.id ?? null}
+						phase='discovery'
+						onLoadHistory={handleLoadHistory}
+						hasMore={historyHasMore}
+						loadingMore={loadingMore}
+						onLoadMore={handleLoadMore}
+						onUserMessage={handleSendChat}
+						onMessage={handleChatMessage}
+						onRedirect={handleChatRedirect}
+						onError={(error) =>
+							toast.error(formatApiError(error, 'Error al enviar el mensaje.'))
+						}
 					/>
 				</div>
 			</div>

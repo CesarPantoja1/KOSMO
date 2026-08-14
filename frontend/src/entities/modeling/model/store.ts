@@ -16,8 +16,6 @@ interface ModelingStore {
 
 	hasDiagram: Record<string, boolean>;
 	setHasDiagram: (id: string, has: boolean) => void;
-	isEditorMaximized: boolean;
-	setEditorMaximized: (v: boolean) => void;
 	resetModeling: () => void;
 }
 
@@ -55,9 +53,7 @@ export const useModelingStore = create<ModelingStore>()(
 				set((state) => ({
 					hasDiagram: { ...state.hasDiagram, [id]: has },
 				})),
-			isEditorMaximized: false,
-			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
-			resetModeling: () => set({ hasDiagram: {}, currentDiagrams: {}, isEditorMaximized: false }),
+			resetModeling: () => set({ hasDiagram: {}, currentDiagrams: {} }),
 		}),
 		{
 			name: 'kosmo-modeling-store',
@@ -71,5 +67,5 @@ export const useModelingStore = create<ModelingStore>()(
 
 export const clearModelingStore = () => {
 	useModelingStore.persist.clearStorage();
-	useModelingStore.setState({ hasDiagram: {}, currentDiagrams: {}, isEditorMaximized: false });
+	useModelingStore.setState({ hasDiagram: {}, currentDiagrams: {} });
 };

@@ -1,4 +1,4 @@
-import type { ChatResponse } from '@/entities/chat';
+import type { ChatHistory, ChatResponse } from '@/entities/chat';
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type { DiscoveryResponse } from '../model/types';
@@ -121,21 +121,6 @@ const mockGenerateDiscovery = async (projectId: string): Promise<DiscoveryRespon
 	};
 };
 
-const mockRefineDiscovery = async (
-	projectId: string,
-	_instructions: string,
-): Promise<DiscoveryResponse> => {
-	await delay(1500);
-	mockContent =
-		mockContent +
-		'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
-	return {
-		id: 'mock-discovery-1',
-		project_id: projectId,
-		content: mockContent,
-	};
-};
-
 const mockSendChatMessage = async (
 	_projectId: string,
 	_content: string,
@@ -169,14 +154,6 @@ const realGenerateDiscovery = (projectId: string) => {
 	});
 };
 
-const realRefineDiscovery = (projectId: string, instructions: string) => {
-	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery/refine`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ instructions }),
-	});
-};
-
 const realSendChatMessage = (projectId: string, content: string) => {
 	return apiClient<ChatResponse>(`/api/v1/projects/${projectId}/discovery/chat`, {
 		method: 'POST',
@@ -201,14 +178,6 @@ export const saveDiscovery = (
 export const generateDiscovery = (projectId: string): Promise<DiscoveryResponse> =>
 	USE_MOCKS ? mockGenerateDiscovery(projectId) : realGenerateDiscovery(projectId);
 
-export const refineDiscovery = (
-	projectId: string,
-	instructions: string,
-): Promise<DiscoveryResponse> =>
-	USE_MOCKS
-		? mockRefineDiscovery(projectId, instructions)
-		: realRefineDiscovery(projectId, instructions);
-
 export const sendChatMessage = (
 	projectId: string,
 	content: string,
@@ -216,3 +185,34 @@ export const sendChatMessage = (
 	USE_MOCKS
 		? mockSendChatMessage(projectId, content)
 		: realSendChatMessage(projectId, content);
+
+const mockGetChatHistory = async (projectId: string): Promise<ChatHistory> => {
+	await delay(300);
+	return {
+		phase: 'discovery',
+		context: projectId,
+		messages: [],
+		has_more: false,
+		next_cursor: null,
+	};
+};
+
+const realGetChatHistory = (projectId: string, sessionId: string | null, before?: string | null) => {
+	const query = new URLSearchParams();
+	if (sessionId) query.set('session_id', sessionId);
+	if (before) query.set('before', before);
+	const suffix = query.toString() ? `?${query.toString()}` : '';
+	return apiClient<ChatHistory>(
+		`/api/v1/projects/${projectId}/discovery/chat${suffix}`,
+		{ method: 'GET' },
+	);
+};
+
+export const getChatHistory = (
+	projectId: string,
+	sessionId: string | null = null,
+	before?: string | null,
+): Promise<ChatHistory> =>
+	USE_MOCKS
+		? mockGetChatHistory(projectId)
+		: realGetChatHistory(projectId, sessionId, before);

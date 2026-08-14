@@ -2,16 +2,17 @@
 
 import {
 	MarkdownEditor,
-	MarkdownEditorSkeleton,
 	PanelAsistenteRequisito,
 	type SaveStatus,
 } from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useRequirementsStore } from '@/entities/requirements';
+import { formatApiError } from '@/shared/api';
+import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
 import {
 	Ai,
 	ArrowLeft,
@@ -23,7 +24,6 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
-import { getTraceabilityNavigation, type TraceabilityNavigationOutput } from '@/entities/traceability';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 
@@ -43,7 +43,6 @@ const RequirementsPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const selectedId = useCharacteristicStore((s) => s.selectedId);
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
-	const [isLoading] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 
 	// Requisitos estado
@@ -70,28 +69,6 @@ const RequirementsPage = () => {
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
-
-	// Trazabilidad
-	const [traceabilityCheck, setTraceabilityCheck] = useState<TraceabilityNavigationOutput | null>(null);
-	const [isCheckingTraceability, setIsCheckingTraceability] = useState(false);
-	const [isEditable, setIsEditable] = useState(false);
-
-	const selectedIdRef = useRef(selectedId);
-	useEffect(() => {
-		selectedIdRef.current = selectedId;
-		console.log('id actual es ' + selectedIdRef.current);
-		console.log('id actual es ' + markdown);
-	}, [selectedId, markdown]);
-
-	useEffect(() => {
-		setHasUnsavedChanges(hasUnsavedChanges);
-	}, [hasUnsavedChanges, setHasUnsavedChanges]);
-
-	useEffect(() => {
-		if (!hasUnsavedChanges && pendingNavigationPath) {
-			setPendingNavigationPath(null);
-		}
-	}, [hasUnsavedChanges, pendingNavigationPath, setPendingNavigationPath]);
 
 	useEffect(() => {
 		if (!hasUnsavedChanges && pendingCharSwitch) {
@@ -121,7 +98,7 @@ const RequirementsPage = () => {
 				setSavedContent(content);
 			} catch (err) {
 				if (!cancelled && (err as { status?: number }).status !== 404) {
-					toast.error('Error al cargar los requisitos');
+					toast.error(formatApiError(err, 'Error al cargar los requisitos'));
 				}
 			} finally {
 				if (!cancelled) setIsLoadingRequirements(false);
@@ -149,7 +126,6 @@ const RequirementsPage = () => {
 		setMarkdown('');
 		setSavedContent('');
 		setSaveStatus('idle');
-		setIsEditable(false);
 		setSelectedId(id);
 		setPendingCharSwitch(null);
 		if (!hasRequirements[id]) {
@@ -175,9 +151,8 @@ const RequirementsPage = () => {
 			);
 			setMarkdown(content);
 			setSavedContent(content);
-		} catch (_err) {
-			toast.error('Error al generar los requisitos');
-			console.log(_err);
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al generar los requisitos'));
 		} finally {
 			setIsGenerating(false);
 		}
@@ -191,35 +166,11 @@ const RequirementsPage = () => {
 			await saveRequirements(currentProject.id, selectedId, markdown);
 			setSavedContent(markdown);
 			setSaveStatus('saved');
-		} catch {
+		} catch (err) {
 			setSaveStatus('error');
-			toast.error('Error al guardar los requisitos');
+			toast.error(formatApiError(err, 'Error al guardar los requisitos'));
 		}
 	}, [currentProject, selectedId, markdown, saveRequirements]);
-
-	const handleEdit = async () => {
-		if (!selectedId) return;
-		setIsCheckingTraceability(true);
-		try {
-			const res = await getTraceabilityNavigation(selectedId, 'requisitos');
-			if (!res.permitted) {
-				setTraceabilityCheck(res);
-			} else {
-				setIsEditable(true);
-			}
-		} catch {
-			toast.error('Error al verificar permisos de edición');
-		} finally {
-			setIsCheckingTraceability(false);
-		}
-	};
-
-	const handleGoToSource = () => {
-		if (traceabilityCheck?.source_level === 'caracteristicas') {
-			router.push('/proyecto/caracteristicas');
-		}
-		setTraceabilityCheck(null);
-	};
 
 	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges: unsaved, setPendingNavigationPath: setPath } =
@@ -242,35 +193,10 @@ const RequirementsPage = () => {
 		setPendingNavigationPath(null);
 	}, [setPendingNavigationPath]);
 
-	useEffect(() => {
-		if (hasUnsavedChanges) {
-			const handler = (e: BeforeUnloadEvent) => {
-				e.preventDefault();
-			};
-			window.addEventListener('beforeunload', handler);
-			return () => window.removeEventListener('beforeunload', handler);
-		}
-	}, [hasUnsavedChanges]);
-
-	useEffect(() => {
-		const handler = () => {
-			if (hasUnsavedChanges) {
-				setPendingNavigationPath(window.location.href);
-			}
-		};
-		window.addEventListener('popstate', handler);
-		return () => window.removeEventListener('popstate', handler);
-	}, [hasUnsavedChanges, setPendingNavigationPath]);
-
-	useEffect(() => {
-		if (markdown === savedContent) return;
-
-		const timer = setTimeout(() => {
-			handleSave();
-		}, 3000);
-
-		return () => clearTimeout(timer);
-	}, [markdown, handleSave, savedContent]);
+	useUnsavedChanges({
+		isDirty: hasUnsavedChanges,
+		onAutosave: handleSave,
+	});
 
 	const hasCharacteristics = characteristics.length > 0;
 
@@ -282,17 +208,6 @@ const RequirementsPage = () => {
 
 			{pendingNavigationPath && (
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
-			)}
-			
-			{!!traceabilityCheck && (
-				<ModalConfirm
-					title='Edición no permitida'
-					description={traceabilityCheck.redirect_message || 'No tienes permisos para editar este nivel.'}
-					confirmText={`Ir a ${traceabilityCheck.source_entity_name || 'Origen'}`}
-					cancelText='Cancelar'
-					onConfirm={handleGoToSource}
-					onCancel={() => setTraceabilityCheck(null)}
-				/>
 			)}
 
 			{isGenerating && (
@@ -315,18 +230,8 @@ const RequirementsPage = () => {
 							</p>
 						</div>
 
-						{!isLoading && hasCharacteristics && !isEditorMaximized && (
+						{hasCharacteristics && !isEditorMaximized && (
 							<div className='flex items-center gap-3 shrink-0'>
-								<button
-									onClick={handleEdit}
-									disabled={isCheckingTraceability || isEditable || !hasRequirements[selectedId ? selectedId : '']}
-									className='btn btn-outline disabled:opacity-50 disabled:cursor-not-allowed'
-								>
-									{isCheckingTraceability ? (
-										<div className='h-4 w-4 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
-									) : null}
-									Editar
-								</button>
 								<button
 									onClick={() => setIsChatbotOpen(true)}
 									disabled={!hasRequirements[selectedId ? selectedId : '']}
@@ -347,28 +252,7 @@ const RequirementsPage = () => {
 						)}
 					</div>
 
-					{isLoading ? (
-						<div className='flex gap-1 flex-1 min-h-0 pb-4'>
-							<div className='w-72 bg-neutral-50 border-r border-neutral-200 rounded-lg flex flex-col gap-3 p-3 animate-pulse shrink-0'>
-								<div className='h-5 bg-neutral-200 rounded-md w-40' />
-								{[1, 2, 3, 4].map((i) => (
-									<div key={i} className='h-12 bg-neutral-200 rounded-md' />
-								))}
-							</div>
-							<div className='flex-1 min-h-0 bg-neutral-50'>
-								<div className='flex flex-col gap-3 h-full min-h-0'>
-									<div className='flex flex-col gap-1 px-4 mt-3'>
-										<div className='flex items-center gap-2'>
-											<div className='h-4 w-16 rounded-md bg-neutral-200 animate-pulse' />
-											<div className='h-4 w-48 rounded-md bg-neutral-200 animate-pulse' />
-										</div>
-										<div className='h-4 w-full max-w-2xl rounded-md bg-neutral-200 animate-pulse' />
-									</div>
-									<MarkdownEditorSkeleton />
-								</div>
-							</div>
-						</div>
-					) : !hasCharacteristics ? (
+					{!hasCharacteristics ? (
 						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 							<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
 								<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
@@ -453,7 +337,6 @@ const RequirementsPage = () => {
 													onMaximize={() => setEditorMaximized(true)}
 													onMinimize={() => setEditorMaximized(false)}
 													saveStatus={saveStatus}
-													readOnly={!isEditable}
 												/>
 											</div>
 										</div>

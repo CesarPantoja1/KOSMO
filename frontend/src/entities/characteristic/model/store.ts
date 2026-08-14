@@ -4,6 +4,7 @@ import {
 	addCharacteristic,
 	generateCharacteristics,
 	getCharacteristics,
+	getChatHistory,
 	getSuggestCharacteristics,
 	sendChatMessage,
 } from '../api/api';
@@ -12,6 +13,7 @@ import type {
 	CreateCharacteristicResponse,
 	SuggestCharacteristic,
 } from './types';
+import { appendMessage, createUserMessage } from '@/entities/chat';
 import type { ChatMessage, ChatResponse } from '@/entities/chat';
 
 interface CharacteristicStore {
@@ -32,6 +34,18 @@ interface CharacteristicStore {
 	) => Promise<CreateCharacteristicResponse>;
 
 	sendChatMessage: (featureId: string, content: string) => Promise<ChatResponse>;
+	loadChatHistory: (
+		featureId: string,
+		sessionId?: string | null,
+	) => Promise<ChatMessage[]>;
+	historyHasMore: boolean;
+	historyCursor: string | null;
+	loadOlderChatHistory: (
+		featureId: string,
+		sessionId?: string | null,
+	) => Promise<void>;
+	appendUserMessage: (featureId: string, content: string) => void;
+	appendAssistantMessage: (featureId: string, message: ChatMessage) => void;
 
 	selectedId: string | null;
 	setSelectedId: (id: string | null) => void;
@@ -49,6 +63,8 @@ export const useCharacteristicStore = create<CharacteristicStore>()(
 				set({ currentCharacteristics: [], currentSuggestions: [], selectedId: null }),
 
 			chatHistories: {},
+			historyHasMore: false,
+			historyCursor: null,
 			clearChatHistory: (featureId) => {
 				const { chatHistories } = get();
 				set({ chatHistories: { ...chatHistories, [featureId]: [] } });
@@ -85,20 +101,13 @@ export const useCharacteristicStore = create<CharacteristicStore>()(
 			},
 
 			sendChatMessage: async (featureId, content) => {
-				const userMessage: ChatMessage = {
-					id: crypto.randomUUID(),
-					role: 'user',
-					content,
-					created_at: new Date().toISOString(),
-					change_suggestions: null,
-					modification: null,
-				};
+				const userMessage = createUserMessage(content);
 
 				const current = get().chatHistories[featureId] ?? [];
 				set({
 					chatHistories: {
 						...get().chatHistories,
-						[featureId]: [...current, userMessage],
+						[featureId]: appendMessage(current, userMessage),
 					},
 				});
 
@@ -108,11 +117,61 @@ export const useCharacteristicStore = create<CharacteristicStore>()(
 				set({
 					chatHistories: {
 						...get().chatHistories,
-						[featureId]: [...afterUser, response.message],
+						[featureId]: appendMessage(afterUser, response.message),
 					},
 				});
 
 				return response;
+			},
+
+			appendUserMessage: (featureId, content) => {
+				const current = get().chatHistories[featureId] ?? [];
+				set({
+					chatHistories: {
+						...get().chatHistories,
+						[featureId]: appendMessage(current, createUserMessage(content)),
+					},
+				});
+			},
+
+			appendAssistantMessage: (featureId, message) => {
+				const current = get().chatHistories[featureId] ?? [];
+				set({
+					chatHistories: {
+						...get().chatHistories,
+						[featureId]: appendMessage(current, message),
+					},
+				});
+			},
+
+			loadChatHistory: async (featureId, sessionId = null) => {
+				const history = await getChatHistory(featureId, sessionId);
+				set((state) => ({
+					chatHistories: {
+						...state.chatHistories,
+						[featureId]: history.messages ?? [],
+					},
+					historyHasMore: history.has_more,
+					historyCursor: history.next_cursor,
+				}));
+				return history.messages ?? [];
+			},
+
+			loadOlderChatHistory: async (featureId, sessionId = null) => {
+				const { historyCursor, chatHistories } = get();
+				if (!historyCursor) return;
+				const history = await getChatHistory(featureId, sessionId, historyCursor);
+				set((state) => ({
+					chatHistories: {
+						...state.chatHistories,
+						[featureId]: [
+							...(history.messages ?? []),
+							...(chatHistories[featureId] ?? []),
+						],
+					},
+					historyHasMore: history.has_more,
+					historyCursor: history.next_cursor,
+				}));
 			},
 
 			selectedId: null,

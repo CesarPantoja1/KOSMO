@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
 	generateDiscovery,
+	getChatHistory,
 	getDiscovery,
-	refineDiscovery,
 	saveDiscovery,
 	sendChatMessage as sendChatMessageApi,
 } from '../api/api';
 import type { DiscoveryResponse } from './types';
+import { appendMessage, createUserMessage } from '@/entities/chat';
 import type { ChatMessage, ChatResponse } from '@/entities/chat';
 
 interface DiscoveryStore {
@@ -20,23 +21,40 @@ interface DiscoveryStore {
 	getDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
 	saveDiscovery: (projectId: string, content: string) => Promise<DiscoveryResponse>;
 	generateDiscovery: (projectId: string) => Promise<DiscoveryResponse>;
-	refineDiscovery: (
-		projectId: string,
-		instructions: string,
-	) => Promise<DiscoveryResponse>;
 	sendChatMessage: (projectId: string, content: string) => Promise<ChatResponse>;
+	loadChatHistory: (
+		projectId: string,
+		sessionId?: string | null,
+	) => Promise<ChatMessage[]>;
+	historyHasMore: boolean;
+	historyCursor: string | null;
+	loadOlderChatHistory: (
+		projectId: string,
+		sessionId?: string | null,
+	) => Promise<void>;
+	appendUserMessage: (content: string) => void;
+	appendAssistantMessage: (message: ChatMessage) => void;
 }
 
 export const useDiscoveryStore = create<DiscoveryStore>()(
 	persist(
-		(set, _get) => ({
+		(set, get) => ({
 			currentDiscovery: null,
 			chatHistory: [],
+			historyHasMore: false,
+			historyCursor: null,
 
 			setCurrentDiscovery: (discovery) => set({ currentDiscovery: discovery }),
 			clearDiscovery: () => set({ currentDiscovery: null }),
-			clearChatHistory: () => set({ chatHistory: [] }),
-			resetDiscovery: () => set({ currentDiscovery: null, chatHistory: [] }),
+			clearChatHistory: () =>
+				set({ chatHistory: [], historyHasMore: false, historyCursor: null }),
+			resetDiscovery: () =>
+				set({
+					currentDiscovery: null,
+					chatHistory: [],
+					historyHasMore: false,
+					historyCursor: null,
+				}),
 
 			getDiscovery: async (projectId) => {
 				const data = await getDiscovery(projectId);
@@ -56,26 +74,44 @@ export const useDiscoveryStore = create<DiscoveryStore>()(
 				return data;
 			},
 
-			refineDiscovery: async (projectId, instructions) => {
-				const data = await refineDiscovery(projectId, instructions);
-				set({ currentDiscovery: data });
-				return data;
-			},
-
 			sendChatMessage: async (projectId, content) => {
-				const userMessage: ChatMessage = {
-					id: crypto.randomUUID(),
-					role: 'user',
-					content,
-					created_at: new Date().toISOString(),
-					change_suggestions: null,
-					modification: null,
-				};
-				set((state) => ({ chatHistory: [...state.chatHistory, userMessage] }));
+				const userMessage = createUserMessage(content);
+				set((state) => ({ chatHistory: appendMessage(state.chatHistory, userMessage) }));
 
 				const response = await sendChatMessageApi(projectId, content);
-				set((state) => ({ chatHistory: [...state.chatHistory, response.message] }));
+				set((state) => ({
+					chatHistory: appendMessage(state.chatHistory, response.message),
+				}));
 				return response;
+			},
+
+			appendUserMessage: (content) =>
+				set((state) => ({
+					chatHistory: appendMessage(state.chatHistory, createUserMessage(content)),
+				})),
+
+			appendAssistantMessage: (message) =>
+				set((state) => ({ chatHistory: appendMessage(state.chatHistory, message) })),
+
+			loadChatHistory: async (projectId, sessionId = null) => {
+				const history = await getChatHistory(projectId, sessionId);
+				set({
+					chatHistory: history.messages ?? [],
+					historyHasMore: history.has_more,
+					historyCursor: history.next_cursor,
+				});
+				return history.messages ?? [];
+			},
+
+			loadOlderChatHistory: async (projectId, sessionId = null) => {
+				const { historyCursor, chatHistory } = get();
+				if (!historyCursor) return;
+				const history = await getChatHistory(projectId, sessionId, historyCursor);
+				set({
+					chatHistory: [...(history.messages ?? []), ...chatHistory],
+					historyHasMore: history.has_more,
+					historyCursor: history.next_cursor,
+				});
 			},
 		}),
 		{

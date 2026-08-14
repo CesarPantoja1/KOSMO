@@ -2,12 +2,14 @@
 
 import { useCharacteristicStore, deleteFeature } from '@/entities/characteristic';
 import { useDiscoveryStore } from '@/entities/discovery';
-import { Chatbot } from '@/feature';
+import { ChatStreamPanel } from '@/feature';
+import { createAssistantError } from '@/entities/chat';
 import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import { useProjectStore } from '@/entities/project';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
@@ -24,7 +26,7 @@ const CharacteristicsPage = () => {
 		useCharacteristicsPage();
 
 	const [activeFeatureId, setActiveFeatureId] = useState<string | null>(null);
-	const [isChatLoading, setIsChatLoading] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
 	const [isGeneratingCharacteristics, setIsGeneratingCharacteristics] = useState(false);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -33,7 +35,13 @@ const CharacteristicsPage = () => {
 	const hasDiscovery = currentDiscovery !== null;
 
 	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
-	const sendChatMessage = useCharacteristicStore((s) => s.sendChatMessage);
+	const appendUserMessage = useCharacteristicStore((s) => s.appendUserMessage);
+	const appendAssistantMessage = useCharacteristicStore(
+		(s) => s.appendAssistantMessage,
+	);
+	const loadChatHistory = useCharacteristicStore((s) => s.loadChatHistory);
+	const loadOlderChatHistory = useCharacteristicStore((s) => s.loadOlderChatHistory);
+	const historyHasMore = useCharacteristicStore((s) => s.historyHasMore);
 	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 	const generateCharacteristics = useCharacteristicStore(
 		(s) => s.generateCharacteristics,
@@ -62,9 +70,7 @@ const CharacteristicsPage = () => {
 			toast.success('Característica eliminada');
 		} catch (err) {
 			toast.close(toastId);
-			const message =
-				err instanceof Error ? err.message : 'Error al eliminar la característica';
-			toast.error(message);
+			toast.error(formatApiError(err, 'Error al eliminar la característica'));
 		}
 	};
 
@@ -76,30 +82,52 @@ const CharacteristicsPage = () => {
 			await generateCharacteristics(currentProject.id);
 			toast.success('Características generadas exitosamente');
 		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : 'Error al generar las características';
-			toast.error(message);
+			toast.error(formatApiError(err, 'Error al generar las características'));
 		} finally {
 			setIsGeneratingCharacteristics(false);
 		}
 	};
 
-	const handleSendChat = async (content: string) => {
+	const handleSendChat = (content: string) => {
 		if (!activeFeatureId) return;
-		setIsChatLoading(true);
-		try {
-			const response = await sendChatMessage(activeFeatureId, content);
-			if (response.modification && currentProject) {
-				await getCharacteristics(currentProject.id);
-			}
-		} catch (err) {
-			const errorMessage =
-				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
-			toast.error(errorMessage);
-		} finally {
-			setIsChatLoading(false);
+		appendUserMessage(activeFeatureId, content);
+	};
+
+	const handleChatMessage = async (message: ChatMessage) => {
+		if (!activeFeatureId) return;
+		appendAssistantMessage(activeFeatureId, message);
+		if (message.modification?.applied && currentProject) {
+			await getCharacteristics(currentProject.id);
 		}
 	};
+
+	const handleChatRedirect = (redirectMessage: string) => {
+		if (!activeFeatureId) return;
+		appendAssistantMessage(activeFeatureId, createAssistantError(redirectMessage));
+	};
+
+	const handleLoadHistory = useCallback(
+		(sessionId: string | null) => {
+			if (!activeFeatureId) return;
+			void loadChatHistory(activeFeatureId, sessionId);
+		},
+		[activeFeatureId, loadChatHistory],
+	);
+
+	const handleLoadMore = useCallback(
+		async (sessionId: string | null) => {
+			if (!activeFeatureId) return;
+			setLoadingMore(true);
+			try {
+				await loadOlderChatHistory(activeFeatureId, sessionId);
+			} catch (err) {
+				toast.error(formatApiError(err, 'Error al cargar el historial.'));
+			} finally {
+				setLoadingMore(false);
+			}
+		},
+		[activeFeatureId, loadOlderChatHistory],
+	);
 
 	const chatMessages: ChatMessage[] = chatHistories[activeFeatureId!] ?? [];
 
@@ -255,12 +283,28 @@ const CharacteristicsPage = () => {
 							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
 					}`}
 				>
-					<Chatbot
+					<ChatStreamPanel
 						placeholder='ej. mejorar característica de búsqueda'
 						onClose={() => setActiveFeatureId(null)}
 						messages={chatMessages}
-						onSendMessage={handleSendChat}
-						isLoading={isChatLoading}
+						streamUrl={
+							activeFeatureId
+								? `/api/v1/features/${activeFeatureId}/chat/stream`
+								: null
+						}
+						projectId={currentProject?.id ?? null}
+						phase='features'
+						contextId={activeFeatureId}
+						onLoadHistory={handleLoadHistory}
+						hasMore={historyHasMore}
+						loadingMore={loadingMore}
+						onLoadMore={handleLoadMore}
+						onUserMessage={handleSendChat}
+						onMessage={handleChatMessage}
+						onRedirect={handleChatRedirect}
+						onError={(error) =>
+							toast.error(formatApiError(error, 'Error al enviar el mensaje.'))
+						}
 					/>
 				</div>
 			</div>

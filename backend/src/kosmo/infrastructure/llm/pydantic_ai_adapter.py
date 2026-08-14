@@ -133,8 +133,9 @@ class PydanticAILLMClient:
         max_tokens: int = 4096,
     ) -> T:
         response = await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
-        text = response.text.strip()
+        return self._parse_typed_output(response.text.strip(), output_type)
 
+    def _parse_typed_output[T](self, text: str, output_type: type[T]) -> T:
         # Intentar extraer JSON incluso si hay texto circundante o markdown
         json_text = _extract_json(text)
         if json_text:
@@ -227,24 +228,27 @@ class PydanticAILLMClient:
         temperature: float = 0.1,
         max_tokens: int = 4096,
     ) -> AsyncIterator[StreamedTypedResult[T]]:
+        # Modo texto: sin output_type para que pydantic-ai exponga stream_text()
+        # y no envíe tools/tool_choice. El JSON tipado se parsea al final con
+        # la misma lógica que complete_typed (ver _parse_typed_output).
         agent = self._get_agent(prompt.system_prompt)
-        async with asyncio.wait_for(  # type: ignore[reportUnknownMemberType]
-            agent.run_stream(  # type: ignore[reportUnknownMemberType]
+        async with asyncio.timeout(self._DEFAULT_TIMEOUT_SECONDS):
+            async with agent.run_stream(  # type: ignore[reportUnknownMemberType]
                 prompt.user_prompt,
-                result_type=output_type,  # type: ignore[reportArgumentType]
                 model_settings=ModelSettings(temperature=temperature, max_tokens=max_tokens),
-            ),
-            timeout=self._DEFAULT_TIMEOUT_SECONDS,
-        ) as streamed:  # type: ignore[reportUnknownVariableType]
-            yield StreamedTypedResult(streamed)  # type: ignore[reportArgumentType]
+            ) as streamed:  # type: ignore[reportUnknownVariableType]
+                yield StreamedTypedResult(streamed, output_type, self)  # type: ignore[reportArgumentType]
 
 
 class StreamedTypedResult[T]:
-    def __init__(self, streamed: Any) -> None:
+    def __init__(self, streamed: Any, output_type: type[T], client: PydanticAILLMClient) -> None:
         self._streamed = streamed
+        self._output_type = output_type
+        self._client = client
 
     def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:
         return self._streamed.stream_text(delta=delta)  # type: ignore[reportReturnType]
 
     async def get_data(self) -> T:
-        return await self._streamed.get_data()  # type: ignore[reportReturnType]
+        text = await self._streamed.get_output()  # type: ignore[reportUnknownMemberType]
+        return self._client._parse_typed_output(str(text).strip(), self._output_type)

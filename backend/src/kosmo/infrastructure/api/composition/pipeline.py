@@ -67,10 +67,15 @@ def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> 
     if provider == "deepseek":
         from pydantic_ai.models.openai import OpenAIChatModel
         from pydantic_ai.providers.openai import OpenAIProvider
+        from pydantic_ai.settings import ModelSettings
 
+        # DeepSeek v4 activa el thinking mode por defecto y, en ese modo, rechaza
+        # tool_choice (requerido por pydantic-ai para la salida estructurada).
+        # Se deshabilita el thinking para conservar el contrato determinista.
         return OpenAIChatModel(
             model,
             provider=OpenAIProvider(base_url="https://api.deepseek.com", api_key=api_key),
+            settings=ModelSettings(extra_body={"thinking": {"type": "disabled"}}),
         )
     elif provider == "openai":
         from pydantic_ai.models.openai import OpenAIChatModel

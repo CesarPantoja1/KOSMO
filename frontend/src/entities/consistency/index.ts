@@ -1,12 +1,13 @@
-export { useConsistencyStore, clearConsistencyStore } from './model/store';
-export { checkConsistency, applyConsistencyImpacts } from './api/api';
-export { useConsistencyStream } from './api/useConsistencyStream';
-export { ConsistencyProgress } from '@/shared/ui';
+export { useConsistencyGateStore } from './model/gate-store';
+export {
+	getConsistencyStatus,
+	getConsistencyReview,
+	applyConsistencyEvaluation,
+	discardConsistencyEvaluation,
+	bulkResolveConsistency,
+	getConsistencyActivity,
+} from './api/api';
 export type {
-	ConsistencyCheck,
-	ConsistencyReportResponse,
-	YourChange,
-	DownstreamProposal,
 	ConsistencyTargetPhase,
 	ConsistencyEvaluationStatus,
 	PhaseConsistencyStatus,

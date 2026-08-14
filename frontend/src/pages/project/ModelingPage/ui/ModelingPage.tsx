@@ -18,6 +18,8 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
+import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
+import { formatApiError } from '@/shared/api';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 
@@ -34,7 +36,6 @@ const ModelingPage = () => {
 	const currentProject = useProjectStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [isLoading] = useState(false);
 	const [isGenerating, setIsGenerating] = useState(false);
 
 	const [uml, setUML] = useState('');
@@ -52,7 +53,6 @@ const ModelingPage = () => {
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
-	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
 	const hasRequirements = useRequirementsStore((s) => s.hasRequirements);
 	const hasDiagram = useModelingStore((s) => s.hasDiagram);
 	const currentDiagrams = useModelingStore((s) => s.currentDiagrams);
@@ -64,9 +64,7 @@ const ModelingPage = () => {
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = uml !== savedContent;
 
-	useEffect(() => {
-		setHasUnsavedChanges(hasUnsavedChanges);
-	}, [hasUnsavedChanges, setHasUnsavedChanges]);
+	useUnsavedChanges({ isDirty: hasUnsavedChanges });
 
 	useEffect(() => {
 		if (!selectedId || !currentProject) return;
@@ -144,9 +142,13 @@ const ModelingPage = () => {
 				selectedCharacteristic.id,
 			);
 			setPlantumlSource(content);
-		} catch (_err) {
-			console.log(_err);
-			toast.error('No se pudo generar el diagrama de actividad. Intenta de nuevo.');
+		} catch (err) {
+			toast.error(
+				formatApiError(
+					err,
+					'No se pudo generar el diagrama de actividad. Intenta de nuevo.',
+				),
+			);
 		} finally {
 			setIsGenerating(false);
 		}
@@ -164,10 +166,10 @@ const ModelingPage = () => {
 	const confirmLeave = useCallback(() => {
 		const path = pendingNavigationPath;
 		setPendingNavigationPath(null);
-		setHasUnsavedChanges(false);
+		useAppStore.getState().setHasUnsavedChanges(false);
 		if (!path) return;
 		router.push(path);
-	}, [pendingNavigationPath, setPendingNavigationPath, setHasUnsavedChanges, router]);
+	}, [pendingNavigationPath, setPendingNavigationPath, router]);
 
 	const cancelLeave = useCallback(() => {
 		setPendingNavigationPath(null);
@@ -212,8 +214,7 @@ const ModelingPage = () => {
 							</p>
 						</div>
 
-						{!isLoading &&
-							hasCharacteristics &&
+						{hasCharacteristics &&
 							!isEditorMaximized &&
 							!isPlantumlMaximized && (
 								<div className='flex items-center gap-3 shrink-0'>
@@ -229,26 +230,7 @@ const ModelingPage = () => {
 							)}
 					</div>
 
-					{isLoading ? (
-						<div className='flex gap-1 flex-1 min-h-0 pb-4'>
-							<div className='w-72 bg-neutral-50 border-r border-neutral-200 rounded-lg flex flex-col gap-3 p-3 animate-pulse shrink-0'>
-								<div className='h-5 bg-neutral-200 rounded-md w-40' />
-								{[1, 2, 3, 4].map((i) => (
-									<div key={i} className='h-12 bg-neutral-200 rounded-md' />
-								))}
-							</div>
-							<div className='flex flex-col gap-3 h-full min-h-0 w-full bg-neutral-50'>
-								<div className='flex flex-col gap-1 px-4 mt-3'>
-									<div className='flex items-center gap-2'>
-										<div className='h-4 w-16 rounded-md bg-neutral-200 animate-pulse' />
-										<div className='h-4 w-48 rounded-md bg-neutral-200 animate-pulse' />
-									</div>
-									<div className='h-4 w-full max-w-2xl rounded-md bg-neutral-200 animate-pulse' />
-								</div>
-								<div className='flex-1 bg-neutral-50 rounded-lg animate-pulse' />
-							</div>
-						</div>
-					) : !hasCharacteristics ? (
+					{!hasCharacteristics ? (
 						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 							<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
 								<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>

@@ -147,6 +147,8 @@ const mockChatHistories: Record<string, ChatMessage[]> = {};
 
 export const getRequirementChatHistory = async (
 	featureId: string,
+	sessionId: string | null = null,
+	before?: string | null,
 ): Promise<ChatHistory> => {
 	if (USE_MOCKS) {
 		await delay(300);
@@ -158,8 +160,12 @@ export const getRequirementChatHistory = async (
 			next_cursor: null,
 		};
 	}
+	const query = new URLSearchParams();
+	if (sessionId) query.set('session_id', sessionId);
+	if (before) query.set('before', before);
+	const suffix = query.toString() ? `?${query.toString()}` : '';
 	return await apiClient<ChatHistory>(
-		`/api/v1/features/${featureId}/requirements/chat/history`,
+		`/api/v1/features/${featureId}/requirements/chat/history${suffix}`,
 		{ method: 'GET' },
 	);
 };

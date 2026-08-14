@@ -8,6 +8,7 @@ import {
 	type CharacteristicResponse,
 } from '@/entities/characteristic';
 import { toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
 
 interface UseCharacteristicsPageReturn {
 	characteristics: CharacteristicResponse[];
@@ -39,7 +40,7 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 				err && typeof err === 'object' && 'status' in err
 					? (err as { status: unknown }).status
 					: undefined;
-			const errorMessage = err instanceof Error ? err.message : '';
+			const errorMessage = formatApiError(err, '');
 			if (
 				errorStatus === 404 ||
 				errorMessage.includes('404') ||

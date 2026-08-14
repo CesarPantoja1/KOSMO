@@ -46,6 +46,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 		const localMarkdownRef = useRef(localMarkdown);
 		const isDirtyRef = useRef(false);
 		const mdxEditorRef = useRef<MDXEditorMethods>(null);
+		const isReadyRef = useRef(false);
+
+		useEffect(() => {
+			isReadyRef.current = true;
+		}, []);
 
 		const headings = useHeadings(headingsMarkdown);
 
@@ -89,6 +94,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 		);
 
 		const handleChange = (value: string) => {
+			// MDXEditor emite onChange de forma síncrona durante su montaje al
+			// normalizar el contenido inicial; antes de que React termine de
+			// montar, cualquier setState dispararía el warning de React.
+			if (!isReadyRef.current) return;
 			// El cambio se origina dentro del propio editor (usuario tecleando):
 			// marcamos este valor como ya sincronizado para que, cuando la prop
 			// `markdown` "rebote" desde el padre con el mismo contenido, el

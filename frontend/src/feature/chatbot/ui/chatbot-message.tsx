@@ -36,6 +36,16 @@ export const ChatbotMessage = ({ message }: ChatbotMessageProps) => {
 				</div>
 			</div>
 
+			{message.modification &&
+				!message.modification.applied &&
+				message.modification.clarification_message && (
+					<div className='w-full rounded-lg border border-ai-200 bg-ai-50 px-4 py-3'>
+						<p className='text-sm leading-6 text-ai-700'>
+							{message.modification.clarification_message}
+						</p>
+					</div>
+				)}
+
 			{message.change_suggestions &&
 				message.change_suggestions.length > 0 &&
 				message.change_suggestions.map((suggestion) => (

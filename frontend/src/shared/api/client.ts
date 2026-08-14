@@ -1,6 +1,8 @@
 import { API_BASE_URL } from './config';
 import { useAuthStore } from '../store/auth.store';
 import { TokenPairResponse } from './auth';
+import { parseApiError } from './errors';
+import { authHeaders } from './headers';
 
 let isRefreshing = false;
 let failedQueue: { resolve: (value?: unknown) => void; reject: (reason?: unknown) => void }[] = [];
@@ -17,18 +19,10 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 };
 
 export const apiClient = async <T>(url: string, options: RequestInit = {}): Promise<T> => {
-	const { accessToken, refreshToken, setTokens, clearAuth, mockUserId } = useAuthStore.getState();
+	const { refreshToken, setTokens, clearAuth } = useAuthStore.getState();
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 
-	const headers = new Headers(options.headers || {});
-	
-	if (isAuthDisabled) {
-		if (mockUserId && !headers.has('X-Mock-User')) {
-			headers.set('X-Mock-User', mockUserId);
-		}
-	} else if (accessToken && !headers.has('Authorization')) {
-		headers.set('Authorization', `Bearer ${accessToken}`);
-	}
+	const headers = authHeaders(options.headers);
 
 	if (!headers.has('Content-Type')) {
 		headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -52,7 +46,9 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 					return fetch(`${API_BASE_URL}${url}`, { ...config, headers });
 				})
 				.then(async (retryRes) => {
-					if (!retryRes.ok) throw new Error('API Error');
+					if (!retryRes.ok) {
+						throw parseApiError(retryRes, await retryRes.json().catch(() => null));
+					}
 					return retryRes.json();
 				});
 		}
@@ -67,7 +63,7 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 			});
 
 			if (!refreshRes.ok) {
-				throw new Error('Refresh failed');
+				throw parseApiError(refreshRes, await refreshRes.json().catch(() => null));
 			}
 
 			const tokens: TokenPairResponse = await refreshRes.json();
@@ -91,14 +87,7 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 	}
 
 	if (!res.ok) {
-		let message = 'API Error';
-		try {
-			const data = await res.json();
-			if (data.detail) message = data.detail;
-		} catch {}
-		const error = new Error(message) as Error & { status?: number };
-		error.status = res.status;
-		throw error;
+		throw parseApiError(res, await res.json().catch(() => null));
 	}
 	
 	// handle 204 No Content

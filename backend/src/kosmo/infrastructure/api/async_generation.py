@@ -118,18 +118,31 @@ async def sse_chat_response(
 
     async def event_stream() -> AsyncGenerator[str]:
         yield "data: " + json.dumps({"type": "start"}, ensure_ascii=False) + "\n\n"
-        async for item in chat_uc.execute_stream(input_data):
-            if isinstance(item, ChatStreamChunk):
-                yield (
-                    "data: "
-                    + json.dumps(
-                        {"type": "chunk", "content": item.content},
-                        ensure_ascii=False,
+        try:
+            async for item in chat_uc.execute_stream(input_data):
+                if isinstance(item, ChatStreamChunk):
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {"type": "chunk", "content": item.content},
+                            ensure_ascii=False,
+                        )
+                        + "\n\n"
                     )
-                    + "\n\n"
+                else:
+                    yield "data: " + json.dumps(_message_dict(item), ensure_ascii=False) + "\n\n"
+        except Exception:
+            # Frontera de transporte: el stream ya empezó, así que el error se
+            # comunica como evento SSE para que el cliente muestre feedback.
+            _log.exception("chat.stream_error", phase=document_type.value)
+            yield (
+                "data: "
+                + json.dumps(
+                    {"type": "error", "message": "Error interno al procesar el mensaje. Reintenta más tarde."},
+                    ensure_ascii=False,
                 )
-            else:
-                yield "data: " + json.dumps(_message_dict(item), ensure_ascii=False) + "\n\n"
+                + "\n\n"
+            )
 
     return StreamingResponse(
         event_stream(),

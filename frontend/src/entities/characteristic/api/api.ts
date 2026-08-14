@@ -1,4 +1,4 @@
-import type { ChatResponse } from '@/entities/chat';
+import type { ChatHistory, ChatResponse } from '@/entities/chat';
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type {
@@ -262,6 +262,36 @@ export const sendChatMessage = (
 	USE_MOCKS
 		? mockSendChatMessage(featureId, content)
 		: realSendChatMessage(featureId, content);
+
+const mockGetChatHistory = async (featureId: string): Promise<ChatHistory> => {
+	await delay(300);
+	return {
+		phase: 'features',
+		context: featureId,
+		messages: [],
+		has_more: false,
+		next_cursor: null,
+	};
+};
+
+const realGetChatHistory = (featureId: string, sessionId: string | null, before?: string | null) => {
+	const query = new URLSearchParams();
+	if (sessionId) query.set('session_id', sessionId);
+	if (before) query.set('before', before);
+	const suffix = query.toString() ? `?${query.toString()}` : '';
+	return apiClient<ChatHistory>(`/api/v1/features/${featureId}/chat/history${suffix}`, {
+		method: 'GET',
+	});
+};
+
+export const getChatHistory = (
+	featureId: string,
+	sessionId: string | null = null,
+	before?: string | null,
+): Promise<ChatHistory> =>
+	USE_MOCKS
+		? mockGetChatHistory(featureId)
+		: realGetChatHistory(featureId, sessionId, before);
 
 const realDeleteFeature = async (projectId: string, featureId: string): Promise<void> => {
 	await apiClient<void>(

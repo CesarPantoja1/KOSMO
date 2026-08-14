@@ -3,7 +3,6 @@ export { default as Loading } from './Loading';
 export { MarkdownText } from './markdown-text';
 export { ModalConfirm } from './ModalConfirm';
 export { CharacterCounter } from './CharacterCounter';
-export { ConsistencyProgress } from './ConsistencyProgress';
 
 // icons
 export { default as Ai } from './icons/Ai';
