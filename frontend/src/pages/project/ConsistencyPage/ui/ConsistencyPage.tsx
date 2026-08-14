@@ -3,6 +3,9 @@
 import { useConsistencyGateStore, CONSISTENCY_REVIEW_ROUTES } from '@/entities/consistency';
 import type { ConsistencyTargetPhase, ReviewCard } from '@/entities/consistency';
 import { useProjectStore } from '@/entities/project';
+import { useCharacteristicStore } from '@/entities/characteristic';
+import { useRequirementsStore } from '@/entities/requirements';
+import { useModelingStore } from '@/entities/modeling';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -35,6 +38,21 @@ const ACTIVITY_LABELS: Record<string, string> = {
 	failed: 'Falló',
 	evaluating: 'Evaluando',
 	completed: 'Pendiente',
+};
+
+const refreshArtifactStores = async (projectId: string, cards: ReviewCard[]) => {
+	const fetches: Promise<unknown>[] = [
+		useCharacteristicStore.getState().getCharacteristics(projectId),
+	];
+	for (const card of cards) {
+		const featureId = card.target_artifact_id.split(':')[0];
+		if (card.artifact_type === 'EARSRequirement') {
+			fetches.push(useRequirementsStore.getState().getRequirements(projectId, featureId));
+		} else if (card.artifact_type === 'ActivityDiagram') {
+			fetches.push(useModelingStore.getState().getDiagram(projectId, featureId));
+		}
+	}
+	await Promise.allSettled(fetches);
 };
 
 const ConsistencyPage = () => {
@@ -92,6 +110,7 @@ const ConsistencyPage = () => {
 			await applyEvaluation(currentProject.id, targetPhase, card.evaluation_id);
 			toast.success('Cambio aplicado');
 			await reload();
+			await refreshArtifactStores(currentProject.id, [card]);
 		} catch (err) {
 			toast.error(formatApiError(err, 'No se pudo aplicar el cambio.'));
 			await reload();
@@ -121,6 +140,7 @@ const ConsistencyPage = () => {
 				}`,
 			);
 			await reload();
+			await refreshArtifactStores(currentProject.id, cards);
 		} catch (err) {
 			toast.error(formatApiError(err, 'No se pudo completar la operación.'));
 			await reload();
