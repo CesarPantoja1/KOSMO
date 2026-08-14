@@ -8,7 +8,7 @@ import {
 	sendChatMessage as sendChatMessageApi,
 } from '../api/api';
 import type { DiscoveryResponse } from './types';
-import { ChatMessage } from '@/entities/chat';
+import type { ChatMessage, ChatResponse } from '@/entities/chat';
 
 interface DiscoveryStore {
 	currentDiscovery: DiscoveryResponse | null;
@@ -24,7 +24,7 @@ interface DiscoveryStore {
 		projectId: string,
 		instructions: string,
 	) => Promise<DiscoveryResponse>;
-	sendChatMessage: (projectId: string, content: string) => Promise<ChatMessage>;
+	sendChatMessage: (projectId: string, content: string) => Promise<ChatResponse>;
 }
 
 export const useDiscoveryStore = create<DiscoveryStore>()(
@@ -68,29 +68,13 @@ export const useDiscoveryStore = create<DiscoveryStore>()(
 					role: 'user',
 					content,
 					created_at: new Date().toISOString(),
+					change_suggestions: null,
 					modification: null,
-					redirect: null,
-					consistency: null,
 				};
 				set((state) => ({ chatHistory: [...state.chatHistory, userMessage] }));
 
-				const raw = (await sendChatMessageApi(projectId, content)) as unknown as Record<
-					string,
-					unknown
-				>;
-				const response: ChatMessage =
-					raw.message !== undefined
-						? {
-								id: crypto.randomUUID(),
-								role: 'assistant',
-								content: String(raw.message),
-								created_at: new Date().toISOString(),
-								modification: null,
-								redirect: null,
-								consistency: null,
-							}
-						: (raw as unknown as ChatMessage);
-				set((state) => ({ chatHistory: [...state.chatHistory, response] }));
+				const response = await sendChatMessageApi(projectId, content);
+				set((state) => ({ chatHistory: [...state.chatHistory, response.message] }));
 				return response;
 			},
 		}),

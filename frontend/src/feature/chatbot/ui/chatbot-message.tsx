@@ -36,11 +36,11 @@ export const ChatbotMessage = ({ message }: ChatbotMessageProps) => {
 				</div>
 			</div>
 
-			{message.modification &&
-				message.modification.changes.length > 0 &&
-				message.modification.changes.map((change, i) => (
-					<div className='w-full' key={i}>
-						<TarjetaRecepcionPlan change={change} />
+			{message.change_suggestions &&
+				message.change_suggestions.length > 0 &&
+				message.change_suggestions.map((suggestion) => (
+					<div className='w-full' key={suggestion.id}>
+						<TarjetaRecepcionPlan suggestion={suggestion} />
 					</div>
 				))}
 		</div>

@@ -1,4 +1,4 @@
-import { ChatMessage } from '@/entities/chat';
+import type { ChatResponse } from '@/entities/chat';
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type {
@@ -37,62 +37,61 @@ const mockSuggestions: SuggestCharacteristic[] = [
 	},
 ];
 
-const mockChatResponses: ChatMessage[] = [
+const mockChatResponses: ChatResponse[] = [
 	{
-		id: 'mock-chat-1',
-		role: 'assistant',
-		content: 'Hola, ¿en qué puedo ayudarte con la característica?',
-		created_at: new Date().toISOString(),
+		message: {
+			id: 'mock-chat-1',
+			role: 'assistant',
+			content: 'Hola, ¿en qué puedo ayudarte con la característica?',
+			created_at: new Date().toISOString(),
+			change_suggestions: null,
+			modification: null,
+		},
 		modification: null,
 		redirect: null,
 		consistency: null,
 	},
 	{
-		id: 'mock-chat-2',
-		role: 'assistant',
-		content:
-			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
-		created_at: new Date().toISOString(),
-		modification: {
-			modified_document: 'Característica',
-			modified_section: 'Descripción de la característica',
-			changes: [
+		message: {
+			id: 'mock-chat-2',
+			role: 'assistant',
+			content:
+				'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
+			created_at: new Date().toISOString(),
+			change_suggestions: [
 				{
-					applied: false,
-					change_description: 'Refinar la descripción para mayor claridad.',
-					before:
+					id: 'mock-chg-1',
+					section: 'Descripción de la característica',
+					description: 'Refinar la descripción para mayor claridad.',
+					diff_before:
 						'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-					after:
+					diff_after:
 						'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
+					rationale: 'Precisión terminológica.',
+					applied: true,
+					not_applied_reason: null,
 				},
 			],
-			undo_version_id: 'mock-undo-2',
-			clarification_message: '',
+			modification: {
+				applied: true,
+				modified_section: 'Descripción de la característica',
+				change_description: 'Se aplicaron los cambios sugeridos.',
+				modified_document: null,
+				before: null,
+				after: null,
+				undo_version_id: null,
+				clarification_message: null,
+			},
 		},
-		redirect: null,
-		consistency: null,
-	},
-	{
-		id: 'mock-chat-3',
-		role: 'assistant',
-		content:
-			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
-		created_at: new Date().toISOString(),
 		modification: {
-			modified_document: 'Característica',
+			applied: true,
 			modified_section: 'Descripción de la característica',
-			changes: [
-				{
-					applied: false,
-					change_description: 'Refinar la descripción para mayor claridad.',
-					before:
-						'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-					after:
-						'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
-				},
-			],
-			undo_version_id: 'mock-undo-3',
-			clarification_message: '',
+			change_description: 'Se aplicaron los cambios sugeridos.',
+			modified_document: null,
+			before: null,
+			after: null,
+			undo_version_id: null,
+			clarification_message: null,
 		},
 		redirect: null,
 		consistency: null,
@@ -165,7 +164,7 @@ const mockAddCharacteristic = async (
 const mockSendChatMessage = async (
 	_featureId: string,
 	_content: string,
-): Promise<ChatMessage> => {
+): Promise<ChatResponse> => {
 	await delay(500);
 	return mockChatResponses[Math.floor(Math.random() * mockChatResponses.length)];
 };
@@ -219,8 +218,8 @@ const realAddCharacteristic = async (
 const realSendChatMessage = async (
 	featureId: string,
 	content: string,
-): Promise<ChatMessage> => {
-	return apiClient<ChatMessage>(`/api/v1/features/${featureId}/chat`, {
+): Promise<ChatResponse> => {
+	return apiClient<ChatResponse>(`/api/v1/features/${featureId}/chat`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ content }),
@@ -259,7 +258,7 @@ export const addCharacteristic = (
 export const sendChatMessage = (
 	featureId: string,
 	content: string,
-): Promise<ChatMessage> =>
+): Promise<ChatResponse> =>
 	USE_MOCKS
 		? mockSendChatMessage(featureId, content)
 		: realSendChatMessage(featureId, content);

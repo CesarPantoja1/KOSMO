@@ -7,7 +7,7 @@ import {
 	generateRequirements as generateRequirementsApi,
 	sendRequirementChatMessage as sendRequirementChatMessageApi,
 } from '../api/api';
-import { ChatMessage } from '@/entities/chat';
+import type { ChatMessage, ChatResponse } from '@/entities/chat';
 
 interface RequirementsStore {
 	currentRequirements: Record<string, string>;
@@ -26,7 +26,7 @@ interface RequirementsStore {
 
 	chatHistories: Record<string, ChatMessage[]>;
 	loadChatHistory: (featureId: string) => Promise<ChatMessage[]>;
-	sendChatMessage: (featureId: string, content: string) => Promise<ChatMessage>;
+	sendChatMessage: (featureId: string, content: string) => Promise<ChatResponse>;
 	clearChatHistory: (featureId: string) => void;
 }
 
@@ -76,7 +76,7 @@ export const useRequirementsStore = create<RequirementsStore>()(
 			chatHistories: {},
 			loadChatHistory: async (featureId) => {
 				const response = await getRequirementChatHistory(featureId);
-				const history = Array.isArray(response) ? response : [];
+				const history = response.messages ?? [];
 				set((state) => ({
 					chatHistories: { ...state.chatHistories, [featureId]: history },
 				}));
@@ -88,9 +88,8 @@ export const useRequirementsStore = create<RequirementsStore>()(
 					role: 'user',
 					content,
 					created_at: new Date().toISOString(),
+					change_suggestions: null,
 					modification: null,
-					consistency: null,
-					redirect: null,
 				};
 
 				const current = get().chatHistories[featureId] ?? [];
@@ -107,7 +106,7 @@ export const useRequirementsStore = create<RequirementsStore>()(
 					set({
 						chatHistories: {
 							...get().chatHistories,
-							[featureId]: [...afterUser, response],
+							[featureId]: [...afterUser, response.message],
 						},
 					});
 					return response;
@@ -124,9 +123,8 @@ export const useRequirementsStore = create<RequirementsStore>()(
 							? '⚠️ El agente generó una respuesta con formato inválido. Por favor, intenta reformular tu solicitud.'
 							: '⚠️ Ocurrió un error al procesar tu solicitud.',
 						created_at: new Date().toISOString(),
+						change_suggestions: null,
 						modification: null,
-						consistency: null,
-						redirect: null,
 					};
 
 					const afterUser = get().chatHistories[featureId] ?? [];

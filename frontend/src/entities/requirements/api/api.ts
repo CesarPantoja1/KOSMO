@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type { RequirementsResponse } from '../model/types';
-import { ChatMessage } from '@/entities/chat';
+import type { ChatHistory, ChatMessage, ChatResponse } from '@/entities/chat';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -147,12 +147,18 @@ const mockChatHistories: Record<string, ChatMessage[]> = {};
 
 export const getRequirementChatHistory = async (
 	featureId: string,
-): Promise<ChatMessage[]> => {
+): Promise<ChatHistory> => {
 	if (USE_MOCKS) {
 		await delay(300);
-		return mockChatHistories[featureId] ?? [];
+		return {
+			phase: 'requirements',
+			context: featureId,
+			messages: mockChatHistories[featureId] ?? [],
+			has_more: false,
+			next_cursor: null,
+		};
 	}
-	return await apiClient<ChatMessage[]>(
+	return await apiClient<ChatHistory>(
 		`/api/v1/features/${featureId}/requirements/chat/history`,
 		{ method: 'GET' },
 	);
@@ -161,12 +167,12 @@ export const getRequirementChatHistory = async (
 export const sendRequirementChatMessage = async (
 	featureId: string,
 	content: string,
-): Promise<ChatMessage> => {
+): Promise<ChatResponse> => {
 	if (USE_MOCKS) {
 		return mockSendRequirementChatMessage(featureId, content);
 	}
 
-	return await apiClient<ChatMessage>(`/api/v1/features/${featureId}/requirements/chat`, {
+	return await apiClient<ChatResponse>(`/api/v1/features/${featureId}/requirements/chat`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ content }),
@@ -176,7 +182,7 @@ export const sendRequirementChatMessage = async (
 const mockSendRequirementChatMessage = async (
 	requirementId: string,
 	content: string,
-): Promise<ChatMessage> => {
+): Promise<ChatResponse> => {
 	await delay(600);
 
 	// Check for testing invalid format simulation
@@ -189,41 +195,60 @@ const mockSendRequirementChatMessage = async (
 		role: 'user',
 		content,
 		created_at: new Date().toISOString(),
+		change_suggestions: null,
 		modification: null,
-		consistency: null,
-		redirect: null,
 	};
 
 	const history = mockChatHistories[requirementId] ?? [];
 
-	const response: ChatMessage = {
-		id: crypto.randomUUID(),
-		role: 'assistant',
-		content:
-			'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación:\n\n' +
-			'Escenario: Validación exitosa de datos\n' +
-			'  Dado que el usuario tiene permisos de edición\n' +
-			'  Cuando envía los datos del formulario completos\n' +
-			'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n',
-		created_at: new Date().toISOString(),
-		modification: {
-			modified_document: 'Criterios de Aceptación',
-			modified_section: 'Agregar escenario de validación de datos',
-			changes: [
+	const response: ChatResponse = {
+		message: {
+			id: crypto.randomUUID(),
+			role: 'assistant',
+			content:
+				'He analizado el requisito. Aquí tienes una propuesta con criterios de aceptación:\n\n' +
+				'Escenario: Validación exitosa de datos\n' +
+				'  Dado que el usuario tiene permisos de edición\n' +
+				'  Cuando envía los datos del formulario completos\n' +
+				'  Entonces el sistema guarda la información y muestra un mensaje de éxito\n',
+			created_at: new Date().toISOString(),
+			change_suggestions: [
 				{
+					id: crypto.randomUUID(),
+					section: 'Agregar escenario de validación de datos',
+					description: 'cambio leve',
+					diff_before: 'antes era asi ',
+					diff_after: 'Ahora es asi',
+					rationale: 'Cubre el flujo de validación del formulario.',
 					applied: true,
-					change_description: 'cambio leve',
-					before: 'antes era asi ',
-					after: 'Ahora es asi',
+					not_applied_reason: null,
 				},
 			],
-			undo_version_id: crypto.randomUUID(),
-			clarification_message: '',
+			modification: {
+				applied: true,
+				modified_section: 'Agregar escenario de validación de datos',
+				change_description: 'Se aplicaron los cambios sugeridos.',
+				modified_document: null,
+				before: null,
+				after: null,
+				undo_version_id: null,
+				clarification_message: null,
+			},
+		},
+		modification: {
+			applied: true,
+			modified_section: 'Agregar escenario de validación de datos',
+			change_description: 'Se aplicaron los cambios sugeridos.',
+			modified_document: null,
+			before: null,
+			after: null,
+			undo_version_id: null,
+			clarification_message: null,
 		},
 		redirect: null,
 		consistency: null,
 	};
 
-	mockChatHistories[requirementId] = [...history, userMessage, response];
+	mockChatHistories[requirementId] = [...history, userMessage, response.message];
 	return response;
 };

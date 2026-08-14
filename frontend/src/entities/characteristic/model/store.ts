@@ -12,7 +12,7 @@ import type {
 	CreateCharacteristicResponse,
 	SuggestCharacteristic,
 } from './types';
-import { ChatMessage } from '@/entities/chat';
+import type { ChatMessage, ChatResponse } from '@/entities/chat';
 
 interface CharacteristicStore {
 	currentCharacteristics: CharacteristicResponse[];
@@ -31,7 +31,7 @@ interface CharacteristicStore {
 		item: { title: string; description: string; origin?: string; force?: boolean },
 	) => Promise<CreateCharacteristicResponse>;
 
-	sendChatMessage: (featureId: string, content: string) => Promise<ChatMessage>;
+	sendChatMessage: (featureId: string, content: string) => Promise<ChatResponse>;
 
 	selectedId: string | null;
 	setSelectedId: (id: string | null) => void;
@@ -90,9 +90,8 @@ export const useCharacteristicStore = create<CharacteristicStore>()(
 					role: 'user',
 					content,
 					created_at: new Date().toISOString(),
+					change_suggestions: null,
 					modification: null,
-					redirect: null,
-					consistency: null,
 				};
 
 				const current = get().chatHistories[featureId] ?? [];
@@ -109,7 +108,7 @@ export const useCharacteristicStore = create<CharacteristicStore>()(
 				set({
 					chatHistories: {
 						...get().chatHistories,
-						[featureId]: [...afterUser, response],
+						[featureId]: [...afterUser, response.message],
 					},
 				});
 
