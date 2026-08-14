@@ -147,6 +147,7 @@ class ChatSessionSummary:
     created_at: datetime
     message_count: int = 0
     last_message_at: datetime | None = None
+    title: str = ""
 
 
 class ChatRepository(Protocol):
@@ -175,6 +176,8 @@ class ChatRepository(Protocol):
     ) -> HistorialChat: ...
 
     async def create_session(self, session: ChatSession) -> ChatSession: ...
+
+    async def delete_session(self, session_id: ChatSessionId) -> None: ...
 
     async def list_sessions(
         self,

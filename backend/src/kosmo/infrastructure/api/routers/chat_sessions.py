@@ -2,18 +2,20 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from kosmo.application.chat.chat_sessions import (
     CreateChatSessionInput,
     CreateChatSessionUseCase,
+    DeleteChatSessionInput,
+    DeleteChatSessionUseCase,
     ListChatSessionsInput,
     ListChatSessionsUseCase,
 )
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
@@ -53,6 +55,10 @@ def _list_uc(request: Request) -> ListChatSessionsUseCase:
     return get_container(request).pipeline.list_chat_sessions
 
 
+def _delete_uc(request: Request) -> DeleteChatSessionUseCase:
+    return get_container(request).pipeline.delete_chat_session
+
+
 def _session_dict(session: Any) -> dict[str, object]:
     return {
         "id": str(session.id),
@@ -61,6 +67,7 @@ def _session_dict(session: Any) -> dict[str, object]:
         "created_at": session.created_at.isoformat(),
         "message_count": getattr(session, "message_count", 0),
         "last_message_at": (session.last_message_at.isoformat() if getattr(session, "last_message_at", None) else None),
+        "title": getattr(session, "title", "") or "",
     }
 
 
@@ -123,3 +130,19 @@ async def create_chat_session(
         )
     )
     return _session_dict(session) | {"session_id": str(session.id)}
+
+
+@router.delete(
+    "/{session_id}",
+    summary="Eliminar una sesión de chat",
+    description="Elimina el hilo de conversación y todos sus mensajes.",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_chat_session(
+    project_id: str,  # noqa: ARG001 — el id valida la ruta bajo el proyecto
+    session_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    uc: Annotated[DeleteChatSessionUseCase, Depends(_delete_uc)],
+) -> Response:
+    await uc.execute(DeleteChatSessionInput(session_id=ChatSessionId(session_id)))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

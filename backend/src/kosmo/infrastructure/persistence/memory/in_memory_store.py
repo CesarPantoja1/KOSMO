@@ -298,6 +298,15 @@ class InMemoryChatRepository(ChatRepository):
         self._sessions.append(session)
         return session
 
+    async def delete_session(self, session_id: ChatSessionId) -> None:
+        self._sessions = [s for s in self._sessions if s.id != session_id]
+        session_key = f"_{session_id}"
+        self._messages = {
+            key: messages
+            for key, messages in self._messages.items()
+            if not key.endswith(session_key)
+        }
+
     async def list_sessions(
         self,
         project_id: ProjectId,  # noqa: ARG002

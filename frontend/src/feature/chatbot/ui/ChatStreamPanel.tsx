@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage, ChatPhase } from '@/entities/chat';
-import { useChatSessions } from '@/entities/chat';
+import { useChatSessions, useChatSessionsStore } from '@/entities/chat';
 import { ApiError, formatApiError } from '@/shared/api';
 import { useChatStream } from '../hooks/useChatStream';
 import { Chatbot } from './Chatbot';
@@ -85,6 +85,13 @@ export const ChatStreamPanel = ({
 		onMessage: (message) => {
 			setStreamingContent(null);
 			onMessageRef.current(message);
+			// Re-lista las sesiones para refrescar el título derivado del primer prompt
+			if (projectId && phase) {
+				void useChatSessionsStore
+					.getState()
+					.listSessions(projectId, phase, contextId)
+					.catch(() => undefined);
+			}
 		},
 		onError: (err) => {
 			setStreamingContent(null);
@@ -135,6 +142,12 @@ export const ChatStreamPanel = ({
 		});
 	};
 
+	const handleDeleteSession = (sessionId: string) => {
+		void chatSessions.deleteSession(sessionId).catch((err) => {
+			setErrorMessage(formatApiError(err, 'No se pudo eliminar el chat.'));
+		});
+	};
+
 	return (
 		<Chatbot
 			title={title}
@@ -161,6 +174,7 @@ export const ChatStreamPanel = ({
 						loading={chatSessions.loading}
 						onSelect={chatSessions.selectSession}
 						onCreate={handleCreateSession}
+						onDelete={handleDeleteSession}
 					/>
 				) : null
 			}

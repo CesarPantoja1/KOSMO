@@ -50,3 +50,18 @@ class ListChatSessionsUseCase:
             phase=input_data.phase,
             context_id=input_data.context_id,
         )
+
+
+@dataclass(frozen=True)
+class DeleteChatSessionInput:
+    session_id: ChatSessionId
+
+
+class DeleteChatSessionUseCase:
+    """Elimina un hilo de conversacion junto con sus mensajes."""
+
+    def __init__(self, chat_repo: ChatRepository) -> None:
+        self._chat_repo = chat_repo
+
+    async def execute(self, input_data: DeleteChatSessionInput) -> None:
+        await self._chat_repo.delete_session(input_data.session_id)
