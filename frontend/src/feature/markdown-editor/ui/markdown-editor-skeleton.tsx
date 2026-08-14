@@ -1,19 +1,40 @@
 export function MarkdownEditorSkeleton() {
 	return (
 		<div className='flex h-full min-h-0 overflow-hidden bg-neutral-0 gap-1'>
-			<aside className='sticky top-0 h-full shrink-0 flex flex-col bg-neutral-50 border-r border-neutral-200 w-[260px] pt-1'>
+			<aside className='sticky top-0 h-full shrink-0 flex flex-col bg-neutral-50 border-r border-neutral-200 w-65 pt-1'>
 				<div className='mb-4 flex items-center justify-between px-4 pt-2 shrink-0'>
 					<div className='h-3 w-16 animate-pulse rounded-md bg-neutral-200' />
 					<div className='h-4 w-4 animate-pulse rounded bg-neutral-200' />
 				</div>
 				<nav className='space-y-1 px-3 flex-1 overflow-y-auto pb-4'>
-					<div className='h-3 w-32 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 8 }} />
-					<div className='h-3 w-40 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 20 }} />
-					<div className='h-3 w-28 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 20 }} />
-					<div className='h-3 w-36 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 32 }} />
-					<div className='h-3 w-24 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 32 }} />
-					<div className='h-3 w-32 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 8 }} />
-					<div className='h-3 w-28 animate-pulse rounded bg-neutral-200' style={{ paddingLeft: 20 }} />
+					<div
+						className='h-3 w-32 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 8 }}
+					/>
+					<div
+						className='h-3 w-40 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 20 }}
+					/>
+					<div
+						className='h-3 w-28 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 20 }}
+					/>
+					<div
+						className='h-3 w-36 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 32 }}
+					/>
+					<div
+						className='h-3 w-24 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 32 }}
+					/>
+					<div
+						className='h-3 w-32 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 8 }}
+					/>
+					<div
+						className='h-3 w-28 animate-pulse rounded bg-neutral-200'
+						style={{ paddingLeft: 20 }}
+					/>
 				</nav>
 			</aside>
 

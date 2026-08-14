@@ -1,5 +1,6 @@
 'use client';
 
+import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { EditorContent } from './editor-content';
@@ -44,13 +45,22 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 		const prevMarkdownRef = useRef(markdown);
 		const localMarkdownRef = useRef(localMarkdown);
 		const isDirtyRef = useRef(false);
+		const mdxEditorRef = useRef<MDXEditorMethods>(null);
 
 		const headings = useHeadings(headingsMarkdown);
 
+		// Solo se dispara cuando el contenido cambia por una fuente EXTERNA
+		// (generación IA, sugerencias de chat aplicadas, recarga de datos), no
+		// cuando el cambio se origina dentro del propio editor (ver handleChange,
+		// que ya marca prevMarkdownRef como sincronizado antes de propagar hacia
+		// afuera). MDXEditor solo lee la prop `markdown` en el montaje inicial,
+		// por lo que las actualizaciones externas deben empujarse de forma
+		// imperativa via `setMarkdown` para reflejarse en el editor ya montado.
 		useEffect(() => {
 			if (markdown !== prevMarkdownRef.current) {
 				setLocalMarkdown(markdown);
 				prevMarkdownRef.current = markdown;
+				mdxEditorRef.current?.setMarkdown(markdown);
 			}
 		}, [markdown]);
 
@@ -79,6 +89,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 		);
 
 		const handleChange = (value: string) => {
+			// El cambio se origina dentro del propio editor (usuario tecleando):
+			// marcamos este valor como ya sincronizado para que, cuando la prop
+			// `markdown` "rebote" desde el padre con el mismo contenido, el
+			// efecto de arriba no lo interprete como una actualización externa
+			// y no dispare `setMarkdown()` (lo que reiniciaría cursor/historial).
+			prevMarkdownRef.current = value;
 			setLocalMarkdown(value);
 			onChange?.(value);
 		};
@@ -134,6 +150,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 				<section className='relative flex min-h-0 flex-1 overflow-hidden'>
 					<EditorContent
 						ref={editorRef}
+						editorRef={mdxEditorRef}
 						markdown={localMarkdown}
 						onChange={handleChange}
 						isMaximized={isMaximized}

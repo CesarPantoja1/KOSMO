@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, type Ref } from 'react';
 
 import {
 	BlockTypeSelect,
@@ -10,6 +10,7 @@ import {
 	ListsToggle,
 	markdownShortcutPlugin,
 	MDXEditor,
+	type MDXEditorMethods,
 	quotePlugin,
 	thematicBreakPlugin,
 	toolbarPlugin,
@@ -31,6 +32,11 @@ interface Props {
 	savedMessage?: string;
 	errorMessage?: string;
 	readOnly?: boolean;
+	/** Ref imperativo hacia la instancia interna de MDXEditor, usado para
+	 * empujar actualizaciones de contenido que se originan fuera del editor
+	 * (generación IA, sugerencias de chat, etc.), ya que MDXEditor solo lee
+	 * la prop `markdown` en el montaje inicial. */
+	editorRef?: Ref<MDXEditorMethods>;
 }
 
 export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorContent(
@@ -45,12 +51,14 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 		savedMessage,
 		errorMessage,
 		readOnly,
+		editorRef,
 	},
 	ref,
 ) {
 	return (
 		<div ref={ref} className='flex-1 min-h-0 overflow-y-auto'>
 			<MDXEditor
+				ref={editorRef}
 				markdown={markdown}
 				onChange={onChange}
 				readOnly={readOnly}
