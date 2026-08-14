@@ -64,7 +64,7 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     "  Para ELIMINAR contenido, diff_after debe ser cadena vacía ('').\n"
     "  * rationale: justificación del cambio conectándolo con la característica padre.\n"
     + DIFF_SEMANTICS_RULE
-    + "- SEPARACIÓN OBLIGATORIA: cuando generes change_suggestion, el campo content "
+    + "- SEPARACIÓN OBLIGATORIA: cuando generes change_suggestions, el campo content "
     "debe contener SOLO una breve introducción conversacional (1-2 oraciones). "
     "El contenido concreto del cambio va EXCLUSIVAMENTE en diff_after. "
     "NUNCA dupliques el contenido del cambio en ambos campos.\n"

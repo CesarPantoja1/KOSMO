@@ -191,7 +191,7 @@ async def test_agent_without_knowledge_tools_records_reasoning() -> None:
     assert len(sessions) == 1
     saved = await store.load_session(sessions[0].session_id)
     assert saved is not None
-    assert any("no disponible" in entry for entry in saved.reasoning_log)
+    assert any("pre_consulta_tools" in entry for entry in saved.reasoning_log)
     assert saved.tool_results == []
 
 
@@ -247,12 +247,14 @@ async def test_agent_with_knowledge_tools_records_tool_invocations() -> None:
     llm = StubToolCallLLMClient()
     store = InMemoryAgentSessionStore()
     skill_reg = SkillRegistry()
+    mode = make_discovery_mode()
+    mode.requires_tool_consultation = True  # este test verifica el registro de invocaciones de tools
     skill_reg.register(
         Skill(
             name="discovery_generate",
             description="Test",
             phase=SpecPhase.DESCUBRIMIENTO,
-            mode=make_discovery_mode(),  # type: ignore[reportArgumentType]
+            mode=mode,  # type: ignore[reportArgumentType]
         )
     )
     knowledge_tools = KnowledgeToolRegistry()
@@ -315,4 +317,4 @@ async def test_agent_saves_reasoning_on_validation_failure() -> None:
     saved = await store.load_session(sessions[0].session_id)
     assert saved is not None
     assert saved.is_completed is False
-    assert any("no disponible" in entry for entry in saved.reasoning_log)
+    assert any("pre_consulta_tools" in entry for entry in saved.reasoning_log)

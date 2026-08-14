@@ -32,7 +32,7 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     + "- No uses formato de historia de usuario (Como... quiero... para...).\n"
     "- Si el usuario te pide un cambio que ya fue aplicado al documento, indicale que ese "
     "cambio ya esta registrado y NO generes una nueva sugerencia. Responde con "
-    "change_suggestion en null.\n"
+    "change_suggestions en null.\n"
     "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud fuera del nivel de "
     "negocio (ej. quiere un endpoint, un requisito, una caracteristica), reformulala "
     "en lenguaje de Descubrimiento. Por ejemplo: 'agrega un endpoint de pagos' -> "

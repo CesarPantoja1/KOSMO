@@ -21,7 +21,7 @@ def phase_isolation_rule(*, example: str = "") -> str:
 
 CONVERSATIONAL_NULL_RULE = (
     "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
-    "change_suggestion en null y responde de forma conversacional.\n\n"
+    "change_suggestions en null y responde de forma conversacional.\n\n"
 )
 
 

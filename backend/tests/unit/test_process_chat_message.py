@@ -429,6 +429,69 @@ async def test_feature_chat_updates_attribute() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_feature_chat_applies_multiple_attributes_and_updates_slug() -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        number=1,
+        title="Registrar gastos compartidos",
+        slug="registrar-gastos-compartidos",
+        description="El usuario ingresa un gasto para dividirlo.",
+        project_id=ProjectId("prj_01"),
+        origin="Deriva de Metas del producto.",
+    )
+    ctx = FeatureChatContext(feature=feature, discovery_document=markdown_to_document(DISCOVERY_VALID))
+    agent = _StubConversationAgent(
+        _assistant_message(
+            suggestions=[
+                SugerenciaCambio(
+                    id="chg_t",
+                    section="Título",
+                    description="Reflejar edición de gastos",
+                    diff=DiffCambio(
+                        before="Registrar gastos compartidos",
+                        after="Registrar y editar gastos compartidos",
+                    ),
+                ),
+                SugerenciaCambio(
+                    id="chg_d",
+                    section="Descripción",
+                    description="Permitir editar gastos",
+                    diff=DiffCambio(before="ingresa un gasto", after="registra y edita un gasto"),
+                ),
+            ]
+        )
+    )
+    feature_repo = InMemoryFeatureRepository()
+    feature_repo.features["feat_01"] = feature
+    uc = ProcessChatMessageUseCase(
+        chat_repo=InMemoryChatRepository(),
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.CARACTERISTICAS),
+        feature_repo=feature_repo,
+    )
+
+    # Act
+    output = await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.CARACTERISTICAS,
+            content="Permite editar gastos y refleja eso en el título",
+            context=ctx,
+        )
+    )
+
+    # Assert — 2 cards, ambas aplicadas, título y slug actualizados
+    assert len(output.message.suggested_changes) == 2
+    assert all(c.applied for c in output.message.suggested_changes)
+    saved = feature_repo.features["feat_01"]
+    assert saved.title == "Registrar y editar gastos compartidos"
+    assert saved.slug == "registrar-y-editar-gastos-compartidos"
+    assert "registra y edita un gasto" in saved.description
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_requirement_chat_updates_markdown() -> None:
     # Arrange
     feature = Feature(

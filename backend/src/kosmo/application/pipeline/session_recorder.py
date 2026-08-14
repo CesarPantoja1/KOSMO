@@ -107,7 +107,7 @@ class SessionRecorder:
             )
         else:
             asyncio.create_task(
-                self.reflect_and_consolidate(
+                self._supervised_reflect(
                     session_id=session.session_id,
                     phase=phase,
                     session_type=session_type,
@@ -115,6 +115,34 @@ class SessionRecorder:
                     current_iteration=current_iteration,
                     validation=validation,
                 )
+            )
+
+    async def _supervised_reflect(
+        self,
+        *,
+        session_id: AgentMemoryId,
+        phase: SpecPhase,
+        session_type: str,
+        is_completed: bool,
+        current_iteration: int,
+        validation: ValidationResult,
+    ) -> None:
+        """Fallback sin outbox: la reflexion fallida se registra, nunca se pierde en silencio."""
+        try:
+            await self.reflect_and_consolidate(
+                session_id=session_id,
+                phase=phase,
+                session_type=session_type,
+                is_completed=is_completed,
+                current_iteration=current_iteration,
+                validation=validation,
+            )
+        except Exception:
+            _log.warning(
+                "agent.reflection_fallback_failed",
+                session_id=str(session_id),
+                phase=phase.value,
+                exc_info=True,
             )
 
     async def reflect_and_consolidate(
@@ -130,13 +158,17 @@ class SessionRecorder:
         if self._memory is None:
             return
 
-        reflection = await self._generate_reflection(
-            phase=phase,
-            session_type=session_type,
-            is_completed=is_completed,
-            current_iteration=current_iteration,
-            validation=validation,
-        )
+        clean_session = is_completed and validation.is_valid and current_iteration <= 1
+        if clean_session:
+            reflection: str | None = None
+        else:
+            reflection = await self._generate_reflection(
+                phase=phase,
+                session_type=session_type,
+                is_completed=is_completed,
+                current_iteration=current_iteration,
+                validation=validation,
+            )
 
         if reflection:
             await self._memory.update_reflection(session_id, reflection)

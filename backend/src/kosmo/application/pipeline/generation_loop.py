@@ -58,10 +58,12 @@ class GenerationLoop:
         knowledge_context: str = ""
         tool_invocations: list[dict[str, Any]] = []
         reason_entries: list[str] = []
-        if needs_enrichment:
+        if needs_enrichment and getattr(mode, "requires_tool_consultation", True):
             knowledge_context, tool_invocations, reason_entries = await self._tool_resolver.resolve(
                 system_prompt, base_user_prompt, project_id
             )
+        elif needs_enrichment:
+            reason_entries.append("pre_consulta_tools: omitida por el modo (generacion desde cero)")
 
         user_prompt = base_user_prompt
         if knowledge_context:

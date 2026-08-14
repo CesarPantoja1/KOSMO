@@ -24,6 +24,16 @@ def test_features_chat_mode_properties() -> None:
     assert mode.available_tools == []
 
 
+def test_features_chat_mode_allows_multiple_suggestions() -> None:
+    mode = FeaturesChatMode()
+
+    prompt = mode.system_prompt
+
+    assert "change_suggestions" in prompt
+    assert "una sugerencia por cada atributo afectado" in prompt
+    assert '"change_suggestions": null | [' in prompt
+
+
 def test_features_chat_mode_build_user_prompt() -> None:
     mode = FeaturesChatMode()
 

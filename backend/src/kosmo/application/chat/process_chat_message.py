@@ -334,7 +334,7 @@ class ProcessChatMessageUseCase:
     async def _apply_discovery_suggestion(
         self,
         project_id: ProjectId,
-        context: Any,
+        context: Any,  # noqa: ARG002  # el contenido se lee del repo: siempre el estado mas reciente
         sc: SugerenciaCambio,
     ) -> str | None:
         if self._document_repo is None:
@@ -344,7 +344,11 @@ class ProcessChatMessageUseCase:
         if terms:
             return "El cambio contiene terminología prohibida: " + ", ".join(sorted(set(terms))[:5]) + "."
 
-        current_md = document_to_markdown(context.current_document)
+        document = await self._document_repo.get_discovery(project_id)
+        if document is None:
+            return "No existe el documento de descubrimiento."
+
+        current_md = document_to_markdown(document)
         new_md = apply_markdown_suggestion(
             current_md,
             section=sc.section or None,
@@ -369,20 +373,31 @@ class ProcessChatMessageUseCase:
         if terms:
             return "El cambio contiene terminología prohibida: " + ", ".join(sorted(set(terms))[:5]) + "."
 
-        feature = context.feature
+        feature = await self._feature_repo.by_id(context.feature.id)
+        if feature is None:
+            return "La característica ya no existe."
+
         current = str(getattr(feature, attr))
         new_value = apply_feature_attribute(current, diff_before=sc.diff.before, diff_after=sc.diff.after)
         if new_value is None:
             return "No se encontró el fragmento a reemplazar en el atributo."
 
-        await self._feature_repo.save(dataclasses.replace(feature, **{attr: new_value}))
+        if attr == "title":
+            updated = dataclasses.replace(
+                feature,
+                title=new_value,
+                slug=new_value.lower().replace(" ", "-"),
+            )
+        else:
+            updated = dataclasses.replace(feature, **{attr: new_value})
+        await self._feature_repo.save(updated)
         return None
 
     async def _apply_requirement_suggestion(self, context: Any, sc: SugerenciaCambio) -> str | None:
         if self._requirement_repo is None:
             return "Repositorio de requisitos no configurado."
 
-        current_md = context.requirements_markdown
+        current_md = await self._requirement_repo.by_feature_id(context.feature.id)
         if not current_md:
             return "No hay markdown de requisitos para aplicar el cambio."
 

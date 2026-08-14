@@ -15,8 +15,10 @@ from tests.unit.fakes import InMemoryOutbox
 class _StubReflectionLLM:
     def __init__(self, text: str) -> None:
         self._text = text
+        self.call_count = 0
 
     async def complete(self, prompt: PromptTemplate, temperature: float = 0.3, max_tokens: int = 4096) -> LLMResponse:
+        self.call_count += 1
         return LLMResponse(text=self._text, usage=LLMUsage(prompt_tokens=1, completion_tokens=1, total_tokens=2))
 
 
@@ -82,7 +84,32 @@ async def test_reflect_and_consolidate_updates_reflection() -> None:
     recorder = _make_recorder(memory, _StubReflectionLLM("Siempre valida la estructura antes de entregar."))
     await memory.save_session(a_session(session_id=AgentMemoryId("agm_test01"), project_id=ProjectId("prj_01")))
 
-    # Act
+    # Act — sesión con reintentos: la reflexión SÍ se genera
+    await recorder.reflect_and_consolidate(
+        session_id=AgentMemoryId("agm_test01"),
+        phase=SpecPhase.DESCUBRIMIENTO,
+        session_type="generation",
+        is_completed=True,
+        current_iteration=2,
+        validation=_valid_validation(),
+    )
+
+    # Assert
+    saved = await memory.load_session(AgentMemoryId("agm_test01"))
+    assert saved is not None
+    assert saved.reflection == "Siempre valida la estructura antes de entregar."
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_clean_session_skips_reflection_llm_call() -> None:
+    # Arrange
+    memory = InMemoryAgentSessionStore()
+    llm = _StubReflectionLLM("Lección aprendida innecesaria para sesión limpia.")
+    recorder = _make_recorder(memory, llm)
+    await memory.save_session(a_session(session_id=AgentMemoryId("agm_test01"), project_id=ProjectId("prj_01")))
+
+    # Act — sesión limpia: 1 iteración, sin errores
     await recorder.reflect_and_consolidate(
         session_id=AgentMemoryId("agm_test01"),
         phase=SpecPhase.DESCUBRIMIENTO,
@@ -92,10 +119,11 @@ async def test_reflect_and_consolidate_updates_reflection() -> None:
         validation=_valid_validation(),
     )
 
-    # Assert
+    # Assert — no se llama al LLM y no se guarda reflexión
+    assert llm.call_count == 0
     saved = await memory.load_session(AgentMemoryId("agm_test01"))
     assert saved is not None
-    assert saved.reflection == "Siempre valida la estructura antes de entregar."
+    assert saved.reflection is None
 
 
 @pytest.mark.unit
@@ -112,7 +140,7 @@ async def test_reflect_and_consolidate_keeps_none_when_reflection_is_short() -> 
         phase=SpecPhase.DESCUBRIMIENTO,
         session_type="generation",
         is_completed=True,
-        current_iteration=1,
+        current_iteration=2,
         validation=_valid_validation(),
     )
 
@@ -145,3 +173,29 @@ async def test_record_without_outbox_saves_session_only() -> None:
     # Assert: la sesion se persiste aunque el outbox no este configurado
     sessions = await memory.list_sessions(project_id)
     assert len(sessions) == 1
+
+
+class _FailingMemory(InMemoryAgentSessionStore):
+    async def update_reflection(self, session_id: AgentMemoryId, reflection: str) -> None:  # noqa: ARG002
+        raise RuntimeError("fallo simulado")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_supervised_reflect_never_raises() -> None:
+    # Arrange — memoria que falla al guardar la reflexion
+    memory = _FailingMemory()
+    recorder = _make_recorder(memory, _StubReflectionLLM("Una leccion suficientemente larga para guardarse."))
+
+    # Act — no debe propagar la excepción
+    await recorder._supervised_reflect(  # noqa: SLF001
+        session_id=AgentMemoryId("agm_test01"),
+        phase=SpecPhase.DESCUBRIMIENTO,
+        session_type="generation",
+        is_completed=True,
+        current_iteration=2,
+        validation=_valid_validation(),
+    )
+
+    # Assert — si llegamos aquí sin excepción, el fallback está supervisado
+    assert True
