@@ -2,15 +2,12 @@
 
 import { Ai, Close, Send } from '@/shared/ui';
 import { useEffect, useRef, useState } from 'react';
-import type { ChatMessage } from '../types/chatbot';
 import { ChatbotMessage } from './chatbot-message';
+import { ChatMessage } from '@/entities/chat';
 
 interface Props {
-	/** Titulo del agente mostrado en el header */
 	title?: string;
-	/** Subtítulo del agente mostrado en el header */
 	subtitle?: string;
-	/** Mensaje de bienvenida cuando no hay historial */
 	greeting?: string;
 	placeholder?: string;
 	onClose?: () => void;
@@ -104,10 +101,7 @@ export const Chatbot = ({
 				)}
 
 				{messages.map((message) => (
-					<ChatbotMessage
-						key={message.id}
-						message={message}
-					/>
+					<ChatbotMessage key={message.id} message={message} />
 				))}
 
 				{(isSending || isLoading) && (
@@ -143,7 +137,7 @@ export const Chatbot = ({
 						placeholder={placeholder}
 						rows={1}
 						disabled={isSending || isLoading}
-						className='max-h-36 min-h-[24px] flex-1 resize-none bg-transparent py-1 text-sm leading-6 outline-none text-neutral-800 placeholder:text-neutral-400'
+						className='max-h-36 min-h-6 flex-1 resize-none bg-transparent py-1 text-sm leading-6 outline-none text-neutral-800 placeholder:text-neutral-400'
 					/>
 					<button
 						type='button'

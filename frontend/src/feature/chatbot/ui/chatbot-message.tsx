@@ -2,8 +2,8 @@
 
 import { Ai } from '@/shared/ui';
 import { MarkdownText } from '@/shared/ui/markdown-text';
-import type { ChatMessage } from '../types/chatbot';
 import { TarjetaRecepcionPlan } from './TarjetaRecepcionPlan';
+import { ChatMessage } from '@/entities/chat';
 
 interface ChatbotMessageProps {
 	message: ChatMessage;
@@ -36,11 +36,11 @@ export const ChatbotMessage = ({ message }: ChatbotMessageProps) => {
 				</div>
 			</div>
 
-			{message.change_suggestions &&
-				message.change_suggestions.length > 0 &&
-				message.change_suggestions.map((suggestion) => (
-					<div className='w-full' key={suggestion.id}>
-						<TarjetaRecepcionPlan suggestion={suggestion} />
+			{message.modification &&
+				message.modification.changes.length > 0 &&
+				message.modification.changes.map((change, i) => (
+					<div className='w-full' key={i}>
+						<TarjetaRecepcionPlan change={change} />
 					</div>
 				))}
 		</div>

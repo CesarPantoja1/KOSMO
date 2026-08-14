@@ -1,13 +1,8 @@
 'use client';
 
-import {
-	useCharacteristicStore,
-	deleteFeature,
-	type CharacteristicChatResponse,
-} from '@/entities/characteristic';
+import { useCharacteristicStore, deleteFeature } from '@/entities/characteristic';
 import { useDiscoveryStore } from '@/entities/discovery';
 import { Chatbot } from '@/feature';
-import type { ChatMessage } from '@/feature/chatbot';
 import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
 import { useProjectStore } from '@/entities/project';
@@ -16,22 +11,13 @@ import { useState } from 'react';
 import { useCharacteristicsPage } from '../hooks/use-characteristics-page';
 import CardCharacterist from './CardCharacterist';
 import Search from './Search';
+import { ChatMessage } from '@/entities/chat';
 
 const generatingCharacteristicMessages = [
 	'Analizando descubrimiento del proyecto...',
 	'Generando características del proyecto...',
 	'Finalizando generación de características...',
 ];
-
-function toChatMessage(r: CharacteristicChatResponse): ChatMessage {
-	return {
-		id: r.id,
-		role: r.role,
-		content: r.content,
-		created_at: r.created_at,
-		change_suggestions: r.change_suggestions ?? undefined,
-	};
-}
 
 const CharacteristicsPage = () => {
 	const { isLoading, hasCharacteristics, searchQuery, setSearchQuery, filtered } =
@@ -103,7 +89,7 @@ const CharacteristicsPage = () => {
 		setIsChatLoading(true);
 		try {
 			const response = await sendChatMessage(activeFeatureId, content);
-			if (response.change_suggestions && response.change_suggestions.length > 0 && currentProject) {
+			if (response.modification && currentProject) {
 				await getCharacteristics(currentProject.id);
 			}
 		} catch (err) {
@@ -115,9 +101,7 @@ const CharacteristicsPage = () => {
 		}
 	};
 
-	const chatMessages: ChatMessage[] = (chatHistories[activeFeatureId!] ?? []).map(
-		toChatMessage,
-	);
+	const chatMessages: ChatMessage[] = chatHistories[activeFeatureId!] ?? [];
 
 	return (
 		<>

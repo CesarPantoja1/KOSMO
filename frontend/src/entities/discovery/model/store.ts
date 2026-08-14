@@ -7,11 +7,12 @@ import {
 	saveDiscovery,
 	sendChatMessage as sendChatMessageApi,
 } from '../api/api';
-import type { DiscoveryChatResponse, DiscoveryResponse } from './types';
+import type { DiscoveryResponse } from './types';
+import { ChatMessage } from '@/entities/chat';
 
 interface DiscoveryStore {
 	currentDiscovery: DiscoveryResponse | null;
-	chatHistory: DiscoveryChatResponse[];
+	chatHistory: ChatMessage[];
 	setCurrentDiscovery: (discovery: DiscoveryResponse) => void;
 	clearDiscovery: () => void;
 	clearChatHistory: () => void;
@@ -23,7 +24,7 @@ interface DiscoveryStore {
 		projectId: string,
 		instructions: string,
 	) => Promise<DiscoveryResponse>;
-	sendChatMessage: (projectId: string, content: string) => Promise<DiscoveryChatResponse>;
+	sendChatMessage: (projectId: string, content: string) => Promise<ChatMessage>;
 }
 
 export const useDiscoveryStore = create<DiscoveryStore>()(
@@ -62,23 +63,33 @@ export const useDiscoveryStore = create<DiscoveryStore>()(
 			},
 
 			sendChatMessage: async (projectId, content) => {
-				const userMessage: DiscoveryChatResponse = {
+				const userMessage: ChatMessage = {
 					id: crypto.randomUUID(),
 					role: 'user',
 					content,
 					created_at: new Date().toISOString(),
+					modification: null,
+					redirect: null,
+					consistency: null,
 				};
 				set((state) => ({ chatHistory: [...state.chatHistory, userMessage] }));
 
-				const raw = await sendChatMessageApi(projectId, content) as unknown as Record<string, unknown>;
-				const response: DiscoveryChatResponse = raw.message !== undefined
-					? {
-							id: crypto.randomUUID(),
-							role: 'assistant',
-							content: String(raw.message),
-							created_at: new Date().toISOString(),
-						}
-					: raw as unknown as DiscoveryChatResponse;
+				const raw = (await sendChatMessageApi(projectId, content)) as unknown as Record<
+					string,
+					unknown
+				>;
+				const response: ChatMessage =
+					raw.message !== undefined
+						? {
+								id: crypto.randomUUID(),
+								role: 'assistant',
+								content: String(raw.message),
+								created_at: new Date().toISOString(),
+								modification: null,
+								redirect: null,
+								consistency: null,
+							}
+						: (raw as unknown as ChatMessage);
 				set((state) => ({ chatHistory: [...state.chatHistory, response] }));
 				return response;
 			},

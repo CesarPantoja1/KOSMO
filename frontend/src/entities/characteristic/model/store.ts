@@ -8,15 +8,15 @@ import {
 	sendChatMessage,
 } from '../api/api';
 import type {
-	CharacteristicChatResponse,
 	CharacteristicResponse,
 	CreateCharacteristicResponse,
 	SuggestCharacteristic,
 } from './types';
+import { ChatMessage } from '@/entities/chat';
 
 interface CharacteristicStore {
 	currentCharacteristics: CharacteristicResponse[];
-	chatHistories: Record<string, CharacteristicChatResponse[]>;
+	chatHistories: Record<string, ChatMessage[]>;
 	setCurrentCharacteristics: (characteristics: CharacteristicResponse[]) => void;
 	currentSuggestions: SuggestCharacteristic[];
 	setCurrentSuggestions: (suggestions: SuggestCharacteristic[]) => void;
@@ -31,10 +31,7 @@ interface CharacteristicStore {
 		item: { title: string; description: string; origin?: string; force?: boolean },
 	) => Promise<CreateCharacteristicResponse>;
 
-	sendChatMessage: (
-		featureId: string,
-		content: string,
-	) => Promise<CharacteristicChatResponse>;
+	sendChatMessage: (featureId: string, content: string) => Promise<ChatMessage>;
 
 	selectedId: string | null;
 	setSelectedId: (id: string | null) => void;
@@ -88,20 +85,33 @@ export const useCharacteristicStore = create<CharacteristicStore>()(
 			},
 
 			sendChatMessage: async (featureId, content) => {
-				const userMessage: CharacteristicChatResponse = {
+				const userMessage: ChatMessage = {
 					id: crypto.randomUUID(),
 					role: 'user',
 					content,
 					created_at: new Date().toISOString(),
+					modification: null,
+					redirect: null,
+					consistency: null,
 				};
 
 				const current = get().chatHistories[featureId] ?? [];
-				set({ chatHistories: { ...get().chatHistories, [featureId]: [...current, userMessage] } });
+				set({
+					chatHistories: {
+						...get().chatHistories,
+						[featureId]: [...current, userMessage],
+					},
+				});
 
 				const response = await sendChatMessage(featureId, content);
 
 				const afterUser = get().chatHistories[featureId] ?? [];
-				set({ chatHistories: { ...get().chatHistories, [featureId]: [...afterUser, response] } });
+				set({
+					chatHistories: {
+						...get().chatHistories,
+						[featureId]: [...afterUser, response],
+					},
+				});
 
 				return response;
 			},

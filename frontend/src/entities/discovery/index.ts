@@ -1,5 +1,5 @@
 // MODELS
-export { type DiscoveryResponse, type DiscoveryChatResponse } from './model/types';
+export { type DiscoveryResponse } from './model/types';
 
 // STORE
 export { useDiscoveryStore, clearDiscoveryStore } from './model/store';

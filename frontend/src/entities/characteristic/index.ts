@@ -1,5 +1,5 @@
 // MODELS
-export type { CharacteristicResponse, SuggestCharacteristic, CharacteristicChatResponse } from './model/types';
+export type { CharacteristicResponse, SuggestCharacteristic } from './model/types';
 export type { CharacteristicResponse as Characteristic } from './model/types';
 
 // STORE

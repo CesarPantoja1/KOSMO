@@ -7,28 +7,26 @@ import {
 	generateRequirements as generateRequirementsApi,
 	sendRequirementChatMessage as sendRequirementChatMessageApi,
 } from '../api/api';
-import type { RequirementChatResponse } from './types';
+import { ChatMessage } from '@/entities/chat';
 
 interface RequirementsStore {
 	currentRequirements: Record<string, string>;
 	setCurrentRequirements: (featureId: string, content: string) => void;
 	getRequirements: (projectId: string, featureId: string) => Promise<string>;
-	saveRequirements: (projectId: string, featureId: string, content: string) => Promise<void>;
-	generateRequirements: (
+	saveRequirements: (
 		projectId: string,
 		featureId: string,
-	) => Promise<string>;
+		content: string,
+	) => Promise<void>;
+	generateRequirements: (projectId: string, featureId: string) => Promise<string>;
 
 	hasRequirements: Record<string, boolean>;
 	setHasRequirements: (id: string, has: boolean) => void;
 	resetRequirements: () => void;
 
-	chatHistories: Record<string, RequirementChatResponse[]>;
-	loadChatHistory: (featureId: string) => Promise<RequirementChatResponse[]>;
-	sendChatMessage: (
-		featureId: string,
-		content: string,
-	) => Promise<RequirementChatResponse>;
+	chatHistories: Record<string, ChatMessage[]>;
+	loadChatHistory: (featureId: string) => Promise<ChatMessage[]>;
+	sendChatMessage: (featureId: string, content: string) => Promise<ChatMessage>;
 	clearChatHistory: (featureId: string) => void;
 }
 
@@ -85,11 +83,14 @@ export const useRequirementsStore = create<RequirementsStore>()(
 				return history;
 			},
 			sendChatMessage: async (featureId, content) => {
-				const userMessage: RequirementChatResponse = {
+				const userMessage: ChatMessage = {
 					id: crypto.randomUUID(),
 					role: 'user',
 					content,
 					created_at: new Date().toISOString(),
+					modification: null,
+					consistency: null,
+					redirect: null,
 				};
 
 				const current = get().chatHistories[featureId] ?? [];
@@ -116,14 +117,16 @@ export const useRequirementsStore = create<RequirementsStore>()(
 						error instanceof Error &&
 						(error.message.includes('inválido') || error.message.includes('format'));
 
-					const errorMessage: RequirementChatResponse = {
+					const errorMessage: ChatMessage = {
 						id: crypto.randomUUID(),
 						role: 'assistant',
 						content: isInvalidFormat
 							? '⚠️ El agente generó una respuesta con formato inválido. Por favor, intenta reformular tu solicitud.'
 							: '⚠️ Ocurrió un error al procesar tu solicitud.',
 						created_at: new Date().toISOString(),
-						is_invalid_format: isInvalidFormat,
+						modification: null,
+						consistency: null,
+						redirect: null,
 					};
 
 					const afterUser = get().chatHistories[featureId] ?? [];
@@ -153,5 +156,9 @@ export const useRequirementsStore = create<RequirementsStore>()(
 
 export const clearRequirementsStore = () => {
 	useRequirementsStore.persist.clearStorage();
-	useRequirementsStore.setState({ hasRequirements: {}, currentRequirements: {}, chatHistories: {} });
+	useRequirementsStore.setState({
+		hasRequirements: {},
+		currentRequirements: {},
+		chatHistories: {},
+	});
 };

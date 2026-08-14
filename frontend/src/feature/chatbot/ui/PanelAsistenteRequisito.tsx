@@ -1,37 +1,17 @@
 'use client';
 
-import {
-	useRequirementsStore,
-	type RequirementChatResponse,
-} from '@/entities/requirements';
+import { useRequirementsStore } from '@/entities/requirements';
 import { toast } from '@/shared/ui';
 import { useEffect, useState } from 'react';
-import type { ChatMessage } from '../types/chatbot';
 import { Chatbot } from './Chatbot';
 
 interface PanelAsistenteRequisitoProps {
-	/** ID de la característica para el chat (contexto activo) */
 	featureId: string | null;
-	/** ID del proyecto para rehidratación cuando hay change_suggestions */
 	projectId?: string | null;
-	/** Callback para cerrar el panel */
 	onClose?: () => void;
 	title?: string;
 	subtitle?: string;
 	placeholder?: string;
-}
-
-/**
- * Adapta la respuesta del backend de requisitos al tipo genérico de mensaje de Chatbot UI
- */
-function toChatMessage(r: RequirementChatResponse): ChatMessage {
-	return {
-		id: r.id,
-		role: r.role,
-		content: r.content,
-		created_at: r.created_at,
-		change_suggestions: r.change_suggestions ?? undefined,
-	};
 }
 
 export const PanelAsistenteRequisito = ({
@@ -56,7 +36,9 @@ export const PanelAsistenteRequisito = ({
 		let isMounted = true;
 
 		const fetchHistory = async () => {
-			const hasHistory = Boolean(useRequirementsStore.getState().chatHistories[featureId]);
+			const hasHistory = Boolean(
+				useRequirementsStore.getState().chatHistories[featureId],
+			);
 			if (!hasHistory) {
 				setIsLoading(true);
 			}
@@ -85,7 +67,7 @@ export const PanelAsistenteRequisito = ({
 		setIsLoading(true);
 		try {
 			const response = await sendChatMessage(featureId, content);
-			if (response.change_suggestions && response.change_suggestions.length > 0 && projectId && featureId) {
+			if (response.modification && projectId && featureId) {
 				await getRequirements(projectId, featureId);
 			}
 		} catch (err) {
@@ -102,8 +84,7 @@ export const PanelAsistenteRequisito = ({
 		}
 	};
 
-	const raw = featureId ? (chatHistories[featureId] ?? []) : [];
-	const messages: ChatMessage[] = Array.isArray(raw) ? raw.map(toChatMessage) : [];
+	const messages = featureId ? (chatHistories[featureId] ?? []) : [];
 
 	return (
 		<Chatbot

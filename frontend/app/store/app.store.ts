@@ -1,5 +1,4 @@
 import { clearConsistencyStore } from '@/entities/consistency';
-import { clearPlanStore, usePlanStore } from '@/entities/plan';
 import { clearDiscoveryStore, useDiscoveryStore } from '@/entities/discovery';
 import { getDiscovery } from '@/entities/discovery/api/api';
 import {
@@ -38,7 +37,6 @@ export const useAppStore = create<AppState>()(
 			resetProjectState: () => {
 				clearProjectStore();
 				clearDiscoveryStore();
-				clearPlanStore();
 				clearCharacteristicStore();
 				clearModelingStore();
 				clearRequirementsStore();
@@ -53,7 +51,6 @@ export const useAppStore = create<AppState>()(
 			resetStateBeforeChangeProject: () => {
 				clearProjectStoreExceptProjects();
 				clearDiscoveryStore();
-				clearPlanStore();
 				clearCharacteristicStore();
 				clearModelingStore();
 				clearRequirementsStore();
@@ -77,13 +74,9 @@ export const useAppStore = create<AppState>()(
 					if (!discovery) return;
 					useDiscoveryStore.getState().setCurrentDiscovery(discovery);
 
-					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'discovery');
-
 					const characteristics = await getCharacteristics(projectId);
 					if (!characteristics || characteristics.length === 0) return;
 					useCharacteristicStore.getState().setCurrentCharacteristics(characteristics);
-
-					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'features');
 
 					await Promise.allSettled(
 						characteristics.map(async (c) => {
@@ -104,8 +97,6 @@ export const useAppStore = create<AppState>()(
 							}
 						}),
 					);
-
-					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'requirements');
 				} catch (error) {
 					console.error('[initializeProject] Error:', error);
 				}

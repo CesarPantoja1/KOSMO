@@ -1,6 +1,6 @@
 'use client';
 
-import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
+import { useDiscoveryStore } from '@/entities/discovery';
 import {
 	Chatbot,
 	MarkdownEditor,
@@ -8,7 +8,6 @@ import {
 	type MarkdownEditorHandle,
 	type SaveStatus,
 } from '@/feature';
-import type { ChatMessage } from '@/feature/chatbot';
 import { Ai, ArrowRight, Loading, ModalConfirm, toast } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
@@ -20,17 +19,6 @@ const generatingDiscoveryMessages = [
 	'Identificando problemas y oportunidades...',
 	'Generando documento de descubrimiento...',
 ];
-
-/** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
-function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
-	return {
-		id: r.id,
-		role: r.role,
-		content: r.content,
-		created_at: r.created_at,
-		change_suggestions: r.change_suggestions ?? undefined,
-	};
-}
 
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -188,7 +176,7 @@ const DiscoveryPage = () => {
 		setIsChatLoading(true);
 		try {
 			const response = await sendChatMessage(currentProject.id, content);
-			if (response.change_suggestions && response.change_suggestions.length > 0) {
+			if (response.modification) {
 				const updated = await getDiscovery(currentProject.id);
 				setMarkdown(updated.content);
 				savedContentRef.current = updated.content;
@@ -202,7 +190,7 @@ const DiscoveryPage = () => {
 		}
 	};
 
-	const chatMessages: ChatMessage[] = chatHistory.map(toChatMessage);
+	const chatMessages = chatHistory;
 
 	return (
 		<>

@@ -1,5 +1,5 @@
 // MODELS
-export type { RequirementsResponse, RequirementChatResponse } from './model/types';
+export type { RequirementsResponse } from './model/types';
 // STORE
 export { useRequirementsStore, clearRequirementsStore } from './model/store';
 
@@ -11,4 +11,3 @@ export {
 	getRequirementChatHistory,
 	sendRequirementChatMessage,
 } from './api/api';
-
