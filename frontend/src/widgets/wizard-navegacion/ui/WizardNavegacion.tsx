@@ -37,7 +37,7 @@ const phaseItems: {
 	consistencyPhase: ConsistencyTargetPhase | null;
 }[] = [
 	{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'DESCUBRIMIENTO', consistencyPhase: null },
-	{ href: '/proyecto/caracteristicas', Icon: Characteristics, label: 'CARACTERÍSTICAS', consistencyPhase: 'features' },
+	{ href: '/proyecto/caracteristicas', Icon: Characteristics, label: 'FUNCIONALIDADES', consistencyPhase: 'features' },
 	{ href: '/proyecto/requisitos', Icon: Requirements, label: 'REQUISITOS', consistencyPhase: 'requirements' },
 	{ href: '/proyecto/modelo', Icon: Modeling, label: 'MODELO', consistencyPhase: 'model' },
 	{ href: '/proyecto/codigo', Icon: Implementation, label: 'CÓDIGO', consistencyPhase: null },
