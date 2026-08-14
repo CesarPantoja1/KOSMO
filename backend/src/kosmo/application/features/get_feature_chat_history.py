@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from kosmo.contracts.chat import ChatRepository, HistorialChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.contracts.sdd.ids import ChatSessionId, FeatureId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 
 
@@ -13,6 +13,7 @@ from kosmo.contracts.sdd.repositories import FeatureRepository
 class GetFeatureChatHistoryInput:
     feature_id: FeatureId
     before: str | None = None
+    session_id: ChatSessionId | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class GetFeatureChatHistoryUseCase:
             phase=SpecPhase.CARACTERISTICAS,
             context_id=str(feature.id),
             before=input_data.before,
+            session_id=input_data.session_id,
         )
 
         return GetFeatureChatHistoryOutput(

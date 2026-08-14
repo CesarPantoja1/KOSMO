@@ -4,6 +4,10 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from kosmo.application.chat.chat_sessions import (
+    CreateChatSessionUseCase,
+    ListChatSessionsUseCase,
+)
 from kosmo.application.chat.process_chat_message import ProcessChatMessageUseCase
 from kosmo.application.chat.process_chat_modification import ProcessChatModificationUseCase
 from kosmo.application.chat.process_chat_regeneration import ProcessChatRegenerationUseCase
@@ -57,6 +61,8 @@ class PipelineComponents:
     traceability_repo: TraceabilityRepository
     outbox: OutboxStore
     consolidate_patterns: ConsolidateKnowledgePatterns
+    create_chat_session: CreateChatSessionUseCase
+    list_chat_sessions: ListChatSessionsUseCase
 
 
 def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -209,4 +215,6 @@ def build_pipeline_components(
         traceability_repo=repos.traceability,
         outbox=outbox,
         consolidate_patterns=consolidate_patterns,
+        create_chat_session=CreateChatSessionUseCase(chat_repo=repos.chat),
+        list_chat_sessions=ListChatSessionsUseCase(chat_repo=repos.chat),
     )

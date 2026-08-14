@@ -3,12 +3,14 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.chat import (
     ChatRepository,
     ChatRole,
+    ChatSession,
+    ChatSessionSummary,
     DiffCambio,
     EstadoPlanCambio,
     HistorialChat,
@@ -17,8 +19,18 @@ from kosmo.contracts.chat import (
     SugerenciaCambio,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
-from kosmo.infrastructure.persistence.postgres.models import ChatMessageModel, PlanChangeModel
+from kosmo.contracts.sdd.ids import (
+    ChatHistoryId,
+    ChatMessageId,
+    ChatSessionId,
+    PlanChangeId,
+    ProjectId,
+)
+from kosmo.infrastructure.persistence.postgres.models import (
+    ChatMessageModel,
+    ChatSessionModel,
+    PlanChangeModel,
+)
 
 
 class SqlAlchemyChatRepository(ChatRepository):
@@ -51,6 +63,7 @@ class SqlAlchemyChatRepository(ChatRepository):
         phase: SpecPhase,
         message: MensajeChat,
         context_id: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat:
         suggested_changes: list[dict[str, Any]] | None = None
         if message.suggested_changes:
@@ -61,6 +74,8 @@ class SqlAlchemyChatRepository(ChatRepository):
                     "description": sc.description,
                     "diff": {"before": sc.diff.before, "after": sc.diff.after},
                     "rationale": sc.rationale,
+                    "applied": sc.applied,
+                    "not_applied_reason": sc.not_applied_reason,
                 }
                 for sc in message.suggested_changes
             ]
@@ -70,6 +85,7 @@ class SqlAlchemyChatRepository(ChatRepository):
             project_id=str(project_id),
             phase=phase.value,
             context_id=context_id,
+            session_id=str(session_id) if session_id is not None else None,
             role=message.role.value,
             content=message.content,
             suggested_change=suggested_changes,
@@ -87,12 +103,15 @@ class SqlAlchemyChatRepository(ChatRepository):
         context_id: str | None = None,
         limit: int = 200,
         before: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None:
         stmt = select(ChatMessageModel).where(
             ChatMessageModel.project_id == str(project_id),
             ChatMessageModel.phase == phase.value,
         )
-        if context_id:
+        if session_id is not None:
+            stmt = stmt.where(ChatMessageModel.session_id == str(session_id))
+        elif context_id:
             stmt = stmt.where(ChatMessageModel.context_id == context_id)
         else:
             stmt = stmt.where(ChatMessageModel.context_id.is_(None))
@@ -125,10 +144,63 @@ class SqlAlchemyChatRepository(ChatRepository):
             project_id=project_id,
             phase=phase,
             context_id=context_id,
+            session_id=session_id,
             messages=messages,
             has_more=has_more,
             next_cursor=next_cursor,
         )
+
+    async def create_session(self, session: ChatSession) -> ChatSession:
+        model = ChatSessionModel(
+            id=str(session.id),
+            project_id=str(session.project_id),
+            phase=session.phase.value,
+            context_id=session.context_id,
+        )
+        async with self._session_ctx() as db:
+            db.add(model)
+            await self._commit(db)
+        return session
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        *,
+        context_id: str | None = None,
+    ) -> list[ChatSessionSummary]:
+        stmt = (
+            select(
+                ChatSessionModel,
+                func.count(ChatMessageModel.id),
+                func.max(ChatMessageModel.created_at),
+            )
+            .outerjoin(ChatMessageModel, ChatMessageModel.session_id == ChatSessionModel.id)
+            .where(
+                ChatSessionModel.project_id == str(project_id),
+                ChatSessionModel.phase == phase.value,
+            )
+            .group_by(ChatSessionModel.id)
+            .order_by(ChatSessionModel.created_at.desc())
+        )
+        if context_id is not None:
+            stmt = stmt.where(ChatSessionModel.context_id == context_id)
+
+        async with self._session_ctx() as db:
+            result = await db.execute(stmt)
+            rows = result.all()
+
+        return [
+            ChatSessionSummary(
+                id=ChatSessionId(model.id),
+                phase=SpecPhase(model.phase),
+                context_id=model.context_id,
+                created_at=model.created_at,
+                message_count=int(count or 0),
+                last_message_at=last_at,
+            )
+            for model, count, last_at in rows
+        ]
 
     @staticmethod
     def _compose_history_id(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:

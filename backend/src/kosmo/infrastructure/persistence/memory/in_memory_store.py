@@ -9,9 +9,17 @@ from kosmo.contracts.agent_memory import (
     KnowledgePattern,
     ProjectMemoryContext,
 )
-from kosmo.contracts.chat import ChatRepository, EstadoPlanCambio, HistorialChat, MensajeChat, PlanCambio
+from kosmo.contracts.chat import (
+    ChatRepository,
+    ChatSession,
+    ChatSessionSummary,
+    EstadoPlanCambio,
+    HistorialChat,
+    MensajeChat,
+    PlanCambio,
+)
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, ChatSessionId, PlanChangeId, ProjectId
 
 
 class InMemoryAgentSessionStore(AgentMemoryPort):
@@ -235,15 +243,28 @@ class InMemoryChatRepository(ChatRepository):
     def __init__(self) -> None:
         self._messages: dict[str, list[MensajeChat]] = {}
         self._plan_changes: dict[str, list[PlanCambio]] = {}
+        self._sessions: list[ChatSession] = []
 
     @staticmethod
-    def _composite_key(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:
+    def _composite_key(
+        project_id: ProjectId,
+        phase: SpecPhase,
+        context_id: str | None,
+        session_id: ChatSessionId | None = None,
+    ) -> str:
+        if session_id is not None:
+            return f"{project_id}_{phase.value}_s_{session_id}"
         return f"{project_id}_{phase.value}_{context_id or ''}"
 
     async def save_message(
-        self, project_id: ProjectId, phase: SpecPhase, message: MensajeChat, context_id: str | None = None
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        message: MensajeChat,
+        context_id: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat:
-        key = self._composite_key(project_id, phase, context_id)
+        key = self._composite_key(project_id, phase, context_id, session_id)
         if key not in self._messages:
             self._messages[key] = []
         self._messages[key].append(message)
@@ -256,8 +277,9 @@ class InMemoryChatRepository(ChatRepository):
         context_id: str | None = None,
         limit: int = 200,
         before: str | None = None,  # noqa: ARG002  # ponytail: implementar cuando se necesite cursor in-memory
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None:
-        key = self._composite_key(project_id, phase, context_id)
+        key = self._composite_key(project_id, phase, context_id, session_id)
         messages = self._messages.get(key)
         if not messages:
             return None
@@ -268,11 +290,34 @@ class InMemoryChatRepository(ChatRepository):
             project_id=project_id,
             phase=phase,
             context_id=context_id,
+            session_id=session_id,
             messages=tuple(recent),
         )
 
     async def save_history(self, history: HistorialChat) -> HistorialChat:
         return history
+
+    async def create_session(self, session: ChatSession) -> ChatSession:
+        self._sessions.append(session)
+        return session
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,
+        *,
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> list[ChatSessionSummary]:
+        return [
+            ChatSessionSummary(
+                id=s.id,
+                phase=s.phase,
+                context_id=s.context_id,
+                created_at=s.created_at,
+            )
+            for s in self._sessions
+            if s.phase == phase
+        ]
 
     async def add_plan_change(self, project_id: ProjectId, phase: SpecPhase, change: PlanCambio) -> PlanCambio:
         key = f"{project_id}_{phase.value}"

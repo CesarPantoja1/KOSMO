@@ -16,7 +16,7 @@ from kosmo.application.chat.validate_phase_context import (
 )
 from kosmo.contracts.chat import ModificacionChat
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 
 if TYPE_CHECKING:
     from kosmo.application.chat.process_chat_message import (
@@ -92,6 +92,7 @@ async def sse_chat_response(
     context: object,
     chat_uc: ProcessChatMessageUseCase,
     validate_uc: ValidatePhaseContextUseCase,
+    session_id: ChatSessionId | None = None,
 ) -> StreamingResponse:
     """Streaming real del chat: tokens conforme se generan y evento final con las cards."""
     from kosmo.application.chat.process_chat_message import (
@@ -112,6 +113,7 @@ async def sse_chat_response(
         phase=document_type,
         context=context,
         context_id=context_id,
+        session_id=session_id,
     )
 
     async def event_stream() -> AsyncGenerator[str]:

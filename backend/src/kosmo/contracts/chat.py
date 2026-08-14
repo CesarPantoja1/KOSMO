@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast
 from pydantic import BaseModel, model_validator
 
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, ChatSessionId, PlanChangeId, ProjectId
 
 
 class ChatRole(StrEnum):
@@ -112,6 +112,7 @@ class HistorialChat:
     project_id: ProjectId
     phase: SpecPhase
     context_id: str | None = None
+    session_id: ChatSessionId | None = None
     messages: tuple[MensajeChat, ...] = field(default_factory=tuple)
     has_more: bool = False
     next_cursor: str | None = None
@@ -122,6 +123,7 @@ class HistorialChat:
             project_id=self.project_id,
             phase=self.phase,
             context_id=self.context_id,
+            session_id=self.session_id,
             messages=(*self.messages, message),
         )
 
@@ -138,6 +140,25 @@ class HistorialChat:
         return f"{self.project_id}:{self.phase.value}:{self.context_id or ''}"
 
 
+@dataclass(frozen=True)
+class ChatSession:
+    id: ChatSessionId
+    project_id: ProjectId
+    phase: SpecPhase
+    context_id: str | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class ChatSessionSummary:
+    id: ChatSessionId
+    phase: SpecPhase
+    context_id: str | None
+    created_at: datetime
+    message_count: int = 0
+    last_message_at: datetime | None = None
+
+
 class ChatRepository(Protocol):
     async def save_message(
         self,
@@ -145,6 +166,7 @@ class ChatRepository(Protocol):
         phase: SpecPhase,
         message: MensajeChat,
         context_id: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat: ...
 
     async def get_history(
@@ -154,12 +176,23 @@ class ChatRepository(Protocol):
         context_id: str | None = None,
         limit: int = 200,
         before: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None: ...
 
     async def save_history(
         self,
         history: HistorialChat,
     ) -> HistorialChat: ...
+
+    async def create_session(self, session: ChatSession) -> ChatSession: ...
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        *,
+        context_id: str | None = None,
+    ) -> list[ChatSessionSummary]: ...
 
     async def add_plan_change(
         self,

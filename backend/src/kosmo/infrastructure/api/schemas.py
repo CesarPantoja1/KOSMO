@@ -592,6 +592,10 @@ class SendChatRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=1, max_length=4000, description="Mensaje del usuario")
+    session_id: str | None = Field(
+        default=None,
+        description="Hilo de conversación (cht_). Si es null, se usa el contexto actual de la fase.",
+    )
 
 
 class ModificationResultView(BaseModel):

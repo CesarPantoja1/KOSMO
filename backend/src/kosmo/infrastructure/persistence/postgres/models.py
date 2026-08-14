@@ -180,10 +180,21 @@ class ChatMessageModel(Base):
     project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     phase: Mapped[str] = mapped_column(String(32), nullable=False)
     context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text(), nullable=False)
     suggested_change: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
     error: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ChatSessionModel(Base):
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
+    context_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 

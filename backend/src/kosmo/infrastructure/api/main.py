@@ -14,6 +14,7 @@ from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
 from kosmo.infrastructure.api.routers.auth import router as auth_router
+from kosmo.infrastructure.api.routers.chat_sessions import router as chat_sessions_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.documents import router as documents_router
@@ -307,6 +308,7 @@ app.include_router(features_router)
 app.include_router(feature_chat_router)
 app.include_router(requirements_router)
 app.include_router(requirement_chat_router)
+app.include_router(chat_sessions_router)
 app.include_router(modelo_router)
 app.include_router(consistency_router)
 app.include_router(schemas_router)

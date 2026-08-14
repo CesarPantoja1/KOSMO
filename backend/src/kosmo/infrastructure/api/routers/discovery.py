@@ -32,7 +32,7 @@ from kosmo.contracts.sdd.errors import (
     LLMInvocationError,
     ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
@@ -315,6 +315,7 @@ async def process_chat_message(
                 phase=SpecPhase.DESCUBRIMIENTO,
                 context=ctx,
                 context_id=None,
+                session_id=ChatSessionId(payload.session_id) if payload.session_id else None,
                 instance=f"/api/v1/projects/{project_id}/discovery/chat",
             )
         )
@@ -358,9 +359,16 @@ async def get_chat_history(
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetDiscoveryChatHistoryUseCase, Depends(_get_discovery_chat_history)],
     before: str | None = None,
+    session_id: str | None = None,
 ) -> ChatHistoryResponse:
     try:
-        output = await use_case.execute(GetDiscoveryChatHistoryInput(project_id=ProjectId(project_id), before=before))
+        output = await use_case.execute(
+            GetDiscoveryChatHistoryInput(
+                project_id=ProjectId(project_id),
+                before=before,
+                session_id=ChatSessionId(session_id) if session_id else None,
+            )
+        )
     except ProjectNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -412,4 +420,5 @@ async def stream_chat_message(
         context=ctx,
         chat_uc=chat_uc,
         validate_uc=validate_uc,
+        session_id=ChatSessionId(payload.session_id) if payload.session_id else None,
     )

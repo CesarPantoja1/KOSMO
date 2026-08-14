@@ -25,7 +25,7 @@ from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
-from kosmo.contracts.sdd.ids import ChatMessageId, ProjectId
+from kosmo.contracts.sdd.ids import ChatMessageId, ChatSessionId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     DocumentRepository,
     FeatureRepository,
@@ -63,6 +63,7 @@ class ProcessChatMessageInput:
     content: str
     context: Any
     context_id: str | None = None
+    session_id: ChatSessionId | None = None
     instance: str = ""
 
 
@@ -220,6 +221,7 @@ class ProcessChatMessageUseCase:
             project_id=input_data.project_id,
             phase=input_data.phase,
             context_id=input_data.context_id,
+            session_id=input_data.session_id,
         )
         prior_messages = list(history.messages) if history else []
 
@@ -233,6 +235,7 @@ class ProcessChatMessageUseCase:
             phase=input_data.phase,
             message=user_msg,
             context_id=input_data.context_id,
+            session_id=input_data.session_id,
         )
 
         return prior_messages + [user_msg], skill_name
@@ -267,6 +270,7 @@ class ProcessChatMessageUseCase:
             phase=input_data.phase,
             message=final_msg,
             context_id=input_data.context_id,
+            session_id=input_data.session_id,
         )
 
         return ProcessChatMessageOutput(
@@ -285,6 +289,7 @@ class ProcessChatMessageUseCase:
             phase=input_data.phase,
             message=error_msg,
             context_id=input_data.context_id,
+            session_id=input_data.session_id,
         )
 
     async def _apply_suggestions(

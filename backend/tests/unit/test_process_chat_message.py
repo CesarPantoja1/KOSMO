@@ -27,7 +27,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
 from kosmo.contracts.sdd.document import EARSPattern, SpecPhase
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, ProjectId, RequirementId
+from kosmo.contracts.sdd.ids import ChatSessionId, FeatureId, ProjectId, RequirementId
 from kosmo.domain.pipeline.phase_modes.discovery_chat_mode import DiscoveryChatMode
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
@@ -271,6 +271,51 @@ async def test_guardrail_blocks_forbidden_terms_in_discovery() -> None:
     assert card.not_applied_reason is not None
     assert "terminología" in card.not_applied_reason
     assert document_to_markdown(docs.discovery_docs["prj_01"]) == original_md
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_messages_are_scoped_to_session() -> None:
+    # Arrange
+    doc = markdown_to_document(DISCOVERY_VALID)
+    ctx = DiscoveryChatContext(current_document=doc)
+    agent = _StubConversationAgent(_assistant_message(suggestions=[]))
+    chat_repo = InMemoryChatRepository()
+    docs = InMemoryDocumentRepository()
+    docs.discovery_docs["prj_01"] = doc
+    uc = ProcessChatMessageUseCase(
+        chat_repo=chat_repo,
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.DESCUBRIMIENTO),
+        document_repo=docs,
+    )
+    session_id = ChatSessionId("cht_01")
+
+    # Act
+    await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.DESCUBRIMIENTO,
+            content="Primer mensaje",
+            context=ctx,
+            session_id=session_id,
+        )
+    )
+
+    # Assert — el historial del hilo contiene solo sus mensajes
+    history = await chat_repo.get_history(
+        ProjectId("prj_01"),
+        SpecPhase.DESCUBRIMIENTO,
+        session_id=session_id,
+    )
+    assert history is not None
+    assert len(history.messages) == 2
+    other_history = await chat_repo.get_history(
+        ProjectId("prj_01"),
+        SpecPhase.DESCUBRIMIENTO,
+        session_id=ChatSessionId("cht_02"),
+    )
+    assert other_history is None
 
 
 # ── features ──

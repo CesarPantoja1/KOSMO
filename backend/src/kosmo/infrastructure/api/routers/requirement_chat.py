@@ -25,7 +25,7 @@ from kosmo.contracts.sdd.errors import (
     LLMInvocationError,
     ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.contracts.sdd.ids import ChatSessionId, FeatureId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
@@ -102,6 +102,7 @@ async def process_requirement_chat_message(
                 phase=SpecPhase.REQUISITOS,
                 context=ctx,
                 context_id=feature_id,
+                session_id=ChatSessionId(payload.session_id) if payload.session_id else None,
                 instance=f"/api/v1/features/{feature_id}/requirements/chat",
             )
         )
@@ -148,12 +149,14 @@ async def get_requirement_chat_history(
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetRequirementChatHistoryUseCase, Depends(_get_requirement_chat_history)],
     before: str | None = None,
+    session_id: str | None = None,
 ) -> ChatHistoryResponse:
     try:
         output = await use_case.execute(
             GetRequirementChatHistoryInput(
                 feature_id=FeatureId(feature_id),
                 before=before,
+                session_id=ChatSessionId(session_id) if session_id else None,
             )
         )
     except FeatureNotFoundError as exc:
@@ -207,4 +210,5 @@ async def stream_requirement_chat_message(
         context=ctx,
         chat_uc=chat_uc,
         validate_uc=validate_uc,
+        session_id=ChatSessionId(payload.session_id) if payload.session_id else None,
     )

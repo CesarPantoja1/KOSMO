@@ -9,6 +9,8 @@ from kosmo.contracts.audit.events import AuditEvent
 from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
 from kosmo.contracts.chat import (
     ChatHistoryId,
+    ChatSession,
+    ChatSessionSummary,
     EstadoPlanCambio,
     HistorialChat,
     MensajeChat,
@@ -21,7 +23,13 @@ from kosmo.contracts.consistency import (
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import (
+    ChatSessionId,
+    ConsistencyEvaluationId,
+    FeatureId,
+    PlanChangeId,
+    ProjectId,
+)
 from kosmo.contracts.sdd.project import Project
 
 _MAX_FAILURES = 10
@@ -419,6 +427,8 @@ class InMemoryChatRepository:
     def __init__(self) -> None:
         self.messages: list[MensajeChat] = []
         self.plans: list[PlanCambio] = []
+        self.sessions: list[ChatSession] = []
+        self._message_sessions: list[tuple[MensajeChat, ChatSessionId | None]] = []
 
     async def save_message(
         self,
@@ -426,8 +436,10 @@ class InMemoryChatRepository:
         phase: SpecPhase,  # noqa: ARG002
         message: MensajeChat,
         context_id: str | None = None,  # noqa: ARG002
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat:
         self.messages.append(message)
+        self._message_sessions.append((message, session_id))
         return message
 
     async def get_history(
@@ -435,18 +447,56 @@ class InMemoryChatRepository:
         project_id: ProjectId,  # noqa: ARG002
         phase: SpecPhase,  # noqa: ARG002
         context_id: str | None = None,  # noqa: ARG002
+        limit: int = 200,  # noqa: ARG002
+        before: str | None = None,  # noqa: ARG002
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None:
+        selected = [
+            msg
+            for msg, sid in self._message_sessions
+            if (session_id is None and sid is None) or (session_id is not None and sid == session_id)
+        ]
+        if not selected:
+            return None
         return HistorialChat(
             id=ChatHistoryId("hist_test"),
             project_id=project_id,
             phase=phase,
             context_id=context_id,
-            messages=tuple(self.messages),
+            session_id=session_id,
+            messages=tuple(selected),
         )
 
     async def save_history(self, history: HistorialChat) -> HistorialChat:
         self.messages = list(history.messages)
         return history
+
+    async def create_session(self, session: ChatSession) -> ChatSession:
+        self.sessions.append(session)
+        return session
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,
+        *,
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> list[ChatSessionSummary]:
+        summaries: list[ChatSessionSummary] = []
+        for session in self.sessions:
+            if session.phase != phase:
+                continue
+            count = sum(1 for _msg, sid in self._message_sessions if sid == session.id)
+            summaries.append(
+                ChatSessionSummary(
+                    id=session.id,
+                    phase=session.phase,
+                    context_id=session.context_id,
+                    created_at=session.created_at,
+                    message_count=count,
+                )
+            )
+        return summaries
 
     async def add_plan_change(
         self,
