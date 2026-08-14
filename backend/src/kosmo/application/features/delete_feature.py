@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import structlog
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository, ProjectRepository
@@ -16,10 +19,12 @@ class DeleteFeatureUseCase:
         project_repo: ProjectRepository,
         feature_repo: FeatureRepository,
         traceability_repo: TraceabilityRepository | None = None,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
         self._traceability_repo = traceability_repo
+        self._outbox = outbox
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> None:
         project = await self._project_repo.by_id(project_id)
@@ -47,6 +52,20 @@ class DeleteFeatureUseCase:
                     feature_id=str(feature_id),
                     exc_info=True,
                 )
+
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=project_id,
+            source_phase=SpecPhase.CARACTERISTICAS,
+            changes=[
+                {
+                    "section": f"Característica {feature.number}",
+                    "description": "Eliminación de la característica",
+                    "before": feature.title,
+                    "after": "",
+                }
+            ],
+        )
 
         _log.info(
             "delete_feature.success",

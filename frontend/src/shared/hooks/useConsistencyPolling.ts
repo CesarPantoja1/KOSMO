@@ -13,7 +13,7 @@ export function useConsistencyPolling(
 	projectId: string | null,
 	options: UseConsistencyPollingOptions = {},
 ) {
-	const { intervalMs = 30_000, enabled = true } = options;
+	const { intervalMs = 10_000, enabled = true } = options;
 	const [status, setStatus] = useState<ConsistencyStatusResponse | null>(null);
 	const [error, setError] = useState<unknown>(null);
 	const inFlightRef = useRef(false);

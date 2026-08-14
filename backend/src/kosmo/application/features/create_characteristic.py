@@ -69,7 +69,6 @@ class CreateCharacteristicInput:
     title: str
     description: str
     origin: str = ""
-    force: bool = False
 
 
 @dataclass(frozen=True)
@@ -107,7 +106,7 @@ class CreateCharacteristicUseCase:
 
         origin = input_data.origin.strip()
 
-        if not origin and not input_data.force and self._document_repo is not None and self._llm_client is not None:
+        if not origin and self._document_repo is not None and self._llm_client is not None:
             derived = await self._derive_origin(input_data.project_id, input_data.title, input_data.description)
             origin = str(derived.get("origin", ""))
             if not bool(derived.get("is_consistent", True)):

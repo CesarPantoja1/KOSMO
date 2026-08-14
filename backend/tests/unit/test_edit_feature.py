@@ -141,3 +141,52 @@ async def test_edit_feature_not_found(use_case: EditFeatureUseCase):
                 description="New Desc",
             )
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_edit_feature_enqueues_downstream_evaluation() -> None:
+    # Arrange
+    from tests.unit.fakes import InMemoryOutbox
+
+    feature_repo = InMemoryFeatureRepository()
+    evaluator = AsyncMock()
+    evaluator.evaluate.return_value = ConsistencyEvaluationOutput(
+        report_id="rep_1",
+        status=ConsistencyStatus.ANALIZADO_SIN_IMPACTO,
+    )
+    outbox = InMemoryOutbox()
+    use_case = EditFeatureUseCase(
+        feature_repo=feature_repo,
+        consistency_evaluator=evaluator,
+        outbox=outbox,
+    )
+
+    project_id = ProjectId(ULID().hex)
+    feature = Feature(
+        id=FeatureId(ULID().hex),
+        project_id=project_id,
+        number=1,
+        title="Old Title",
+        slug="old-title",
+        description="Old Desc",
+    )
+    await feature_repo.save(feature)
+
+    # Act
+    result = await use_case.execute(
+        EditFeatureInput(
+            project_id=project_id,
+            feature_id=feature.id,
+            title="New Title",
+            description="New Desc",
+        )
+    )
+
+    # Assert — la edición manual dispara la verificación de las fases a la derecha
+    assert result.is_saved is True
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["project_id"] == str(project_id)
+    assert payload["source_phase"] == "caracteristicas"

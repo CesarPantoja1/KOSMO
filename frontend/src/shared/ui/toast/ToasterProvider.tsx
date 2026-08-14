@@ -83,6 +83,17 @@ function ToastItem({ toastItem }: { toastItem: { toast: QueuedToast<ToastContent
 						{content.message}
 					</Text>
 				</UNSTABLE_ToastContent>
+				{content.action && (
+					<Button
+						onPress={() => {
+							content.action?.onAction();
+							queue.close(toastItem.toast.key);
+						}}
+						className='shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-semibold text-primary-600 transition-colors hover:bg-primary-50'
+					>
+						{content.action.label}
+					</Button>
+				)}
 				<Button slot='close' className='cursor-pointer rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-600'>
 					<CloseIcon className='h-4 w-4' />
 				</Button>

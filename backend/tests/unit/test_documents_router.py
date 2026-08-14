@@ -145,3 +145,32 @@ async def test_modify_direct_llm_error_raises_502() -> None:
         await modify_document_direct(_principal(), body, uc)
 
     assert exc_info.value.status_code == 502
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_revert_document_enqueues_downstream_evaluation() -> None:
+    # Arrange
+    from kosmo.application.discovery.revert_document import revert_to_version
+    from kosmo.contracts.sdd.ids import ProjectId
+    from tests.unit.fakes import InMemoryDocumentRepository, InMemoryOutbox
+
+    document_repo = InMemoryDocumentRepository()
+    document_repo.versions["v1"] = "## Visión\n\nVisión antigua."
+    outbox = InMemoryOutbox()
+
+    # Act
+    result = await revert_to_version(
+        document_repo,
+        ProjectId("prj_revert"),
+        "v1",
+        outbox=outbox,
+    )
+
+    # Assert — revertir el Descubrimiento dispara la verificación de las fases a la derecha
+    assert result is not None
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["project_id"] == "prj_revert"
+    assert payload["source_phase"] == "descubrimiento"

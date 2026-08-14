@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
+from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import EARSPhaseOutput
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     LLMInvocationError,
@@ -38,11 +41,13 @@ class RegenerateRequirementsUseCase:
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
         agent: AgentPort,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._agent = agent
+        self._outbox = outbox
 
     async def execute(self, input_data: RegenerateRequirementsInput) -> RegenerateRequirementsOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -110,6 +115,20 @@ class RegenerateRequirementsUseCase:
             )
 
         await self._requirement_repo.save(input_data.feature_id, phase_output.requirements_markdown)
+
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=input_data.project_id,
+            source_phase=SpecPhase.REQUISITOS,
+            changes=[
+                {
+                    "section": "documento",
+                    "description": f"Regeneración con IA de los requisitos de {feature.display_id}",
+                    "before": current_markdown,
+                    "after": phase_output.requirements_markdown,
+                }
+            ],
+        )
 
         return RegenerateRequirementsOutput(
             artifact_id=str(input_data.feature_id),

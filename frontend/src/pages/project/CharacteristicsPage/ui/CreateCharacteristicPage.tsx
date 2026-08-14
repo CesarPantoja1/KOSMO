@@ -27,7 +27,6 @@ const CreateCharacteristic = () => {
 		showConsistencyModal,
 		consistencyInfo,
 		isValidating,
-		handleForceCreate,
 		closeConsistencyModal,
 	} = useCreateCharacteristic();
 
@@ -177,36 +176,20 @@ const CreateCharacteristic = () => {
 								Revisión de coherencia
 							</h3>
 							<p className='text-sm text-neutral-500'>
-								El asistente detectó que esta funcionalidad podría no alinearse con el
-								descubrimiento del proyecto:
+								El asistente detectó que esta funcionalidad no se alinea con el
+								descubrimiento del proyecto. Para guardarla, modifica primero el
+								documento de Descubrimiento:
 							</p>
 							<div className='bg-error-50 border border-error-500/30 rounded-md p-3'>
 								<p className='text-sm text-error-700'>{consistencyInfo.reason}</p>
-							</div>
-							<div className='flex flex-col gap-1.5'>
-								<label className='text-xs font-semibold text-neutral-500 uppercase tracking-wider'>
-									Origen derivado
-								</label>
-								<input
-									type='text'
-									className='w-full px-3 py-2 border border-neutral-300 rounded-md bg-neutral-50 text-neutral-800 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none'
-									defaultValue={consistencyInfo.origin}
-								/>
 							</div>
 							<div className='flex justify-end gap-3 pt-1'>
 								<button
 									type='button'
 									onClick={closeConsistencyModal}
-									className='btn btn-secondary'
-								>
-									Cancelar
-								</button>
-								<button
-									type='button'
-									onClick={handleForceCreate}
 									className='btn btn-primary'
 								>
-									Guardar de todas formas
+									Entendido
 								</button>
 							</div>
 						</div>

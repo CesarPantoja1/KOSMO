@@ -10,6 +10,7 @@ from kosmo.domain.pipeline.prompts.shared_rules import (
     SERVER_APPLIES_RULE,
     formatting_rules,
     phase_isolation_rule,
+    upstream_guard_rule,
 )
 
 
@@ -38,6 +39,13 @@ def _build_chat_system_prompt() -> str:
         "- SIN TERMINOLOGIA DE NEGOCIO ABSTRACTA. PROHIBIDO: "
         f"{terms_negocio}.\n"
         + phase_isolation_rule(example=" (ej. modificar el Descubrimiento)")
+        + upstream_guard_rule(
+            "el Descubrimiento",
+            example=(
+                " (por ejemplo, incluir en la característica productos o capacidades "
+                "marcados como Excluido en el Alcance)"
+            ),
+        )
         + "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia tecnica, "
         "reformulala en lenguaje de usuario para la caracteristica.\n\n"
         "REGLAS DE CONTENIDO POR ATRIBUTO:\n"

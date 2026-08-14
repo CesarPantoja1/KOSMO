@@ -99,12 +99,16 @@ def build_discovery_components(
             agent=pipeline.agent,
         ),
         get_discovery=GetDiscoveryUseCase(document_repo=repos.documents),
-        save_discovery=SaveDiscoveryUseCase(document_repo=repos.documents),
+        save_discovery=SaveDiscoveryUseCase(
+            document_repo=repos.documents,
+            outbox=pipeline.outbox,
+        ),
         refine_discovery=RefineDiscoveryUseCase(
             project_repo=repos.projects,
             document_repo=repos.documents,
             context_builder=pipeline.context_builder,
             agent=pipeline.agent,
+            outbox=pipeline.outbox,
         ),
         get_discovery_chat_history=GetDiscoveryChatHistoryUseCase(
             project_repo=repos.projects,
@@ -166,6 +170,7 @@ def build_features_components(
         edit_feature=EditFeatureUseCase(
             feature_repo=repos.features,
             consistency_evaluator=consistency_evaluator,
+            outbox=pipeline.outbox,
         ),
         check_feature_consistency=CheckFeatureConsistencyUseCase(
             feature_repo=repos.features,
@@ -209,18 +214,21 @@ def build_requirements_components(
             project_repo=repos.projects,
             feature_repo=repos.features,
             requirement_repo=repos.requirements,
+            outbox=pipeline.outbox,
         ),
         refine_requirements=RefineRequirementsUseCase(
             project_repo=repos.projects,
             feature_repo=repos.features,
             requirement_repo=repos.requirements,
             agent=pipeline.agent,
+            outbox=pipeline.outbox,
         ),
         regenerate_requirements=RegenerateRequirementsUseCase(
             project_repo=repos.projects,
             feature_repo=repos.features,
             requirement_repo=repos.requirements,
             agent=pipeline.agent,
+            outbox=pipeline.outbox,
         ),
         get_requirement_chat_history=get_requirement_chat_history,
         requirement_repo=repos.requirements,
@@ -305,6 +313,7 @@ def build_consistency_components(
             project_repo=repos.projects,
             feature_repo=repos.features,
             traceability_repo=repos.traceability,
+            outbox=pipeline.outbox,
         ),
         consistency_status=GetConsistencyStatusUseCase(evaluation_repo=evaluation_repo),
         consistency_review=GetConsistencyReviewUseCase(

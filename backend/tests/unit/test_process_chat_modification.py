@@ -295,3 +295,54 @@ async def test_process_chat_modification_raises_when_feature_not_found(
         await use_case.execute(input_data)
 
     assert exc_info.value.problem.status == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_process_chat_modification_enqueues_downstream_evaluation(
+    document_repo: InMemoryDocumentRepository,
+    feature_repo: InMemoryFeatureRepository,
+    requirement_repo: InMemoryRequirementRepository,
+) -> None:
+    # Arrange
+    from kosmo.contracts.llm.ports import LLMResponse
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+    from tests.unit.fakes import InMemoryOutbox
+
+    llm_client = AsyncMock()
+    outbox = InMemoryOutbox()
+    use_case = ProcessChatModificationUseCase(
+        document_repo=document_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        llm_client=llm_client,
+        outbox=outbox,
+    )
+
+    project_id = ProjectId(ULID().hex)
+    await document_repo.save_discovery(project_id, markdown_to_document(_DISCOVERY_MARKDOWN))
+
+    llm_response = {
+        "applied": True,
+        "modified_document": _MODIFIED_DISCOVERY,
+        "modified_section": "Público objetivo",
+        "change_description": "Se cambió el público objetivo",
+    }
+    llm_client.complete_json.return_value = LLMResponse(text=json.dumps(llm_response))
+
+    # Act
+    result = await use_case.execute(
+        ProcessChatModificationInput(
+            text="Cambia el público objetivo",
+            document_id=str(project_id),
+            document_type=SpecPhase.DESCUBRIMIENTO,
+        )
+    )
+
+    # Assert — la modificación directa del Descubrimiento dispara la verificación a la derecha
+    assert result.success is True
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["source_phase"] == "descubrimiento"
+    assert payload["changes"][0]["after"] == _MODIFIED_DISCOVERY

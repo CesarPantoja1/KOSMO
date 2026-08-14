@@ -19,6 +19,17 @@ def phase_isolation_rule(*, example: str = "") -> str:
     )
 
 
+def upstream_guard_rule(upstream_documents: str, *, example: str = "") -> str:
+    return (
+        "- GUARDIA DE TRAZABILIDAD: el documento de la izquierda "
+        f"({upstream_documents}) define el alcance permitido de esta fase. PROHIBIDO "
+        "proponer cambios que lo contradigan, lo reescriban o amplíen su alcance"
+        f"{example}. Si la solicitud lo requiere, NIEGA el cambio: explica la "
+        "contradicción, indica qué sección del documento de la izquierda debe "
+        "modificarse primero y devuelve change_suggestions en null.\n"
+    )
+
+
 CONVERSATIONAL_NULL_RULE = (
     "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
     "change_suggestions en null y responde de forma conversacional.\n\n"

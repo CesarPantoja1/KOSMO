@@ -9,7 +9,7 @@ from kosmo.application.discovery.save_discovery import (
 )
 from kosmo.contracts.sdd.document import DocumentNode, RichTextDocument, SectionHeading
 from kosmo.contracts.sdd.ids import ProjectId
-from tests.unit.fakes import InMemoryDocumentRepository
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryOutbox
 
 
 def _make_discovery_document(title: str = "Test Discovery") -> RichTextDocument:
@@ -82,3 +82,24 @@ async def test_save_discovery_overwrites_existing_document() -> None:
     assert saved is not None
     assert saved.nodes[0].heading is not None
     assert saved.nodes[0].heading.text == "Segunda Versión"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_save_discovery_enqueues_downstream_evaluation() -> None:
+    # Arrange
+    repository: Any = InMemoryDocumentRepository()
+    outbox = InMemoryOutbox()
+    use_case = SaveDiscoveryUseCase(document_repo=repository, outbox=outbox)
+    project_id = ProjectId("prj_chain")
+
+    # Act
+    await use_case.execute(SaveDiscoveryInput(project_id=project_id, document=_make_discovery_document()))
+
+    # Assert — editar Descubrimiento dispara la verificación de todas las fases a la derecha
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["project_id"] == "prj_chain"
+    assert payload["source_phase"] == "descubrimiento"
+    assert len(payload["changes"]) == 1

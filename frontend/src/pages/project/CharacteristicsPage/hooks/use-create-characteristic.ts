@@ -30,7 +30,6 @@ interface UseCreateCharacteristicReturn {
 	showConsistencyModal: boolean;
 	consistencyInfo: { origin: string; reason: string } | null;
 	isValidating: boolean;
-	handleForceCreate: () => void;
 	closeConsistencyModal: () => void;
 }
 
@@ -141,24 +140,6 @@ export function useCreateCharacteristic(): UseCreateCharacteristicReturn {
 		}
 	};
 
-	const handleForceCreate = async () => {
-		if (!projectId || !consistencyInfo) return;
-		try {
-			const result = await storeAddCharacteristic(projectId, {
-				title: titleValue,
-				description: descValue,
-				origin: consistencyInfo.origin,
-				force: true,
-			});
-			if (result.is_saved) {
-				setShowConsistencyModal(false);
-				router.push('/proyecto/caracteristicas');
-			}
-		} catch {
-			toast.error('No se pudo forzar la creación.');
-		}
-	};
-
 	const handleCancel = () => {
 		router.push('/proyecto/caracteristicas');
 	};
@@ -190,7 +171,6 @@ export function useCreateCharacteristic(): UseCreateCharacteristicReturn {
 		showConsistencyModal,
 		consistencyInfo,
 		isValidating,
-		handleForceCreate,
 		closeConsistencyModal: () => setShowConsistencyModal(false),
 	};
 }

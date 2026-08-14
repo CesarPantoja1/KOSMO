@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
+from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
@@ -126,11 +128,13 @@ class ProcessChatModificationUseCase:
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
         llm_client: LLMClient,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._document_repo = document_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._llm_client = llm_client
+        self._outbox = outbox
 
     async def execute(self, input_data: ProcessChatModificationInput) -> ProcessChatModificationOutput:
         current_content = await fetch_current_content(
@@ -175,12 +179,34 @@ class ProcessChatModificationUseCase:
             modified_content=modified_document,
         )
 
+        project_id = await self._resolve_project_id(input_data)
+        if project_id is not None:
+            await trigger_downstream_evaluation(
+                self._outbox,
+                project_id=project_id,
+                source_phase=input_data.document_type,
+                changes=[
+                    {
+                        "section": modified_section or "documento",
+                        "description": change_description,
+                        "before": "",
+                        "after": modified_document,
+                    }
+                ],
+            )
+
         return ProcessChatModificationOutput(
             success=True,
             modified_document=modified_document,
             modified_section=modified_section,
             change_description=change_description,
         )
+
+    async def _resolve_project_id(self, input_data: ProcessChatModificationInput) -> ProjectId | None:
+        if input_data.document_type == SpecPhase.DESCUBRIMIENTO:
+            return ProjectId(input_data.document_id)
+        feature = await self._feature_repo.by_id(FeatureId(input_data.document_id))
+        return feature.project_id if feature is not None else None
 
     @staticmethod
     def _parse_response(text: str) -> dict[str, object]:

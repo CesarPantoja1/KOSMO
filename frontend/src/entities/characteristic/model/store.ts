@@ -30,7 +30,7 @@ interface CharacteristicStore {
 	getSuggestCharacteristics: (projectId: string) => Promise<SuggestCharacteristic[]>;
 	addCharacteristic: (
 		projectId: string,
-		item: { title: string; description: string; origin?: string; force?: boolean },
+		item: { title: string; description: string; origin?: string },
 	) => Promise<CreateCharacteristicResponse>;
 
 	sendChatMessage: (featureId: string, content: string) => Promise<ChatResponse>;

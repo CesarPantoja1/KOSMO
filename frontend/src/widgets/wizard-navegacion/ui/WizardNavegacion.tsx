@@ -1,15 +1,26 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 import { useAppStore } from 'app/store/app.store';
 import { useProjectStore } from '@/entities/project';
-import type { ConsistencyTargetPhase } from '@/entities/consistency';
+import {
+	CONSISTENCY_REVIEW_ROUTES,
+	firstPhaseToReview,
+	sumPhaseStatus,
+} from '@/entities/consistency';
+import type {
+	ConsistencyStatusResponse,
+	ConsistencyTargetPhase,
+} from '@/entities/consistency';
 import { useConsistencyPolling } from '@/shared/hooks/useConsistencyPolling';
+import { toast } from '@/shared/ui';
 
 import { getStyleIconStatus } from '../lib/get-status-color';
 import { ProjectStatus } from '../types/status';
 import WizardItem from './WizardItem';
 import { PhaseStatusBadge } from './PhaseStatusBadge';
+import { ConsistencyGateButton } from './ConsistencyGateButton';
 
 import Discovery from '@/widgets/main-navbar/ui/icons/Discovery';
 import {
@@ -47,6 +58,43 @@ export function WizardNavegacion() {
 		}
 	};
 
+	const prevStatusRef = useRef<ConsistencyStatusResponse | null>(null);
+
+	useEffect(() => {
+		const prev = prevStatusRef.current;
+		prevStatusRef.current = consistencyStatus;
+		if (!consistencyStatus || !prev) return;
+		if ((pathname || '').includes('/consistencia')) return;
+
+		const finishedEvaluating =
+			sumPhaseStatus(prev, 'evaluating') > 0 &&
+			sumPhaseStatus(consistencyStatus, 'evaluating') === 0;
+		const pending = sumPhaseStatus(consistencyStatus, 'pending');
+		if (!finishedEvaluating || pending === 0) return;
+
+		const route = CONSISTENCY_REVIEW_ROUTES[firstPhaseToReview(consistencyStatus)];
+		toast.add(
+			{
+				variant: 'info',
+				title: 'Consistencia evaluada',
+				message: `${pending} sugerencia(s) pendiente(s) de revisión`,
+				action: {
+					label: 'Revisar',
+					onAction: () => {
+						const { hasUnsavedChanges, setPendingNavigationPath } =
+							useAppStore.getState();
+						if (hasUnsavedChanges) {
+							setPendingNavigationPath(route);
+						} else {
+							router.push(route);
+						}
+					},
+				},
+			},
+			{ timeout: 10_000 },
+		);
+	}, [consistencyStatus, pathname, router]);
+
 	if ((pathname || '').includes('/consistencia')) return null;
 	if (!isProyectosOpen) return null;
 
@@ -55,7 +103,7 @@ export function WizardNavegacion() {
 	);
 
 	return (
-		<nav className='flex items-center justify-center gap-0 px-16 py-4 bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
+		<nav className='relative flex items-center justify-center gap-0 px-16 py-4 bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
 			{phaseItems.map(({ href, Icon, label, consistencyPhase }, index) => {
 				let status: ProjectStatus = 'disable';
 				if (activeIndex !== -1) {
@@ -84,22 +132,9 @@ export function WizardNavegacion() {
 								onClick={handleWizardClick(href)}
 							/>
 							{consistencyPhase && (
-								<button
-									type='button'
-									aria-label={`Revisar consistencia de ${label.toLowerCase()}`}
-									onClick={() => {
-										const { hasUnsavedChanges, setPendingNavigationPath } =
-											useAppStore.getState();
-										if (hasUnsavedChanges) {
-											setPendingNavigationPath(`${href}/consistencia`);
-										} else {
-											router.push(`${href}/consistencia`);
-										}
-									}}
-									className='absolute -top-1 -right-0 cursor-pointer'
-								>
+								<span className='absolute -top-1 -right-0'>
 									<PhaseStatusBadge status={phaseBadge} />
-								</button>
+								</span>
 							)}
 						</div>
 						{/* Connector line between steps */}
@@ -120,6 +155,9 @@ export function WizardNavegacion() {
 					</div>
 				);
 			})}
+			<div className='absolute top-1/2 right-6 -translate-y-1/2'>
+				<ConsistencyGateButton status={consistencyStatus} />
+			</div>
 		</nav>
 	);
 }

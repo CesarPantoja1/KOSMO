@@ -548,10 +548,6 @@ class CreateCharacteristicRequest(BaseModel):
         default="",
         description="Origen y trazabilidad de la característica. Si se deja vacío, la IA lo deriva del descubrimiento.",
     )
-    force: bool = Field(
-        default=False,
-        description="Si es true, fuerza la creación aunque la IA detecte inconsistencia con el descubrimiento.",
-    )
 
 
 class EditFeatureManualRequest(BaseModel):

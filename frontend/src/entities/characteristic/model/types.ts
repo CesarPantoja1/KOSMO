@@ -36,5 +36,4 @@ export interface CreateCharacteristicParams {
 	titleMaxLength: number;
 	descriptionMaxLength: number;
 	origin?: string;
-	force?: boolean;
 }

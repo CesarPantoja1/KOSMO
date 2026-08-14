@@ -159,6 +159,14 @@ def build_pipeline_components(
 
     validate_phase_context = ValidatePhaseContextUseCase()
 
+    consistency_evaluator: ConsistencyEvaluator = EvaluateConsistencyUseCase(
+        agent=agent,
+        feature_repo=repos.features,
+        requirement_repo=repos.requirements,
+        diagram_repo=repos.diagrams,
+        document_repo=repos.documents,
+    )
+
     process_chat_message = ProcessChatMessageUseCase(
         chat_repo=repos.chat,
         agent=agent,
@@ -168,6 +176,7 @@ def build_pipeline_components(
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
         outbox=outbox,
+        consistency_evaluator=consistency_evaluator,
     )
 
     process_chat_modification = ProcessChatModificationUseCase(
@@ -175,14 +184,7 @@ def build_pipeline_components(
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
         llm_client=llm_client,
-    )
-
-    consistency_evaluator: ConsistencyEvaluator = EvaluateConsistencyUseCase(
-        agent=agent,
-        feature_repo=repos.features,
-        requirement_repo=repos.requirements,
-        diagram_repo=repos.diagrams,
-        document_repo=repos.documents,
+        outbox=outbox,
     )
 
     consolidate_patterns = ConsolidateKnowledgePatterns(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useConsistencyGateStore } from '@/entities/consistency';
+import { useConsistencyGateStore, CONSISTENCY_REVIEW_ROUTES } from '@/entities/consistency';
 import type { ConsistencyTargetPhase, ReviewCard } from '@/entities/consistency';
 import { useProjectStore } from '@/entities/project';
 import { useParams, useRouter } from 'next/navigation';
@@ -27,12 +27,6 @@ const TARGET_TO_ROUTE: Record<ConsistencyTargetPhase, string> = {
 	features: '/proyecto/caracteristicas',
 	requirements: '/proyecto/requisitos',
 	model: '/proyecto/modelo',
-};
-
-const REVIEW_ROUTES: Record<ConsistencyTargetPhase, string> = {
-	features: '/proyecto/caracteristicas/consistencia',
-	requirements: '/proyecto/requisitos/consistencia',
-	model: '/proyecto/modelo/consistencia',
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -177,7 +171,7 @@ const ConsistencyPage = () => {
 					{(Object.keys(TARGET_LABELS) as ConsistencyTargetPhase[]).map((phase) => (
 						<Link
 							key={phase}
-							href={REVIEW_ROUTES[phase]}
+							href={CONSISTENCY_REVIEW_ROUTES[phase]}
 							className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
 								phase === targetPhase
 									? 'bg-primary-500 text-neutral-0'

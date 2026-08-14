@@ -10,6 +10,7 @@ from kosmo.domain.pipeline.prompts.shared_rules import (
     SERVER_APPLIES_RULE,
     formatting_rules,
     phase_isolation_rule,
+    upstream_guard_rule,
 )
 
 _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
@@ -36,6 +37,12 @@ _REQUIREMENTS_CHAT_SYSTEM_PROMPT = (
     "- SIN TERMINOLOGIA DE USUARIO. PROHIBIDO: usuario, experiencia de usuario, interfaz, "
     "pantalla, diseño visual, usabilidad, navegación, layout, flujo de usuario, click, botón.\n"
     + phase_isolation_rule()
+    + upstream_guard_rule(
+        "la característica padre y el Descubrimiento",
+        example=(
+            " (por ejemplo, añadir un requisito que excede la intención de la característica o contradice el Alcance)"
+        ),
+    )
     + "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia de negocio o de "
     "usuario, reformúlala en lenguaje de requisitos de software. Solo si la solicitud es "
     "puramente ajena al nivel de software, indica amablemente que debe modificar directamente "

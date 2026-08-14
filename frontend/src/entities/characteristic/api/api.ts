@@ -138,7 +138,7 @@ const mockGetSuggestCharacteristics = async (
 
 const mockAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string; origin?: string; force?: boolean },
+	item: { title: string; description: string; origin?: string },
 ): Promise<CreateCharacteristicResponse> => {
 	await delay(600);
 	const nextNum = mockStore.length + 1;
@@ -198,7 +198,7 @@ const realGetSuggestCharacteristics = async (
 
 const realAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string; origin?: string; force?: boolean },
+	item: { title: string; description: string; origin?: string },
 ): Promise<CreateCharacteristicResponse> => {
 	return apiClient<CreateCharacteristicResponse>(
 		`/api/v1/projects/${projectId}/features/manual`,
@@ -209,7 +209,6 @@ const realAddCharacteristic = async (
 				title: item.title,
 				description: item.description,
 				origin: item.origin || '',
-				force: item.force || false,
 			}),
 		},
 	);
@@ -249,7 +248,7 @@ export const getSuggestCharacteristics = (
 
 export const addCharacteristic = (
 	projectId: string,
-	item: { title: string; description: string; origin?: string; force?: boolean },
+	item: { title: string; description: string; origin?: string },
 ): Promise<CreateCharacteristicResponse> =>
 	USE_MOCKS
 		? mockAddCharacteristic(projectId, item)

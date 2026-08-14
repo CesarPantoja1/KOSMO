@@ -14,13 +14,16 @@ from tenacity import (
     wait_exponential,
 )
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.chat import (
+    AppliedChange,
     ChatRepository,
     ChatRole,
     MensajeChat,
     ModificacionChat,
     SugerenciaCambio,
 )
+from kosmo.contracts.consistency import ConsistencyEvaluator, ConsistencyStatus
 from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
@@ -97,6 +100,7 @@ class ProcessChatMessageUseCase:
         feature_repo: FeatureRepository | None = None,
         requirement_repo: RequirementRepository | None = None,
         outbox: OutboxPort | None = None,
+        consistency_evaluator: ConsistencyEvaluator | None = None,
     ) -> None:
         self._chat_repo = chat_repo
         self._agent = agent
@@ -106,6 +110,7 @@ class ProcessChatMessageUseCase:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._outbox = outbox
+        self._consistency_evaluator = consistency_evaluator
 
     async def execute(self, input_data: ProcessChatMessageInput) -> ProcessChatMessageOutput:
         total_start = time.monotonic()
@@ -300,6 +305,21 @@ class ProcessChatMessageUseCase:
         context: Any,
         suggestions: list[SugerenciaCambio],
     ) -> list[SugerenciaCambio]:
+        guard_reason = await self._check_upstream_guard(phase, project_id, suggestions)
+        if guard_reason is not None:
+            return [
+                SugerenciaCambio(
+                    id=sc.id,
+                    section=sc.section,
+                    description=sc.description,
+                    diff=sc.diff,
+                    rationale=sc.rationale,
+                    applied=False,
+                    not_applied_reason=guard_reason,
+                )
+                for sc in suggestions
+            ]
+
         applied: list[SugerenciaCambio] = []
         for sc in suggestions:
             reason = await self._apply_suggestion(phase, project_id, context, sc)
@@ -315,6 +335,65 @@ class ProcessChatMessageUseCase:
                 )
             )
         return applied
+
+    async def _check_upstream_guard(
+        self,
+        phase: SpecPhase,
+        project_id: ProjectId,
+        suggestions: list[SugerenciaCambio],
+    ) -> str | None:
+        """Guarda de trazabilidad a la izquierda: rechaza cambios de chat que
+        contradigan o amplíen lo declarado en los documentos upstream."""
+        if self._consistency_evaluator is None or not suggestions:
+            return None
+
+        pairs: list[tuple[SpecPhase, SpecPhase, str]] = []
+        if phase == SpecPhase.CARACTERISTICAS:
+            pairs.append((phase, SpecPhase.DESCUBRIMIENTO, "el documento de Descubrimiento"))
+        elif phase == SpecPhase.REQUISITOS:
+            pairs.append((phase, SpecPhase.CARACTERISTICAS, "la característica padre"))
+            pairs.append((phase, SpecPhase.DESCUBRIMIENTO, "el documento de Descubrimiento"))
+        else:
+            return None
+
+        changes = [
+            AppliedChange(
+                id=sc.id,
+                section=sc.section,
+                description=sc.description,
+                diff=sc.diff,
+            )
+            for sc in suggestions
+        ]
+
+        for source_phase, target_phase, doc_label in pairs:
+            try:
+                result = await self._consistency_evaluator.evaluate(
+                    source_phase=source_phase,
+                    target_phase=target_phase,
+                    project_id=project_id,
+                    applied_changes=changes,
+                )
+            except Exception:
+                _log.warning(
+                    "chat.upstream_guard_failed",
+                    phase=phase.value,
+                    target=target_phase.value,
+                    exc_info=True,
+                )
+                continue
+
+            if result.status != ConsistencyStatus.ANALIZADO_CON_IMPACTO:
+                continue
+
+            section = result.actions[0].suggested_field if result.actions else ""
+            section_note = f" (sección: {section})" if section else ""
+            return (
+                f"El cambio contradice o amplía lo declarado en {doc_label}{section_note}. "
+                f"Modifica primero {doc_label} y vuelve a pedir el cambio aquí."
+            )
+
+        return None
 
     async def _apply_suggestion(
         self,
@@ -418,23 +497,19 @@ class ProcessChatMessageUseCase:
         input_data: ProcessChatMessageInput,
         applied_cards: list[SugerenciaCambio],
     ) -> None:
-        if self._outbox is None:
-            return
-        await self._outbox.enqueue(
-            "consistency_evaluate",
-            {
-                "project_id": str(input_data.project_id),
-                "source_phase": input_data.phase.value,
-                "changes": [
-                    {
-                        "section": c.section,
-                        "description": c.description,
-                        "before": c.diff.before,
-                        "after": c.diff.after,
-                    }
-                    for c in applied_cards
-                ],
-            },
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=input_data.project_id,
+            source_phase=input_data.phase,
+            changes=[
+                {
+                    "section": c.section,
+                    "description": c.description,
+                    "before": c.diff.before,
+                    "after": c.diff.after,
+                }
+                for c in applied_cards
+            ],
         )
 
     @staticmethod

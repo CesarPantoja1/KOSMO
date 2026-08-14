@@ -183,8 +183,8 @@ async def suggest_features(
     description=(
         "Crea una nueva característica. Si no se proporciona origin, la IA lo deriva "
         "del descubrimiento y verifica coherencia. Si la IA detecta inconsistencia, "
-        "devuelve is_saved=false con el origin derivado y la razón. Usa force=true para "
-        "forzar el guardado."
+        "devuelve is_saved=false con el origin derivado y la razón. El guardado nunca "
+        "se fuerza: si contradice el Descubrimiento, primero debe modificarse ese documento."
     ),
     status_code=status.HTTP_200_OK,
     responses={
@@ -215,7 +215,6 @@ async def create_characteristic_manual(
                 title=payload.title,
                 description=payload.description,
                 origin=payload.origin,
-                force=payload.force,
             )
         )
     except ValueError as exc:

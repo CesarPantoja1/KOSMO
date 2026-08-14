@@ -33,6 +33,7 @@ from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from tests.unit.conftest import DISCOVERY_VALID
 from tests.unit.fakes import (
+    FakeConsistencyEvaluator,
     InMemoryChatRepository,
     InMemoryDocumentRepository,
     InMemoryFeatureRepository,
@@ -557,3 +558,332 @@ async def test_requirement_chat_updates_markdown() -> None:
     card = output.message.suggested_changes[0]
     assert card.applied is True
     assert "con dos decimales" in (await requirement_repo.by_feature_id(FeatureId("feat_01")) or "")
+
+
+# ── guardia upstream (trazabilidad a la izquierda) ──
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_feature_chat_rejects_suggestion_when_guard_detects_upstream_impact() -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        number=1,
+        title="Registrar gastos compartidos",
+        slug="registrar-gastos-compartidos",
+        description="El usuario ingresa un gasto para dividirlo.",
+        project_id=ProjectId("prj_01"),
+        origin="Deriva de Metas del producto.",
+    )
+    ctx = FeatureChatContext(feature=feature, discovery_document=markdown_to_document(DISCOVERY_VALID))
+    agent = _StubConversationAgent(
+        _assistant_message(
+            suggestions=[
+                SugerenciaCambio(
+                    id="chg_scope",
+                    section="Descripción",
+                    description="Incluir bebidas y abarrotes",
+                    diff=DiffCambio(
+                        before="ingresa un gasto",
+                        after="administra bebidas, abarrotes y artículos de cocina",
+                    ),
+                )
+            ]
+        )
+    )
+    feature_repo = InMemoryFeatureRepository()
+    feature_repo.features["feat_01"] = feature
+    evaluator = FakeConsistencyEvaluator()
+    evaluator.set_affected_ids("descubrimiento", ["prj_01"])
+    outbox = InMemoryOutbox()
+    uc = ProcessChatMessageUseCase(
+        chat_repo=InMemoryChatRepository(),
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.CARACTERISTICAS),
+        feature_repo=feature_repo,
+        consistency_evaluator=evaluator,  # type: ignore[reportArgumentType]
+        outbox=outbox,
+    )
+
+    # Act
+    output = await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.CARACTERISTICAS,
+            content="Incluye bebidas y abarrotes",
+            context=ctx,
+        )
+    )
+
+    # Assert — la sugerencia se rechaza sin tocar la característica ni encolar downstream
+    card = output.message.suggested_changes[0]
+    assert card.applied is False
+    assert card.not_applied_reason is not None
+    assert "Descubrimiento" in card.not_applied_reason
+    assert output.message.modification is not None
+    assert output.message.modification.applied is False
+    assert output.message.modification.clarification_message is not None
+    assert "Descubrimiento" in (output.message.modification.clarification_message or "")
+    assert "ingresa un gasto" in feature_repo.features["feat_01"].description
+    assert outbox.jobs == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_feature_chat_applies_suggestion_when_upstream_guard_clean() -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        number=1,
+        title="Registrar gastos compartidos",
+        slug="registrar-gastos-compartidos",
+        description="El usuario ingresa un gasto para dividirlo.",
+        project_id=ProjectId("prj_01"),
+    )
+    ctx = FeatureChatContext(feature=feature, discovery_document=markdown_to_document(DISCOVERY_VALID))
+    agent = _StubConversationAgent(
+        _assistant_message(
+            suggestions=[
+                SugerenciaCambio(
+                    id="chg_ok",
+                    section="Descripción",
+                    description="Permitir editar gastos",
+                    diff=DiffCambio(before="ingresa un gasto", after="registra y edita un gasto"),
+                )
+            ]
+        )
+    )
+    feature_repo = InMemoryFeatureRepository()
+    feature_repo.features["feat_01"] = feature
+    evaluator = FakeConsistencyEvaluator()
+    outbox = InMemoryOutbox()
+    uc = ProcessChatMessageUseCase(
+        chat_repo=InMemoryChatRepository(),
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.CARACTERISTICAS),
+        feature_repo=feature_repo,
+        consistency_evaluator=evaluator,  # type: ignore[reportArgumentType]
+        outbox=outbox,
+    )
+
+    # Act
+    output = await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.CARACTERISTICAS,
+            content="Permite editar gastos",
+            context=ctx,
+        )
+    )
+
+    # Assert — sin impacto upstream se aplica y se encola la evaluación downstream
+    card = output.message.suggested_changes[0]
+    assert card.applied is True
+    assert "registra y edita un gasto" in feature_repo.features["feat_01"].description
+    assert len(outbox.jobs) == 1
+    assert outbox.jobs[0][0] == "consistency_evaluate"
+    assert outbox.jobs[0][1]["source_phase"] == "caracteristicas"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_feature_chat_applies_suggestion_when_upstream_evaluator_fails() -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        number=1,
+        title="Registrar gastos compartidos",
+        slug="registrar-gastos-compartidos",
+        description="El usuario ingresa un gasto para dividirlo.",
+        project_id=ProjectId("prj_01"),
+    )
+    ctx = FeatureChatContext(feature=feature, discovery_document=markdown_to_document(DISCOVERY_VALID))
+    agent = _StubConversationAgent(
+        _assistant_message(
+            suggestions=[
+                SugerenciaCambio(
+                    id="chg_failopen",
+                    section="Descripción",
+                    description="Permitir editar gastos",
+                    diff=DiffCambio(before="ingresa un gasto", after="registra y edita un gasto"),
+                )
+            ]
+        )
+    )
+    feature_repo = InMemoryFeatureRepository()
+    feature_repo.features["feat_01"] = feature
+    evaluator = FakeConsistencyEvaluator()
+    evaluator.set_should_fail(True)
+    uc = ProcessChatMessageUseCase(
+        chat_repo=InMemoryChatRepository(),
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.CARACTERISTICAS),
+        feature_repo=feature_repo,
+        consistency_evaluator=evaluator,  # type: ignore[reportArgumentType]
+    )
+
+    # Act
+    output = await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.CARACTERISTICAS,
+            content="Permite editar gastos",
+            context=ctx,
+        )
+    )
+
+    # Assert — fail-open: la sugerencia se aplica aunque el guard falle
+    card = output.message.suggested_changes[0]
+    assert card.applied is True
+    assert "registra y edita un gasto" in feature_repo.features["feat_01"].description
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_requirement_chat_rejects_suggestion_when_guard_detects_parent_impact() -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        number=1,
+        title="Gestión de gastos",
+        slug="gestion-gastos",
+        description="El usuario administra los gastos.",
+        project_id=ProjectId("prj_01"),
+    )
+    requirement = EARSRequirement(
+        id=RequirementId("req_01"),
+        feature_id=FeatureId("feat_01"),
+        feature_number=1,
+        requirement_number=1,
+        title="Presentación de montos",
+        pattern=EARSPattern.ubiquitous,
+        statement="El sistema debe presentar los montos.",
+        origin="Deriva de C01.",
+    )
+    markdown = "### REQ-1.1 Presentación de montos\n\n**Statement:** El sistema debe presentar los montos.\n"
+    ctx = RequirementChatContext(
+        requirement=requirement,
+        feature=feature,
+        discovery_document=markdown_to_document(DISCOVERY_VALID),
+        requirements_markdown=markdown,
+    )
+    agent = _StubConversationAgent(
+        _assistant_message(
+            suggestions=[
+                SugerenciaCambio(
+                    id="chg_req_scope",
+                    section="Enunciado EARS",
+                    description="Aceptar criptomonedas",
+                    diff=DiffCambio(
+                        before="El sistema debe presentar los montos.",
+                        after="El sistema debe aceptar criptomonedas como pago.",
+                    ),
+                )
+            ]
+        )
+    )
+    requirement_repo = InMemoryRequirementRepository()
+    requirement_repo._requirements["feat_01"] = markdown  # noqa: SLF001
+    evaluator = FakeConsistencyEvaluator()
+    evaluator.set_affected_ids("caracteristicas", ["feat_01"])
+    uc = ProcessChatMessageUseCase(
+        chat_repo=InMemoryChatRepository(),
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.REQUISITOS),
+        requirement_repo=requirement_repo,
+        consistency_evaluator=evaluator,  # type: ignore[reportArgumentType]
+    )
+
+    # Act
+    output = await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.REQUISITOS,
+            content="Acepta criptomonedas",
+            context=ctx,
+        )
+    )
+
+    # Assert — el requisito no se toca y la razón menciona el documento de la izquierda
+    card = output.message.suggested_changes[0]
+    assert card.applied is False
+    assert card.not_applied_reason is not None
+    assert "característica" in card.not_applied_reason.lower()
+    saved = await requirement_repo.by_feature_id(FeatureId("feat_01"))
+    assert saved == markdown
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_requirement_chat_rejects_suggestion_when_guard_detects_discovery_impact() -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_01"),
+        number=1,
+        title="Gestión de gastos",
+        slug="gestion-gastos",
+        description="El usuario administra los gastos.",
+        project_id=ProjectId("prj_01"),
+    )
+    requirement = EARSRequirement(
+        id=RequirementId("req_01"),
+        feature_id=FeatureId("feat_01"),
+        feature_number=1,
+        requirement_number=1,
+        title="Presentación de montos",
+        pattern=EARSPattern.ubiquitous,
+        statement="El sistema debe presentar los montos.",
+        origin="Deriva de C01.",
+    )
+    markdown = "### REQ-1.1 Presentación de montos\n\n**Statement:** El sistema debe presentar los montos.\n"
+    ctx = RequirementChatContext(
+        requirement=requirement,
+        feature=feature,
+        discovery_document=markdown_to_document(DISCOVERY_VALID),
+        requirements_markdown=markdown,
+    )
+    agent = _StubConversationAgent(
+        _assistant_message(
+            suggestions=[
+                SugerenciaCambio(
+                    id="chg_req_discovery",
+                    section="Enunciado EARS",
+                    description="Integración con bancos",
+                    diff=DiffCambio(
+                        before="El sistema debe presentar los montos.",
+                        after="El sistema debe integrarse con bancos externos.",
+                    ),
+                )
+            ]
+        )
+    )
+    requirement_repo = InMemoryRequirementRepository()
+    requirement_repo._requirements["feat_01"] = markdown  # noqa: SLF001
+    evaluator = FakeConsistencyEvaluator()
+    evaluator.set_affected_ids("descubrimiento", ["prj_01"])
+    uc = ProcessChatMessageUseCase(
+        chat_repo=InMemoryChatRepository(),
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.REQUISITOS),
+        requirement_repo=requirement_repo,
+        consistency_evaluator=evaluator,  # type: ignore[reportArgumentType]
+    )
+
+    # Act
+    output = await uc.execute(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.REQUISITOS,
+            content="Integra con bancos",
+            context=ctx,
+        )
+    )
+
+    # Assert — el segundo par upstream (requisitos→descubrimiento) también bloquea
+    card = output.message.suggested_changes[0]
+    assert card.applied is False
+    assert card.not_applied_reason is not None
+    assert "Descubrimiento" in card.not_applied_reason
+    saved = await requirement_repo.by_feature_id(FeatureId("feat_01"))
+    assert saved == markdown

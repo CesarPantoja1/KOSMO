@@ -129,11 +129,14 @@ async def revert_document(
     version_id: Annotated[str, Body(..., embed=True)],
     _principal: Annotated[Principal, Depends(get_principal)],
     doc_repo: Annotated[DocumentRepository, Depends(_document_repo)],
+    request: Request,
 ) -> dict[str, str]:
+    outbox = get_container(request).pipeline.outbox
     result = await revert_to_version(
         document_repo=doc_repo,
         project_id=ProjectId(project_id),
         version_id=version_id,
+        outbox=outbox,
     )
     if result is None:
         raise HTTPException(
