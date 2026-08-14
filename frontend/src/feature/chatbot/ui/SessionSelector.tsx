@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ChatSessionSummary } from '@/entities/chat';
-import { ArrowRight } from '@/shared/ui';
+import { ChevronDown, Plus, Trash } from '@/shared/ui';
 
 interface SessionSelectorProps {
 	sessions: ChatSessionSummary[];
@@ -10,6 +10,7 @@ interface SessionSelectorProps {
 	loading: boolean;
 	onSelect: (sessionId: string | null) => void;
 	onCreate: () => void;
+	onDelete: (sessionId: string) => void;
 }
 
 function relativeTime(iso: string | null): string {
@@ -27,12 +28,16 @@ const optionStyles = (isActive: boolean) =>
 		isActive ? 'bg-ai-50' : 'hover:bg-neutral-50'
 	}`;
 
+const sessionLabel = (session: ChatSessionSummary | undefined) =>
+	session?.title?.trim() || 'Nuevo chat';
+
 export const SessionSelector = ({
 	sessions,
 	activeSessionId,
 	loading,
 	onSelect,
 	onCreate,
+	onDelete,
 }: SessionSelectorProps) => {
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
@@ -56,105 +61,120 @@ export const SessionSelector = ({
 		};
 	}, [open]);
 
-	const activeIndex = activeSessionId
-		? sessions.findIndex((s) => s.id === activeSessionId)
-		: -1;
-	const triggerLabel =
-		activeIndex >= 0 ? `Chat ${activeIndex + 1}` : 'Chat actual';
+	const activeSession = activeSessionId
+		? sessions.find((s) => s.id === activeSessionId)
+		: undefined;
+	const triggerLabel = activeSessionId ? sessionLabel(activeSession) : 'Chat actual';
 
 	return (
-		<div ref={rootRef} className='relative border-b border-neutral-200 bg-neutral-0 px-4 py-2'>
-			<button
-				type='button'
-				onClick={() => setOpen((v) => !v)}
-				disabled={loading}
-				aria-haspopup='listbox'
-				aria-expanded={open}
-				aria-label='Seleccionar chat'
-				className='flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-neutral-300 bg-neutral-0 px-3 text-sm text-neutral-700 transition-colors hover:border-ai-500 focus:border-ai-500 focus:outline-none disabled:opacity-60'
-			>
-				<span className='truncate font-medium'>{triggerLabel}</span>
-				<span className={`transition-transform ${open ? 'rotate-90' : ''}`}>
-					<ArrowRight size={14} color='text-neutral-400' />
-				</span>
-			</button>
-
-			{open && (
-				<div
-					role='listbox'
-					aria-label='Chats'
-					className='absolute left-4 right-4 top-full z-10 mt-1 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-0 shadow-lg'
+		<div
+			ref={rootRef}
+			className='flex items-center gap-2 border-b border-neutral-200 bg-neutral-0 px-4 py-2'
+		>
+			<div className='relative flex-1'>
+				<button
+					type='button'
+					onClick={() => setOpen((v) => !v)}
+					disabled={loading}
+					aria-haspopup='listbox'
+					aria-expanded={open}
+					aria-label='Seleccionar chat'
+					className='flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-neutral-300 bg-neutral-0 px-3 text-sm text-neutral-700 transition-colors hover:border-ai-500 focus:border-ai-500 focus:outline-none disabled:opacity-60'
 				>
-					<div className='max-h-56 overflow-y-auto py-1'>
-						<button
-							type='button'
-							role='option'
-							aria-selected={activeSessionId === null}
-							onClick={() => {
-								onSelect(null);
-								setOpen(false);
-							}}
-							className={optionStyles(activeSessionId === null)}
-						>
-							<span
-								className={`text-sm font-medium ${
-									activeSessionId === null ? 'text-ai-700' : 'text-neutral-700'
-								}`}
-							>
-								Chat actual
-							</span>
-						</button>
+					<span className='truncate font-medium'>{triggerLabel}</span>
+					<span className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+						<ChevronDown size={14} color='text-neutral-400' />
+					</span>
+				</button>
 
-						{sessions.map((session, index) => (
+				{open && (
+					<div
+						role='listbox'
+						aria-label='Chats'
+						className='absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-0 shadow-lg'
+					>
+						<div className='max-h-56 overflow-y-auto py-1'>
 							<button
-								key={session.id}
 								type='button'
 								role='option'
-								aria-selected={activeSessionId === session.id}
+								aria-selected={activeSessionId === null}
 								onClick={() => {
-									onSelect(session.id);
+									onSelect(null);
 									setOpen(false);
 								}}
-								className={optionStyles(activeSessionId === session.id)}
+								className={optionStyles(activeSessionId === null)}
 							>
 								<span
 									className={`text-sm font-medium ${
-										activeSessionId === session.id
-											? 'text-ai-700'
-											: 'text-neutral-700'
+										activeSessionId === null ? 'text-ai-700' : 'text-neutral-700'
 									}`}
 								>
-									Chat {index + 1}
-								</span>
-								<span className='text-xs text-neutral-400'>
-									{session.message_count} mensaje(s) ·{' '}
-									{relativeTime(session.last_message_at ?? session.created_at)}
+									Chat actual
 								</span>
 							</button>
-						))}
 
-						{sessions.length === 0 && (
-							<p className='px-3 py-2 text-sm text-neutral-400'>
-								Aún no hay otros chats.
-							</p>
-						)}
-					</div>
+							{sessions.map((session, index) => (
+								<div
+									key={session.id}
+									className={`flex items-center gap-1 pr-2 transition-colors ${
+										activeSessionId === session.id ? 'bg-ai-50' : 'hover:bg-neutral-50'
+									}`}
+								>
+									<button
+										type='button'
+										role='option'
+										aria-selected={activeSessionId === session.id}
+										onClick={() => {
+											onSelect(session.id);
+											setOpen(false);
+										}}
+										className='flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-2 text-left'
+									>
+										<span
+											className={`truncate text-sm font-medium ${
+												activeSessionId === session.id
+													? 'text-ai-700'
+													: 'text-neutral-700'
+											}`}
+										>
+											{session.title?.trim() || `Chat ${index + 1}`}
+										</span>
+										<span className='text-xs text-neutral-400'>
+											{relativeTime(session.last_message_at ?? session.created_at)}
+										</span>
+									</button>
+									<button
+										type='button'
+										onClick={() => onDelete(session.id)}
+										title='Eliminar chat'
+										aria-label={`Eliminar chat ${session.title?.trim() || index + 1}`}
+										className='shrink-0 cursor-pointer rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-error-50 hover:text-error-500'
+									>
+										<Trash size={16} color='text-current' />
+									</button>
+								</div>
+							))}
 
-					<div className='border-t border-neutral-200 p-2'>
-						<button
-							type='button'
-							onClick={() => {
-								onCreate();
-								setOpen(false);
-							}}
-							disabled={loading}
-							className='btn btn-ai btn-sm w-full justify-center disabled:opacity-60'
-						>
-							+ Nuevo chat
-						</button>
+							{sessions.length === 0 && (
+								<p className='px-3 py-2 text-sm text-neutral-400'>
+									Aún no hay otros chats.
+								</p>
+							)}
+						</div>
 					</div>
-				</div>
-			)}
+				)}
+			</div>
+
+			<button
+				type='button'
+				onClick={onCreate}
+				disabled={loading}
+				aria-label='Nuevo chat'
+				title='Nuevo chat'
+				className='flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-300 bg-neutral-0 text-neutral-600 transition-colors hover:border-ai-500 hover:text-ai-600 focus:border-ai-500 focus:outline-none disabled:opacity-60'
+			>
+				<Plus size={16} color='text-current' />
+			</button>
 		</div>
 	);
 };

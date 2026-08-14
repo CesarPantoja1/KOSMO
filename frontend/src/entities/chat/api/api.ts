@@ -26,6 +26,21 @@ export async function listChatSessions(
 	return data.sessions;
 }
 
+export async function deleteChatSession(
+	projectId: string,
+	sessionId: string,
+): Promise<void> {
+	if (USE_MOCKS) {
+		const index = mockSessions.findIndex((s) => s.id === sessionId);
+		if (index >= 0) mockSessions.splice(index, 1);
+		return;
+	}
+	await apiClient<void>(
+		`/api/v1/projects/${projectId}/chat-sessions/${sessionId}`,
+		{ method: 'DELETE' },
+	);
+}
+
 export async function createChatSession(
 	projectId: string,
 	phase: ChatPhase,
@@ -40,6 +55,7 @@ export async function createChatSession(
 			created_at: new Date().toISOString(),
 			message_count: 0,
 			last_message_at: null,
+			title: '',
 		};
 		mockSessions.unshift(session);
 		return session;

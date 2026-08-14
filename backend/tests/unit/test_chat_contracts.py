@@ -13,8 +13,9 @@ from kosmo.contracts import (
     MensajeChat,
     SugerenciaCambio,
 )
+from kosmo.contracts.chat import ChatSession, ChatSessionSummary
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 
 
 def test_mensaje_chat_creation_without_suggested_change():
@@ -188,6 +189,21 @@ class FakeChatRepository:
     async def save_history(self, history: HistorialChat) -> HistorialChat:
         self.messages = list(history.messages)
         return history
+
+    async def create_session(self, session: ChatSession) -> ChatSession:
+        return session
+
+    async def delete_session(self, session_id: ChatSessionId) -> None:
+        return None
+
+    async def list_sessions(
+        self,
+        project_id: ProjectId,  # noqa: ARG002
+        phase: SpecPhase,  # noqa: ARG002
+        *,
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> list[ChatSessionSummary]:
+        return []
 
 
 @pytest.mark.asyncio

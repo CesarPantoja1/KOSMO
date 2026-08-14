@@ -60,6 +60,7 @@ export interface ChatSessionSummary {
 	created_at: string;
 	message_count: number;
 	last_message_at: string | null;
+	title: string;
 }
 
 export interface CreateChatSessionRequest {

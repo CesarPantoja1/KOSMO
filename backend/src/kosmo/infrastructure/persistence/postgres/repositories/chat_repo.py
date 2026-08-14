@@ -23,6 +23,7 @@ from kosmo.contracts.sdd.ids import (
     ChatSessionId,
     ProjectId,
 )
+from kosmo.domain.sdd.session_title import derive_session_title
 from kosmo.infrastructure.persistence.postgres.models import (
     ChatMessageModel,
     ChatSessionModel,
@@ -186,6 +187,8 @@ class SqlAlchemyChatRepository(ChatRepository):
             result = await db.execute(stmt)
             rows = result.all()
 
+        first_messages = await self._first_user_messages([str(row[0].id) for row in rows])
+
         return [
             ChatSessionSummary(
                 id=ChatSessionId(model.id),
@@ -194,9 +197,41 @@ class SqlAlchemyChatRepository(ChatRepository):
                 created_at=model.created_at,
                 message_count=int(count or 0),
                 last_message_at=last_at,
+                title=derive_session_title(first_messages.get(str(model.id), "")),
             )
             for model, count, last_at in rows
         ]
+
+    async def _first_user_messages(self, session_ids: list[str]) -> dict[str, str]:
+        """Primer mensaje del usuario (más antiguo) por sesión, para derivar el título."""
+        if not session_ids:
+            return {}
+        stmt = (
+            select(ChatMessageModel.session_id, ChatMessageModel.content)
+            .where(
+                ChatMessageModel.session_id.in_(session_ids),
+                ChatMessageModel.role == ChatRole.USER.value,
+            )
+            .order_by(ChatMessageModel.created_at.asc())
+        )
+        async with self._session_ctx() as db:
+            result = await db.execute(stmt)
+            rows = result.all()
+
+        first: dict[str, str] = {}
+        for session_id, content in rows:
+            if session_id is None or session_id in first:
+                continue
+            first[session_id] = content or ""
+        return first
+
+    async def delete_session(self, session_id: ChatSessionId) -> None:
+        from sqlalchemy import delete
+
+        async with self._session_ctx() as db:
+            await db.execute(delete(ChatMessageModel).where(ChatMessageModel.session_id == str(session_id)))
+            await db.execute(delete(ChatSessionModel).where(ChatSessionModel.id == str(session_id)))
+            await self._commit(db)
 
     @staticmethod
     def _compose_history_id(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:

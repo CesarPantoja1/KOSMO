@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const apiMocks = vi.hoisted(() => ({
 	listChatSessions: vi.fn(),
 	createChatSession: vi.fn(),
+	deleteChatSession: vi.fn(),
 }));
 
 vi.mock('../api/api', () => apiMocks);
@@ -16,6 +17,7 @@ const sessionFixture = {
 	created_at: '2026-08-14T10:00:00Z',
 	message_count: 3,
 	last_message_at: '2026-08-14T11:00:00Z',
+	title: 'Revisar criterios de aceptación',
 };
 
 describe('chat sessions store', () => {
@@ -74,5 +76,43 @@ describe('chat sessions store', () => {
 
 		expect(useChatSessionsStore.getState().sessions).toEqual({});
 		expect(useChatSessionsStore.getState().error).toBeNull();
+	});
+
+	it('deleteSession elimina el hilo de la lista y resetea la sesión activa', async () => {
+		apiMocks.listChatSessions.mockResolvedValue([sessionFixture]);
+		await useChatSessionsStore
+			.getState()
+			.listSessions('prj_01', 'requirements', 'feat_01');
+		const key = sessionKey('prj_01', 'requirements', 'feat_01');
+		useChatSessionsStore.getState().setActiveSessionId(key, 'cht_01');
+		apiMocks.deleteChatSession.mockResolvedValue(undefined);
+
+		await useChatSessionsStore
+			.getState()
+			.deleteSession('prj_01', 'requirements', 'feat_01', 'cht_01');
+
+		expect(apiMocks.deleteChatSession).toHaveBeenCalledWith('prj_01', 'cht_01');
+		expect(useChatSessionsStore.getState().sessions[key]).toHaveLength(0);
+		expect(useChatSessionsStore.getState().activeSessionId[key]).toBeNull();
+	});
+
+	it('deleteSession conserva la sesión activa si elimina otra', async () => {
+		apiMocks.listChatSessions.mockResolvedValue([
+			sessionFixture,
+			{ ...sessionFixture, id: 'cht_02', title: 'Otro chat' },
+		]);
+		await useChatSessionsStore
+			.getState()
+			.listSessions('prj_01', 'requirements', 'feat_01');
+		const key = sessionKey('prj_01', 'requirements', 'feat_01');
+		useChatSessionsStore.getState().setActiveSessionId(key, 'cht_02');
+		apiMocks.deleteChatSession.mockResolvedValue(undefined);
+
+		await useChatSessionsStore
+			.getState()
+			.deleteSession('prj_01', 'requirements', 'feat_01', 'cht_01');
+
+		expect(useChatSessionsStore.getState().sessions[key]).toHaveLength(1);
+		expect(useChatSessionsStore.getState().activeSessionId[key]).toBe('cht_02');
 	});
 });
