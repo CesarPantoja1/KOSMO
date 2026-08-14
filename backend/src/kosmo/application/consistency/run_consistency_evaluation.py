@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import time
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -117,11 +118,19 @@ async def run_consistency_evaluation(
                 )
                 continue
 
+            eval_start = time.monotonic()
             result = await evaluator.evaluate(
                 source_phase=source_phase,
                 target_phase=target_phase,
                 project_id=project_id,
                 applied_changes=changes,
+            )
+            _log.info(
+                "consistency.eval_ms",
+                project_id=str(project_id),
+                source=source_phase.value,
+                target=target_phase.value,
+                eval_ms=int((time.monotonic() - eval_start) * 1000),
             )
         except Exception as exc:
             _log.warning(

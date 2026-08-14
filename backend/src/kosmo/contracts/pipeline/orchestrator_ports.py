@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -138,6 +139,15 @@ class AgentPort(Protocol):
         history: list[MensajeChat] | None = None,
         project_id: ProjectId | None = None,
     ) -> DirectModificationResult: ...
+
+    def execute_conversation_stream(
+        self,
+        skill_name: str,
+        messages: list[MensajeChat],
+        context: PhaseContext,
+        *,
+        project_id: ProjectId | None = None,
+    ) -> AsyncIterator[Any]: ...
 
     async def reflect_and_consolidate(
         self,

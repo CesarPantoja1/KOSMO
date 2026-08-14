@@ -10,7 +10,6 @@ from kosmo.application.chat.process_chat_message import (
     ProcessChatMessageUseCase,
 )
 from kosmo.application.chat.validate_phase_context import (
-    ValidatePhaseContextInput,
     ValidatePhaseContextUseCase,
 )
 from kosmo.application.requirements import (
@@ -84,12 +83,9 @@ async def process_requirement_chat_message(
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
     context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> ChatResponse:
-    validation = await validate_uc.execute(
-        ValidatePhaseContextInput(
-            content=payload.content,
-            current_phase=SpecPhase.REQUISITOS,
-        )
-    )
+    from kosmo.infrastructure.api.async_generation import validate_chat_content
+
+    validation = await validate_chat_content(validate_uc, payload.content, SpecPhase.REQUISITOS)
 
     if not validation.is_valid:
         return ChatResponse.from_redirect(

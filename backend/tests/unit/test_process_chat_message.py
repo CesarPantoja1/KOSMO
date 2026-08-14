@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
 
 from kosmo.application.chat.process_chat_message import (
+    ChatStreamChunk,
     ProcessChatMessageInput,
+    ProcessChatMessageOutput,
     ProcessChatMessageUseCase,
 )
 from kosmo.contracts.chat import (
@@ -53,6 +56,24 @@ class _StubConversationAgent:
     ) -> MensajeChat:
         self.last_skill_name = skill_name
         return self._message
+
+
+class _StubStreamingAgent:
+    def __init__(self, chunks: list[str], message: MensajeChat) -> None:
+        self._chunks = chunks
+        self._message = message
+
+    async def execute_conversation_stream(
+        self,
+        skill_name: str,  # noqa: ARG002
+        messages: list[MensajeChat],  # noqa: ARG002
+        context: Any,  # noqa: ARG002
+        *,
+        project_id: ProjectId | None = None,  # noqa: ARG002
+    ) -> AsyncIterator[Any]:
+        for chunk in self._chunks:
+            yield chunk
+        yield self._message
 
 
 def _registry(phase: SpecPhase) -> SkillRegistry:
@@ -253,6 +274,58 @@ async def test_guardrail_blocks_forbidden_terms_in_discovery() -> None:
 
 
 # ── features ──
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_stream_emits_chunks_then_applies_suggestion() -> None:
+    # Arrange
+    doc = markdown_to_document(DISCOVERY_VALID)
+    ctx = DiscoveryChatContext(current_document=doc)
+    agent = _StubStreamingAgent(
+        ["He ", "ampliado ", "la visión."],
+        _assistant_message(
+            suggestions=[
+                _a_discovery_suggestion(
+                    before="organizar y repartir gastos compartidos",
+                    after="organizar y repartir gastos en LATAM",
+                )
+            ]
+        ),
+    )
+    chat_repo = InMemoryChatRepository()
+    docs = InMemoryDocumentRepository()
+    docs.discovery_docs["prj_01"] = doc
+    outbox = InMemoryOutbox()
+    uc = ProcessChatMessageUseCase(
+        chat_repo=chat_repo,
+        agent=agent,  # type: ignore[reportArgumentType]
+        skill_registry=_registry(SpecPhase.DESCUBRIMIENTO),
+        document_repo=docs,
+        outbox=outbox,
+    )
+
+    # Act
+    events: list[Any] = []
+    async for item in uc.execute_stream(
+        ProcessChatMessageInput(
+            project_id=ProjectId("prj_01"),
+            phase=SpecPhase.DESCUBRIMIENTO,
+            content="Amplía la visión a LATAM",
+            context=ctx,
+        )
+    ):
+        events.append(item)
+
+    # Assert — los chunks fluyen antes del evento final
+    chunks = [e.content for e in events if isinstance(e, ChatStreamChunk)]
+    assert chunks == ["He ", "ampliado ", "la visión."]
+    outputs = [e for e in events if isinstance(e, ProcessChatMessageOutput)]
+    assert len(outputs) == 1
+    assert outputs[0].message.suggested_changes[0].applied is True
+    assert "gastos en LATAM" in document_to_markdown(docs.discovery_docs["prj_01"])
+    assert len(chat_repo.messages) == 2
+    assert len(outbox.jobs) == 1
 
 
 @pytest.mark.unit

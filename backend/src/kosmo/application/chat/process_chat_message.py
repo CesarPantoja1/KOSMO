@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
+import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -70,6 +72,11 @@ class ProcessChatMessageOutput:
     message: MensajeChat
 
 
+@dataclass(frozen=True)
+class ChatStreamChunk:
+    content: str
+
+
 class ProcessChatMessageUseCase:
     """Chat conversacional por fase con aplicacion instantanea de sugerencias.
 
@@ -100,13 +107,105 @@ class ProcessChatMessageUseCase:
         self._outbox = outbox
 
     async def execute(self, input_data: ProcessChatMessageInput) -> ProcessChatMessageOutput:
-        content = input_data.content.strip()
+        total_start = time.monotonic()
+        content = self._validate_content(input_data)
+        messages, skill_name = await self._prepare(input_data, content)
 
-        if not content:
-            raise ValueError("El mensaje no puede estar vacío.")
-        if len(content) > _MAX_CONTENT_LENGTH:
-            raise ValueError(f"El mensaje no puede exceder {_MAX_CONTENT_LENGTH} caracteres.")
+        llm_start = time.monotonic()
+        try:
+            assistant_msg = await self._invoke_agent_with_retry(
+                skill_name=skill_name,
+                messages=messages,
+                context=input_data.context,
+                project_id=input_data.project_id,
+            )
+        except ValueError:
+            raise
+        except Exception as exc:
+            _log.error("chat.llm_error", exc_info=True)
+            await self._save_error_message(input_data)
+            raise LLMInvocationError(
+                detail="Error interno al procesar el mensaje. Reintenta más tarde.",
+                instance=input_data.instance,
+            ) from exc
+        llm_ms = self._elapsed_ms(llm_start)
 
+        apply_start = time.monotonic()
+        output = await self._finalize(input_data, assistant_msg)
+        apply_ms = self._elapsed_ms(apply_start)
+
+        _log.info(
+            "chat.stage_times",
+            phase=input_data.phase.value,
+            llm_ms=llm_ms,
+            apply_ms=apply_ms,
+            total_ms=self._elapsed_ms(total_start),
+        )
+        return output
+
+    async def execute_stream(
+        self,
+        input_data: ProcessChatMessageInput,
+    ) -> AsyncIterator[ChatStreamChunk | ProcessChatMessageOutput]:
+        """Streaming real: emite fragmentos conforme el LLM genera y aplica al final.
+
+        Eventos: ChatStreamChunk por delta de texto y ProcessChatMessageOutput al
+        terminar (con las cards aplicadas). La persistencia del mensaje ocurre
+        despues del ultimo evento, igual que en execute().
+        """
+        total_start = time.monotonic()
+        content = self._validate_content(input_data)
+        messages, skill_name = await self._prepare(input_data, content)
+
+        llm_start = time.monotonic()
+        final_msg: MensajeChat | None = None
+        try:
+            async for item in self._agent.execute_conversation_stream(
+                skill_name=skill_name,
+                messages=messages,
+                context=input_data.context,
+                project_id=input_data.project_id,
+            ):
+                if isinstance(item, str):
+                    yield ChatStreamChunk(content=item)
+                else:
+                    final_msg = item
+        except ValueError:
+            raise
+        except Exception as exc:
+            _log.error("chat.llm_error", exc_info=True)
+            await self._save_error_message(input_data)
+            raise LLMInvocationError(
+                detail="Error interno al procesar el mensaje. Reintenta más tarde.",
+                instance=input_data.instance,
+            ) from exc
+        llm_ms = self._elapsed_ms(llm_start)
+
+        if final_msg is None:
+            final_msg = MensajeChat(
+                id=ChatMessageId(IdGenerator.generate("chat_message")),
+                role=ChatRole.ASSISTANT,
+                content="No se pudo generar una respuesta. Intenta nuevamente.",
+            )
+
+        apply_start = time.monotonic()
+        output = await self._finalize(input_data, final_msg)
+        apply_ms = self._elapsed_ms(apply_start)
+
+        _log.info(
+            "chat.stage_times",
+            phase=input_data.phase.value,
+            llm_ms=llm_ms,
+            apply_ms=apply_ms,
+            total_ms=self._elapsed_ms(total_start),
+        )
+        yield output
+
+    async def _prepare(
+        self,
+        input_data: ProcessChatMessageInput,
+        content: str,
+    ) -> tuple[list[MensajeChat], str]:
         if self._project_repo is not None:
             project = await self._project_repo.by_id(input_data.project_id)
             if project is None:
@@ -136,35 +235,13 @@ class ProcessChatMessageUseCase:
             context_id=input_data.context_id,
         )
 
-        messages = prior_messages + [user_msg]
+        return prior_messages + [user_msg], skill_name
 
-        try:
-            assistant_msg = await self._invoke_agent_with_retry(
-                skill_name=skill_name,
-                messages=messages,
-                context=input_data.context,
-                project_id=input_data.project_id,
-            )
-        except ValueError:
-            raise
-        except Exception as exc:
-            _log.error("chat.llm_error", exc_info=True)
-            error_msg = MensajeChat(
-                id=ChatMessageId(IdGenerator.generate("chat_message")),
-                role=ChatRole.ASSISTANT,
-                content="No se pudo procesar la solicitud. Intenta nuevamente.",
-            )
-            await self._chat_repo.save_message(
-                project_id=input_data.project_id,
-                phase=input_data.phase,
-                message=error_msg,
-                context_id=input_data.context_id,
-            )
-            raise LLMInvocationError(
-                detail="Error interno al procesar el mensaje. Reintenta más tarde.",
-                instance=input_data.instance,
-            ) from exc
-
+    async def _finalize(
+        self,
+        input_data: ProcessChatMessageInput,
+        assistant_msg: MensajeChat,
+    ) -> ProcessChatMessageOutput:
         cards = await self._apply_suggestions(
             phase=input_data.phase,
             project_id=input_data.project_id,
@@ -195,6 +272,19 @@ class ProcessChatMessageUseCase:
         return ProcessChatMessageOutput(
             project_id=input_data.project_id,
             message=final_msg,
+        )
+
+    async def _save_error_message(self, input_data: ProcessChatMessageInput) -> None:
+        error_msg = MensajeChat(
+            id=ChatMessageId(IdGenerator.generate("chat_message")),
+            role=ChatRole.ASSISTANT,
+            content="No se pudo procesar la solicitud. Intenta nuevamente.",
+        )
+        await self._chat_repo.save_message(
+            project_id=input_data.project_id,
+            phase=input_data.phase,
+            message=error_msg,
+            context_id=input_data.context_id,
         )
 
     async def _apply_suggestions(
@@ -343,6 +433,19 @@ class ProcessChatMessageUseCase:
             modified_section=sections or None,
             change_description="Se aplicaron los cambios sugeridos.",
         )
+
+    @staticmethod
+    def _validate_content(input_data: ProcessChatMessageInput) -> str:
+        content = input_data.content.strip()
+        if not content:
+            raise ValueError("El mensaje no puede estar vacío.")
+        if len(content) > _MAX_CONTENT_LENGTH:
+            raise ValueError(f"El mensaje no puede exceder {_MAX_CONTENT_LENGTH} caracteres.")
+        return content
+
+    @staticmethod
+    def _elapsed_ms(start: float) -> int:
+        return int((time.monotonic() - start) * 1000)
 
     async def _invoke_agent_with_retry(
         self,
