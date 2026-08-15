@@ -1092,3 +1092,247 @@ async def test_evaluate_runs_with_chat_change_despite_cosmetic_diff() -> None:
     # Assert
     assert result.affected_artifact_ids == ["feat_cos2"]
     assert "consistency_evaluate" in agent.skill_names
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_impact_requirements_with_statement_fragment() -> None:
+    """Un fragmento de statement sin ### debe enriquecerse con display_id y título."""
+    from kosmo.application.consistency.enrich_impact import enrich_impact_items
+    from kosmo.contracts.consistency import (
+        ArtifactAction,
+        ConsistencyEvaluationOutput,
+        ConsistencyStatus,
+    )
+
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_pedidos", "prj_01", "Gestión de pedidos", number=6)
+    await feature_repo.save(feat)
+
+    req_md = (
+        "### REQ-6.1 Descuento automático de stock\n\n"
+        "**Basado en eventos**\n\n"
+        "CUANDO el colaborador de tienda confirma un pedido, el sistema debe descontar automáticamente "
+        "las cantidades de cada producto del inventario disponible.\n"
+    )
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(FeatureId("feat_pedidos"), req_md)
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    result = ConsistencyEvaluationOutput(
+        report_id="cnr_req_test",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["feat_pedidos"],
+        actions=[
+            ArtifactAction(
+                artifact_id="feat_pedidos",
+                action="update",
+                rationale="El actor colaborador de tienda fue eliminado del alcance.",
+                suggested_field="REQ-6.1",
+                suggested_before=(
+                    "CUANDO el colaborador de tienda confirma un pedido, el sistema debe descontar "
+                    "automáticamente las cantidades de cada producto del inventario disponible."
+                ),
+                suggested_after=(
+                    "CUANDO el sistema recibe un pedido confirmado, debe descontar "
+                    "automáticamente las cantidades de cada producto del inventario disponible."
+                ),
+            )
+        ],
+    )
+
+    # Act
+    items = await enrich_impact_items(
+        result,
+        SpecPhase.REQUISITOS,
+        SpecPhase.DESCUBRIMIENTO,
+        feature_repo,
+        requirement_repo,
+        diagram_repo,
+    )
+
+    # Assert
+    assert len(items) == 1
+    item = items[0]
+    assert item.target_id == "feat_pedidos"
+    assert item.artifact_type == "EARSRequirement"
+    assert item.target_display_id == "REQ-6.1"
+    assert item.target_title == "Descuento automático de stock"
+    assert item.section == "statement"
+    assert item.action == "update"
+    assert item.diff is not None
+    assert "colaborador de tienda" in str(item.diff.get("before"))
+    assert "el sistema recibe" in str(item.diff.get("after"))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_impact_requirements_with_actor_subphrase_fragment() -> None:
+    """Un fragmento corto como el nombre del actor debe correlacionarse con el requisito que lo contiene."""
+    from kosmo.application.consistency.enrich_impact import enrich_impact_items
+    from kosmo.contracts.consistency import (
+        ArtifactAction,
+        ConsistencyEvaluationOutput,
+        ConsistencyStatus,
+    )
+
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_pedidos2", "prj_01", "Gestión de pedidos", number=6)
+    await feature_repo.save(feat)
+
+    req_md = (
+        "### REQ-6.1 Descuento automático de stock\n\n"
+        "**Basado en eventos**\n\n"
+        "CUANDO el colaborador de tienda confirma un pedido, "
+        "el sistema debe descontar automáticamente las cantidades.\n\n"
+        "### REQ-6.2 Notificación al cliente\n\n"
+        "**Ubicuo**\n\n"
+        "El sistema debe notificar al cliente cuando el pedido se envíe.\n"
+    )
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(FeatureId("feat_pedidos2"), req_md)
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    result = ConsistencyEvaluationOutput(
+        report_id="cnr_req_test2",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["feat_pedidos2"],
+        actions=[
+            ArtifactAction(
+                artifact_id="feat_pedidos2",
+                action="update",
+                rationale="Se eliminó el actor colaborador de tienda.",
+                suggested_before="el colaborador de tienda",
+                suggested_after="el encargado de despacho",
+            )
+        ],
+    )
+
+    # Act
+    items = await enrich_impact_items(
+        result,
+        SpecPhase.REQUISITOS,
+        SpecPhase.DESCUBRIMIENTO,
+        feature_repo,
+        requirement_repo,
+        diagram_repo,
+    )
+
+    # Assert
+    assert len(items) == 1
+    item = items[0]
+    assert item.target_display_id == "REQ-6.1"
+    assert item.target_title == "Descuento automático de stock"
+    assert item.action == "update"
+    assert item.diff == {
+        "field": "statement",
+        "before": "el colaborador de tienda",
+        "after": "el encargado de despacho",
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_cascading_consistency_end_to_end_actor_removal() -> None:
+    """La eliminación de un actor genera impactos en características, requisitos y modelo."""
+    from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase
+    from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+    from kosmo.contracts.sdd.ids import ActivityDiagramId
+
+    # Arrange
+    project = _make_project("prj_cascade")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_pedidos", "prj_cascade", "Gestión de pedidos", number=6)
+    feat.description = "Permite al colaborador de tienda gestionar y confirmar pedidos."
+    await feature_repo.save(feat)
+
+    req_md = (
+        "### REQ-6.1 Descuento automático de stock\n\n"
+        "**Basado en eventos**\n\n"
+        "CUANDO el colaborador de tienda confirma un pedido, el sistema debe descontar automáticamente "
+        "las cantidades de cada producto del inventario disponible.\n"
+    )
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(FeatureId("feat_pedidos"), req_md)
+
+    diagram_repo = InMemoryActivityDiagramRepository()
+    diagram_syntax = (
+        "@startuml\n"
+        "|Colaborador de tienda|\n"
+        "start\n"
+        ":Confirmar pedido;\n"
+        "|Sistema|\n"
+        ":Descontar stock;\n"
+        "stop\n"
+        "@enduml"
+    )
+    await diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("feat_pedidos"),
+            feature_id=FeatureId("feat_pedidos"),
+            diagram_syntax=diagram_syntax,
+        )
+    )
+
+    document_repo = InMemoryDocumentRepository()
+
+    agent = _TwoPhaseAgent(
+        detection_report={
+            "actions": [
+                {
+                    "artifact_id": "feat_pedidos",
+                    "action": "update",
+                    "rationale": "El actor colaborador de tienda fue eliminado.",
+                    "suggested_field": "REQ-6.1",
+                }
+            ],
+            "overall_rationale": "Impacto por remoción de actor",
+        },
+        corrections={
+            "feat_pedidos": {
+                "suggested_field": "statement",
+                "suggested_before": (
+                    "CUANDO el colaborador de tienda confirma un pedido, el sistema debe descontar "
+                    "automáticamente las cantidades de cada producto del inventario disponible."
+                ),
+                "suggested_after": (
+                    "CUANDO el cliente confirma un pedido, el sistema debe descontar "
+                    "automáticamente las cantidades de cada producto del inventario disponible."
+                ),
+            }
+        },
+    )
+
+    evaluator = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+    cascade_uc = CascadingConsistencyUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+        evaluator=evaluator,
+    )
+
+    change = _applied_change(
+        "chg_actor",
+        before="- **Colaborador de tienda**: Empleado de tienda.",
+        after="",
+    )
+
+    # Act
+    output = await cascade_uc.execute(
+        project_id=ProjectId("prj_cascade"),
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        applied_changes=[change],
+    )
+
+    # Assert: debe haber impacto en Requisitos con REQ-6.1
+    req_impacts = [i for i in output.downstream_impact if i.get("artifact_type") == "EARSRequirement"]
+    assert len(req_impacts) >= 1
+    assert req_impacts[0]["targetDisplayId"] == "REQ-6.1"
+    assert req_impacts[0]["targetTitle"] == "Descuento automático de stock"
+    assert "colaborador de tienda" in str(req_impacts[0]["diff"]["before"])

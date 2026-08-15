@@ -117,6 +117,42 @@ _LEVEL_RULES_REQUIREMENTS = (
     "general, la caracteristica NO esta afectada.\n\n"
 )
 
+_LEVEL_RULES_REQUIREMENTS_DOWNSTREAM = (
+    "## NIVEL DE ANALISIS: Requisitos EARS (Destino)\n\n"
+    "Los requisitos representan comportamientos especificos del sistema en formato EARS. "
+    "1. CAMBIO O ELIMINACION DE ACTORES O ROLES: Si en el documento fuente se elimina, "
+    "renombra o modifica un actor o rol (ej: se elimina 'colaborador de tienda', 'cajero', "
+    "'administrador'), TODOS los requisitos EARS que mencionen o dependan de dicho actor "
+    "en sus disparadores o condiciones (ej: 'CUANDO el colaborador de tienda confirma...', "
+    "'MIENTRAS el colaborador...') o en sus criterios de aceptacion DEBEN marcarse como 'update' "
+    "para adaptar el actor o disparador del evento, o 'delete' si el requisito completo "
+    "pierde razon de ser.\n"
+    "2. CAMBIO DE REGLAS DE NEGOCIO O CONDICIONES: Si una regla de negocio o condicion cambia en "
+    "la fuente, identifica los codigos REQ-X.Y afectados e incluyelos en la rationale.\n"
+    "3. El artifact_id en la respuesta DEBE ser el ID de la feature a la que pertenecen los "
+    "requisitos afectados (tal como aparece en la lista de artefactos).\n\n"
+)
+
+_REQUIREMENTS_DOWNSTREAM_EXAMPLES = (
+    "## EJEMPLOS DE EVALUACION DE REQUISITOS EARS\n\n"
+    "Ejemplo 1 — Eliminacion o cambio de actor:\n"
+    '  Cambio: se elimina el actor "Colaborador de tienda" del documento de Descubrimiento\n'
+    '  Artefacto: Requisitos de Gestion de pedidos (id: feat_01...) con '
+    '"REQ-6.1 Descuento automatico de stock: CUANDO el colaborador de tienda confirma un pedido..."\n'
+    '  → accion: "update", artifact_id: "feat_01...", '
+    'razon: "El actor \'colaborador de tienda\' fue eliminado del alcance; REQ-6.1 debe actualizar el actor."\n\n'
+    "Ejemplo 2 — Modificacion de regla de negocio:\n"
+    '  Cambio: "el descuento maximo pasa de 10% a 15%"\n'
+    '  Artefacto: Requisitos de Promociones (id: feat_02...) con "REQ-2.1 Aplicar descuento..."\n'
+    '  → accion: "update", artifact_id: "feat_02...", '
+    'razon: "REQ-2.1 debe actualizar el porcentaje maximo de descuento a 15%."\n\n'
+    "Ejemplo 3 — Eliminacion de capacidad:\n"
+    '  Cambio: se elimina el modulo de facturacion electronica\n'
+    '  Artefacto: Requisitos de Facturacion (id: feat_03...)\n'
+    '  → accion: "delete", artifact_id: "feat_03...", '
+    'razon: "La funcionalidad de facturacion electronica fue eliminada."\n\n'
+)
+
 _LEVEL_RULES_MODEL = (
     "## NIVEL DE ANALISIS: Diagramas de Actividad\n\n"
     "Los diagramas representan flujos de proceso (actores, pasos, decisiones). "
@@ -256,7 +292,7 @@ CONSISTENCY_FEATURES_DOWNSTREAM_SYSTEM_PROMPT = build_consistency_prompt(
     direction="downstream",
     source_label="Caracteristicas",
     target_artifact="EARSRequirement",
-    extra_rules=_LEVEL_RULES_FEATURES,
+    extra_rules=_LEVEL_RULES_REQUIREMENTS_DOWNSTREAM + _REQUIREMENTS_DOWNSTREAM_EXAMPLES,
 )
 
 CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT = build_consistency_prompt(
@@ -270,7 +306,7 @@ CONSISTENCY_DISCOVERY_REQUIREMENTS_PROMPT = build_consistency_prompt(
     direction="downstream",
     source_label="Descubrimiento",
     target_artifact="EARSRequirement",
-    extra_rules=_LEVEL_RULES_REQUIREMENTS + _DISCOVERY_EXAMPLES,
+    extra_rules=_LEVEL_RULES_REQUIREMENTS_DOWNSTREAM + _REQUIREMENTS_DOWNSTREAM_EXAMPLES,
 )
 
 CONSISTENCY_DISCOVERY_MODEL_PROMPT = build_consistency_prompt(
@@ -497,8 +533,10 @@ que fue marcado como afectado por cambios aplicados en una fase anterior.
 3. Tipo de artefacto:
    - Feature: 'suggested_field' debe ser 'title' o 'description'. 'suggested_after'
      contiene SOLO el nuevo valor del campo, no la feature completa.
-   - EARSRequirement: 'suggested_before'/'suggested_after' son fragmentos del
-     markdown EARS. Manten los codigos REQ-X.Y y el formato original.
+   - EARSRequirement: 'suggested_field' debe ser el codigo del requisito (ej. 'REQ-6.1')
+     o 'statement'. 'suggested_before'/'suggested_after' son fragmentos del markdown
+     EARS (enunciado, clausula o bloque de requisito). Copia el texto exacto tal como
+     aparece en el artefacto. Manten los codigos REQ-X.Y y el formato original.
    - ActivityDiagram: fragmentos PlantUML. Preserva la sintaxis: @startuml/@enduml,
      balance de if/endif y fork/end merge.
    - DiscoveryDocument: 'suggested_field' es el titulo de la seccion
