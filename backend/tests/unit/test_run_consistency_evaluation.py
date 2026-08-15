@@ -214,6 +214,44 @@ async def test_run_evaluation_contains_failure_in_failed_row() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_run_evaluation_stores_operation_id() -> None:
+    # Arrange
+    projects, features, requirements, diagrams, documents, evaluations = _make_repos()
+    evaluator = _ActionEvaluator(
+        [
+            ArtifactAction(
+                artifact_id="feat_01",
+                action="update",
+                rationale="afecta",
+                suggested_field="description",
+                suggested_before="El usuario ingresa un gasto para dividirlo.",
+                suggested_after="El usuario registra y edita un gasto para dividirlo.",
+            )
+        ]
+    )
+    payload = _payload()
+    payload["operation_id"] = "ope_test"
+
+    # Act
+    await run_consistency_evaluation(
+        payload,
+        project_repo=projects,
+        feature_repo=features,
+        requirement_repo=requirements,
+        diagram_repo=diagrams,
+        document_repo=documents,
+        evaluator=evaluator,  # type: ignore[reportArgumentType]
+        evaluation_repo=evaluations,
+    )
+
+    # Assert
+    rows = await evaluations.list_unresolved(ProjectId("prj_01"), SpecPhase.CARACTERISTICAS)
+    assert len(rows) == 1
+    assert rows[0].operation_id == "ope_test"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_run_evaluation_skips_when_no_target_artifacts() -> None:
     # Arrange
     projects, features, requirements, diagrams, documents, evaluations = _make_repos(with_feature=False)

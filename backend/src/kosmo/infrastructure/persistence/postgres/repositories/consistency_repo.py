@@ -64,6 +64,7 @@ class SqlAlchemyConsistencyEvaluationRepository(ConsistencyEvaluationRepository)
             model.status = evaluation.status.value
             model.result = evaluation.result
             model.source_changes = list(evaluation.source_changes)
+            model.operation_id = evaluation.operation_id
             model.failure_reason = evaluation.failure_reason
             model.updated_at = datetime.now(UTC)
             await session.commit()
@@ -128,6 +129,7 @@ def _with_id(evaluation: ConsistencyEvaluation, id_value: str) -> ConsistencyEva
         status=evaluation.status,
         result=evaluation.result,
         source_changes=evaluation.source_changes,
+        operation_id=evaluation.operation_id,
         failure_reason=evaluation.failure_reason,
         created_at=evaluation.created_at,
         updated_at=evaluation.updated_at,
@@ -150,6 +152,7 @@ def _model_to_evaluation(model: ConsistencyEvaluationModel) -> ConsistencyEvalua
         status=ConsistencyEvaluationStatus(model.status),
         result=result,
         source_changes=source_changes,
+        operation_id=model.operation_id,
         failure_reason=model.failure_reason,
         created_at=model.created_at,
         updated_at=model.updated_at,

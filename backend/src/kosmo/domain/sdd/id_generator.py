@@ -24,6 +24,7 @@ _PREFIX_MAP: dict[str, str] = {
     "user_pref": "upf_",
     "consistency_evaluation": "cev_",
     "chat_session": "cht_",
+    "operation": "ope_",
 }
 
 

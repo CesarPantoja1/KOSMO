@@ -54,6 +54,7 @@ class ConsistencyEvaluation:
     status: ConsistencyEvaluationStatus = ConsistencyEvaluationStatus.COMPLETED
     result: dict[str, object] | None = None
     source_changes: list[dict[str, object]] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    operation_id: str | None = None
     failure_reason: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

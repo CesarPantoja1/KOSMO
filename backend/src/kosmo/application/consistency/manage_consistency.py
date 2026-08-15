@@ -54,6 +54,7 @@ class ReviewCard:
     action: str
     diff: dict[str, object] | None
     status: str
+    operation_id: str | None = None
     failure_reason: str | None = None
 
 
@@ -74,6 +75,7 @@ def _card_from_row(row: ConsistencyEvaluation) -> ReviewCard:
         action=str(result.get("action", "update")),
         diff=diff,
         status=row.status.value,
+        operation_id=row.operation_id,
         failure_reason=row.failure_reason,
     )
 

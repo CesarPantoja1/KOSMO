@@ -86,6 +86,7 @@ async def run_consistency_evaluation(
     """
     project_id = ProjectId(payload["project_id"])
     source_phase = SpecPhase(payload["source_phase"])
+    operation_id = str(payload["operation_id"]) if payload.get("operation_id") else None
     changes_raw = payload.get("changes")
     raw_changes = [
         cast(dict[str, object], c)
@@ -151,6 +152,7 @@ async def run_consistency_evaluation(
                     snapshot_hash="",
                     status=ConsistencyEvaluationStatus.FAILED,
                     source_changes=raw_changes,
+                    operation_id=operation_id,
                     failure_reason=str(exc)[:1000],
                 )
             )
@@ -198,6 +200,7 @@ async def run_consistency_evaluation(
                     status=ConsistencyEvaluationStatus.COMPLETED,
                     result=impact_item_to_dict(item),
                     source_changes=raw_changes,
+                    operation_id=operation_id,
                 )
             )
 

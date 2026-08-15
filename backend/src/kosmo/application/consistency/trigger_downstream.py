@@ -3,6 +3,7 @@ from __future__ import annotations
 from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.domain.sdd.id_generator import IdGenerator
 from kosmo.domain.sdd.traceability_tracer import trace_downstream_phases
 
 
@@ -25,5 +26,6 @@ async def trigger_downstream_evaluation(
             "project_id": str(project_id),
             "source_phase": source_phase.value,
             "changes": changes,
+            "operation_id": IdGenerator.generate("operation"),
         },
     )

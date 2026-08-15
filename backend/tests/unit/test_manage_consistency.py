@@ -122,6 +122,7 @@ class _Seed:
         target_phase: SpecPhase = SpecPhase.CARACTERISTICAS,
         evaluation_id: str = "cev_01",
         target_artifact_id: str = "feat_01",
+        operation_id: str | None = None,
     ) -> ConsistencyEvaluation:
         parts = await self.snapshot_parts(
             source_phase,
@@ -152,6 +153,7 @@ class _Seed:
                 },
             },
             source_changes=[{"section": "Alcance", "description": "Ampliar", "before": "a", "after": "b"}],
+            operation_id=operation_id,
         )
         return await self.evaluations.save(row)
 
@@ -206,6 +208,27 @@ async def test_review_returns_fresh_card() -> None:
     assert cards[0].evaluation_id == "cev_01"
     assert cards[0].diff is not None
     assert cards[0].status == "completed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_review_card_includes_operation_id() -> None:
+    # Arrange
+    seed = _Seed()
+    await seed.seed_completed(operation_id="ope_01")
+
+    # Act
+    cards = await GetConsistencyReviewUseCase(
+        seed.evaluations,
+        document_repo=seed.documents,
+        feature_repo=seed.features,
+        requirement_repo=seed.requirements,
+        diagram_repo=seed.diagrams,
+    ).execute(ProjectId("prj_01"), SpecPhase.CARACTERISTICAS)
+
+    # Assert
+    assert len(cards) == 1
+    assert cards[0].operation_id == "ope_01"
 
 
 @pytest.mark.unit
