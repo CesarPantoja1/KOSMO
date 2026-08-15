@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
 from kosmo.contracts.pipeline.orchestrator_ports import ToolDefinition
 from kosmo.contracts.pipeline.phase_outputs import (
-    ConsistencyReport,
+    ConsistencyCorrection,
+    ConsistencyDetectionReport,
     GenerationMetadata,
     ValidationResult,
 )
@@ -23,16 +24,13 @@ _FIDELITY_RULES = (
     "## REGLAS DE ANALISIS\n\n"
     "1. LEE el documento fuente COMPLETO y cada artefacto destino.\n"
     "2. Para cada artefacto, determina una UNICA accion:\n"
-    '   - "update": el cambio afecta el contenido del artefacto. '
-    "DEBES sugerir el texto corregido.\n"
+    '   - "update": el cambio afecta el contenido del artefacto.\n'
     '   - "delete": el concepto del que depende el artefacto fue ELIMINADO. '
     "El artefacto ya no tiene razon de existir.\n"
     '   - "keep": el artefacto NO esta relacionado con ningun cambio. '
     "NO lo incluyas en la respuesta.\n\n"
-    "3. COPIA VERBATIM: 'suggested_before' debe ser una copia EXACTA y "
-    "LITERAL de un fragmento del artefacto destino tal como aparece en la "
-    "lista de artefactos. No parafrasees. Si el texto no existe exactamente "
-    "en el artefacto, la correccion no se podra aplicar.\n"
+    "3. SOLO DETECTAS el impacto: NO debes generar ni sugerir el texto "
+    "corregido. Otra fase se encarga de redactar la correccion exacta.\n"
     "4. ANALISIS SEMANTICO: no busques coincidencia literal entre el documento "
     "fuente y los artefactos. Evalua el significado.\n"
     "5. CAMBIOS COSMETICOS (ortografia, formato) que no alteran el significado "
@@ -142,32 +140,23 @@ def _output_schema(target_artifact: str) -> str:
             '    {{"artifact_id": "<id exacto de la caracteristica>", '
             '"action": "update" | "delete", '
             '"rationale": "<explicacion en español>", '
-            '"suggested_field": "<title o description>", '
-            '"suggested_before": "<fragmento EXACTO del artefacto>", '
-            '"suggested_after": "<texto sugerido>"}}'
+            '"suggested_field": "<title o description>"}}'
         ),
         "EARSRequirement": (
             '    {{"artifact_id": "<id exacto de la feature, tal como aparece en la lista>", '
             '"action": "update" | "delete", '
-            '"rationale": "<explicacion. Incluye codigos REQ-X.Y afectados>", '
-            '"suggested_before": "<fragmento EXACTO del markdown EARS actual>", '
-            '"suggested_after": "<fragmento corregido del markdown EARS>"}}'
+            '"rationale": "<explicacion. Incluye codigos REQ-X.Y afectados>"}}'
         ),
         "ActivityDiagram": (
             '    {{"artifact_id": "<id exacto de la feature>", '
             '"action": "update" | "delete", '
-            '"rationale": "<explicacion en español>", '
-            '"suggested_field": "diagram_syntax", '
-            '"suggested_before": "<fragmento PlantUML EXACTO del diagrama>", '
-            '"suggested_after": "<fragmento PlantUML corregido>"}}'
+            '"rationale": "<explicacion en español>"}}'
         ),
         "DiscoveryDocument": (
             '    {{"artifact_id": "<id EXACTO del documento, tal como aparece en la lista de artefactos>", '
             '"action": "update", '
             '"rationale": "<explicacion en español>", '
-            '"suggested_field": "<titulo de la seccion: ## Vision, ## Alcance, etc.>", '
-            '"suggested_before": "<contenido EXACTO de la seccion a modificar>", '
-            '"suggested_after": "<contenido corregido>"}}'
+            '"suggested_field": "<titulo de la seccion: ## Vision, ## Alcance, etc.>"}}'
         ),
     }
     return schemas.get(target_artifact, schemas["Feature"])
@@ -358,7 +347,7 @@ class ConsistencyEvaluationMode:
 
     @property
     def output_type(self) -> type[BaseModel]:
-        return ConsistencyReport
+        return ConsistencyDetectionReport
 
     @property
     def system_prompt(self) -> str:
@@ -395,12 +384,8 @@ class ConsistencyEvaluationMode:
             "## Instrucciones\n\n"
             "Analiza cada artefacto contra los cambios aplicados y el documento fuente actual. "
             "Determina que accion requiere cada uno (update, delete, o keep). "
-            "Para acciones 'update', incluye el texto sugerido.\n\n"
-            "**IMPORTANTE:** El valor de 'suggested_before' debe ser una copia "
-            "EXACTA y LITERAL de un fragmento del artefacto destino, tal como "
-            "aparece en la lista de arriba. No lo parafrasees ni lo resumas. "
-            "Si el texto no existe exactamente en el artefacto, la correccion "
-            "no se podra aplicar.\n\n"
+            "SOLO detectas el impacto: NO generes el texto corregido. "
+            "La correccion exacta la redacta otra fase con el contenido completo del artefacto.\n\n"
             "Usa ortografia correcta en español con TODAS las tildes "
             "(á, é, í, ó, ú), eñes (ñ), signos de puntuacion y mayusculas "
             "iniciales donde corresponda.\n\n"
@@ -409,8 +394,8 @@ class ConsistencyEvaluationMode:
 
     def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
         errors: list[str] = []
-        if not isinstance(output, ConsistencyReport):
-            errors.append("El output debe ser un ConsistencyReport.")
+        if not isinstance(output, ConsistencyDetectionReport):
+            errors.append("El output debe ser un ConsistencyDetectionReport.")
             return ValidationResult(is_valid=False, errors=errors)
         if output.actions:
             for idx, action in enumerate(output.actions):
@@ -418,6 +403,153 @@ class ConsistencyEvaluationMode:
                     errors.append(f"actions[{idx}] falta 'artifact_id'.")
                 if not action.rationale:
                     errors.append(f"actions[{idx}] falta 'rationale'.")
+                if action.action not in ("update", "delete"):
+                    errors.append(f"actions[{idx}] accion invalida '{action.action}'. Usa 'update' o 'delete'.")
+        return ValidationResult(is_valid=len(errors) == 0, errors=errors)
+
+    def build_validation_feedback(self, errors: list[str]) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return f"## Errores de validacion\n\n{error_list}\n\nCorrige los errores y genera una nueva respuesta."
+
+    def build_retry_prompt(
+        self,
+        original_prompt: str,
+        errors: list[str],
+        retry_count: int,
+    ) -> str:
+        error_list = "\n".join(f"- {e}" for e in errors)
+        return (
+            f"{original_prompt}\n\n"
+            f"## Correcciones necesarias (intento {retry_count})\n\n"
+            f"Errores detectados:\n{error_list}\n\n"
+            "Genera una nueva respuesta en el formato JSON especificado."
+        )
+
+    def build_output(
+        self,
+        raw_output: Any,
+        validation_result: ValidationResult,  # noqa: ARG002
+        metadata: GenerationMetadata,  # noqa: ARG002
+        *,
+        context: Any = None,  # noqa: ARG002
+    ) -> Any:
+        return raw_output
+
+
+def _render_changes(context: ConsistencyPhaseContext) -> str:
+    return "\n".join(
+        f"### Cambio en '{c.section}'\n"
+        f"**Descripcion:** {c.description}\n"
+        f"**Antes:**\n{c.diff.before[:15000]}{'[…truncado…]' if len(c.diff.before) > 15000 else ''}\n"
+        f"**Despues:**\n{c.diff.after[:15000]}{'[…truncado…]' if len(c.diff.after) > 15000 else ''}\n"
+        for c in context.applied_changes
+    )
+
+
+def _render_source(context: ConsistencyPhaseContext) -> str:
+    src = context.source_content
+    truncated = "\n[…contenido truncado…]" if len(src) > 30000 else ""
+    return (src[:30000] + truncated) if src else "(no disponible)"
+
+
+_CORRECTION_SYSTEM_PROMPT = """Eres un analista experto en trazabilidad de requisitos de software.
+Tu UNICA responsabilidad es generar la correccion textual EXACTA para UN artefacto
+que fue marcado como afectado por cambios aplicados en una fase anterior.
+
+## Reglas
+1. COPIA VERBATIM: 'suggested_before' debe ser una copia EXACTA y LITERAL de un
+   fragmento del contenido actual del artefacto. No parafrasees. Si el texto no
+   existe exactamente en el artefacto, la correccion no se podra aplicar.
+2. 'suggested_after' contiene SOLO el texto corregido del mismo fragmento.
+3. Tipo de artefacto:
+   - Feature: 'suggested_field' debe ser 'title' o 'description'. 'suggested_after'
+     contiene SOLO el nuevo valor del campo, no la feature completa.
+   - EARSRequirement: 'suggested_before'/'suggested_after' son fragmentos del
+     markdown EARS. Manten los codigos REQ-X.Y y el formato original.
+   - ActivityDiagram: fragmentos PlantUML. Preserva la sintaxis: @startuml/@enduml,
+     balance de if/endif y fork/end merge.
+   - DiscoveryDocument: 'suggested_field' es el titulo de la seccion
+     (ej. '## Vision'). 'suggested_before'/'suggested_after' son el contenido
+     de la seccion a modificar.
+4. Prohibido usar el caracter guion largo. Usa punto, coma o dos puntos.
+5. ORTOGRAFIA: escribe en español correcto con TODAS las tildes (á, é, í, ó, ú),
+   dieresis (ü) y eñes (ñ). Usa signos de puntuacion correctos.
+
+## FORMATO DE SALIDA (JSON estricto)
+Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:
+{
+  "suggested_field": "<campo o seccion, segun el tipo de artefacto>",
+  "suggested_before": "<fragmento EXACTO del artefacto actual>",
+  "suggested_after": "<fragmento corregido>"
+}
+"""
+
+
+class ConsistencyCorrectionMode:
+    @property
+    def requires_enrichment(self) -> bool:
+        return False
+
+    @property
+    def phase_name(self) -> SpecPhase:
+        return SpecPhase.DESCUBRIMIENTO
+
+    @property
+    def temperature(self) -> float:
+        return 0.2
+
+    @property
+    def max_tokens(self) -> int:
+        return 8192
+
+    @property
+    def output_type(self) -> type[BaseModel]:
+        return ConsistencyCorrection
+
+    @property
+    def system_prompt(self) -> str:
+        return _CORRECTION_SYSTEM_PROMPT
+
+    @property
+    def available_tools(self) -> list[ToolDefinition]:
+        return []
+
+    def build_user_prompt(self, context: ConsistencyPhaseContext) -> str:
+        artifacts = context.downstream_artifacts
+        artifact_text = "(no disponible)"
+        if artifacts:
+            a = artifacts[0]
+            artifact_text = (
+                f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}"\n'
+                f"### Contenido actual COMPLETO del artefacto:\n{a.description}\n"
+            )
+
+        return (
+            f"## Fase origen: {context.source_phase.value}\n"
+            f"## Fase destino: {context.target_phase.value}\n\n"
+            f"### Documento fuente actual:\n{_render_source(context)}\n\n"
+            f"### Cambios aplicados:\n{_render_changes(context)}\n\n"
+            f"### Artefacto afectado:\n{artifact_text}\n\n"
+            "## Instrucciones\n\n"
+            "Genera la correccion exacta para el artefacto afectado: copia VERBATIM "
+            "el fragmento actual del artefacto en 'suggested_before' y escribe el texto "
+            "corregido en 'suggested_after'. Responde UNICAMENTE con el JSON especificado."
+        )
+
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+        errors: list[str] = []
+        if isinstance(output, ConsistencyCorrection):
+            before = output.suggested_before
+            after = output.suggested_after
+        elif isinstance(output, dict):
+            correction_dict: dict[str, object] = output  # type: ignore[reportUnknownVariableType]
+            before = str(correction_dict.get("suggested_before", ""))
+            after = str(correction_dict.get("suggested_after", ""))
+        else:
+            errors.append("El output debe ser un ConsistencyCorrection.")
+            return ValidationResult(is_valid=False, errors=errors)
+        if not before and not after:
+            errors.append("La correccion debe incluir 'suggested_before' o 'suggested_after'.")
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def build_validation_feedback(self, errors: list[str]) -> str:

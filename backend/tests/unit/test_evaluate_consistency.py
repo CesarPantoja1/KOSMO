@@ -31,6 +31,7 @@ class StubConsistencyAgent:
         self._should_fail = should_fail
         self.last_context: object | None = None
         self.last_skill_name: str | None = None
+        self.skill_names: list[str] = []
 
     async def execute_with_skill(  # noqa: ARG002
         self,
@@ -42,6 +43,7 @@ class StubConsistencyAgent:
     ) -> object:
         self.last_context = context
         self.last_skill_name = skill_name
+        self.skill_names.append(skill_name)
         if self._should_fail:
             raise RuntimeError("Stub agent failure")
         return {
@@ -351,7 +353,7 @@ async def test_evaluate_requirements_to_features_uses_correct_skill() -> None:
 
     # Assert
     assert result.affected_artifact_ids == ["feat_r2f"]
-    assert agent.last_skill_name == "consistency_evaluate_requirements"
+    assert "consistency_evaluate_requirements" in agent.skill_names
 
 
 @pytest.mark.unit
@@ -444,7 +446,7 @@ async def test_evaluate_requirements_to_discovery_uses_upstream_skill() -> None:
 
     # Assert
     assert result.affected_artifact_ids == ["prj_r2d"]
-    assert agent.last_skill_name == "consistency_evaluate_requirements_upstream"
+    assert "consistency_evaluate_requirements_upstream" in agent.skill_names
 
 
 @pytest.mark.unit
@@ -502,7 +504,7 @@ async def test_evaluate_empty_changes_uses_automatic_diff() -> None:
 
     # Assert: el diff automático se usó y la evaluación se ejecutó
     assert result.affected_artifact_ids == ["feat_diff"]
-    assert agent.last_skill_name == "consistency_evaluate"
+    assert "consistency_evaluate" in agent.skill_names
     assert isinstance(agent.last_context, ConsistencyPhaseContext)
     assert len(agent.last_context.applied_changes) == 1
     assert "producto X" in agent.last_context.applied_changes[0].diff.before
@@ -550,6 +552,7 @@ class _DictOutputAgent:
         self._actions = actions
         self.last_skill_name: str | None = None
         self.last_context: object | None = None
+        self.skill_names: list[str] = []
 
     async def execute_with_skill(  # noqa: ARG002
         self,
@@ -561,7 +564,45 @@ class _DictOutputAgent:
     ) -> object:
         self.last_skill_name = skill_name
         self.last_context = context
+        self.skill_names.append(skill_name)
         return {"actions": self._actions, "overall_rationale": "Stub"}
+
+    async def execute_conversation(self, *args: object, **kwargs: object) -> object:  # noqa: ARG002
+        raise NotImplementedError
+
+
+class _TwoPhaseAgent:
+    """Stub con comportamiento distinto por fase: detección y corrección."""
+
+    def __init__(
+        self,
+        detection_report: dict[str, object],
+        corrections: dict[str, dict[str, str]] | None = None,
+    ) -> None:
+        self._detection_report = detection_report
+        self._corrections = corrections or {}
+        self.skill_names: list[str] = []
+        self.contexts: list[object] = []
+        self.call_count = 0
+
+    async def execute_with_skill(
+        self,
+        skill_name: str,
+        context: object,
+        *,
+        project_id: object | None = None,
+        user_instructions: str | None = None,
+    ) -> object:
+        self.skill_names.append(skill_name)
+        self.contexts.append(context)
+        self.call_count += 1
+        if skill_name == "consistency_correct":
+            from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
+
+            assert isinstance(context, ConsistencyPhaseContext)
+            artifact_id = context.downstream_artifacts[0].artifact_id
+            return self._corrections.get(artifact_id, {"suggested_before": "", "suggested_after": ""})
+        return self._detection_report
 
     async def execute_conversation(self, *args: object, **kwargs: object) -> object:  # noqa: ARG002
         raise NotImplementedError
@@ -726,3 +767,181 @@ async def test_enrich_impact_logs_when_ears_parsing_fails() -> None:
     assert parse_events[0]["artifact_id"] == "feat_enr"
     assert parse_events[0]["before_requirements"] == 0
     assert parse_events[0]["after_requirements"] == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_detection_keeps_impact_despite_mismatched_before() -> None:
+    """Un before incoherente en la detección no debe descartar el impacto: la corrección lo resuelve."""
+    # Arrange
+    project = _make_project("prj_p1")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_p1", "prj_p1", "Gestión de catálogo", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = _TwoPhaseAgent(
+        detection_report={
+            "actions": [
+                {
+                    "artifact_id": "feat_p1",
+                    "action": "update",
+                    "rationale": "El producto X fue eliminado del descubrimiento.",
+                    "suggested_before": "fragmento que no existe en el artefacto truncado",
+                    "suggested_after": "x",
+                }
+            ],
+            "overall_rationale": "Impacto real",
+        },
+        corrections={
+            "feat_p1": {
+                "suggested_field": "description",
+                "suggested_before": "Descripción de Gestión de catálogo",
+                "suggested_after": "Descripción sin el producto X",
+            }
+        },
+    )
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _applied_change("chg_p1")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_p1"),
+        applied_changes=[change],
+    )
+
+    # Assert: el impacto se conserva y la corrección validada proviene de la fase 2
+    assert result.affected_artifact_ids == ["feat_p1"]
+    assert len(result.actions) == 1
+    assert result.actions[0].suggested_before == "Descripción de Gestión de catálogo"
+    assert result.actions[0].suggested_after == "Descripción sin el producto X"
+    assert "consistency_correct" in agent.skill_names
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_delete_action_skips_correction_call() -> None:
+    """Una acción delete no necesita fase de corrección: se conserva sin before/after."""
+    # Arrange
+    project = _make_project("prj_del")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_del", "prj_del", "Gestión de inventario", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = _TwoPhaseAgent(
+        detection_report={
+            "actions": [
+                {
+                    "artifact_id": "feat_del",
+                    "action": "delete",
+                    "rationale": "El concepto de inventario ya no existe.",
+                }
+            ],
+            "overall_rationale": "Eliminación",
+        }
+    )
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _applied_change("chg_del")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_del"),
+        applied_changes=[change],
+    )
+
+    # Assert
+    assert result.affected_artifact_ids == ["feat_del"]
+    assert len(result.actions) == 1
+    assert result.actions[0].action == "delete"
+    assert result.actions[0].suggested_before == ""
+    assert agent.call_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_correction_receives_full_artifact_content() -> None:
+    """La fase de corrección recibe el contenido COMPLETO del artefacto, sin truncamiento."""
+    from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
+
+    # Arrange
+    project = _make_project("prj_full")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_full", "prj_full", "Flujo complejo", number=1)
+    await feature_repo.save(feat)
+
+    diagram_repo = InMemoryActivityDiagramRepository()
+    from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+    from kosmo.contracts.sdd.ids import ActivityDiagramId
+
+    long_syntax = "@startuml\nstart\n" + (":procesar paso;\n" * 700) + "stop\n@enduml"
+    await diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("feat_full"),
+            feature_id=FeatureId("feat_full"),
+            diagram_syntax=long_syntax,
+        )
+    )
+
+    requirement_repo = InMemoryRequirementRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = _TwoPhaseAgent(
+        detection_report={
+            "actions": [
+                {
+                    "artifact_id": "feat_full",
+                    "action": "update",
+                    "rationale": "El flujo cambió.",
+                }
+            ],
+            "overall_rationale": "Cambio de flujo",
+        },
+        corrections={
+            "feat_full": {
+                "suggested_before": "stop\n@enduml",
+                "suggested_after": "fin\n@enduml",
+            }
+        },
+    )
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _applied_change("chg_full")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.REQUISITOS,
+        target_phase=SpecPhase.MODELO,
+        project_id=ProjectId("prj_full"),
+        applied_changes=[change],
+    )
+
+    # Assert: el contexto de corrección trae el diagrama completo (sin marca de truncado)
+    assert result.affected_artifact_ids == ["feat_full"]
+    correction_ctx = agent.contexts[1]
+    assert isinstance(correction_ctx, ConsistencyPhaseContext)
+    full_description = correction_ctx.downstream_artifacts[0].description
+    assert len(full_description) > 8000
+    assert "[…contenido truncado…]" not in full_description
+    assert full_description.endswith("stop\n@enduml")

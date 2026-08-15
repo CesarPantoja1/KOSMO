@@ -11,6 +11,7 @@ from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import (
     CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
     CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT,
     CONSISTENCY_UPSTREAM_SYSTEM_PROMPT,
+    ConsistencyCorrectionMode,
     ConsistencyEvaluationMode,
 )
 from kosmo.domain.pipeline.phase_modes.direct_modification_mode import (
@@ -199,6 +200,14 @@ def build_skill_registry() -> SkillRegistry:
                 phase_name=SpecPhase.REQUISITOS,
                 system_prompt=CONSISTENCY_REQUIREMENTS_MODEL_SYSTEM_PROMPT,
             ),  # type: ignore[reportArgumentType]
+        )
+    )
+    skill_registry.register(
+        Skill(
+            name="consistency_correct",
+            description="Genera la correccion textual exacta de un artefacto afectado por un cambio de consistencia",
+            phase=SpecPhase.DESCUBRIMIENTO,
+            mode=ConsistencyCorrectionMode(),  # type: ignore[reportArgumentType]
         )
     )
     skill_registry.register(
