@@ -13,6 +13,10 @@ from kosmo.contracts.pipeline.phase_outputs import (
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.domain.sdd.validators.activity_diagram_validator import (
+    validate_activity_diagram_syntax,
+    wrap_diagram_fragment,
+)
 
 # ═══════════════════════════════════════════════════════════════════
 # Bloques compartidos del builder de prompts
@@ -137,18 +141,18 @@ _REQUIREMENTS_DOWNSTREAM_EXAMPLES = (
     "## EJEMPLOS DE EVALUACION DE REQUISITOS EARS\n\n"
     "Ejemplo 1 — Eliminacion o cambio de actor:\n"
     '  Cambio: se elimina el actor "Colaborador de tienda" del documento de Descubrimiento\n'
-    '  Artefacto: Requisitos de Gestion de pedidos (id: feat_01...) con '
+    "  Artefacto: Requisitos de Gestion de pedidos (id: feat_01...) con "
     '"REQ-6.1 Descuento automatico de stock: CUANDO el colaborador de tienda confirma un pedido..."\n'
     '  → accion: "update", artifact_id: "feat_01...", '
-    'razon: "El actor \'colaborador de tienda\' fue eliminado del alcance; REQ-6.1 debe actualizar el actor."\n\n'
+    "razon: \"El actor 'colaborador de tienda' fue eliminado del alcance; REQ-6.1 debe actualizar el actor.\"\n\n"
     "Ejemplo 2 — Modificacion de regla de negocio:\n"
     '  Cambio: "el descuento maximo pasa de 10% a 15%"\n'
     '  Artefacto: Requisitos de Promociones (id: feat_02...) con "REQ-2.1 Aplicar descuento..."\n'
     '  → accion: "update", artifact_id: "feat_02...", '
     'razon: "REQ-2.1 debe actualizar el porcentaje maximo de descuento a 15%."\n\n'
     "Ejemplo 3 — Eliminacion de capacidad:\n"
-    '  Cambio: se elimina el modulo de facturacion electronica\n'
-    '  Artefacto: Requisitos de Facturacion (id: feat_03...)\n'
+    "  Cambio: se elimina el modulo de facturacion electronica\n"
+    "  Artefacto: Requisitos de Facturacion (id: feat_03...)\n"
     '  → accion: "delete", artifact_id: "feat_03...", '
     'razon: "La funcionalidad de facturacion electronica fue eliminada."\n\n'
 )
@@ -556,6 +560,14 @@ Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:
 """
 
 
+def _is_diagram_context(context: object) -> bool:
+    return (
+        isinstance(context, ConsistencyPhaseContext)
+        and bool(context.downstream_artifacts)
+        and context.downstream_artifacts[0].artifact_type == "ActivityDiagram"
+    )
+
+
 class ConsistencyCorrectionMode:
     @property
     def requires_enrichment(self) -> bool:
@@ -607,7 +619,7 @@ class ConsistencyCorrectionMode:
             "corregido en 'suggested_after'. Responde UNICAMENTE con el JSON especificado."
         )
 
-    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:  # noqa: ARG002
+    def validate_output(self, output: Any, *, context: Any = None) -> ValidationResult:
         errors: list[str] = []
         if isinstance(output, ConsistencyCorrection):
             before = output.suggested_before
@@ -621,6 +633,10 @@ class ConsistencyCorrectionMode:
             return ValidationResult(is_valid=False, errors=errors)
         if not before and not after:
             errors.append("La correccion debe incluir 'suggested_before' o 'suggested_after'.")
+        if after and _is_diagram_context(context):
+            diagram_validation = validate_activity_diagram_syntax(wrap_diagram_fragment(after))
+            if not diagram_validation.is_valid:
+                errors.append("El fragmento PlantUML sugerido no es valido: " + "; ".join(diagram_validation.errors))
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def build_validation_feedback(self, errors: list[str]) -> str:

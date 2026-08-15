@@ -13,4 +13,6 @@ export interface PlantUmlViewerProps {
 	isMaximized?: boolean;
 	onMaximize?: () => void;
 	onMinimize?: () => void;
+	showControls?: boolean;
+	fallbackContent?: string;
 }

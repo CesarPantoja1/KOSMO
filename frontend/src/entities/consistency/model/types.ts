@@ -28,7 +28,13 @@ export interface ReviewCard {
 	section: string;
 	rationale: string;
 	action: string;
-	diff: { field: string; before: string; after: string } | null;
+	diff: {
+		field: string;
+		before: string;
+		after: string;
+		before_diagram?: string;
+		after_diagram?: string;
+	} | null;
 	status: string;
 	failure_reason: string | null;
 }

@@ -1,8 +1,19 @@
+import re
+
 from kosmo.contracts.pipeline.phase_outputs import ValidationResult
 
 _DEFAULT_MAX_ACTION_NODES = 20
 _DEFAULT_MAX_SWIMLANES = 4
 _DEFAULT_MAX_NESTING_DEPTH = 3
+
+_DIAGRAM_START_RE = re.compile(r"^@startuml\s*", re.IGNORECASE)
+_DIAGRAM_END_RE = re.compile(r"@enduml\s*$", re.IGNORECASE)
+
+
+def wrap_diagram_fragment(fragment: str) -> str:
+    """Normaliza un fragmento PlantUML para que sea renderizable como diagrama completo."""
+    content = _DIAGRAM_END_RE.sub("", _DIAGRAM_START_RE.sub("", fragment.strip())).strip()
+    return f"@startuml\n{content}\n@enduml"
 
 
 def _count_action_nodes(lines: list[str]) -> int:

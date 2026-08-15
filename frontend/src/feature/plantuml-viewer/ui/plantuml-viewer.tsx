@@ -9,7 +9,10 @@ import { usePanZoom } from '../hooks/usePanZoom';
 import { ZOOM_MAX, ZOOM_MIN } from '../lib/zoom';
 
 export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(
-	function PlantUmlViewer({ source, isMaximized, onMaximize, onMinimize }, ref) {
+	function PlantUmlViewer(
+		{ source, isMaximized, onMaximize, onMinimize, showControls = true, fallbackContent },
+		ref,
+	) {
 		const { svg, state, error } = useRender(source);
 		const {
 			zoom,
@@ -31,46 +34,48 @@ export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(
 
 		return (
 		<div ref={ref} className='flex-1 min-h-0 overflow-y-auto'>
-			<div className='flex items-center justify-between py-2 bg-neutral-100 border-b border-neutral-200 px-3'>
-				<h3 className='text-sm font-semibold text-neutral-600'>Diagrama de actividad</h3>
-				<div className='flex items-center gap-1'>
-					<button
-						type='button'
-						onClick={zoomOut}
-						disabled={zoom <= ZOOM_MIN}
-						className='cursor-pointer flex items-center justify-center rounded-md w-7 h-7 text-sm font-bold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:pointer-events-none'
-						title='Alejar'
-					>
-						−
-					</button>
-					<button
-						type='button'
-						onClick={zoomReset}
-						className='cursor-pointer px-2 h-7 flex items-center justify-center rounded-md text-xs font-medium text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors'
-						title='Restablecer zoom'
-					>
-						{Math.round(zoom * 100)}%
-					</button>
-					<button
-						type='button'
-						onClick={zoomIn}
-						disabled={zoom >= ZOOM_MAX}
-						className='cursor-pointer flex items-center justify-center rounded-md w-7 h-7 text-sm font-bold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:pointer-events-none'
-						title='Acercar'
-					>
-						+
-					</button>
-					<div className='w-px h-5 bg-neutral-300 mx-1' />
-					<button
-						type='button'
-						className='cursor-pointer size-7 flex items-center justify-center rounded-md text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors'
-						onClick={isMaximized ? onMinimize : onMaximize}
-						title={isMaximized ? 'Restablecer' : 'Expandir'}
-					>
-						{isMaximized ? <MinEditor size={20} /> : <MaxEditor size={20} />}
-					</button>
+			{showControls && (
+				<div className='flex items-center justify-between py-2 bg-neutral-100 border-b border-neutral-200 px-3'>
+					<h3 className='text-sm font-semibold text-neutral-600'>Diagrama de actividad</h3>
+					<div className='flex items-center gap-1'>
+						<button
+							type='button'
+							onClick={zoomOut}
+							disabled={zoom <= ZOOM_MIN}
+							className='cursor-pointer flex items-center justify-center rounded-md w-7 h-7 text-sm font-bold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:pointer-events-none'
+							title='Alejar'
+						>
+							−
+						</button>
+						<button
+							type='button'
+							onClick={zoomReset}
+							className='cursor-pointer px-2 h-7 flex items-center justify-center rounded-md text-xs font-medium text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors'
+							title='Restablecer zoom'
+						>
+							{Math.round(zoom * 100)}%
+						</button>
+						<button
+							type='button'
+							onClick={zoomIn}
+							disabled={zoom >= ZOOM_MAX}
+							className='cursor-pointer flex items-center justify-center rounded-md w-7 h-7 text-sm font-bold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors disabled:opacity-30 disabled:pointer-events-none'
+							title='Acercar'
+						>
+							+
+						</button>
+						<div className='w-px h-5 bg-neutral-300 mx-1' />
+						<button
+							type='button'
+							className='cursor-pointer size-7 flex items-center justify-center rounded-md text-neutral-500 hover:text-neutral-800 hover:bg-neutral-200 transition-colors'
+							onClick={isMaximized ? onMinimize : onMaximize}
+							title={isMaximized ? 'Restablecer' : 'Expandir'}
+						>
+							{isMaximized ? <MinEditor size={20} /> : <MaxEditor size={20} />}
+						</button>
+					</div>
 				</div>
-			</div>
+			)}
 
 			{(state === 'loading-engine' || state === 'rendering') && (
 				<div className='flex items-center gap-2 text-neutral-400 text-sm py-8 justify-center'>
@@ -104,8 +109,13 @@ export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(
 
 			{state === 'error' && (
 				<div className='bg-error-50 border border-error-500/30 rounded-lg p-4 m-3 text-error-700 text-sm'>
-					<p className='font-medium mb-1'>Error al renderizar el diagrama</p>
+					<p className='font-medium mb-1'>No se pudo renderizar el diagrama</p>
 					<p className='text-error-500 text-xs font-mono'>{error}</p>
+					{fallbackContent && (
+						<pre className='mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-neutral-700'>
+							{fallbackContent}
+						</pre>
+					)}
 				</div>
 			)}
 

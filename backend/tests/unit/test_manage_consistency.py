@@ -16,10 +16,17 @@ from kosmo.contracts.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationStatus,
 )
+from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ConsistencyStaleError
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, ProjectId, UserId
+from kosmo.contracts.sdd.ids import (
+    ActivityDiagramId,
+    ConsistencyEvaluationId,
+    FeatureId,
+    ProjectId,
+    UserId,
+)
 from kosmo.contracts.sdd.project import Project
 from kosmo.domain.sdd.consistency_snapshot import compute_snapshot_hash
 from kosmo.domain.sdd.document_converters import markdown_to_document
@@ -229,6 +236,111 @@ async def test_review_card_includes_operation_id() -> None:
     # Assert
     assert len(cards) == 1
     assert cards[0].operation_id == "ope_01"
+
+
+async def _seed_diagram_row(seed: _Seed, diagram_syntax: str, *, before: str, after: str) -> None:
+    await seed.diagrams.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("feat_01"),
+            feature_id=FeatureId("feat_01"),
+            diagram_syntax=diagram_syntax,
+        )
+    )
+    parts = await fetch_snapshot_parts(
+        project_id=ProjectId("prj_01"),
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.MODELO,
+        target_artifact_id="feat_01",
+        artifact_type="ActivityDiagram",
+        document_repo=seed.documents,
+        feature_repo=seed.features,
+        requirement_repo=seed.requirements,
+        diagram_repo=seed.diagrams,
+    )
+    row = ConsistencyEvaluation(
+        id=ConsistencyEvaluationId("cev_dia"),
+        project_id=ProjectId("prj_01"),
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.MODELO,
+        target_artifact_id="feat_01",
+        artifact_type="ActivityDiagram",
+        snapshot_hash=compute_snapshot_hash(*parts),
+        status=ConsistencyEvaluationStatus.COMPLETED,
+        result={
+            "targetId": "feat_01",
+            "artifact_type": "ActivityDiagram",
+            "targetDisplayId": "C01",
+            "targetTitle": "Diagrama de Registrar gastos compartidos",
+            "section": "estructura UML",
+            "rationale": "Renombrar actor.",
+            "action": "update",
+            "diff": {"field": "estructura UML", "before": before, "after": after},
+        },
+        source_changes=[{"section": "Actores", "description": "Renombrar", "before": "a", "after": "b"}],
+    )
+    await seed.evaluations.save(row)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_review_card_includes_full_diagrams_for_activity() -> None:
+    """El card de diagrama expone el diagrama completo anterior y propuesto."""
+    # Arrange
+    seed = _Seed()
+    diagram_syntax = "@startuml\nstart\n|#pink|Colaborador_de_tienda|\n:Recibir pedido;\nstop\n@enduml"
+    await _seed_diagram_row(
+        seed,
+        diagram_syntax,
+        before="|#pink|Colaborador_de_tienda|",
+        after="|#pink|Dueno_o_colaborador|",
+    )
+
+    # Act
+    cards = await GetConsistencyReviewUseCase(
+        seed.evaluations,
+        document_repo=seed.documents,
+        feature_repo=seed.features,
+        requirement_repo=seed.requirements,
+        diagram_repo=seed.diagrams,
+    ).execute(ProjectId("prj_01"), SpecPhase.MODELO)
+
+    # Assert
+    assert len(cards) == 1
+    assert cards[0].diff is not None
+    assert cards[0].diff["before_diagram"] == diagram_syntax
+    after_diagram = str(cards[0].diff["after_diagram"])
+    assert "Dueno_o_colaborador" in after_diagram
+    assert "Colaborador_de_tienda" not in after_diagram
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_review_card_keeps_fragments_when_full_result_invalid() -> None:
+    """Si el cambio rompe la sintaxis del diagrama completo, el diff queda solo con fragmentos."""
+    # Arrange
+    seed = _Seed()
+    diagram_syntax = "@startuml\nstart\nif (¿ok?) then (sí)\n:Paso;\nendif\nstop\n@enduml"
+    await _seed_diagram_row(
+        seed,
+        diagram_syntax,
+        before="endif\nstop",
+        after="stop",
+    )
+
+    # Act
+    cards = await GetConsistencyReviewUseCase(
+        seed.evaluations,
+        document_repo=seed.documents,
+        feature_repo=seed.features,
+        requirement_repo=seed.requirements,
+        diagram_repo=seed.diagrams,
+    ).execute(ProjectId("prj_01"), SpecPhase.MODELO)
+
+    # Assert
+    assert len(cards) == 1
+    assert cards[0].diff is not None
+    assert "before_diagram" not in cards[0].diff
+    assert cards[0].diff["before"] == "endif\nstop"
 
 
 @pytest.mark.unit

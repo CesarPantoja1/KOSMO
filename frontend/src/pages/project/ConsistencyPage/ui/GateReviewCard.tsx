@@ -1,8 +1,10 @@
 'use client';
 
 import type { ReviewCard } from '@/entities/consistency';
+import { PlantUmlViewer } from '@/feature/plantuml-viewer';
+import { wrapPlantUmlSource } from '@/feature/plantuml-viewer/lib/wrap-plantuml';
 import { MarkdownText } from '@/shared/ui/markdown-text';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const ACTION_LABELS: Record<string, string> = {
 	update: 'Actualizar',
@@ -25,6 +27,56 @@ interface GateReviewCardProps {
 	onDiscard: () => void;
 }
 
+function DiagramDiffPane({
+	source,
+	fragment,
+	hasFullDiagram,
+}: {
+	source: string;
+	fragment: string;
+	hasFullDiagram: boolean;
+}) {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [visible, setVisible] = useState(
+		() => typeof IntersectionObserver === 'undefined',
+	);
+
+	useEffect(() => {
+		if (visible) return;
+		const el = containerRef.current;
+		if (!el) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (entry.isIntersecting) {
+						setVisible(true);
+						observer.disconnect();
+					}
+				}
+			},
+			{ rootMargin: '200px' },
+		);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, [visible]);
+
+	if (!visible) {
+		return (
+			<div ref={containerRef} className='py-3 text-center text-[11px] text-neutral-400'>
+				Preparando diagrama…
+			</div>
+		);
+	}
+
+	return (
+		<PlantUmlViewer
+			source={source}
+			showControls={hasFullDiagram}
+			fallbackContent={fragment}
+		/>
+	);
+}
+
 export const GateReviewCard = ({ card, busy, onApply, onDiscard }: GateReviewCardProps) => {
 	const [showFullRationale, setShowFullRationale] = useState(false);
 	const actionLabel = ACTION_LABELS[card.action] ?? card.action;
@@ -32,8 +84,25 @@ export const GateReviewCard = ({ card, busy, onApply, onDiscard }: GateReviewCar
 
 	const before = card.diff?.before ?? '';
 	const after = card.diff?.after ?? '';
+	const beforeDiagram = card.diff?.before_diagram ?? '';
+	const afterDiagram = card.diff?.after_diagram ?? '';
 	const hasDiff = before !== '' || after !== '';
 	const isDeletion = after === '' && before !== '';
+	const isDiagram = card.artifact_type === 'ActivityDiagram';
+
+	const renderDiffContent = (fragment: string, fullDiagram: string) => {
+		if (!isDiagram) {
+			return <MarkdownText content={fragment} />;
+		}
+		const source = fullDiagram.trim() ? fullDiagram : wrapPlantUmlSource(fragment);
+		return (
+			<DiagramDiffPane
+				source={source}
+				fragment={fragment}
+				hasFullDiagram={Boolean(fullDiagram.trim())}
+			/>
+		);
+	};
 
 	return (
 		<article className='flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm'>
@@ -79,7 +148,7 @@ export const GateReviewCard = ({ card, busy, onApply, onDiscard }: GateReviewCar
 							<div className='mb-1 font-mono text-[10px] font-semibold text-error-500 uppercase tracking-wider'>
 								- Eliminar
 							</div>
-							<MarkdownText content={before} />
+							{renderDiffContent(before, beforeDiagram)}
 						</div>
 					)}
 					{before !== '' && !isDeletion && (
@@ -87,7 +156,7 @@ export const GateReviewCard = ({ card, busy, onApply, onDiscard }: GateReviewCar
 							<div className='mb-1 font-mono text-[10px] font-semibold text-error-500 uppercase tracking-wider'>
 								- Anterior
 							</div>
-							<MarkdownText content={before} />
+							{renderDiffContent(before, beforeDiagram)}
 						</div>
 					)}
 					{!isDeletion && after !== '' && (
@@ -95,7 +164,7 @@ export const GateReviewCard = ({ card, busy, onApply, onDiscard }: GateReviewCar
 							<div className='mb-1 font-mono text-[10px] font-semibold text-primary-500 uppercase tracking-wider'>
 								+ Propuesto
 							</div>
-							<MarkdownText content={after} />
+							{renderDiffContent(after, afterDiagram)}
 						</div>
 					)}
 				</div>

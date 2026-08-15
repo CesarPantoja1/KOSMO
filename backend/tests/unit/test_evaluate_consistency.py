@@ -1262,14 +1262,7 @@ async def test_cascading_consistency_end_to_end_actor_removal() -> None:
 
     diagram_repo = InMemoryActivityDiagramRepository()
     diagram_syntax = (
-        "@startuml\n"
-        "|Colaborador de tienda|\n"
-        "start\n"
-        ":Confirmar pedido;\n"
-        "|Sistema|\n"
-        ":Descontar stock;\n"
-        "stop\n"
-        "@enduml"
+        "@startuml\n|Colaborador de tienda|\nstart\n:Confirmar pedido;\n|Sistema|\n:Descontar stock;\nstop\n@enduml"
     )
     await diagram_repo.save(
         DiagramaActividad(

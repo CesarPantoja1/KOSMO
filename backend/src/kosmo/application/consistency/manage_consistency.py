@@ -21,7 +21,7 @@ from kosmo.contracts.sdd.errors import (
     ConsistencyStaleError,
     ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, ProjectId
+from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,
@@ -29,7 +29,9 @@ from kosmo.contracts.sdd.repositories import (
     RequirementRepository,
 )
 from kosmo.domain.sdd.consistency_snapshot import compute_snapshot_hash
+from kosmo.domain.sdd.plan_diffs import apply_change_diff
 from kosmo.domain.sdd.traceability_tracer import trace_downstream_phases
+from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
 
 _log = structlog.get_logger(__name__)
 
@@ -147,9 +149,41 @@ class GetConsistencyReviewUseCase:
                 )
                 continue
 
-            cards.append(_card_from_row(row))
+            cards.append(_card_from_row(await self._enrich_diagram_diff(row)))
 
         return cards
+
+    async def _enrich_diagram_diff(self, row: ConsistencyEvaluation) -> ConsistencyEvaluation:
+        """Inyecta el diagrama completo (anterior y propuesto) en el diff de un card de actividad."""
+        if row.artifact_type != "ActivityDiagram":
+            return row
+        result = dict(row.result or {})
+        diff_raw = result.get("diff")
+        if not isinstance(diff_raw, dict):
+            return row
+        diff_dict: dict[str, object] = diff_raw  # type: ignore[reportUnknownVariableType]
+        before = str(diff_dict.get("before", ""))
+        after = str(diff_dict.get("after", ""))
+        if not before and not after:
+            return row
+        try:
+            diagram = await self._diagram_repo.by_feature_id(FeatureId(row.target_artifact_id))
+        except Exception:
+            return row
+        if diagram is None:
+            return row
+        after_full = apply_change_diff(diagram.diagram_syntax, before=before, after=after)
+        if after_full is None:
+            return row
+        if not validate_activity_diagram_syntax(diagram.diagram_syntax).is_valid:
+            return row
+        if not validate_activity_diagram_syntax(after_full).is_valid:
+            return row
+        enriched_diff = dict(diff_dict)
+        enriched_diff["before_diagram"] = diagram.diagram_syntax
+        enriched_diff["after_diagram"] = after_full
+        result["diff"] = enriched_diff
+        return dataclasses.replace(row, result=result)
 
 
 class ApplyConsistencyEvaluationUseCase:

@@ -299,8 +299,7 @@ async def enrich_impact_items(
                                     target_display_id=req.display_id,
                                     target_title=req.title,
                                     section="statement",
-                                    rationale=per_rationale
-                                    or "Se eliminará en cascada al eliminar la característica.",
+                                    rationale=per_rationale or "Se eliminará en cascada al eliminar la característica.",
                                     diff=None,
                                     action="delete",
                                 )
@@ -315,8 +314,7 @@ async def enrich_impact_items(
                                 target_display_id=feature.display_id,
                                 target_title=f"Requisitos de {feature.title}",
                                 section="statement",
-                                rationale=per_rationale
-                                or "Se eliminará en cascada al eliminar la característica.",
+                                rationale=per_rationale or "Se eliminará en cascada al eliminar la característica.",
                                 diff=None,
                                 action="delete",
                             )

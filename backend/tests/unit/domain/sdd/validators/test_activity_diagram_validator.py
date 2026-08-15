@@ -1,6 +1,9 @@
 import pytest
 
-from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
+from kosmo.domain.sdd.validators.activity_diagram_validator import (
+    validate_activity_diagram_syntax,
+    wrap_diagram_fragment,
+)
 
 
 def test_validate_valid_diagram():
@@ -170,3 +173,39 @@ def test_validate_complexity_thresholds_configurable() -> None:
     # Assert
     assert result.is_valid is True
     assert not any("nodos de acción" in w for w in result.warnings)
+
+
+@pytest.mark.unit
+def test_wrap_diagram_fragment_wraps_bare_fragment() -> None:
+    # Arrange
+    fragment = "|#lightgray|Sistema|\n:Paso;"
+
+    # Act
+    result = wrap_diagram_fragment(fragment)
+
+    # Assert
+    assert result == "@startuml\n|#lightgray|Sistema|\n:Paso;\n@enduml"
+
+
+@pytest.mark.unit
+def test_wrap_diagram_fragment_normalizes_existing_markers() -> None:
+    # Arrange
+    fragment = "@startuml\nstart\n:Paso;\nstop\n@enduml"
+
+    # Act
+    result = wrap_diagram_fragment(fragment)
+
+    # Assert
+    assert result == "@startuml\nstart\n:Paso;\nstop\n@enduml"
+
+
+@pytest.mark.unit
+def test_wrap_diagram_fragment_completes_partial_markers() -> None:
+    # Arrange
+    fragment = "@startuml\nstart\n:Paso;\nstop"
+
+    # Act
+    result = wrap_diagram_fragment(fragment)
+
+    # Assert
+    assert result == "@startuml\nstart\n:Paso;\nstop\n@enduml"

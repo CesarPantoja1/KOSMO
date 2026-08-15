@@ -9,6 +9,7 @@ import { useModelingStore } from '@/entities/modeling';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { preloadPlantUmlEngine } from '@/feature/plantuml-viewer/lib/engine-loader';
 import { ArrowLeft, ModalConfirm, toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { GateReviewCard } from './GateReviewCard';
@@ -81,6 +82,10 @@ const ConsistencyPage = () => {
 	const phaseStatus = status?.phases?.[targetPhase];
 	const evaluating = phaseStatus?.evaluating ?? 0;
 	const pending = phaseStatus?.pending ?? 0;
+
+	useEffect(() => {
+		preloadPlantUmlEngine();
+	}, []);
 
 	useEffect(() => {
 		if (!currentProject) return;
