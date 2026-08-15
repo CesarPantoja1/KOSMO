@@ -132,7 +132,7 @@ export function WizardNavegacion() {
 								onClick={handleWizardClick(href)}
 							/>
 							{consistencyPhase && (
-								<span className='absolute -top-1 -right-0'>
+								<span className='absolute -top-1 right-0'>
 									<PhaseStatusBadge status={phaseBadge} />
 								</span>
 							)}

@@ -33,7 +33,9 @@ export function TocSidebar({ headings, activeId }: Props) {
 			{isOpen ? (
 				<>
 					<div className='mb-4 flex items-center justify-between px-4 pt-2 shrink-0'>
-						<h2 className='text-xs font-semibold uppercase tracking-wider text-neutral-500'>Contenido</h2>
+						<h2 className='text-xs font-semibold uppercase tracking-wider text-neutral-500'>
+							Contenido
+						</h2>
 						<button
 							onClick={() => setIsOpen(false)}
 							className='cursor-pointer text-neutral-400 hover:text-neutral-700 transition-colors'
@@ -51,7 +53,7 @@ export function TocSidebar({ headings, activeId }: Props) {
 									key={index}
 									onClick={() => handleScroll(heading.id)}
 									className={clsx(
-										'block w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors cursor-pointer',
+										'block w-full px-2 py-1.5 text-left text-xs transition-colors cursor-pointer',
 										activeId === heading.id
 											? 'bg-primary-50 text-primary-600 font-medium'
 											: 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800',

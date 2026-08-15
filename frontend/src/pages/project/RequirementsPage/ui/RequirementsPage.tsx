@@ -1,10 +1,6 @@
 'use client';
 
-import {
-	MarkdownEditor,
-	PanelAsistenteRequisito,
-	type SaveStatus,
-} from '@/feature';
+import { MarkdownEditor, PanelAsistenteRequisito, type SaveStatus } from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -232,14 +228,15 @@ const RequirementsPage = () => {
 
 						{hasCharacteristics && !isEditorMaximized && (
 							<div className='flex items-center gap-3 shrink-0'>
-								<button
-									onClick={() => setIsChatbotOpen(true)}
-									disabled={!hasRequirements[selectedId ? selectedId : '']}
-									className='btn btn-ai disabled:opacity-50 disabled:cursor-not-allowed'
-								>
-									<Ai size={18} color='' />
-									Mejorar con IA
-								</button>
+								{hasRequirements[selectedId ? selectedId : ''] && (
+									<button
+										onClick={() => setIsChatbotOpen(true)}
+										className='btn btn-ai disabled:opacity-50 disabled:cursor-not-allowed'
+									>
+										<Ai size={18} color='' />
+										Mejorar con IA
+									</button>
+								)}
 								<Link
 									href='modelo'
 									onClick={handleNextLink('modelo')}

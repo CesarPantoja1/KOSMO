@@ -40,7 +40,7 @@ const ViewCardProject = ({ projects, handleProjectClick }: props) => {
 						</h3>
 					</header>
 
-					<p className='mt-2 line-clamp-2 text-sm text-neutral-500 capitalize flex-1'>
+					<p className='mt-2 line-clamp-2 text-sm text-neutral-500 flex-1'>
 						{project.description || 'Sin descripción'}
 					</p>
 

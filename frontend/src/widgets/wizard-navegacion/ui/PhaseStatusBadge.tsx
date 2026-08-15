@@ -21,7 +21,7 @@ export function PhaseStatusBadge({ status }: PhaseStatusBadgeProps) {
 	if (status.pending > 0) {
 		return (
 			<span
-				className='flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-500 px-1 text-[10px] font-semibold text-neutral-0'
+				className='flex h-4 min-w-4 items-center justify-center rounded-full bg-warning-500 px-1 text-[10px] font-semibold text-neutral-0'
 				title={`${status.pending} cambio(s) pendiente(s) de revisión`}
 			>
 				{status.pending}

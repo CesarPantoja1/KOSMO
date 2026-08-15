@@ -38,7 +38,7 @@ export function ConsistencyGateButton({ status }: ConsistencyGateButtonProps) {
 				type='button'
 				onClick={goToReview}
 				title='Revisar cambios pendientes'
-				className='flex cursor-pointer items-center rounded-full bg-primary-500 px-4 py-1.5 text-sm font-semibold text-neutral-0 transition-colors hover:bg-primary-600'
+				className='flex cursor-pointer items-center rounded-full bg-warning-500 px-4 py-1.5 text-sm font-semibold text-neutral-0 transition-colors hover:bg-warning-600'
 			>
 				Revisar consistencia ({pending})
 			</button>
@@ -60,7 +60,7 @@ export function ConsistencyGateButton({ status }: ConsistencyGateButtonProps) {
 
 	return (
 		<span className='flex items-center gap-2 rounded-full bg-neutral-100 px-4 py-1.5 text-sm font-medium text-neutral-600'>
-			<span className='h-2 w-2 animate-pulse rounded-full bg-warning-500' />
+			<span className='h-2 w-2 animate-pulse rounded-full bg-neutral-500' />
 			Analizando consistencia…
 		</span>
 	);

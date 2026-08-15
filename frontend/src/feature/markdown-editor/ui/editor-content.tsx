@@ -70,7 +70,7 @@ export const EditorContent = forwardRef<HTMLDivElement, Props>(function EditorCo
 					thematicBreakPlugin(),
 					markdownShortcutPlugin(),
 					toolbarPlugin({
-						toolbarClassName: 'bg-neutral-100 border-b border-neutral-200',
+						toolbarClassName: 'bg-neutral-100 border-b border-neutral-200 rounded-none!',
 						toolbarContents: () => (
 							<div className='flex w-full items-center justify-between'>
 								<div className='flex items-center gap-2'>

@@ -65,23 +65,25 @@ export function SaveIndicator({
 			}}
 		>
 			{status === 'saving' && (
-				<>
-					<Load size={14} color='text-primary-500' />
-					<span className='text-neutral-500'>{saveMessage}</span>
-				</>
+				// Al poner el color en este div, tanto el Load como el span se volverán neutrales
+				<div className='flex items-center gap-1.5 text-neutral-500'>
+					<Load size={14} />
+					<span>{saveMessage}</span>
+				</div>
 			)}
 
 			{status === 'saved' && (
-				<div className='flex items-center gap-1.5'>
-					<Check size={14} color='text-success-600' />
-					<span className='text-success-600'>{savedMessage}</span>
+				// Al poner el color en este div, tanto el Check como el span se volverán success
+				<div className='flex items-center gap-1.5 text-success-500'>
+					<Check size={14} />
+					<span>{savedMessage}</span>
 				</div>
 			)}
 
 			{status === 'error' && (
 				<div className='flex items-center gap-1.5'>
-					<span className='text-error-600 font-medium'>!</span>
-					<span className='text-error-600'>{errorMessage}</span>
+					<span className='text-error-500 font-medium'>!</span>
+					<span className='text-error-500'>{errorMessage}</span>
 				</div>
 			)}
 		</div>

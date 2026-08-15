@@ -53,7 +53,7 @@ const ViewTableProject = ({ projects, handleProjectClick }: props) => {
 								<h3 className='text-neutral-800 text-sm font-semibold truncate capitalize'>
 									{project.name}
 								</h3>
-								<p className='text-neutral-400 text-xs capitalize'>
+								<p className='text-neutral-400 text-xs'>
 									{project.description || 'Sin descripción'}
 								</p>
 							</div>

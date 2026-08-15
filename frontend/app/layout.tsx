@@ -1,6 +1,15 @@
+import { Metadata } from 'next';
 import { ToasterProvider } from '@/shared/ui/toast';
 import localFont from 'next/font/local';
 import './globals.css';
+
+export const metadata: Metadata = {
+	title: {
+		default: 'KOSMO',
+		template: '%s | KOSMO',
+	},
+	description: 'Plataforma de gestión de proyectos KOSMO',
+};
 
 const geistSans = localFont({
 	src: [
@@ -21,8 +30,8 @@ const geistSans = localFont({
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang='es' className={geistSans.variable}>
-			<body>
+		<html lang='es' className={`${geistSans.variable} h-full`}>
+			<body className='h-full'>
 				{children}
 				<ToasterProvider />
 			</body>

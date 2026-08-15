@@ -96,32 +96,32 @@ export function HomePage() {
 					<div className='flex flex-col gap-1'>
 						<h2 className='text-neutral-800 text-3xl font-bold'>Proyectos</h2>
 						<p className='text-neutral-500 text-base'>
-							Gestiona y da seguimiento a tus iniciativas de producto
+							Gestiona y realiza seguimiento a tus iniciativas de producto
 						</p>
 					</div>
 
 					<div className='flex items-center gap-3 shrink-0'>
 						{/* View toggles */}
-						<div className='flex rounded-md overflow-hidden border border-neutral-300'>
+						<div className='flex overflow-hidden'>
 							<button
 								onClick={setViewCard}
-								className={`px-3 py-2 cursor-pointer transition-all duration-200 ease-in-out ${stylesToogleView.card.button}`}
+								className={`px-4 py-2 lg:px-5 lg:py-2.5 border-2 rounded-l-md border-neutral-300 cursor-pointer transition-all duration-200 ease-in-out ${stylesToogleView.card.button}`}
 								title='Vista de tarjetas'
 							>
-								<Cards size={18} color={stylesToogleView.card.icon} />
+								<Cards size={22} color={stylesToogleView.card.icon} />
 							</button>
 							<button
 								onClick={setViewList}
-								className={`px-3 py-2 cursor-pointer transition-all duration-200 ease-in-out border-l border-neutral-300 ${stylesToogleView.list.button}`}
+								className={`px-4 py-2 lg:px-5 lg:py-2.5 border-2 rounded-r-md border-neutral-300 cursor-pointer transition-all duration-200 ease-in-out border-l ${stylesToogleView.list.button}`}
 								title='Vista de lista'
 							>
-								<List size={18} color={stylesToogleView.list.icon} />
+								<List size={22} color={stylesToogleView.list.icon} />
 							</button>
 						</div>
 
 						{/* Primary CTA */}
 						<Link href='/crear-proyecto' className='btn btn-primary'>
-							<Plus color='text-neutral-0' />
+							<Plus size={18} color='text-neutral-0' />
 							<span>Nuevo proyecto</span>
 						</Link>
 					</div>

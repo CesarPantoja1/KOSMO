@@ -64,7 +64,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						{isSidebarExpanded ? (
 							<>
 								<button
-									className='text-xl font-bold text-neutral-0 cursor-pointer whitespace-nowrap tracking-wide'
+									className='text-xl font-bold text-neutral-0 cursor-pointer whitespace-nowrap tracking-widest'
 									onClick={handleBackToHub}
 								>
 									KOSMO

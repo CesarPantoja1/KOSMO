@@ -1,6 +1,6 @@
 'use client';
 
-import { Ai, CharacterCounter, toast } from '@/shared/ui';
+import { Ai, CharacterCounter, Send, toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useProjectStore } from '@/entities/project';
@@ -18,10 +18,7 @@ const CreateProjectForm = () => {
 	const setProjectState = useProjectStore((s) => s.setProjectState);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const {
-		control,
-		handleSubmit,
-	} = useForm<ProjectFormData>({
+	const { control, handleSubmit } = useForm<ProjectFormData>({
 		mode: 'onSubmit',
 		resolver: zodResolver(projectSchema),
 		defaultValues: { name: '', description: '' },
@@ -147,8 +144,8 @@ const CreateProjectForm = () => {
 					>
 						Cancelar
 					</button>
-					<button type='submit' disabled={isSubmitting} className='btn btn-ai'>
-						<Ai size={18} color='' />
+					<button type='submit' disabled={isSubmitting} className='btn btn-primary'>
+						<Send size={18} color='-rotate-45' />
 						{isSubmitting ? 'Creando proyecto...' : 'Crear proyecto'}
 					</button>
 				</div>
