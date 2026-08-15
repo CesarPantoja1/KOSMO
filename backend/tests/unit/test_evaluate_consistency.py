@@ -945,3 +945,53 @@ async def test_evaluate_correction_receives_full_artifact_content() -> None:
     assert len(full_description) > 8000
     assert "[…contenido truncado…]" not in full_description
     assert full_description.endswith("stop\n@enduml")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_prefilters_artifacts_before_detection() -> None:
+    """Solo los artefactos que mencionan los términos del cambio se envían a la detección."""
+    from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
+
+    # Arrange
+    project = _make_project("prj_pref")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature("feat_pref", "prj_pref", "Registro de productos", number=1))
+    await feature_repo.save(_make_feature("feat_other", "prj_pref", "Gestión de pagos", number=2))
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = _TwoPhaseAgent(
+        detection_report={
+            "actions": [{"artifact_id": "feat_pref", "action": "update", "rationale": "El producto X cambió."}],
+            "overall_rationale": "Impacto",
+        },
+        corrections={
+            "feat_pref": {
+                "suggested_before": "Descripción de Registro de productos",
+                "suggested_after": "Descripción actualizada",
+            }
+        },
+    )
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _applied_change("chg_pref", before="se elimina el producto X", after="se elimina el producto Y")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_pref"),
+        applied_changes=[change],
+    )
+
+    # Assert: la detección solo vio el artefacto candidato
+    detection_ctx = agent.contexts[0]
+    assert isinstance(detection_ctx, ConsistencyPhaseContext)
+    assert [a.artifact_id for a in detection_ctx.downstream_artifacts] == ["feat_pref"]
+    assert result.affected_artifact_ids == ["feat_pref"]

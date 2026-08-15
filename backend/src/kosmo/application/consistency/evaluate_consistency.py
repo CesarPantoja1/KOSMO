@@ -28,6 +28,7 @@ from kosmo.contracts.sdd.repositories import (
     FeatureRepository,
     RequirementRepository,
 )
+from kosmo.domain.sdd.consistency_filter import filter_downstream_artifacts
 from kosmo.domain.sdd.discovery_diff import diff_discovery_versions
 from kosmo.domain.sdd.document_converters import document_to_markdown
 from kosmo.domain.sdd.plan_diffs import merge_changes_with_diffs
@@ -99,6 +100,16 @@ class EvaluateConsistencyUseCase:
 
         if not applied_changes:
             return ConsistencyEvaluationOutput(report_id=report_id, status=ConsistencyStatus.ANALIZADO_SIN_IMPACTO)
+
+        prefiltered = filter_downstream_artifacts(artifacts, applied_changes)
+        if len(prefiltered) != len(artifacts):
+            _log.info(
+                "consistency.prefilter_applied",
+                target=target_phase.value,
+                total=len(artifacts),
+                kept=len(prefiltered),
+            )
+        artifacts = prefiltered
 
         source_content = await self._fetch_source_content(source_phase, project_id)
 
