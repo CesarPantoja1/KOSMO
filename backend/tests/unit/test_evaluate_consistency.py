@@ -458,3 +458,86 @@ def test_consistency_requirements_upstream_prompt_exists() -> None:
     assert "Requisitos EARS" in CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT
     assert "Descubrimiento" in CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT
     assert "JSON" in CONSISTENCY_REQUIREMENTS_UPSTREAM_SYSTEM_PROMPT
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_empty_changes_uses_automatic_diff() -> None:
+    """applied_changes vacío con diff real entre versiones de Discovery debe evaluar igualmente."""
+    from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    # Arrange
+    project = _make_project("prj_diff")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_diff", "prj_diff", "Gestión de catálogo", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+    await document_repo.save_version(
+        ProjectId("prj_diff"),
+        SpecPhase.DESCUBRIMIENTO,
+        "## Alcance\n\nEl sistema tendrá el producto X.",
+        [],
+    )
+    document_repo.discovery_docs["prj_diff"] = markdown_to_document(
+        "## Alcance\n\nEl sistema ya no tendrá el producto X."
+    )
+
+    agent = StubConsistencyAgent(affected_ids=["feat_diff"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_diff"),
+        applied_changes=[],
+    )
+
+    # Assert: el diff automático se usó y la evaluación se ejecutó
+    assert result.affected_artifact_ids == ["feat_diff"]
+    assert agent.last_skill_name == "consistency_evaluate"
+    assert isinstance(agent.last_context, ConsistencyPhaseContext)
+    assert len(agent.last_context.applied_changes) == 1
+    assert "producto X" in agent.last_context.applied_changes[0].diff.before
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_empty_changes_without_previous_version_returns_no_impact() -> None:
+    """applied_changes vacío sin versión previa guardada debe retornar sin impacto sin llamar al agente."""
+    from kosmo.contracts.consistency import ConsistencyStatus
+
+    # Arrange
+    project = _make_project("prj_noversion")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_nov", "prj_noversion", "Gestión de catálogo", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = StubConsistencyAgent(affected_ids=["feat_nov"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_noversion"),
+        applied_changes=[],
+    )
+
+    # Assert
+    assert result.status == ConsistencyStatus.ANALIZADO_SIN_IMPACTO
+    assert agent.last_skill_name is None

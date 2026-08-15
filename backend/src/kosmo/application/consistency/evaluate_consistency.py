@@ -83,12 +83,12 @@ class EvaluateConsistencyUseCase:
         if not artifacts:
             return ConsistencyEvaluationOutput(report_id=report_id, status=ConsistencyStatus.ANALIZADO_SIN_IMPACTO)
 
+        applied_changes = await self._resolve_changes(source_phase, project_id, applied_changes)
+
         if not applied_changes:
             return ConsistencyEvaluationOutput(report_id=report_id, status=ConsistencyStatus.ANALIZADO_SIN_IMPACTO)
 
         source_content = await self._fetch_source_content(source_phase, project_id)
-
-        applied_changes = await self._resolve_changes(source_phase, project_id, applied_changes)
 
         context = ConsistencyPhaseContext(
             source_phase=source_phase,
