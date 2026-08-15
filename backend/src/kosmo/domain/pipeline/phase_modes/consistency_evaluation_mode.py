@@ -334,6 +334,10 @@ class ConsistencyEvaluationMode:
         return False
 
     @property
+    def requires_tool_consultation(self) -> bool:
+        return True
+
+    @property
     def phase_name(self) -> SpecPhase:
         return self._phase_name
 
@@ -355,7 +359,36 @@ class ConsistencyEvaluationMode:
 
     @property
     def available_tools(self) -> list[ToolDefinition]:
-        return []
+        return [
+            ToolDefinition(
+                name="get_requirements_for_feature",
+                description="Recupera los requisitos EARS en markdown de una caracteristica",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "feature_id": {
+                            "type": "string",
+                            "description": "ID de la caracteristica a consultar (ej. feat_01KT...)",
+                        },
+                    },
+                    "required": ["feature_id"],
+                },
+            ),
+            ToolDefinition(
+                name="get_diagram_for_feature",
+                description="Recupera el diagrama de actividad PlantUML de una caracteristica",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "feature_id": {
+                            "type": "string",
+                            "description": "ID de la caracteristica a consultar (ej. feat_01KT...)",
+                        },
+                    },
+                    "required": ["feature_id"],
+                },
+            ),
+        ]
 
     def build_user_prompt(self, context: ConsistencyPhaseContext) -> str:
         changes_text = "\n".join(

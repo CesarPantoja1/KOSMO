@@ -80,6 +80,22 @@ class _ModeWithTools(_ModeNoTools):
     requires_tool_consultation = True
 
 
+class _ModeNoEnrichmentWithTools(_ModeNoTools):
+    """Modo de consistencia: sin enrichment de memoria pero con pre-consulta de tools."""
+
+    requires_enrichment = False
+    requires_tool_consultation = True
+
+
+class _CountingEnricher:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def enrich(self, system_prompt: str, base: str, project_id: Any, *, phase: Any = None) -> str:  # noqa: ARG002
+        self.calls += 1
+        return system_prompt
+
+
 def _make_loop(resolver: _CountingToolResolver) -> GenerationLoop:
     return GenerationLoop(
         llm_client=_StubLLM(),  # type: ignore[reportArgumentType]
@@ -116,6 +132,28 @@ async def test_generation_loop_consults_tools_when_mode_requires_it() -> None:
 
     # Assert
     assert resolver.calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generation_loop_consults_tools_without_enrichment() -> None:
+    # Arrange — modo sin enrichment (consistencia) igual consulta tools de conocimiento
+    resolver = _CountingToolResolver()
+    enricher = _CountingEnricher()
+    loop = GenerationLoop(
+        llm_client=_StubLLM(),  # type: ignore[reportArgumentType]
+        max_iterations=2,
+        prompt_enricher=enricher,  # type: ignore[reportArgumentType]
+        tool_resolver=resolver,  # type: ignore[reportArgumentType]
+        session_recorder=_StubRecorder(),  # type: ignore[reportArgumentType]
+    )
+
+    # Act
+    await loop.run(_ModeNoEnrichmentWithTools(), context={}, skill_name="test")
+
+    # Assert
+    assert resolver.calls == 1
+    assert enricher.calls == 0
 
 
 @pytest.mark.unit

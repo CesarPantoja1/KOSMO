@@ -58,7 +58,8 @@ class GenerationLoop:
         knowledge_context: str = ""
         tool_invocations: list[dict[str, Any]] = []
         reason_entries: list[str] = []
-        if needs_enrichment and getattr(mode, "requires_tool_consultation", True):
+        needs_tools = getattr(mode, "requires_tool_consultation", True)
+        if needs_tools:
             knowledge_context, tool_invocations, reason_entries = await self._tool_resolver.resolve(
                 system_prompt, base_user_prompt, project_id
             )

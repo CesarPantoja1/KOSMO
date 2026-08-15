@@ -995,3 +995,21 @@ async def test_evaluate_prefilters_artifacts_before_detection() -> None:
     assert isinstance(detection_ctx, ConsistencyPhaseContext)
     assert [a.artifact_id for a in detection_ctx.downstream_artifacts] == ["feat_pref"]
     assert result.affected_artifact_ids == ["feat_pref"]
+
+
+@pytest.mark.unit
+def test_consistency_evaluation_mode_exposes_knowledge_tools() -> None:
+    """El modo de consistencia debe exponer tools de conocimiento y habilitar la pre-consulta."""
+    from kosmo.domain.pipeline.phase_modes.consistency_evaluation_mode import ConsistencyEvaluationMode
+
+    # Arrange
+    mode = ConsistencyEvaluationMode()
+
+    # Act
+    tool_names = [t.name for t in mode.available_tools]
+
+    # Assert
+    assert "get_requirements_for_feature" in tool_names
+    assert "get_diagram_for_feature" in tool_names
+    assert getattr(mode, "requires_tool_consultation", True) is True
+    assert mode.requires_enrichment is False
