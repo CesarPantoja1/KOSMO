@@ -371,3 +371,107 @@ async def test_apply_locks_requirement_and_diagram_rows() -> None:
     assert len(result.failed) == 1
     assert "feat_01" in requirement_repo.locked_feature_ids
     assert "feat_01" in diagram_repo.locked_feature_ids
+
+
+_VALID_DIAGRAM = "@startuml\nstart\n|Sistema|\n:Registrar pago;\nstop\n@enduml"
+
+
+async def _seed_diagram(diagram_repo: InMemoryActivityDiagramRepository, feature_id: str) -> None:
+    from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+    from kosmo.contracts.sdd.ids import ActivityDiagramId
+
+    await diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId(feature_id),
+            feature_id=FeatureId(feature_id),
+            diagram_syntax=_VALID_DIAGRAM,
+        )
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_apply_diagram_update_breaking_validation_fails() -> None:
+    """Un apply que rompe la sintaxis PlantUML debe fallar sin persistir el diagrama."""
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature(project.id))
+    diagram_repo = InMemoryActivityDiagramRepository()
+    await _seed_diagram(diagram_repo, "feat_01")
+    uc = _make_uc(
+        project_repo,
+        document_repo,
+        feature_repo=feature_repo,
+        diagram_repo=diagram_repo,
+    )
+
+    # Act
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "ActivityDiagram",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "estructura UML",
+                "before": "@enduml",
+                "after": "",
+            }
+        ],
+    )
+
+    # Assert: el apply falla con error claro y el diagrama original sigue intacto
+    assert len(result.applied) == 0
+    assert len(result.failed) == 1
+    assert "sintaxis" in result.failed[0].reason
+    saved = await diagram_repo.by_feature_id(FeatureId("feat_01"))
+    assert saved is not None
+    assert saved.diagram_syntax.endswith("@enduml")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_apply_diagram_valid_update_persists() -> None:
+    """Un apply que mantiene la sintaxis PlantUML válida debe persistirse correctamente."""
+    # Arrange
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature(project.id))
+    diagram_repo = InMemoryActivityDiagramRepository()
+    await _seed_diagram(diagram_repo, "feat_01")
+    uc = _make_uc(
+        project_repo,
+        document_repo,
+        feature_repo=feature_repo,
+        diagram_repo=diagram_repo,
+    )
+
+    # Act
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "ActivityDiagram",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "estructura UML",
+                "before": ":Registrar pago;",
+                "after": ":Registrar pago con tarjeta;",
+            }
+        ],
+    )
+
+    # Assert
+    assert len(result.applied) == 1
+    assert len(result.failed) == 0
+    saved = await diagram_repo.by_feature_id(FeatureId("feat_01"))
+    assert saved is not None
+    assert "Registrar pago con tarjeta" in saved.diagram_syntax
+    assert saved.diagram_syntax.endswith("@enduml")

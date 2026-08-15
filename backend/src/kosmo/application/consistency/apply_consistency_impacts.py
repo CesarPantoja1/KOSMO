@@ -12,6 +12,7 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
+from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
 
 _log = structlog.get_logger(__name__)
 
@@ -246,6 +247,15 @@ class ApplyConsistencyImpactsUseCase:
         result = apply_change_diff(diagram.diagram_syntax, before=before, after=after)
         if result is None:
             return "El texto original no se encontro en el diagrama"
+
+        validation = validate_activity_diagram_syntax(result)
+        if not validation.is_valid:
+            _log.warning(
+                "consistency.diagram_validation_failed",
+                feature_id=str(feature_id),
+                errors=validation.errors,
+            )
+            return f"El cambio dejaría el diagrama con sintaxis inválida: {'; '.join(validation.errors)}"
 
         updated = DiagramaActividad(
             id=diagram.id,
