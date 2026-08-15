@@ -1013,3 +1013,82 @@ def test_consistency_evaluation_mode_exposes_knowledge_tools() -> None:
     assert "get_diagram_for_feature" in tool_names
     assert getattr(mode, "requires_tool_consultation", True) is True
     assert mode.requires_enrichment is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_skips_when_only_cosmetic_changes() -> None:
+    """Cambios solo cosméticos no deben disparar evaluación LLM."""
+    from kosmo.contracts.consistency import ConsistencyStatus
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    # Arrange
+    project = _make_project("prj_cos")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature("feat_cos", "prj_cos", "Gestión de catálogo", number=1))
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+    await document_repo.save_version(
+        ProjectId("prj_cos"),
+        SpecPhase.DESCUBRIMIENTO,
+        "## Visión\n\nVisión original.",
+        [],
+    )
+    document_repo.discovery_docs["prj_cos"] = markdown_to_document("## Visión\n\nVisión  original.")
+
+    agent = StubConsistencyAgent(affected_ids=["feat_cos"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_cos"),
+        applied_changes=[],
+    )
+
+    # Assert
+    assert result.status == ConsistencyStatus.ANALIZADO_SIN_IMPACTO
+    assert agent.skill_names == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_runs_with_chat_change_despite_cosmetic_diff() -> None:
+    """Un cambio del chat sin clasificar (no cosmético) evalúa normalmente."""
+    from kosmo.domain.sdd.document_converters import markdown_to_document
+
+    # Arrange
+    project = _make_project("prj_cos2")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature("feat_cos2", "prj_cos2", "Gestión de catálogo", number=1))
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+    document_repo.discovery_docs["prj_cos2"] = markdown_to_document("## Visión\n\nVisión original.")
+
+    agent = StubConsistencyAgent(affected_ids=["feat_cos2"])
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _applied_change("chg_cos2", before="visión original", after="visión ampliada")
+
+    # Act
+    result = await uc.evaluate(
+        source_phase=SpecPhase.DESCUBRIMIENTO,
+        target_phase=SpecPhase.CARACTERISTICAS,
+        project_id=ProjectId("prj_cos2"),
+        applied_changes=[change],
+    )
+
+    # Assert
+    assert result.affected_artifact_ids == ["feat_cos2"]
+    assert "consistency_evaluate" in agent.skill_names

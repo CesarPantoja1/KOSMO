@@ -32,6 +32,7 @@ class AppliedChange:
     description: str = ""
     diff: DiffCambio = field(default_factory=lambda: DiffCambio(before="", after=""))
     rationale: str | None = None
+    change_class: str = ""
 
 
 @dataclass(frozen=True)

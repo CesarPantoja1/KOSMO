@@ -1,6 +1,7 @@
 import pytest
 
-from kosmo.domain.sdd.plan_diffs import apply_change_diff
+from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange
+from kosmo.domain.sdd.plan_diffs import apply_change_diff, merge_changes_with_diffs
 
 
 @pytest.mark.unit
@@ -55,6 +56,25 @@ def test_replace_with_multiline() -> None:
     assert "Contenido original aquí." not in result
     assert "## Título" in result
     assert "## Otra sección" in result
+
+
+@pytest.mark.unit
+def test_merge_changes_with_diffs_propagates_change_class() -> None:
+    # Arrange
+    cosmetic = SectionChange(
+        section="Visión",
+        change_type=ChangeType.MODIFIED,
+        change_class=ChangeClass.COSMETIC,
+        before="Visión original.",
+        after="Visión  original.",
+    )
+
+    # Act
+    result = merge_changes_with_diffs([], [cosmetic])
+
+    # Assert
+    assert len(result) == 1
+    assert result[0].change_class == "cosmetic"
 
 
 @pytest.mark.unit

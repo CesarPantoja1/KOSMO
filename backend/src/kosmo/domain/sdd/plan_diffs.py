@@ -143,6 +143,7 @@ def merge_changes_with_diffs(originals: list[AppliedChange], diffs: list[Section
                 section=sc.section,
                 description=description,
                 diff=DiffCambio(before=sc.before, after=sc.after),
+                change_class=sc.change_class.value,
             )
         )
     return result

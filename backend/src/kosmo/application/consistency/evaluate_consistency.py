@@ -29,7 +29,7 @@ from kosmo.contracts.sdd.repositories import (
     RequirementRepository,
 )
 from kosmo.domain.sdd.consistency_filter import filter_downstream_artifacts
-from kosmo.domain.sdd.discovery_diff import diff_discovery_versions
+from kosmo.domain.sdd.discovery_diff import ChangeClass, diff_discovery_versions
 from kosmo.domain.sdd.document_converters import document_to_markdown
 from kosmo.domain.sdd.plan_diffs import merge_changes_with_diffs
 from kosmo.domain.sdd.text_normalizer import normalize_for_match
@@ -37,6 +37,10 @@ from kosmo.domain.sdd.text_normalizer import normalize_for_match
 _log = structlog.get_logger(__name__)
 
 _LOG_FRAGMENT_LIMIT = 500
+
+
+def _has_only_cosmetic_changes(changes: list[AppliedChange]) -> bool:
+    return bool(changes) and all(c.change_class == ChangeClass.COSMETIC.value for c in changes)
 
 
 def _validate_action(
@@ -100,6 +104,19 @@ class EvaluateConsistencyUseCase:
 
         if not applied_changes:
             return ConsistencyEvaluationOutput(report_id=report_id, status=ConsistencyStatus.ANALIZADO_SIN_IMPACTO)
+
+        if _has_only_cosmetic_changes(applied_changes):
+            _log.info(
+                "consistency.cosmetic_only_skipped",
+                report_id=report_id,
+                target=target_phase.value,
+                changes=len(applied_changes),
+            )
+            return ConsistencyEvaluationOutput(
+                report_id=report_id,
+                status=ConsistencyStatus.ANALIZADO_SIN_IMPACTO,
+                rationale="Solo hay cambios cosmeticos; no se requiere evaluacion.",
+            )
 
         prefiltered = filter_downstream_artifacts(artifacts, applied_changes)
         if len(prefiltered) != len(artifacts):
