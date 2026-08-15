@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import structlog
 from ulid import ULID
 
 from kosmo.contracts.consistency import (
@@ -15,6 +16,10 @@ from kosmo.contracts.sdd.repositories import (
     RequirementRepository,
 )
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
+
+_log = structlog.get_logger(__name__)
+
+_LOG_FRAGMENT_LIMIT = 500
 
 _SOURCE_LABEL: dict[SpecPhase, str] = {
     SpecPhase.DESCUBRIMIENTO: "Descubrimiento",
@@ -119,6 +124,15 @@ async def enrich_impact_items(
             if action and action.suggested_before and action.suggested_after:
                 before_reqs = parse_requirements_markdown(action.suggested_before, feature.id, feature.number)
                 after_reqs = parse_requirements_markdown(action.suggested_after, feature.id, feature.number)
+                if not before_reqs or not after_reqs:
+                    _log.warning(
+                        "consistency.enrich_parse_empty",
+                        artifact_id=str(feature.id),
+                        before_requirements=len(before_reqs),
+                        after_requirements=len(after_reqs),
+                        suggested_before=action.suggested_before[:_LOG_FRAGMENT_LIMIT],
+                        suggested_after=action.suggested_after[:_LOG_FRAGMENT_LIMIT],
+                    )
                 before_by_id = {r.display_id: r for r in before_reqs}
                 after_by_id = {r.display_id: r for r in after_reqs}
                 all_ids = sorted(set(before_by_id.keys()) | set(after_by_id.keys()))

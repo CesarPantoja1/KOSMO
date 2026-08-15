@@ -30,6 +30,8 @@ from kosmo.domain.sdd.text_normalizer import normalize_for_match
 
 _log = structlog.get_logger(__name__)
 
+_LOG_FRAGMENT_LIMIT = 500
+
 
 def _validate_action(
     artifact_id: str,
@@ -43,12 +45,17 @@ def _validate_action(
         _log.warning("consistency.delete_discovery_blocked", artifact_id=artifact_id)
         return False
     if suggested_before == suggested_after:
+        _log.warning("consistency.noop_action", artifact_id=artifact_id, action=action)
         return False
     if suggested_before and normalize_for_match(suggested_before) not in normalize_for_match(artifact_desc):
         _log.warning(
             "consistency.before_mismatch",
             artifact_id=artifact_id,
-            before=suggested_before[:200],
+            action=action,
+            before=suggested_before[:_LOG_FRAGMENT_LIMIT],
+            artifact_desc=artifact_desc[:_LOG_FRAGMENT_LIMIT],
+            before_length=len(suggested_before),
+            artifact_desc_length=len(artifact_desc),
         )
         return False
     return True
@@ -163,6 +170,7 @@ class EvaluateConsistencyUseCase:
         artifact_by_id = {a.artifact_id: a for a in artifacts}
         actions: list[ArtifactAction] = []
         affected_ids: list[str] = []
+        total_candidates = len(report.actions)
 
         for item in report.actions:
             if item.artifact_id not in artifact_ids_set:
@@ -195,6 +203,15 @@ class EvaluateConsistencyUseCase:
             )
             affected_ids.append(item.artifact_id)
 
+        if len(actions) < total_candidates:
+            _log.warning(
+                "consistency.actions_discarded",
+                report_id=report_id,
+                total_candidates=total_candidates,
+                accepted=len(actions),
+                discarded=total_candidates - len(actions),
+            )
+
         status = ConsistencyStatus.ANALIZADO_CON_IMPACTO if affected_ids else ConsistencyStatus.ANALIZADO_SIN_IMPACTO
         return ConsistencyEvaluationOutput(
             report_id=report_id,
@@ -224,6 +241,7 @@ class EvaluateConsistencyUseCase:
         artifact_by_id = {a.artifact_id: a for a in artifacts}
         actions: list[ArtifactAction] = []
         affected_ids: list[str] = []
+        total_candidates = sum(1 for item in actions_raw if isinstance(item, dict))  # type: ignore[reportUnknownArgumentType]
 
         for item in actions_raw:  # type: ignore[reportUnknownVariableType]
             if not isinstance(item, dict):
@@ -263,6 +281,15 @@ class EvaluateConsistencyUseCase:
                 )
             )
             affected_ids.append(artifact_id)
+
+        if len(actions) < total_candidates:
+            _log.warning(
+                "consistency.actions_discarded",
+                report_id=report_id,
+                total_candidates=total_candidates,
+                accepted=len(actions),
+                discarded=total_candidates - len(actions),
+            )
 
         status = ConsistencyStatus.ANALIZADO_CON_IMPACTO if affected_ids else ConsistencyStatus.ANALIZADO_SIN_IMPACTO
         return ConsistencyEvaluationOutput(

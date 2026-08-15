@@ -541,3 +541,188 @@ async def test_evaluate_empty_changes_without_previous_version_returns_no_impact
     # Assert
     assert result.status == ConsistencyStatus.ANALIZADO_SIN_IMPACTO
     assert agent.last_skill_name is None
+
+
+class _DictOutputAgent:
+    """Stub que devuelve un dict crudo con acciones mezcladas (válidas y descartables)."""
+
+    def __init__(self, actions: list[dict[str, str]]) -> None:
+        self._actions = actions
+        self.last_skill_name: str | None = None
+        self.last_context: object | None = None
+
+    async def execute_with_skill(  # noqa: ARG002
+        self,
+        skill_name: str,
+        context: object,
+        *,
+        project_id: object | None = None,
+        user_instructions: str | None = None,
+    ) -> object:
+        self.last_skill_name = skill_name
+        self.last_context = context
+        return {"actions": self._actions, "overall_rationale": "Stub"}
+
+    async def execute_conversation(self, *args: object, **kwargs: object) -> object:  # noqa: ARG002
+        raise NotImplementedError
+
+
+@pytest.mark.unit
+def test_validate_action_logs_before_mismatch_with_context() -> None:
+    """Un mismatch de suggested_before debe loguearse con contexto suficiente para diagnosticar."""
+    from structlog.testing import capture_logs
+
+    from kosmo.application.consistency.evaluate_consistency import _validate_action
+
+    # Arrange
+    before = "REQ-1.1: El sistema debe registrar el producto X" + " relleno" * 60
+    artifact_desc = "## Requisitos\n\nREQ-1.1: El sistema debe registrar el catálogo."
+
+    # Act
+    with capture_logs() as logs:
+        accepted = _validate_action(
+            "feat_01",
+            "update",
+            before,
+            "corregido",
+            artifact_desc,
+            "EARSRequirement",
+        )
+
+    # Assert
+    assert accepted is False
+    mismatch_events = [e for e in logs if e.get("event") == "consistency.before_mismatch"]
+    assert len(mismatch_events) == 1
+    event = mismatch_events[0]
+    assert event["artifact_id"] == "feat_01"
+    assert event["action"] == "update"
+    assert event["before_length"] == len(before)
+    assert event["artifact_desc_length"] == len(artifact_desc)
+    assert len(event["before"]) == 500
+    assert len(event["artifact_desc"]) == len(artifact_desc)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_evaluate_logs_actions_discarded_summary() -> None:
+    """Las acciones descartadas deben quedar contabilizadas en un log de resumen."""
+    from structlog.testing import capture_logs
+
+    # Arrange
+    project = _make_project("prj_sum")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature("feat_ok", "prj_sum", "Feature Válida", number=1))
+    await feature_repo.save(_make_feature("feat_bad", "prj_sum", "Feature con Mismatch", number=2))
+
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+    document_repo = InMemoryDocumentRepository()
+
+    agent = _DictOutputAgent(
+        actions=[
+            {
+                "artifact_id": "feat_ok",
+                "action": "update",
+                "rationale": "válida",
+                "suggested_before": "",
+                "suggested_after": "corrección",
+            },
+            {
+                "artifact_id": "feat_ghost",
+                "action": "update",
+                "rationale": "id desconocido",
+                "suggested_before": "",
+                "suggested_after": "x",
+            },
+            {
+                "artifact_id": "feat_bad",
+                "action": "update",
+                "rationale": "mismatch",
+                "suggested_before": "texto que no existe",
+                "suggested_after": "corrección",
+            },
+        ]
+    )
+    uc = _make_uc(agent, feature_repo, requirement_repo, diagram_repo, document_repo)
+
+    change = _applied_change("chg_sum")
+
+    # Act
+    with capture_logs() as logs:
+        result = await uc.evaluate(
+            source_phase=SpecPhase.CARACTERISTICAS,
+            target_phase=SpecPhase.CARACTERISTICAS,
+            project_id=ProjectId("prj_sum"),
+            applied_changes=[change],
+        )
+
+    # Assert
+    assert result.affected_artifact_ids == ["feat_ok"]
+    summary_events = [e for e in logs if e.get("event") == "consistency.actions_discarded"]
+    assert len(summary_events) == 1
+    assert summary_events[0]["total_candidates"] == 3
+    assert summary_events[0]["accepted"] == 1
+    assert summary_events[0]["discarded"] == 2
+    assert any(e.get("event") == "consistency.before_mismatch" for e in logs)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_impact_logs_when_ears_parsing_fails() -> None:
+    """Si parse_requirements_markdown no puede parsear el suggested_before, debe loguearse."""
+    from structlog.testing import capture_logs
+
+    from kosmo.application.consistency.enrich_impact import enrich_impact_items
+    from kosmo.contracts.consistency import (
+        ArtifactAction,
+        ConsistencyEvaluationOutput,
+        ConsistencyStatus,
+    )
+
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_enr", "prj_enr", "Gestión de catálogo", number=1)
+    await feature_repo.save(feat)
+
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(
+        FeatureId("feat_enr"),
+        "### REQ-1.1\n\nEl sistema shall registrar el catálogo.\n",
+    )
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    result = ConsistencyEvaluationOutput(
+        report_id="cnr_enr",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["feat_enr"],
+        actions=[
+            ArtifactAction(
+                artifact_id="feat_enr",
+                action="update",
+                rationale="Impacto en requisitos",
+                suggested_before="Este texto no es markdown EARS",
+                suggested_after="Este tampoco lo es",
+            )
+        ],
+    )
+
+    # Act
+    with capture_logs() as logs:
+        await enrich_impact_items(
+            result,
+            SpecPhase.REQUISITOS,
+            SpecPhase.DESCUBRIMIENTO,
+            feature_repo,
+            requirement_repo,
+            diagram_repo,
+        )
+
+    # Assert
+    parse_events = [e for e in logs if e.get("event") == "consistency.enrich_parse_empty"]
+    assert len(parse_events) == 1
+    assert parse_events[0]["artifact_id"] == "feat_enr"
+    assert parse_events[0]["before_requirements"] == 0
+    assert parse_events[0]["after_requirements"] == 0
