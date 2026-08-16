@@ -36,11 +36,36 @@ const phaseItems: {
 	label: string;
 	consistencyPhase: ConsistencyTargetPhase | null;
 }[] = [
-	{ href: '/proyecto/descubrimiento', Icon: Discovery, label: 'DESCUBRIMIENTO', consistencyPhase: null },
-	{ href: '/proyecto/caracteristicas', Icon: Characteristics, label: 'FUNCIONALIDADES', consistencyPhase: 'features' },
-	{ href: '/proyecto/requisitos', Icon: Requirements, label: 'REQUISITOS', consistencyPhase: 'requirements' },
-	{ href: '/proyecto/modelo', Icon: Modeling, label: 'MODELO', consistencyPhase: 'model' },
-	{ href: '/proyecto/codigo', Icon: Implementation, label: 'CÓDIGO', consistencyPhase: null },
+	{
+		href: '/proyecto/descubrimiento',
+		Icon: Discovery,
+		label: 'DESCUBRIMIENTO',
+		consistencyPhase: null,
+	},
+	{
+		href: '/proyecto/caracteristicas',
+		Icon: Characteristics,
+		label: 'FUNCIONALIDADES',
+		consistencyPhase: 'features',
+	},
+	{
+		href: '/proyecto/requisitos',
+		Icon: Requirements,
+		label: 'CRITERIOS',
+		consistencyPhase: 'requirements',
+	},
+	{
+		href: '/proyecto/modelo',
+		Icon: Modeling,
+		label: 'DIAGRAMAS',
+		consistencyPhase: 'model',
+	},
+	{
+		href: '/proyecto/codigo',
+		Icon: Implementation,
+		label: 'IMPLEMENTACIÓN',
+		consistencyPhase: null,
+	},
 ];
 
 export function WizardNavegacion() {
