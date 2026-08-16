@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from kosmo.application.requirements import (
+    DeleteRequirementsInput,
+    DeleteRequirementsUseCase,
     GenerateEARSInput,
     GenerateEARSUseCase,
     GetRequirementsUseCase,
@@ -144,6 +146,31 @@ async def save_requirements(
         ) from exc
 
     return {"feature_id": feature_id, "message": "ok"}
+
+
+@router.delete(
+    "",
+    summary="Eliminar requisitos",
+    description=("Elimina el documento de requisitos EARS de la característica especificada."),
+    status_code=status.HTTP_200_OK,
+)
+async def delete_requirements(
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+    project_id: str = Query(...),
+) -> dict[str, str]:
+    fid = await _get_feature_id(request, project_id, feature_id)
+    uc: DeleteRequirementsUseCase = get_container(request).requirements.delete_requirements
+
+    await uc.execute(
+        DeleteRequirementsInput(
+            project_id=ProjectId(project_id),
+            feature_id=fid,
+        )
+    )
+
+    return {"status": "deleted", "feature_id": feature_id}
 
 
 @router.post(

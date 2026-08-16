@@ -94,6 +94,14 @@ class SqlAlchemyProjectRepository(ProjectRepository):
             await self._commit(session)
             return project
 
+    async def delete(self, project_id: ProjectId) -> None:
+        from sqlalchemy import delete
+
+        async with self._session_ctx() as session:
+            stmt = delete(ProjectModel).where(ProjectModel.id == str(project_id))
+            await session.execute(stmt)
+            await self._commit(session)
+
     def _to_entity(self, model: ProjectModel) -> Project:
         return Project(
             id=ProjectId(model.id),

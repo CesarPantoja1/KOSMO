@@ -96,7 +96,7 @@ def build_app_components(settings: Settings) -> AppContainer:
     features = build_features_components(repos, pipeline, discovery.consistency_evaluator)
     requirements = build_requirements_components(repos, pipeline, uow)
     modelo = build_modelo_components(repos, pipeline)
-    projects = build_project_components(repos)
+    projects = build_project_components(repos, pipeline)
     consistency = build_consistency_components(repos, pipeline, discovery.consistency_evaluator, uow)
 
     return AppContainer(

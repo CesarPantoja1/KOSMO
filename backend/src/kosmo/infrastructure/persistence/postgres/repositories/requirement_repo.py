@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.ids import FeatureId
@@ -54,6 +55,12 @@ class SqlAlchemyRequirementRepository(RequirementRepository):
             else:
                 model.markdown = markdown
                 model.updated_at = datetime.now(UTC)
+            await self._commit(session)
+
+    async def delete(self, feature_id: FeatureId) -> None:
+        async with self._session_ctx() as session:
+            stmt = delete(RequirementModel).where(RequirementModel.feature_id == str(feature_id))
+            await session.execute(stmt)
             await self._commit(session)
 
     async def save_many(self, *args: object) -> list[object]:

@@ -233,6 +233,14 @@ class SqlAlchemyChatRepository(ChatRepository):
             await db.execute(delete(ChatSessionModel).where(ChatSessionModel.id == str(session_id)))
             await self._commit(db)
 
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        from sqlalchemy import delete
+
+        async with self._session_ctx() as db:
+            await db.execute(delete(ChatMessageModel).where(ChatMessageModel.project_id == str(project_id)))
+            await db.execute(delete(ChatSessionModel).where(ChatSessionModel.project_id == str(project_id)))
+            await self._commit(db)
+
     @staticmethod
     def _compose_history_id(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:
         return f"{project_id}:{phase.value}:{context_id or ''}"

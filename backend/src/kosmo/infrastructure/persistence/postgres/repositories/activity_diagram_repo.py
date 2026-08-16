@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
@@ -89,3 +89,9 @@ class SqlAlchemyActivityDiagramRepository(ActivityDiagramRepository):
             stmt = select(ActivityDiagramModel.id).where(ActivityDiagramModel.feature_id == str(feature_id))
             result = await session.execute(stmt)
             return result.first() is not None
+
+    async def delete(self, feature_id: FeatureId) -> None:
+        async with self._session_ctx() as session:
+            stmt = delete(ActivityDiagramModel).where(ActivityDiagramModel.feature_id == str(feature_id))
+            await session.execute(stmt)
+            await self._commit(session)

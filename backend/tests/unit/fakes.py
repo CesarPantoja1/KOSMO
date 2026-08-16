@@ -56,11 +56,15 @@ class InMemoryProjectRepository:
         self.projects[str(project.id)] = project
         return project
 
+    async def delete(self, project_id: ProjectId) -> None:
+        self.projects.pop(str(project_id), None)
+
 
 class InMemoryDocumentRepository:
     def __init__(self) -> None:
         self.discovery_docs: dict[str, RichTextDocument] = {}
         self.versions: dict[str, str] = {}
+        self._version_projects: dict[str, str] = {}
         self._latest_version: dict[tuple[str, str], str] = {}
         self._version_counter = 0
         self.locked_project_ids: list[str] = []
@@ -79,6 +83,18 @@ class InMemoryDocumentRepository:
         self.discovery_docs[str(project_id)] = document
         return document
 
+    async def delete_discovery(self, project_id: ProjectId) -> None:
+        self.discovery_docs.pop(str(project_id), None)
+
+    async def delete_versions_by_project(self, project_id: ProjectId) -> None:
+        for version_id in list(self._version_projects):
+            if self._version_projects[version_id] == str(project_id):
+                self.versions.pop(version_id, None)
+                del self._version_projects[version_id]
+        self._latest_version = {
+            (pid, phase): markdown for (pid, phase), markdown in self._latest_version.items() if pid != str(project_id)
+        }
+
     async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
         return None
 
@@ -95,6 +111,7 @@ class InMemoryDocumentRepository:
         self._version_counter += 1
         version_id = f"ver_{self._version_counter}"
         self.versions[version_id] = markdown
+        self._version_projects[version_id] = str(project_id)
         phase_value = phase.value if hasattr(phase, "value") else str(phase)
         self._latest_version[(str(project_id), phase_value)] = markdown
         return version_id
@@ -153,6 +170,9 @@ class InMemoryRequirementRepository:
             self.locked_feature_ids.append(str(feature_id))
         return self._requirements.get(str(feature_id))
 
+    async def delete(self, feature_id: FeatureId) -> None:
+        self._requirements.pop(str(feature_id), None)
+
 
 class InMemoryActivityDiagramRepository:
     def __init__(self) -> None:
@@ -175,6 +195,9 @@ class InMemoryActivityDiagramRepository:
 
     async def exists(self, feature_id: FeatureId) -> bool:
         return str(feature_id) in self._diagrams
+
+    async def delete(self, feature_id: FeatureId) -> None:
+        self._diagrams.pop(str(feature_id), None)
 
 
 class StubEmbedder:
@@ -401,6 +424,12 @@ class InMemoryConsistencyEvaluationRepository:
         resolved = {ConsistencyEvaluationStatus.APPLIED, ConsistencyEvaluationStatus.DISCARDED}
         return [e for e in self._rows.values() if str(e.project_id) == str(project_id) and e.status in resolved][:limit]
 
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        for key in list(self._by_key):
+            if key[0] == str(project_id):
+                evaluation = self._by_key.pop(key)
+                self._rows.pop(str(evaluation.id), None)
+
 
 class InMemoryUnitOfWork:
     def __init__(
@@ -496,6 +525,14 @@ class InMemoryChatRepository:
     async def delete_session(self, session_id: ChatSessionId) -> None:
         self.sessions = [s for s in self.sessions if s.id != session_id]
         self._message_sessions = [(msg, sid) for msg, sid in self._message_sessions if sid != session_id]
+
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        project_sessions = {s.id for s in self.sessions if str(s.project_id) == str(project_id)}
+        self.sessions = [s for s in self.sessions if s.id not in project_sessions]
+        self._message_sessions = [
+            (msg, sid) for msg, sid in self._message_sessions if sid is None or sid not in project_sessions
+        ]
+        self.messages = [msg for msg, _sid in self._message_sessions]
 
     async def list_sessions(
         self,

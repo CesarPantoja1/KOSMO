@@ -78,6 +78,8 @@ class ConsistencyEvaluationRepository(Protocol):
         limit: int = 50,
     ) -> list[ConsistencyEvaluation]: ...
 
+    async def delete_by_project(self, project_id: ProjectId) -> None: ...
+
 
 # Trazabilidad solo hacia la derecha: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo
 DOWNSTREAM_TARGETS: dict[SpecPhase, list[SpecPhase]] = {

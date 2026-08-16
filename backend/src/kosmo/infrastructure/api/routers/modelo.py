@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from kosmo.application.modelo import (
+    DeleteActivityDiagramUseCase,
+    DeleteDiagramInput,
     GenerateActivityDiagramUseCase,
     GenerateDiagramInput,
     GetActivityDiagramUseCase,
@@ -128,3 +130,28 @@ async def get_diagram(
         "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
         "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
     }
+
+
+@router.delete(
+    "",
+    summary="Eliminar diagrama de actividad",
+    description=("Elimina el diagrama de actividad PlantUML existente de la característica."),
+    status_code=status.HTTP_200_OK,
+)
+async def delete_diagram(
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+    project_id: str = Query(...),
+) -> dict[str, str]:
+    fid = await _get_feature_id(request, project_id, feature_id)
+    uc: DeleteActivityDiagramUseCase = get_container(request).modelo.delete_diagram
+
+    await uc.execute(
+        DeleteDiagramInput(
+            project_id=ProjectId(project_id),
+            feature_id=fid,
+        )
+    )
+
+    return {"status": "deleted", "feature_id": feature_id}

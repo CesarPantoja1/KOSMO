@@ -180,6 +180,8 @@ class ChatRepository(Protocol):
 
     async def delete_session(self, session_id: ChatSessionId) -> None: ...
 
+    async def delete_by_project(self, project_id: ProjectId) -> None: ...
+
     async def list_sessions(
         self,
         project_id: ProjectId,

@@ -32,15 +32,18 @@ from kosmo.application.features.delete_feature import DeleteFeatureUseCase
 from kosmo.application.features.get_feature_chat_history import GetFeatureChatHistoryUseCase
 from kosmo.application.features.list_features import ListFeaturesUseCase
 from kosmo.application.modelo import (
+    DeleteActivityDiagramUseCase,
     GenerateActivityDiagramUseCase,
     GetActivityDiagramUseCase,
 )
 from kosmo.application.projects import (
     CreateProjectUseCase,
+    DeleteProjectUseCase,
     GetProjectUseCase,
     ListProjectsUseCase,
 )
 from kosmo.application.requirements import (
+    DeleteRequirementsUseCase,
     GenerateEARSUseCase,
     GetRequirementsUseCase,
     RefineRequirementsUseCase,
@@ -65,13 +68,28 @@ class ProjectComponents:
     create_project: CreateProjectUseCase
     get_project: GetProjectUseCase
     list_projects: ListProjectsUseCase
+    delete_project: DeleteProjectUseCase
 
 
-def build_project_components(repos: RepositoryRegistry) -> ProjectComponents:
+def build_project_components(
+    repos: RepositoryRegistry,
+    pipeline: PipelineComponents,
+) -> ProjectComponents:
     return ProjectComponents(
         create_project=CreateProjectUseCase(project_repository=repos.projects),
         get_project=GetProjectUseCase(project_repository=repos.projects),
         list_projects=ListProjectsUseCase(project_repository=repos.projects),
+        delete_project=DeleteProjectUseCase(
+            project_repo=repos.projects,
+            feature_repo=repos.features,
+            requirement_repo=repos.requirements,
+            diagram_repo=repos.diagrams,
+            document_repo=repos.documents,
+            chat_repo=repos.chat,
+            consistency_evaluation_repo=repos.consistency_evaluations,
+            traceability_repo=repos.traceability,
+            agent_memory=pipeline.agent_memory,
+        ),
     )
 
 
@@ -186,6 +204,7 @@ class RequirementsComponents:
     save_requirements: SaveRequirementsUseCase
     refine_requirements: RefineRequirementsUseCase
     regenerate_requirements: RegenerateRequirementsUseCase
+    delete_requirements: DeleteRequirementsUseCase
     get_requirement_chat_history: GetRequirementChatHistoryUseCase
     requirement_repo: RequirementRepository
 
@@ -230,6 +249,13 @@ def build_requirements_components(
             agent=pipeline.agent,
             outbox=pipeline.outbox,
         ),
+        delete_requirements=DeleteRequirementsUseCase(
+            project_repo=repos.projects,
+            feature_repo=repos.features,
+            requirement_repo=repos.requirements,
+            diagram_repo=repos.diagrams,
+            outbox=pipeline.outbox,
+        ),
         get_requirement_chat_history=get_requirement_chat_history,
         requirement_repo=repos.requirements,
     )
@@ -239,6 +265,7 @@ def build_requirements_components(
 class ModeloComponents:
     generate_diagram: GenerateActivityDiagramUseCase
     get_diagram: GetActivityDiagramUseCase
+    delete_diagram: DeleteActivityDiagramUseCase
     diagram_repo: ActivityDiagramRepository
 
 
@@ -252,6 +279,10 @@ def build_modelo_components(repos: RepositoryRegistry, pipeline: PipelineCompone
             project_repo=repos.projects,
         ),
         get_diagram=GetActivityDiagramUseCase(
+            feature_repo=repos.features,
+            diagram_repo=repos.diagrams,
+        ),
+        delete_diagram=DeleteActivityDiagramUseCase(
             feature_repo=repos.features,
             diagram_repo=repos.diagrams,
         ),
@@ -312,6 +343,8 @@ def build_consistency_components(
         delete_feature=DeleteFeatureUseCase(
             project_repo=repos.projects,
             feature_repo=repos.features,
+            requirement_repo=repos.requirements,
+            diagram_repo=repos.diagrams,
             traceability_repo=repos.traceability,
             outbox=pipeline.outbox,
         ),

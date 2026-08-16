@@ -221,6 +221,8 @@ class ApplyConsistencyImpactsUseCase:
         if feature is None:
             return "La caracteristica no existe"
 
+        await uow.requirements.delete(feature_id)
+        await uow.diagrams.delete(feature_id)
         await uow.features.delete(feature_id)
 
         try:

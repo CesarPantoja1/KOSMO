@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
@@ -79,6 +79,18 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
 
             await self._commit(session)
             return document
+
+    async def delete_discovery(self, project_id: ProjectId) -> None:
+        async with self._session_ctx() as session:
+            stmt = delete(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
+            await session.execute(stmt)
+            await self._commit(session)
+
+    async def delete_versions_by_project(self, project_id: ProjectId) -> None:
+        async with self._session_ctx() as session:
+            stmt = delete(DocumentVersionModel).where(DocumentVersionModel.project_id == str(project_id))
+            await session.execute(stmt)
+            await self._commit(session)
 
     async def get_requirements(  # type: ignore[override]
         self, feature_id: object

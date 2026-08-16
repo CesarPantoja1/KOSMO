@@ -185,6 +185,11 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
             counts[key] = counts.get(key, 0) + 1
         return counts
 
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        for session_id in list(self._store):
+            if self._store[session_id].project_id == project_id:
+                del self._store[session_id]
+
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))

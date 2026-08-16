@@ -216,6 +216,54 @@ async def test_apply_requirement_update_rebuilds_traceability_edges() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_apply_feature_delete_cascades_requirements_and_diagram() -> None:
+    # Arrange: feature con requisitos y diagrama — el delete debe borrarlos en cascada
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature(project.id))
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(
+        FeatureId("feat_01"),
+        "### REQ-1.1 Procesamiento de pagos\n\nEl sistema debe procesar pagos.\n",
+    )
+    diagram_repo = InMemoryActivityDiagramRepository()
+    await _seed_diagram(diagram_repo, "feat_01")
+    uc = _make_uc(
+        project_repo,
+        document_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+    )
+
+    # Act
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "Feature",
+                "target_id": "feat_01",
+                "action": "delete",
+                "field": "",
+                "before": "",
+                "after": "",
+            }
+        ],
+    )
+
+    # Assert: feature eliminada junto con sus requisitos y modelo
+    assert len(result.applied) == 1
+    assert len(result.failed) == 0
+    assert await feature_repo.by_id(FeatureId("feat_01")) is None
+    assert await requirement_repo.by_feature_id(FeatureId("feat_01")) is None
+    assert await diagram_repo.by_feature_id(FeatureId("feat_01")) is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_apply_failed_impact_does_not_block_subsequent_impacts() -> None:
     # Arrange: primer impacto invalido, segundo valido
     project = _make_project()

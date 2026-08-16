@@ -4,6 +4,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from kosmo.application.projects import (
     CreateProjectUseCase,
+    DeleteProjectInput,
+    DeleteProjectUseCase,
     GetProjectUseCase,
     ListProjectsUseCase,
 )
@@ -30,6 +32,10 @@ def _get_project(request: Request) -> GetProjectUseCase:
 
 def _list_projects(request: Request) -> ListProjectsUseCase:
     return get_container(request).projects.list_projects
+
+
+def _delete_project(request: Request) -> DeleteProjectUseCase:
+    return get_container(request).projects.delete_project
 
 
 @router.post(
@@ -146,3 +152,38 @@ async def get_project(
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
+
+
+@router.delete(
+    "/{project_id}",
+    summary="Eliminar proyecto",
+    description=(
+        "Elimina el proyecto y todos sus artefactos en cascada: descubrimiento, "
+        "características, requisitos, modelos, chat y evaluaciones de consistencia. "
+        "Requiere autenticación mediante Bearer token."
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Proyecto eliminado exitosamente.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de acceso inválido o ausente.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Proyecto no encontrado.",
+        },
+    },
+)
+async def delete_project(
+    project_id: str,
+    principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[DeleteProjectUseCase, Depends(_delete_project)],
+) -> dict[str, str]:
+    await use_case.execute(
+        DeleteProjectInput(
+            project_id=ProjectId(project_id),
+            owner_id=UserId(principal.subject),
+        )
+    )
+    return {"status": "deleted", "project_id": project_id}

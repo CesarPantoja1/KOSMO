@@ -116,6 +116,13 @@ class SqlAlchemyConsistencyEvaluationRepository(ConsistencyEvaluationRepository)
             result = await session.execute(stmt)
             return [_model_to_evaluation(m) for m in result.scalars().all()]
 
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        from sqlalchemy import delete
+
+        async with self._session_ctx() as session:
+            stmt = delete(ConsistencyEvaluationModel).where(ConsistencyEvaluationModel.project_id == str(project_id))
+            await session.execute(stmt)
+
 
 def _with_id(evaluation: ConsistencyEvaluation, id_value: str) -> ConsistencyEvaluation:
     return ConsistencyEvaluation(
