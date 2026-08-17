@@ -10,6 +10,7 @@ import { clearModelingStore, useModelingStore } from '@/entities/modeling';
 import { getDiagram } from '@/entities/modeling/api/api';
 import { clearRequirementsStore, useRequirementsStore } from '@/entities/requirements';
 import { getRequirements } from '@/entities/requirements/api/api';
+import { clearImplementationStore } from '@/entities/implementation';
 import { useChatSessionsStore } from '@/entities/chat';
 import { ApiError } from '@/shared/api';
 import { clearProjectStore } from '@/entities/project';
@@ -39,6 +40,7 @@ export const useAppStore = create<AppState>()((set) => ({
 				clearCharacteristicStore();
 				clearModelingStore();
 				clearRequirementsStore();
+				clearImplementationStore();
 				useChatSessionsStore.getState().reset();
 				useConsistencyGateStore.getState().reset();
 				set({
@@ -54,6 +56,7 @@ export const useAppStore = create<AppState>()((set) => ({
 				clearCharacteristicStore();
 				clearModelingStore();
 				clearRequirementsStore();
+				clearImplementationStore();
 				useChatSessionsStore.getState().reset();
 				useConsistencyGateStore.getState().reset();
 				set({

@@ -9,6 +9,8 @@ type AsideCharacteristicProps = {
 	onSelectCharacteristic: (id: string) => void;
 	hasIcon: Record<string, boolean>;
 	defaultExpanded?: boolean;
+	isExpanded?: boolean;
+	onToggleExpand?: (expanded: boolean) => void;
 	icon: ElementType<{ size?: number; color: string }>;
 };
 
@@ -19,9 +21,20 @@ const AsideCharacteristic = ({
 	onSelectCharacteristic,
 	hasIcon,
 	defaultExpanded = true,
+	isExpanded: isExpandedProp,
+	onToggleExpand,
 	icon: Icon,
 }: AsideCharacteristicProps) => {
-	const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+	const [isExpandedInternal, setIsExpandedInternal] = useState(defaultExpanded);
+	const isExpanded = isExpandedProp ?? isExpandedInternal;
+
+	const toggleExpand = (value: boolean) => {
+		if (onToggleExpand) {
+			onToggleExpand(value);
+		} else {
+			setIsExpandedInternal(value);
+		}
+	};
 
 	return (
 		<aside
@@ -33,7 +46,7 @@ const AsideCharacteristic = ({
 					<div className='flex items-center justify-between px-4 py-3 border-b border-neutral-200 shrink-0'>
 						<h3 className='text-xs font-semibold uppercase tracking-wider text-neutral-500'>{title}</h3>
 						<button
-							onClick={() => setIsExpanded(false)}
+							onClick={() => toggleExpand(false)}
 							className='cursor-pointer p-1 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors'
 						>
 							<CloseMarkdownContent size={18} />
@@ -89,7 +102,7 @@ const AsideCharacteristic = ({
 				<>
 					<div className='flex justify-center py-3 border-b border-neutral-200 shrink-0'>
 						<button
-							onClick={() => setIsExpanded(true)}
+							onClick={() => toggleExpand(true)}
 							className='cursor-pointer p-1 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors'
 						>
 							<OpenMarkdownContent size={18} />

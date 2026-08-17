@@ -13,7 +13,6 @@ interface PanelAsistenteRequisitoProps {
 	projectId?: string | null;
 	onClose?: () => void;
 	title?: string;
-	subtitle?: string;
 	placeholder?: string;
 }
 
@@ -22,7 +21,6 @@ export const PanelAsistenteRequisito = ({
 	projectId,
 	onClose,
 	title = 'Asistente de Requisitos EARS',
-	subtitle = 'Refinamiento y criterios de aceptación',
 	placeholder = 'Ej., Agregar escenarios alternativos...',
 }: PanelAsistenteRequisitoProps) => {
 	const chatHistories = useRequirementsStore((s) => s.chatHistories);
@@ -92,15 +90,12 @@ export const PanelAsistenteRequisito = ({
 		<ChatStreamPanel
 			key={featureId || 'empty'}
 			title={title}
-			subtitle={subtitle}
 			greeting='Hola 👋. Soy tu asistente de Requisitos EARS. Puedo ayudarte a refinar los requisitos y generar sus criterios de aceptación (Dado-Cuando-Entonces).'
 			placeholder={placeholder}
 			onClose={onClose}
 			messages={messages}
 			streamUrl={
-				featureId
-					? `/api/v1/features/${featureId}/requirements/chat/stream`
-					: null
+				featureId ? `/api/v1/features/${featureId}/requirements/chat/stream` : null
 			}
 			projectId={projectId ?? null}
 			phase='requirements'

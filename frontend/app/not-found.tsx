@@ -22,7 +22,7 @@ export default function NotFound() {
 					</p>
 					<Link href='/proyecto' className='btn btn-primary'>
 						<ArrowLeft size={18} color='' />
-						Back to Homepage
+						Volver
 					</Link>
 				</div>
 			</div>
