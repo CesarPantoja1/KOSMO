@@ -545,7 +545,22 @@ async def test_workspace_repository_protocol_compliance() -> None:
             if ws:
                 self._by_id.pop(str(ws.id), None)
 
+        async def update_lock(
+            self,
+            project_id: ProjectId,
+            is_locked: bool,
+            locked_by: str | None = None,
+        ) -> CodeWorkspace | None:
+            ws = self._by_project.get(str(project_id))
+            if ws is None:
+                return None
+            return ws
+
+        async def release_lock(self, project_id: ProjectId) -> CodeWorkspace | None:
+            return await self.update_lock(project_id, is_locked=False)
+
     repo: WorkspaceRepository = FakeWorkspaceRepository()
+
     project_id = ProjectId("prj_01TEST")
     workspace = CodeWorkspace(
         id=WorkspaceId("ws_01TEST"),

@@ -221,6 +221,15 @@ class WorkspaceRepository(Protocol):
 
     async def delete(self, project_id: ProjectId) -> None: ...
 
+    async def update_lock(
+        self,
+        project_id: ProjectId,
+        is_locked: bool,
+        locked_by: str | None = None,
+    ) -> CodeWorkspace | None: ...
+
+    async def release_lock(self, project_id: ProjectId) -> CodeWorkspace | None: ...
+
 
 class FeatureImplementationRepository(Protocol):
     async def by_feature_id(self, feature_id: FeatureId) -> FeatureImplementation | None: ...
