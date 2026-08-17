@@ -10,7 +10,7 @@ from kosmo.contracts.codegen import (
 )
 
 _TSC_REGEX = re.compile(
-    r"^(?P<file>[^(\s:]+?)(?:\((?P<line1>\d+),(?P<col1>\d+)\):?|:(?P<line2>\d+):(?P<col2>\d+))\s*(?:-\s*)?(?P<severity>error|warning)\s*(?P<code>TS\d+)?:\s*(?P<msg>.+)$"
+    r"^(?P<file>[^(\s:]+?)(?:\((?P<line1>\d+),(?P<col1>\d+)\):?|:(?P<line2>\d+):(?P<col2>\d+):?)\s*(?:-\s*)?(?P<severity>error|warning)\s*(?P<code>TS\d+)?:\s*(?P<msg>.+)$"
 )
 
 
@@ -236,9 +236,16 @@ def parse_step_output(
     errors = parse_validation_output(step, raw_output)
     success = exit_code == 0 and len(errors) == 0
 
-    error_messages = tuple(
-        f"{e.file}:{e.line}:{e.column} [{e.code or e.severity}] {e.message}" if e.file else e.message for e in errors
-    )
+    if errors:
+        error_messages = tuple(
+            f"{e.file}:{e.line}:{e.column} [{e.code or e.severity}] {e.message}" if e.file else e.message
+            for e in errors
+        )
+    elif not success:
+        fallback = raw_output.strip() or f"Step '{step}' failed with exit code {exit_code}"
+        error_messages = (fallback,)
+    else:
+        error_messages = ()
 
     return ValidationStepResult(
         step=step,
