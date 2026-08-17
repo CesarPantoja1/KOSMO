@@ -90,3 +90,22 @@ class DirectModificationContext:
     current_document: str
     instruction: str
     document_type: SpecPhase
+
+
+@dataclass(frozen=True)
+class ImplementationPhaseContext:
+    feature: Feature
+    requirements_markdown: str
+    workspace_manifest: tuple[str, ...] = field(default_factory=tuple)  # type: ignore[reportUnknownVariableType]
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+    @property
+    def ears_requirements(self) -> str:
+        return self.requirements_markdown
+
+    @property
+    def manifest_files(self) -> tuple[str, ...]:
+        return self.workspace_manifest
+
+
+ImplementationContext = ImplementationPhaseContext
