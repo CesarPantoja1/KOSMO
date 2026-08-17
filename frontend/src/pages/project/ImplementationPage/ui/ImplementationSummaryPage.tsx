@@ -64,8 +64,8 @@ const ImplementationSummaryPage = () => {
 			<div className='page-header'>
 				<div className='flex items-start justify-between gap-4'>
 					<div className='flex flex-col gap-1'>
-						<h2 className='text-neutral-800 text-3xl font-bold'>Resumen de implementación</h2>
-						<p className='text-neutral-500 text-base'>
+						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>Resumen de implementación</h1>
+						<p className='text-neutral-500 text-sm md:text-base'>
 							Estos son los elementos que forman parte de tu proyecto.
 						</p>
 					</div>

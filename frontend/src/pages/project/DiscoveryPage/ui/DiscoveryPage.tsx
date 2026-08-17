@@ -187,14 +187,14 @@ const DiscoveryPage = () => {
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
-			<div className={`page-container gap-2 ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
-				<div className='page-header flex-8/12'>
+			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
+				<div className='page-header'>
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
-							<h2 className='text-neutral-800 text-3xl font-bold'>
+							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
 								Descubrimiento del proyecto
-							</h2>
-							<p className='text-neutral-500 text-base'>
+							</h1>
+							<p className='text-neutral-500 text-sm md:text-base'>
 								Identifica y documenta el problema de negocio, el contexto y el alcance de
 								tu proyecto.
 							</p>
@@ -263,13 +263,7 @@ const DiscoveryPage = () => {
 				</div>
 
 				{/* Chatbot panel */}
-				<div
-					className={`chatbot ${
-						isChatbotOpen
-							? 'opacity-100 translate-x-0 w-96 shrink-0'
-							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-					}`}
-				>
+				{isChatbotOpen && (
 					<ChatStreamPanel
 						placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
 						onClose={() => setIsChatbotOpen(false)}
@@ -292,7 +286,7 @@ const DiscoveryPage = () => {
 							toast.error(formatApiError(error, 'Error al enviar el mensaje.'))
 						}
 					/>
-				</div>
+				)}
 			</div>
 		</>
 	);

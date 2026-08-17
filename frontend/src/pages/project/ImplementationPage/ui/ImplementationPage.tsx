@@ -8,7 +8,7 @@ import { useRequirementsStore } from '@/entities/requirements';
 import { useModelingStore } from '@/entities/modeling';
 import { AsideCharacteristic } from '@/widgets';
 import { Implementation } from '@/widgets/main-navbar/ui/icons';
-import { Ai, CursorClickFill, Loading } from '@/shared/ui';
+import { Ai, ArrowLeft, CursorClickFill, Loading } from '@/shared/ui';
 
 const generatingMessages = [
 	'Analizando funcionalidad...',
@@ -42,7 +42,11 @@ const ImplementationPage = () => {
 
 	const handleGenerate = async () => {
 		if (!selectedId || !selectedCharacteristic) return;
-		await startGeneration(selectedId, selectedCharacteristic.title, selectedCharacteristic.display_id);
+		await startGeneration(
+			selectedId,
+			selectedCharacteristic.title,
+			selectedCharacteristic.display_id,
+		);
 	};
 
 	return (
@@ -59,10 +63,13 @@ const ImplementationPage = () => {
 				<div className='page-header'>
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
-							<h2 className='text-neutral-800 text-3xl font-bold'>Implementación</h2>
-							<p className='text-neutral-500 text-base'>
-								Tu aplicación está lista. KOSMO ha transformado todo lo que definiste en los
-								pasos anteriores en una estructura funcional para continuar con su desarrollo.
+							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
+								Implementación
+							</h1>
+							<p className='text-neutral-500 text-sm md:text-base'>
+								Tu aplicación está lista. KOSMO ha transformado todo lo que definiste en
+								los pasos anteriores en una estructura funcional para continuar con su
+								desarrollo.
 							</p>
 						</div>
 
@@ -91,6 +98,7 @@ const ImplementationPage = () => {
 									</p>
 								</div>
 								<Link href='/proyecto/caracteristicas' className='btn btn-secondary'>
+									<ArrowLeft color='' size={18} />
 									Ir a Funcionalidades
 								</Link>
 							</div>
@@ -139,25 +147,7 @@ const ImplementationPage = () => {
 											</p>
 										</div>
 
-										{!selectedHasReqs ? (
-											<div className='flex flex-col my-auto items-center gap-5 px-12'>
-												<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-warning-50'>
-													<Ai color='text-warning-500' size={48} />
-												</div>
-												<div className='flex flex-col items-center gap-2 text-center max-w-md'>
-													<h3 className='text-neutral-800 text-lg font-semibold'>
-														Faltan criterios de aceptancia
-													</h3>
-													<p className='text-neutral-500 text-sm'>
-														Esta funcionalidad no tiene requisitos EARS generados.
-														Genera los requisitos antes de continuar con la implementación.
-													</p>
-												</div>
-												<Link href='/proyecto/requisitos' className='btn btn-secondary'>
-													Ir a requisitos
-												</Link>
-											</div>
-										) : !selectedHasDiagram ? (
+										{!selectedHasDiagram ? (
 											<div className='flex flex-col my-auto items-center gap-5 px-12'>
 												<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-warning-50'>
 													<Ai color='text-warning-500' size={48} />
@@ -172,7 +162,8 @@ const ImplementationPage = () => {
 													</p>
 												</div>
 												<Link href='/proyecto/modelo' className='btn btn-secondary'>
-													Ir a modelado
+													<ArrowLeft color='' size={18} />
+													Ir a diagramas
 												</Link>
 											</div>
 										) : (
@@ -216,7 +207,13 @@ const ImplementationPage = () => {
 
 										<div className='flex flex-col my-auto items-center gap-5 px-12'>
 											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-success-50'>
-												<svg className='h-10 w-10 text-success-600' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
+												<svg
+													className='h-10 w-10 text-success-600'
+													viewBox='0 0 24 24'
+													fill='none'
+													stroke='currentColor'
+													strokeWidth='2'
+												>
 													<path d='M5 12l4 4L19 6' />
 												</svg>
 											</div>

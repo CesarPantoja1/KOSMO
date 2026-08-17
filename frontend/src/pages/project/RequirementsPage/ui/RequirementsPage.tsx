@@ -62,6 +62,7 @@ const RequirementsPage = () => {
 
 	// Otros estados
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	const [isAsideExpanded, setIsAsideExpanded] = useState(true);
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
@@ -218,10 +219,10 @@ const RequirementsPage = () => {
 				<div className='page-header'>
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
-							<h2 className='text-neutral-800 text-3xl font-bold'>
+							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
 								Criterios de aceptación
-							</h2>
-							<p className='text-neutral-500 text-base'>
+							</h1>
+							<p className='text-neutral-500 text-sm md:text-base'>
 								Estructura los requisitos de cada funcionalidad bajo el estándar EARS.
 							</p>
 						</div>
@@ -230,7 +231,10 @@ const RequirementsPage = () => {
 							<div className='flex items-center gap-3 shrink-0'>
 								{hasRequirements[selectedId ? selectedId : ''] && (
 									<button
-										onClick={() => setIsChatbotOpen(true)}
+										onClick={() => {
+											setIsChatbotOpen(true);
+											setIsAsideExpanded(false);
+										}}
 										className='btn btn-ai disabled:opacity-50 disabled:cursor-not-allowed'
 									>
 										<Ai size={18} color='' />
@@ -278,6 +282,8 @@ const RequirementsPage = () => {
 								onSelectCharacteristic={handleSelectCharacteristic}
 								hasIcon={hasRequirements}
 								icon={Requirements}
+								isExpanded={isAsideExpanded}
+								onToggleExpand={setIsAsideExpanded}
 							/>
 
 							<div className='relative flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
@@ -383,19 +389,16 @@ const RequirementsPage = () => {
 					)}
 				</div>
 
-				<div
-					className={`chatbot ${
-						isChatbotOpen
-							? 'opacity-100 translate-x-0 w-96 shrink-0'
-							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-					}`}
-				>
+				{isChatbotOpen && (
 					<PanelAsistenteRequisito
 						featureId={selectedId}
 						projectId={currentProject?.id ?? null}
-						onClose={() => setIsChatbotOpen(false)}
+						onClose={() => {
+							setIsChatbotOpen(false);
+							setIsAsideExpanded(true);
+						}}
 					/>
-				</div>
+				)}
 			</div>
 		</>
 	);

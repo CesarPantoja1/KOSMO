@@ -76,8 +76,8 @@ const CreateProjectPage = () => {
 				{/* Header row */}
 				<div className='flex items-start justify-between gap-4'>
 					<div className='flex flex-col gap-1'>
-						<h1 className='text-neutral-800 text-3xl font-bold'>Crear Proyecto</h1>
-						<p className='text-neutral-500 text-base'>
+						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>Crear Proyecto</h1>
+						<p className='text-neutral-500 text-sm md:text-base'>
 							Define la idea central y los objetivos de tu aplicación. Una descripción
 							clara le permitirá al asistente estructurar correctamente las etapas
 							posteriores.

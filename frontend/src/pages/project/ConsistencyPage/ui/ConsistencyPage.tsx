@@ -181,10 +181,10 @@ const ConsistencyPage = () => {
 							<ArrowLeft size={16} color='' />
 							Volver a {phaseLabel}
 						</Link>
-						<h2 className='text-neutral-800 text-3xl font-bold'>
+						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
 							Revisión de consistencia
-						</h2>
-						<p className='text-neutral-500 text-base'>
+						</h1>
+						<p className='text-neutral-500 text-sm md:text-base'>
 							El agente detectó impactos de cambios sobre {phaseLabel}. Revisa cada
 							sugerencia antes de aplicarla.
 						</p>

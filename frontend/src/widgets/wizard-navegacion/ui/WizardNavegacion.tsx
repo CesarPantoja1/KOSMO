@@ -34,36 +34,42 @@ const phaseItems: {
 	href: string;
 	Icon: typeof Discovery;
 	label: string;
+	subtitle: string;
 	consistencyPhase: ConsistencyTargetPhase | null;
 }[] = [
 	{
 		href: '/proyecto/descubrimiento',
 		Icon: Discovery,
 		label: 'DESCUBRIMIENTO',
+		subtitle: 'Entender el problema',
 		consistencyPhase: null,
 	},
 	{
 		href: '/proyecto/caracteristicas',
 		Icon: Characteristics,
 		label: 'FUNCIONALIDADES',
+		subtitle: 'Que debe hacer',
 		consistencyPhase: 'features',
 	},
 	{
 		href: '/proyecto/requisitos',
 		Icon: Requirements,
 		label: 'CRITERIOS',
+		subtitle: 'Reglas de aceptación',
 		consistencyPhase: 'requirements',
 	},
 	{
 		href: '/proyecto/modelo',
 		Icon: Modeling,
 		label: 'DIAGRAMAS',
+		subtitle: 'Flujo de interacción',
 		consistencyPhase: 'model',
 	},
 	{
 		href: '/proyecto/codigo',
 		Icon: Implementation,
 		label: 'IMPLEMENTACIÓN',
+		subtitle: 'Generar código',
 		consistencyPhase: null,
 	},
 ];
@@ -128,8 +134,8 @@ export function WizardNavegacion() {
 	);
 
 	return (
-		<nav className='relative flex items-center justify-center gap-0 px-16 py-4 bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
-			{phaseItems.map(({ href, Icon, label, consistencyPhase }, index) => {
+		<nav className='relative flex items-center justify-center gap-2 px-8 py-3 bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
+			{phaseItems.map(({ href, Icon, label, subtitle, consistencyPhase }, index) => {
 				let status: ProjectStatus = 'disable';
 				if (activeIndex !== -1) {
 					if (index === activeIndex) {
@@ -150,9 +156,10 @@ export function WizardNavegacion() {
 						<div className='relative'>
 							<WizardItem
 								href={href}
-								icon={<Icon size={18} color={colors.iconStyles} />}
+								icon={<Icon size={14} color={colors.iconStyles} />}
 								iconContainerStyles={colors.iconContainer}
 								label={label}
+								subtitle={subtitle}
 								labelStyles={colors.labelStyles}
 								onClick={handleWizardClick(href)}
 							/>
@@ -165,8 +172,7 @@ export function WizardNavegacion() {
 						{/* Connector line between steps */}
 						{!isLast && (
 							<div
-								className='w-20 mx-1 shrink-0 flex items-center'
-								style={{ marginBottom: '20px' }}
+								className='w-16 mx-1 shrink-0 flex items-center self-center'
 							>
 								<div
 									className={`h-0.5 w-full rounded-full transition-all duration-500 ${
