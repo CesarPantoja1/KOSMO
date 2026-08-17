@@ -5,6 +5,13 @@ from kosmo.application.codegen.generate_feature_implementation import (
     MissingDiagramError,
     MissingRequirementsError,
 )
+from kosmo.application.codegen.register_code_traceability import (
+    RegisterCodeTraceabilityInput,
+    RegisterCodeTraceabilityOutput,
+    RegisterCodeTraceabilityUseCase,
+    RequirementCodeMapping,
+    format_requirement_key,
+)
 from kosmo.application.codegen.validate_workspace import (
     DEFAULT_VALIDATION_STEPS,
     ValidateWorkspaceInput,
@@ -20,8 +27,13 @@ __all__ = [
     "GenerateFeatureImplementationUseCase",
     "MissingDiagramError",
     "MissingRequirementsError",
+    "RegisterCodeTraceabilityInput",
+    "RegisterCodeTraceabilityOutput",
+    "RegisterCodeTraceabilityUseCase",
+    "RequirementCodeMapping",
     "ValidateWorkspaceInput",
     "ValidateWorkspaceOutput",
     "ValidateWorkspaceUseCase",
     "WorkspaceNotFoundError",
+    "format_requirement_key",
 ]
