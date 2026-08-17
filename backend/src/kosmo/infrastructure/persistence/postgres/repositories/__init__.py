@@ -16,6 +16,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo imp
     SqlAlchemyRequirementRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.users import SqlAlchemyUserRepository
+from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
+    SqlAlchemyWorkspaceRepository,
+)
 
 __all__ = [
     "SqlAlchemyActivityDiagramRepository",
@@ -26,4 +29,5 @@ __all__ = [
     "SqlAlchemyProjectRepository",
     "SqlAlchemyRequirementRepository",
     "SqlAlchemyUserRepository",
+    "SqlAlchemyWorkspaceRepository",
 ]

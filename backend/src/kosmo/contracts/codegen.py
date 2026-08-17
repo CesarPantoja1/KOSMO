@@ -124,6 +124,10 @@ class CodeWorkspace:
     status: WorkspaceStatus = WorkspaceStatus.NOT_CREATED
     workspace_dir: str | None = None
     manifest_files: tuple[str, ...] = field(default_factory=tuple)
+    current_branch: str = "main"
+    is_locked: bool = False
+    locked_at: datetime | None = None
+    locked_by: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
