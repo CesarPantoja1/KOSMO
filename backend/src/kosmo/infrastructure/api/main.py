@@ -21,6 +21,7 @@ from kosmo.infrastructure.api.routers.documents import router as documents_route
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
+from kosmo.infrastructure.api.routers.mcp import router as mcp_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirement_chat import router as requirement_chat_router
@@ -241,6 +242,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
     components = build_app_components(settings)
     app.state.container = components
+    app.state.requirement_repo = components.repos.requirements
+    app.state.diagram_repo = components.repos.diagrams
 
     outbox_task = asyncio.create_task(run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components)))
 
@@ -313,6 +316,7 @@ app.include_router(schemas_router)
 app.include_router(knowledge_router)
 app.include_router(documents_router)
 app.include_router(traceability_router)
+app.include_router(mcp_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
