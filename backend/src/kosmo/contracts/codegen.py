@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any, Protocol
 
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, WorkspaceId
 
@@ -38,6 +40,33 @@ class ValidationStep(StrEnum):
 class ValidationSeverity(StrEnum):
     ERROR = "error"
     WARNING = "warning"
+
+
+class OpenCodeEventType(StrEnum):
+    SESSION_CREATED = "session_created"
+    PLAN_PROGRESS = "plan_progress"
+    PLAN_COMPLETE = "plan_complete"
+    BUILD_PROGRESS = "build_progress"
+    BUILD_COMPLETE = "build_complete"
+    FILE_EDIT = "file_edit"
+    ERROR = "error"
+    DONE = "done"
+
+
+@dataclass(frozen=True)
+class OpenCodeEvent:
+    event_type: OpenCodeEventType | str
+    session_id: str
+    data: dict[str, Any] = field(default_factory=dict)  # type: ignore[reportUnknownVariableType]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class OpenCodeSession:
+    session_id: str
+    workspace_dir: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    title: str = ""
 
 
 @dataclass(frozen=True)
@@ -113,3 +142,89 @@ class FeatureImplementation:
     generated_files: tuple[str, ...] = field(default_factory=tuple)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+class WorkspaceManagerPort(Protocol):
+    async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace: ...
+
+    async def get_workspace(self, project_id: ProjectId) -> CodeWorkspace | None: ...
+
+    async def get_manifest(self, workspace: CodeWorkspace) -> tuple[str, ...]: ...
+
+    async def is_locked(self, project_id: ProjectId) -> bool: ...
+
+    async def acquire_lock(self, project_id: ProjectId) -> None: ...
+
+    async def release_lock(self, project_id: ProjectId) -> None: ...
+
+
+class CodeRunnerPort(Protocol):
+    async def run_step(
+        self,
+        workspace_dir: str,
+        step: ValidationStep,
+        *,
+        timeout_seconds: int = 300,
+    ) -> ValidationStepResult: ...
+
+    async def run_command(
+        self,
+        workspace_dir: str,
+        command: str,
+        *,
+        timeout_seconds: int = 300,
+    ) -> ValidationStepResult: ...
+
+    async def run_pipeline(
+        self,
+        workspace_dir: str,
+        steps: tuple[ValidationStep, ...] = (
+            ValidationStep.TYPECHECK,
+            ValidationStep.LINT,
+            ValidationStep.TESTS,
+            ValidationStep.BUILD,
+        ),
+    ) -> ValidationRunResult: ...
+
+
+class OpenCodeClientPort(Protocol):
+    async def health_check(self) -> bool: ...
+
+    async def create_session(
+        self,
+        workspace_dir: str,
+        *,
+        title: str = "",
+    ) -> OpenCodeSession: ...
+
+    def send_prompt(
+        self,
+        session_id: str,
+        prompt: str,
+        *,
+        agent: str = "plan",
+    ) -> AsyncIterator[OpenCodeEvent]: ...
+
+    async def close_session(self, session_id: str) -> None: ...
+
+
+class WorkspaceRepository(Protocol):
+    async def by_project_id(self, project_id: ProjectId) -> CodeWorkspace | None: ...
+
+    async def by_id(self, workspace_id: WorkspaceId) -> CodeWorkspace | None: ...
+
+    async def save(self, workspace: CodeWorkspace) -> CodeWorkspace: ...
+
+    async def delete(self, project_id: ProjectId) -> None: ...
+
+
+class FeatureImplementationRepository(Protocol):
+    async def by_feature_id(self, feature_id: FeatureId) -> FeatureImplementation | None: ...
+
+    async def by_id(self, implementation_id: ImplementationId) -> FeatureImplementation | None: ...
+
+    async def list_by_project(self, project_id: ProjectId) -> list[FeatureImplementation]: ...
+
+    async def save(self, implementation: FeatureImplementation) -> FeatureImplementation: ...
+
+    async def delete(self, feature_id: FeatureId) -> None: ...
