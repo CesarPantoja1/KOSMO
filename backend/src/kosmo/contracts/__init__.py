@@ -9,6 +9,20 @@ from kosmo.contracts.chat import (
     SugerenciaCambio,
     SugerenciaCambioLLM,
 )
+from kosmo.contracts.codegen import (
+    CodeWorkspace,
+    FeatureImplementation,
+    FeatureImplementationStatus,
+    FileAction,
+    FileOperation,
+    ImplementationPlan,
+    ValidationErrorDetail,
+    ValidationRunResult,
+    ValidationSeverity,
+    ValidationStep,
+    ValidationStepResult,
+    WorkspaceStatus,
+)
 from kosmo.contracts.consistency import (
     ArtefactoAfectado,
     ArtifactAction,
@@ -20,7 +34,12 @@ from kosmo.contracts.consistency import (
     ReporteConsistencia,
     TraceabilityRepository,
 )
-from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId
+from kosmo.contracts.sdd.ids import (
+    ChatHistoryId,
+    ChatMessageId,
+    ImplementationId,
+    WorkspaceId,
+)
 
 __all__ = [
     "AppliedChange",
@@ -30,12 +49,19 @@ __all__ = [
     "ChatMessageId",
     "ChatRepository",
     "ChatRole",
+    "CodeWorkspace",
     "ConsistencyEvaluationOutput",
     "ConsistencyEvaluator",
     "ConsistencyStatus",
     "DiffCambio",
+    "FeatureImplementation",
+    "FeatureImplementationStatus",
+    "FileAction",
+    "FileOperation",
     "HistorialChat",
     "ImpactItem",
+    "ImplementationId",
+    "ImplementationPlan",
     "MensajeChat",
     "PhasePropagationInfo",
     "ReporteConsistencia",
@@ -43,4 +69,11 @@ __all__ = [
     "SugerenciaCambio",
     "SugerenciaCambioLLM",
     "TraceabilityRepository",
+    "ValidationErrorDetail",
+    "ValidationRunResult",
+    "ValidationSeverity",
+    "ValidationStep",
+    "ValidationStepResult",
+    "WorkspaceId",
+    "WorkspaceStatus",
 ]

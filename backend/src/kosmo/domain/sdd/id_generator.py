@@ -25,6 +25,10 @@ _PREFIX_MAP: dict[str, str] = {
     "consistency_evaluation": "cev_",
     "chat_session": "cht_",
     "operation": "ope_",
+    "workspace": "ws_",
+    "code_workspace": "ws_",
+    "implementation": "impl_",
+    "feature_implementation": "impl_",
 }
 
 
