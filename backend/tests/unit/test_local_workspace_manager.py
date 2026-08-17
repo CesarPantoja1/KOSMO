@@ -277,3 +277,240 @@ async def test_get_workspace_repo_with_missing_dir() -> None:
         # Assert
         assert result is not None
         assert result.workspace_dir == "/nonexistent/path"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_generates_agents_md_and_opencode_json() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_01")
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+        agents_path = ws_dir / "AGENTS.md"
+        opencode_path = ws_dir / "opencode.json"
+
+        assert agents_path.exists()
+        assert opencode_path.exists()
+
+        assert "AGENTS.md" in ws.manifest_files
+        assert "opencode.json" in ws.manifest_files
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agents_md_content_and_structure() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_sdd_01")
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        content = (Path(ws.workspace_dir) / "AGENTS.md").read_text(encoding="utf-8")
+
+        # Assert — stack
+        assert "Next.js 16" in content
+        assert "Drizzle ORM" in content
+        assert "Vitest" in content
+        assert "TypeScript" in content
+        assert "Tailwind CSS" in content
+        assert "get_requirements" in content
+        assert "get_activity_diagram" in content
+        assert "src/" in content
+        assert "tests/" in content
+
+        # Assert — pipeline de validación obligatorio
+        assert "tsc --noEmit" in content
+        assert "eslint" in content
+        assert "vitest run" in content
+        assert "next build" in content
+
+        # Assert — no detenerse hasta que todo esté verde
+        assert "completada" in content
+        assert "verde" in content
+
+        # Assert — TDD obligatorio con skill
+        assert ".opencode/skills/tdd/SKILL.md" in content
+        assert "Red-Green-Refactor" in content
+
+        # Assert — navegación y APIs con tools MCP
+        assert "token-savior" in content
+        assert "context7" in content
+
+        # Assert — anti-patrones
+        assert "any" in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_opencode_json_content_and_permissions() -> None:
+    import json
+
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            mcp_url="http://127.0.0.1:8000/mcp",
+        )
+        project_id = ProjectId("prj_test_perms")
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        raw_json = (Path(ws.workspace_dir) / "opencode.json").read_text(encoding="utf-8")
+        config = json.loads(raw_json)
+
+        # Assert
+        assert config["instructions"] == ["AGENTS.md"]
+        assert config["plugin"] == ["@dietrichgebert/ponytail"]
+
+        assert "kosmo-context" in config["mcp"]
+        assert config["mcp"]["kosmo-context"]["url"] == "http://127.0.0.1:8000/mcp"
+        assert config["mcp"]["kosmo-context"]["environment"]["KOSMO_PROJECT_ID"] == "prj_test_perms"
+
+        # MCP token-savior (local, uvx)
+        token_savior = config["mcp"]["token-savior"]
+        assert token_savior["type"] == "local"
+        assert token_savior["command"] == ["uvx", "--from", "token-savior-recall", "token-savior"]
+        assert token_savior["environment"]["WORKSPACE_ROOTS"] == str(Path(tmp_root) / "prj_test_perms")
+        assert token_savior["environment"]["TOKEN_SAVIOR_CLIENT"] == "opencode"
+
+        # MCP context7 (remote)
+        assert config["mcp"]["context7"]["type"] == "remote"
+        assert config["mcp"]["context7"]["url"] == "https://mcp.context7.com/mcp"
+
+        # Permissions: read
+        assert config["permission"]["read"] == {"*": "allow"}
+
+        # Permissions: edit (src, tests, drizzle allowed, rest denied)
+        assert config["permission"]["edit"]["src/**"] == "allow"
+        assert config["permission"]["edit"]["tests/**"] == "allow"
+        assert config["permission"]["edit"]["drizzle/**"] == "allow"
+        assert config["permission"]["edit"]["*"] == "deny"
+
+        # Permissions: bash whitelist
+        bash_rules = config["permission"]["bash"]
+        assert bash_rules["npm install"] == "allow"
+        assert bash_rules["npm run build"] == "allow"
+        assert bash_rules["npx tsc --noEmit"] == "allow"
+        assert bash_rules["npx vitest run"] == "allow"
+        assert bash_rules["npx eslint ."] == "allow"
+        assert bash_rules["npx drizzle-kit push"] == "allow"
+        assert bash_rules["*"] == "deny"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_generates_tdd_skill() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_tdd_skill")
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+        skill_path = ws_dir / ".opencode" / "skills" / "tdd" / "SKILL.md"
+
+        assert skill_path.exists()
+        assert ".opencode/skills/tdd/SKILL.md" in ws.manifest_files
+
+        content = skill_path.read_text(encoding="utf-8")
+        assert "name: tdd" in content
+        assert "Vitest" in content
+        assert "AAA" in content
+        assert "Red-Green-Refactor" in content
+        assert "describe(" in content or "it(" in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_preserves_custom_tdd_skill() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_tdd_custom")
+
+        # First call creates the skill
+        ws1 = await manager.ensure_workspace(project_id)
+        assert ws1.workspace_dir is not None
+        skill_path = Path(ws1.workspace_dir) / ".opencode" / "skills" / "tdd" / "SKILL.md"
+        skill_path.write_text("---\nname: tdd\n---\n# Custom skill\n", encoding="utf-8")
+
+        # Act: second call must not overwrite
+        await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert skill_path.read_text(encoding="utf-8") == "---\nname: tdd\n---\n# Custom skill\n"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_uses_project_name_from_repo() -> None:
+    from kosmo.contracts.sdd.ids import UserId
+    from kosmo.contracts.sdd.project import Project
+    from tests.unit.fakes import InMemoryProjectRepository
+
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        project_repo = InMemoryProjectRepository()
+        project = Project(
+            id=ProjectId("prj_gasto_justo"),
+            name="GastoJusto",
+            slug="gasto-justo",
+            description="Control de gastos compartidos",
+            owner_id=UserId("usr_01"),
+        )
+        await project_repo.save(project)
+
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+        )
+
+        # Act
+        ws = await manager.ensure_workspace(project.id)
+        assert ws.workspace_dir is not None
+        content = (Path(ws.workspace_dir) / "AGENTS.md").read_text(encoding="utf-8")
+
+        # Assert
+        assert "GastoJusto" in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_preserves_custom_agents_md_and_opencode_json() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_custom")
+
+        # First call creates the workspace
+        ws1 = await manager.ensure_workspace(project_id)
+        assert ws1.workspace_dir is not None
+        ws_dir = Path(ws1.workspace_dir)
+
+        # Custom modifications
+        (ws_dir / "AGENTS.md").write_text("# Custom Agents Config", encoding="utf-8")
+        (ws_dir / "opencode.json").write_text('{"custom": true}', encoding="utf-8")
+
+        # Act: Second call should not overwrite
+        ws2 = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws1.workspace_dir == ws2.workspace_dir
+        assert (ws_dir / "AGENTS.md").read_text(encoding="utf-8") == "# Custom Agents Config"
+        assert (ws_dir / "opencode.json").read_text(encoding="utf-8") == '{"custom": true}'
