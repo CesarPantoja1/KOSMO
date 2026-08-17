@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
 
 class UnsafePathError(ValueError):
     """Lanzada cuando una ruta intenta escapar del directorio raíz del workspace."""
+
+
+def _is_absolute_path_str(raw_path: str) -> bool:
+    """Detecta si una ruta es absoluta en formato POSIX, Windows o UNC."""
+    if raw_path.startswith(("/", "\\", "//", "\\\\")):
+        return True
+    return bool(re.match(r"^[a-zA-Z]:", raw_path))
 
 
 def validate_safe_path(path: str | Path, workspace_root: str | Path) -> bool:
@@ -33,9 +41,14 @@ def validate_safe_path(path: str | Path, workspace_root: str | Path) -> bool:
     if any(part == ".." for part in path_obj.parts):
         return False
 
+    # Si tiene letra de unidad Windows pero estamos en entorno POSIX, no puede residir en workspace_root POSIX
+    if bool(re.match(r"^[a-zA-Z]:", raw_path)) and os.name != "nt":
+        return False
+
     try:
         root_resolved = Path(raw_root).resolve()
-        target_resolved = path_obj.resolve() if path_obj.is_absolute() else (root_resolved / path_obj).resolve()
+        is_abs = _is_absolute_path_str(raw_path) or path_obj.is_absolute()
+        target_resolved = Path(raw_path).resolve() if is_abs else (root_resolved / path_obj).resolve()
 
         return target_resolved.is_relative_to(root_resolved)
     except (ValueError, OSError, RuntimeError):
@@ -55,11 +68,13 @@ def ensure_safe_path(path: str | Path, workspace_root: str | Path) -> Path:
     if not validate_safe_path(path, workspace_root):
         raise UnsafePathError(f"Unsafe path detected: '{path}' escapes workspace root '{workspace_root}'")
 
+    raw_path = str(path).strip()
     root_resolved = Path(workspace_root).resolve()
-    path_obj = Path(str(path).strip().replace("\\", "/"))
-    if path_obj.is_absolute():
-        return path_obj.resolve()
-    return (root_resolved / path_obj).resolve()
+    is_abs = _is_absolute_path_str(raw_path) or Path(raw_path).is_absolute()
+    if is_abs:
+        return Path(raw_path).resolve()
+    normalized_rel = raw_path.replace("\\", "/")
+    return (root_resolved / normalized_rel).resolve()
 
 
 def sanitize_relative_path(path: str) -> str:
