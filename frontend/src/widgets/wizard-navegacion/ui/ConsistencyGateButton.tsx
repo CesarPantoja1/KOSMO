@@ -38,9 +38,10 @@ export function ConsistencyGateButton({ status }: ConsistencyGateButtonProps) {
 				type='button'
 				onClick={goToReview}
 				title='Revisar cambios pendientes'
-				className='flex cursor-pointer items-center rounded-full bg-warning-500 px-4 py-1.5 text-sm font-semibold text-neutral-0 transition-colors hover:bg-warning-600'
+				className='w-full flex items-center justify-center gap-2 py-2 text-sm font-semibold text-warning-700 bg-warning-50 border-b border-warning-200 cursor-pointer hover:bg-warning-100 transition-colors'
 			>
-				Revisar consistencia ({pending})
+				<span className='h-2 w-2 rounded-full bg-warning-500' />
+				Revisar consistencia ({pending} pendiente{pending > 1 ? 's' : ''})
 			</button>
 		);
 	}
@@ -51,16 +52,17 @@ export function ConsistencyGateButton({ status }: ConsistencyGateButtonProps) {
 				type='button'
 				onClick={goToReview}
 				title='Revisar fallos de evaluación'
-				className='flex cursor-pointer items-center rounded-full bg-error-500 px-4 py-1.5 text-sm font-semibold text-neutral-0 transition-colors hover:bg-error-600'
+				className='w-full flex items-center justify-center gap-2 py-2 text-sm font-semibold text-error-700 bg-error-50 border-b border-error-200 cursor-pointer hover:bg-error-100 transition-colors'
 			>
-				Fallos de consistencia
+				<span className='h-2 w-2 rounded-full bg-error-500' />
+				Fallos de consistencia ({failed})
 			</button>
 		);
 	}
 
 	return (
-		<span className='flex items-center gap-2 rounded-full bg-neutral-100 px-4 py-1.5 text-sm font-medium text-neutral-600'>
-			<span className='h-2 w-2 animate-pulse rounded-full bg-neutral-500' />
+		<span className='w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-neutral-500 bg-neutral-50 border-b border-neutral-200'>
+			<span className='h-2 w-2 animate-pulse rounded-full bg-neutral-400' />
 			Analizando consistencia…
 		</span>
 	);

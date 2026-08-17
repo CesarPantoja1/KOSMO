@@ -10,10 +10,11 @@ import { ZOOM_MAX, ZOOM_MIN } from '../lib/zoom';
 
 export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(
 	function PlantUmlViewer(
-		{ source, isMaximized, onMaximize, onMinimize, showControls = true, fallbackContent },
+		{ source, isMaximized, onMaximize, onMinimize, showControls = true, fallbackContent, controlledPanZoom, onPanZoomChange },
 		ref,
 	) {
 		const { svg, state, error } = useRender(source);
+		const controlled = controlledPanZoom !== undefined;
 		const {
 			zoom,
 			tx,
@@ -26,7 +27,13 @@ export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(
 			handlePanStart,
 			handlePanMove,
 			handlePanEnd,
-		} = usePanZoom(state === 'done');
+		} = usePanZoom(state === 'done', {
+			control: controlled ? 'controlled' : 'uncontrolled',
+			controlledZoom: controlledPanZoom?.zoom,
+			controlledTx: controlledPanZoom?.tx,
+			controlledTy: controlledPanZoom?.ty,
+			onPanZoomChange,
+		});
 
 		if (!source.trim()) {
 			return null;

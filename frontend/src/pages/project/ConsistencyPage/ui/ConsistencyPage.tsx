@@ -1,6 +1,9 @@
 'use client';
 
-import { useConsistencyGateStore, CONSISTENCY_REVIEW_ROUTES } from '@/entities/consistency';
+import {
+	useConsistencyGateStore,
+	CONSISTENCY_REVIEW_ROUTES,
+} from '@/entities/consistency';
 import type { ConsistencyTargetPhase, ReviewCard } from '@/entities/consistency';
 import { useProjectStore } from '@/entities/project';
 import { useCharacteristicStore } from '@/entities/characteristic';
@@ -15,9 +18,9 @@ import { formatApiError } from '@/shared/api';
 import { GateReviewCard } from './GateReviewCard';
 
 const TARGET_LABELS: Record<ConsistencyTargetPhase, string> = {
-	features: 'Características',
-	requirements: 'Requisitos',
-	model: 'Modelo',
+	features: 'Funcionalidades',
+	requirements: 'Criterios',
+	model: 'Diagramas',
 };
 
 const ROUTE_TO_TARGET: Record<string, ConsistencyTargetPhase> = {
@@ -31,14 +34,6 @@ const TARGET_TO_ROUTE: Record<ConsistencyTargetPhase, string> = {
 	features: '/proyecto/caracteristicas',
 	requirements: '/proyecto/requisitos',
 	model: '/proyecto/modelo',
-};
-
-const ACTIVITY_LABELS: Record<string, string> = {
-	applied: 'Aplicado',
-	discarded: 'Descartado',
-	failed: 'Falló',
-	evaluating: 'Evaluando',
-	completed: 'Pendiente',
 };
 
 const refreshArtifactStores = async (projectId: string, cards: ReviewCard[]) => {
@@ -158,7 +153,11 @@ const ConsistencyPage = () => {
 		<>
 			{confirmBulk && (
 				<ModalConfirm
-					title={confirmBulk === 'apply' ? 'Aplicar todas las sugerencias' : 'Descartar todas las sugerencias'}
+					title={
+						confirmBulk === 'apply'
+							? 'Aplicar todas las sugerencias'
+							: 'Descartar todas las sugerencias'
+					}
 					description={
 						confirmBulk === 'apply'
 							? `Se aplicarán todas las sugerencias frescas de ${phaseLabel}. Los cambios se encadenarán hacia las fases siguientes.`
@@ -274,43 +273,6 @@ const ConsistencyPage = () => {
 							onDiscard={() => void handleDiscard(card)}
 						/>
 					))}
-
-					{/* Actividad (progressive disclosure) */}
-					<details className='group rounded-lg border border-neutral-200 bg-neutral-0'>
-						<summary className='cursor-pointer list-none px-4 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50'>
-							Actividad reciente {activity && activity.length > 0 ? `(${activity.length})` : ''}
-						</summary>
-						<div className='flex flex-col gap-2 border-t border-neutral-200 px-4 py-3'>
-							{(!activity || activity.length === 0) && (
-								<p className='text-sm text-neutral-400'>Sin actividad registrada.</p>
-							)}
-							{activity?.map((item) => (
-								<div
-									key={item.evaluation_id}
-									className='flex items-start justify-between gap-3 text-sm'
-								>
-									<div className='min-w-0'>
-										<p className='truncate font-medium text-neutral-700'>
-											{item.target_title || item.target_artifact_id}
-										</p>
-										{item.failure_reason && (
-											<p className='truncate text-xs text-neutral-400'>
-												{item.failure_reason}
-											</p>
-										)}
-									</div>
-									<div className='flex shrink-0 items-center gap-2'>
-										<span className='rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600'>
-											{ACTIVITY_LABELS[item.status] ?? item.status}
-										</span>
-										<span className='text-xs text-neutral-400'>
-											{new Date(item.updated_at).toLocaleString()}
-										</span>
-									</div>
-								</div>
-							))}
-						</div>
-					</details>
 				</div>
 			</div>
 		</>

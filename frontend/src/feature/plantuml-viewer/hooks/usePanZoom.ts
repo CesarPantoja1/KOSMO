@@ -1,12 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { PanZoomState } from '../model/types';
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP_FACTOR } from '../lib/zoom';
 
-export function usePanZoom(isReady: boolean) {
-	const [zoom, setZoom] = useState(1);
-	const [tx, setTx] = useState(0);
-	const [ty, setTy] = useState(0);
+interface UsePanZoomOptions {
+	control?: 'controlled' | 'uncontrolled';
+	controlledZoom?: number;
+	controlledTx?: number;
+	controlledTy?: number;
+	onPanZoomChange?: (state: PanZoomState) => void;
+}
+
+export function usePanZoom(isReady: boolean, options?: UsePanZoomOptions) {
+	const controlled = options?.control === 'controlled';
+	const onPanZoomChange = options?.onPanZoomChange;
+
+	const [internalZoom, setInternalZoom] = useState(1);
+	const [internalTx, setInternalTx] = useState(0);
+	const [internalTy, setInternalTy] = useState(0);
 	const [isPanning, setIsPanning] = useState(false);
+
+	const zoom = controlled ? (options?.controlledZoom ?? 1) : internalZoom;
+	const tx = controlled ? (options?.controlledTx ?? 0) : internalTx;
+	const ty = controlled ? (options?.controlledTy ?? 0) : internalTy;
 
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const isPanningRef = useRef(false);
@@ -18,16 +34,35 @@ export function usePanZoom(isReady: boolean) {
 		zoomRef.current = zoom;
 	}, [zoom]);
 
-	const zoomAt = useCallback((factor: number, cx: number, cy: number) => {
-		const newZoom = Math.max(
-			ZOOM_MIN,
-			Math.min(ZOOM_MAX, zoomRef.current * factor),
-		);
-		const f = newZoom / zoomRef.current;
-		setTx((t) => cx - (cx - t) * f);
-		setTy((t) => cy - (cy - t) * f);
-		setZoom(newZoom);
-	}, []);
+	const emitChange = useCallback(
+		(nextZoom: number, nextTx: number, nextTy: number) => {
+			if (controlled) {
+				onPanZoomChange?.({ zoom: nextZoom, tx: nextTx, ty: nextTy });
+			}
+		},
+		[controlled, onPanZoomChange],
+	);
+
+	const zoomAt = useCallback(
+		(factor: number, cx: number, cy: number) => {
+			const newZoom = Math.max(
+				ZOOM_MIN,
+				Math.min(ZOOM_MAX, zoomRef.current * factor),
+			);
+			const f = newZoom / zoomRef.current;
+			const nextTx = cx - (cx - tx) * f;
+			const nextTy = cy - (cy - ty) * f;
+
+			if (controlled) {
+				emitChange(newZoom, nextTx, nextTy);
+			} else {
+				setInternalTx(nextTx);
+				setInternalTy(nextTy);
+				setInternalZoom(newZoom);
+			}
+		},
+		[tx, ty, controlled, emitChange],
+	);
 
 	const zoomIn = useCallback(() => {
 		const vp = viewportRef.current;
@@ -44,10 +79,14 @@ export function usePanZoom(isReady: boolean) {
 	}, [zoomAt]);
 
 	const zoomReset = useCallback(() => {
-		setZoom(1);
-		setTx(0);
-		setTy(0);
-	}, []);
+		if (controlled) {
+			emitChange(1, 0, 0);
+		} else {
+			setInternalZoom(1);
+			setInternalTx(0);
+			setInternalTy(0);
+		}
+	}, [controlled, emitChange]);
 
 	useEffect(() => {
 		const el = viewportRef.current;
@@ -80,8 +119,15 @@ export function usePanZoom(isReady: boolean) {
 		if (!isPanningRef.current) return;
 		const dx = e.clientX - panStartRef.current.x;
 		const dy = e.clientY - panStartRef.current.y;
-		setTx(panTxTyRef.current.tx + dx);
-		setTy(panTxTyRef.current.ty + dy);
+		const nextTx = panTxTyRef.current.tx + dx;
+		const nextTy = panTxTyRef.current.ty + dy;
+
+		if (controlled) {
+			emitChange(zoomRef.current, nextTx, nextTy);
+		} else {
+			setInternalTx(nextTx);
+			setInternalTy(nextTy);
+		}
 	};
 
 	const handlePanEnd = () => {
