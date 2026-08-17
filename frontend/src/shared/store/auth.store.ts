@@ -41,3 +41,8 @@ export const useAuthStore = create<AuthState>()(
 		},
 	),
 );
+
+export const clearAuthStore = () => {
+	useAuthStore.persist.clearStorage();
+	useAuthStore.setState({ accessToken: null, refreshToken: null, user: null, mockUserId: null });
+};

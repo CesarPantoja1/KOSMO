@@ -12,10 +12,9 @@ import asyncio
 import os
 import sys
 
-from kosmo.application.auth import RegisterUser
 from kosmo.config import settings
 from kosmo.contracts.auth import UserAlreadyExistsError
-from kosmo.infrastructure.api.composition import build_auth_components
+from kosmo.infrastructure.api.composition import build_app_components
 
 DEFAULT_EMAIL = "dev@kosmo.dev"
 DEFAULT_PASSWORD = "dev-password-12345"
@@ -25,11 +24,16 @@ async def _run() -> int:
     email = os.getenv("SEED_EMAIL", DEFAULT_EMAIL).strip().lower()
     password = os.getenv("SEED_PASSWORD", DEFAULT_PASSWORD)
 
-    components = build_auth_components(settings)
-    register: RegisterUser = components.register_user
-    repo = components.user_repository
-
+    components = build_app_components(settings)
     try:
+        auth = components.auth
+        if auth is None:
+            print("[seed] error: AUTH_DISABLED=true, no se puede crear el usuario")  # noqa: T201
+            return 1
+
+        register = auth.register_user
+        repo = auth.user_repository
+
         try:
             user = await register.execute(email=email, password=password)
             status = "created"
@@ -45,8 +49,7 @@ async def _run() -> int:
         print(f"[seed] password={password}")  # noqa: T201
         return 0
     finally:
-        await components.redis.aclose()
-        await components.db_engine.dispose()
+        await components.close()
 
 
 def main() -> int:

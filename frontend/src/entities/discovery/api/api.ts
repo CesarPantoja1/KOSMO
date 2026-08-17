@@ -1,6 +1,7 @@
+import type { ChatHistory, ChatResponse } from '@/entities/chat';
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { DiscoveryChatResponse, DiscoveryResponse } from '../model/types';
+import type { DiscoveryResponse } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -9,36 +10,87 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 let mockContent =
 	'## Visión del producto\n\nEste es un descubrimiento de prueba en modo mock.';
 
-const mockChatResponses: DiscoveryChatResponse[] = [
+const mockChatResponses: ChatResponse[] = [
 	{
-		id: 'mock-chat-1',
-		role: 'assistant',
-		content: 'Hola, ¿en qué puedo ayudarte con el descubrimiento?',
-		created_at: new Date().toISOString(),
-		change_suggestions: null,
+		message: {
+			id: 'mock-chat-1',
+			role: 'assistant',
+			content: 'Hola, ¿en qué puedo ayudarte con el descubrimiento?',
+			created_at: new Date().toISOString(),
+			change_suggestions: null,
+			modification: null,
+		},
+		modification: null,
+		redirect: null,
+		consistency: null,
 	},
 	{
-		id: 'mock-chat-2',
-		role: 'assistant',
-		content:
-			'Aquí tienes una sugerencia de cambio para mejorar la sección de visión del producto.',
-		created_at: new Date().toISOString(),
-		change_suggestions: [{
-			id: 'mock-change-1',
-			section: 'Visión del producto',
-			description: 'Refinar la visión del producto para mayor claridad.',
-			diff_before: 'Este es un descubrimiento de prueba en modo mock.',
-			diff_after:
-				'Este es un descubrimiento refinado con mejoras en la visión del producto.',
-			rationale: 'Se mejoró la claridad y el enfoque de la visión del producto.',
-		}],
+		message: {
+			id: 'mock-chat-2',
+			role: 'assistant',
+			content:
+				'Aquí tienes una sugerencia de cambio para mejorar la sección de visión del producto.',
+			created_at: new Date().toISOString(),
+			change_suggestions: [
+				{
+					id: 'mock-chg-1',
+					section: 'Visión del producto',
+					description: 'Refinar la visión del producto para mayor claridad.',
+					diff_before: 'Este es un descubrimiento de prueba en modo mock.',
+					diff_after:
+						'Este es un descubrimiento refinado con mejoras en la visión del producto.',
+					rationale: 'Mayor claridad para el lector.',
+					applied: true,
+					not_applied_reason: null,
+				},
+			],
+			modification: {
+				applied: true,
+				modified_section: 'Visión del producto',
+				change_description: 'Se aplicaron los cambios sugeridos.',
+				modified_document: null,
+				before: null,
+				after: null,
+				undo_version_id: null,
+				clarification_message: null,
+			},
+		},
+		modification: {
+			applied: true,
+			modified_section: 'Visión del producto',
+			change_description: 'Se aplicaron los cambios sugeridos.',
+			modified_document: null,
+			before: null,
+			after: null,
+			undo_version_id: null,
+			clarification_message: null,
+		},
+		redirect: null,
+		consistency: null,
+	},
+	{
+		message: {
+			id: 'mock-chat-3',
+			role: 'assistant',
+			content:
+				'Tu descubrimiento parece listo. Te redirijo a la siguiente fase del proceso.',
+			created_at: new Date().toISOString(),
+			change_suggestions: null,
+			modification: null,
+		},
+		modification: null,
+		redirect: {
+			target_phase: 'requirements',
+			redirect_message: 'El descubrimiento está completo, avanza a requerimientos.',
+		},
+		consistency: null,
 	},
 ];
 
 // --- Mock implementations ---
 
 const mockGetDiscovery = async (projectId: string): Promise<DiscoveryResponse> => {
-	await delay(800);
+	await delay(5000);
 	return {
 		id: 'mock-discovery-1',
 		project_id: projectId,
@@ -51,7 +103,7 @@ const mockSaveDiscovery = async (
 	content: string,
 ): Promise<DiscoveryResponse> => {
 	await delay(500);
-	mockContent = content;
+	// mockContent = content;
 	return {
 		id: 'mock-discovery-1',
 		project_id: projectId,
@@ -69,25 +121,10 @@ const mockGenerateDiscovery = async (projectId: string): Promise<DiscoveryRespon
 	};
 };
 
-const mockRefineDiscovery = async (
-	projectId: string,
-	_instructions: string,
-): Promise<DiscoveryResponse> => {
-	await delay(1500);
-	mockContent =
-		mockContent +
-		'\n\n## Refinamiento aplicado\n\nContenido refinado basado en las instrucciones proporcionadas.';
-	return {
-		id: 'mock-discovery-1',
-		project_id: projectId,
-		content: mockContent,
-	};
-};
-
 const mockSendChatMessage = async (
 	_projectId: string,
 	_content: string,
-): Promise<DiscoveryChatResponse> => {
+): Promise<ChatResponse> => {
 	await delay(500);
 	return mockChatResponses[Math.floor(Math.random() * mockChatResponses.length)];
 };
@@ -95,9 +132,12 @@ const mockSendChatMessage = async (
 // --- Real implementations ---
 
 const realGetDiscovery = (projectId: string) => {
-	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery?_t=${Date.now()}`, {
-		method: 'GET',
-	});
+	return apiClient<DiscoveryResponse>(
+		`/api/v1/projects/${projectId}/discovery?_t=${Date.now()}`,
+		{
+			method: 'GET',
+		},
+	);
 };
 
 const realSaveDiscovery = (projectId: string, content: string) => {
@@ -114,23 +154,12 @@ const realGenerateDiscovery = (projectId: string) => {
 	});
 };
 
-const realRefineDiscovery = (projectId: string, instructions: string) => {
-	return apiClient<DiscoveryResponse>(`/api/v1/projects/${projectId}/discovery/refine`, {
+const realSendChatMessage = (projectId: string, content: string) => {
+	return apiClient<ChatResponse>(`/api/v1/projects/${projectId}/discovery/chat`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ instructions }),
+		body: JSON.stringify({ content }),
 	});
-};
-
-const realSendChatMessage = (projectId: string, content: string) => {
-	return apiClient<DiscoveryChatResponse>(
-		`/api/v1/projects/${projectId}/discovery/chat`,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ content }),
-		},
-	);
 };
 
 // --- Exports (switch based on USE_MOCKS) ---
@@ -149,18 +178,41 @@ export const saveDiscovery = (
 export const generateDiscovery = (projectId: string): Promise<DiscoveryResponse> =>
 	USE_MOCKS ? mockGenerateDiscovery(projectId) : realGenerateDiscovery(projectId);
 
-export const refineDiscovery = (
-	projectId: string,
-	instructions: string,
-): Promise<DiscoveryResponse> =>
-	USE_MOCKS
-		? mockRefineDiscovery(projectId, instructions)
-		: realRefineDiscovery(projectId, instructions);
-
 export const sendChatMessage = (
 	projectId: string,
 	content: string,
-): Promise<DiscoveryChatResponse> =>
+): Promise<ChatResponse> =>
 	USE_MOCKS
 		? mockSendChatMessage(projectId, content)
 		: realSendChatMessage(projectId, content);
+
+const mockGetChatHistory = async (projectId: string): Promise<ChatHistory> => {
+	await delay(300);
+	return {
+		phase: 'discovery',
+		context: projectId,
+		messages: [],
+		has_more: false,
+		next_cursor: null,
+	};
+};
+
+const realGetChatHistory = (projectId: string, sessionId: string | null, before?: string | null) => {
+	const query = new URLSearchParams();
+	if (sessionId) query.set('session_id', sessionId);
+	if (before) query.set('before', before);
+	const suffix = query.toString() ? `?${query.toString()}` : '';
+	return apiClient<ChatHistory>(
+		`/api/v1/projects/${projectId}/discovery/chat${suffix}`,
+		{ method: 'GET' },
+	);
+};
+
+export const getChatHistory = (
+	projectId: string,
+	sessionId: string | null = null,
+	before?: string | null,
+): Promise<ChatHistory> =>
+	USE_MOCKS
+		? mockGetChatHistory(projectId)
+		: realGetChatHistory(projectId, sessionId, before);

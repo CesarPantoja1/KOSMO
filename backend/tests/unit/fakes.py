@@ -2,21 +2,31 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from kosmo.contracts.audit.events import AuditEvent
 from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
 from kosmo.contracts.chat import (
     ChatHistoryId,
-    EstadoPlanCambio,
+    ChatSession,
+    ChatSessionSummary,
     HistorialChat,
     MensajeChat,
-    PlanCambio,
+)
+from kosmo.contracts.consistency import (
+    ConsistencyEvaluation,
+    ConsistencyEvaluationStatus,
 )
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import (
+    ChatSessionId,
+    ConsistencyEvaluationId,
+    FeatureId,
+    ProjectId,
+)
 from kosmo.contracts.sdd.project import Project
 
 _MAX_FAILURES = 10
@@ -46,20 +56,44 @@ class InMemoryProjectRepository:
         self.projects[str(project.id)] = project
         return project
 
+    async def delete(self, project_id: ProjectId) -> None:
+        self.projects.pop(str(project_id), None)
+
 
 class InMemoryDocumentRepository:
     def __init__(self) -> None:
         self.discovery_docs: dict[str, RichTextDocument] = {}
         self.versions: dict[str, str] = {}
+        self._version_projects: dict[str, str] = {}
         self._latest_version: dict[tuple[str, str], str] = {}
         self._version_counter = 0
+        self.locked_project_ids: list[str] = []
 
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
+    async def get_discovery(
+        self,
+        project_id: ProjectId,
+        *,
+        for_update: bool = False,
+    ) -> RichTextDocument | None:
+        if for_update:
+            self.locked_project_ids.append(str(project_id))
         return self.discovery_docs.get(str(project_id))
 
     async def save_discovery(self, project_id: ProjectId, document: RichTextDocument) -> RichTextDocument:
         self.discovery_docs[str(project_id)] = document
         return document
+
+    async def delete_discovery(self, project_id: ProjectId) -> None:
+        self.discovery_docs.pop(str(project_id), None)
+
+    async def delete_versions_by_project(self, project_id: ProjectId) -> None:
+        for version_id in list(self._version_projects):
+            if self._version_projects[version_id] == str(project_id):
+                self.versions.pop(version_id, None)
+                del self._version_projects[version_id]
+        self._latest_version = {
+            (pid, phase): markdown for (pid, phase), markdown in self._latest_version.items() if pid != str(project_id)
+        }
 
     async def get_requirements(self, feature_id: Any) -> RichTextDocument | None:  # noqa: ARG002
         return None
@@ -77,6 +111,7 @@ class InMemoryDocumentRepository:
         self._version_counter += 1
         version_id = f"ver_{self._version_counter}"
         self.versions[version_id] = markdown
+        self._version_projects[version_id] = str(project_id)
         phase_value = phase.value if hasattr(phase, "value") else str(phase)
         self._latest_version[(str(project_id), phase_value)] = markdown
         return version_id
@@ -92,8 +127,11 @@ class InMemoryDocumentRepository:
 class InMemoryFeatureRepository:
     def __init__(self) -> None:
         self.features: dict[str, Feature] = {}
+        self.locked_feature_ids: list[str] = []
 
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
+    async def by_id(self, feature_id: FeatureId, *, for_update: bool = False) -> Feature | None:
+        if for_update:
+            self.locked_feature_ids.append(str(feature_id))
         return self.features.get(str(feature_id))
 
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
@@ -122,27 +160,44 @@ class InMemoryFeatureRepository:
 class InMemoryRequirementRepository:
     def __init__(self) -> None:
         self._requirements: dict[str, str] = {}
+        self.locked_feature_ids: list[str] = []
 
     async def save(self, feature_id: FeatureId, markdown: str) -> None:
         self._requirements[str(feature_id)] = markdown
 
-    async def by_feature_id(self, feature_id: FeatureId) -> str | None:
+    async def by_feature_id(self, feature_id: FeatureId, *, for_update: bool = False) -> str | None:
+        if for_update:
+            self.locked_feature_ids.append(str(feature_id))
         return self._requirements.get(str(feature_id))
+
+    async def delete(self, feature_id: FeatureId) -> None:
+        self._requirements.pop(str(feature_id), None)
 
 
 class InMemoryActivityDiagramRepository:
     def __init__(self) -> None:
         self._diagrams: dict[str, DiagramaActividad] = {}
+        self.locked_feature_ids: list[str] = []
 
     async def save(self, diagram: DiagramaActividad) -> DiagramaActividad:
         self._diagrams[str(diagram.feature_id)] = diagram
         return diagram
 
-    async def by_feature_id(self, feature_id: FeatureId) -> DiagramaActividad | None:
+    async def by_feature_id(
+        self,
+        feature_id: FeatureId,
+        *,
+        for_update: bool = False,
+    ) -> DiagramaActividad | None:
+        if for_update:
+            self.locked_feature_ids.append(str(feature_id))
         return self._diagrams.get(str(feature_id))
 
     async def exists(self, feature_id: FeatureId) -> bool:
         return str(feature_id) in self._diagrams
+
+    async def delete(self, feature_id: FeatureId) -> None:
+        self._diagrams.pop(str(feature_id), None)
 
 
 class StubEmbedder:
@@ -280,10 +335,147 @@ class InMemoryStore:
                 del self.refresh[jti]
 
 
+class InMemoryTraceabilityRepository:
+    def __init__(self) -> None:
+        self.edges: list[tuple[str, str, str, str, str]] = []
+
+    async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
+        upstream = [
+            {"type": source_type, "id": source_id, "origin": origin}
+            for source_type, source_id, _target_type, target_id, origin in self.edges
+            if target_id == artifact_id
+        ]
+        downstream = [
+            {"type": target_type, "id": target_id, "origin": origin}
+            for _source_type, source_id, target_type, target_id, origin in self.edges
+            if source_id == artifact_id
+        ]
+        return {"upstream": upstream, "downstream": downstream}
+
+    async def add_edge(
+        self,
+        source_type: str,
+        source_id: str,
+        target_type: str,
+        target_id: str,
+        origin: str = "llm",
+    ) -> None:
+        self.edges.append((source_type, source_id, target_type, target_id, origin))
+
+    async def add_feature_requirement_edges(self, feature_id: FeatureId, requirement_ids: list[Any]) -> None:
+        for req_id in requirement_ids:
+            self.edges.append(("feature", str(feature_id), "requirement", str(req_id), "llm"))
+
+    async def delete_by_entity_id(self, entity_id: str) -> None:
+        self.edges = [edge for edge in self.edges if edge[1] != entity_id and edge[3] != entity_id]
+
+
+class InMemoryOutbox:
+    def __init__(self) -> None:
+        self.jobs: list[tuple[str, dict[str, Any]]] = []
+
+    async def enqueue(self, job_type: str, payload: dict[str, Any]) -> None:
+        self.jobs.append((job_type, payload))
+
+
+class InMemoryConsistencyEvaluationRepository:
+    def __init__(self) -> None:
+        self._rows: dict[str, ConsistencyEvaluation] = {}
+        self._by_key: dict[tuple[str, str, str, str], ConsistencyEvaluation] = {}
+
+    async def save(self, evaluation: ConsistencyEvaluation) -> ConsistencyEvaluation:
+        key = (
+            str(evaluation.project_id),
+            evaluation.source_phase.value,
+            evaluation.target_phase.value,
+            evaluation.target_artifact_id,
+        )
+        existing = self._by_key.get(key)
+        stored = dataclasses.replace(evaluation, id=existing.id) if existing is not None else evaluation
+        self._by_key[key] = stored
+        self._rows[str(stored.id)] = stored
+        return stored
+
+    async def by_id(self, evaluation_id: ConsistencyEvaluationId) -> ConsistencyEvaluation | None:
+        return self._rows.get(str(evaluation_id))
+
+    async def list_unresolved(
+        self,
+        project_id: ProjectId,
+        target_phase: SpecPhase,
+    ) -> list[ConsistencyEvaluation]:
+        unresolved = {
+            ConsistencyEvaluationStatus.EVALUATING,
+            ConsistencyEvaluationStatus.COMPLETED,
+            ConsistencyEvaluationStatus.FAILED,
+        }
+        return [
+            e
+            for e in self._rows.values()
+            if str(e.project_id) == str(project_id) and e.target_phase == target_phase and e.status in unresolved
+        ]
+
+    async def list_for_activity(
+        self,
+        project_id: ProjectId,
+        *,
+        limit: int = 50,
+    ) -> list[ConsistencyEvaluation]:
+        resolved = {ConsistencyEvaluationStatus.APPLIED, ConsistencyEvaluationStatus.DISCARDED}
+        return [e for e in self._rows.values() if str(e.project_id) == str(project_id) and e.status in resolved][:limit]
+
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        for key in list(self._by_key):
+            if key[0] == str(project_id):
+                evaluation = self._by_key.pop(key)
+                self._rows.pop(str(evaluation.id), None)
+
+
+class InMemoryUnitOfWork:
+    def __init__(
+        self,
+        *,
+        projects: InMemoryProjectRepository | None = None,
+        documents: InMemoryDocumentRepository | None = None,
+        features: InMemoryFeatureRepository | None = None,
+        requirements: InMemoryRequirementRepository | None = None,
+        diagrams: InMemoryActivityDiagramRepository | None = None,
+        chat: InMemoryChatRepository | None = None,
+        traceability: InMemoryTraceabilityRepository | None = None,
+        outbox: InMemoryOutbox | None = None,
+    ) -> None:
+        self.projects = projects or InMemoryProjectRepository()
+        self.documents = documents or InMemoryDocumentRepository()
+        self.features = features or InMemoryFeatureRepository()
+        self.requirements = requirements or InMemoryRequirementRepository()
+        self.diagrams = diagrams or InMemoryActivityDiagramRepository()
+        self.chat = chat or InMemoryChatRepository()
+        self.traceability = traceability or InMemoryTraceabilityRepository()
+        self.outbox = outbox or InMemoryOutbox()
+
+    async def __aenter__(self) -> InMemoryUnitOfWork:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+    async def rollback(self) -> None:
+        return None
+
+
 class InMemoryChatRepository:
     def __init__(self) -> None:
         self.messages: list[MensajeChat] = []
-        self.plans: list[PlanCambio] = []
+        self.sessions: list[ChatSession] = []
+        self._message_sessions: list[tuple[MensajeChat, ChatSessionId | None]] = []
 
     async def save_message(
         self,
@@ -291,8 +483,10 @@ class InMemoryChatRepository:
         phase: SpecPhase,  # noqa: ARG002
         message: MensajeChat,
         context_id: str | None = None,  # noqa: ARG002
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat:
         self.messages.append(message)
+        self._message_sessions.append((message, session_id))
         return message
 
     async def get_history(
@@ -300,74 +494,68 @@ class InMemoryChatRepository:
         project_id: ProjectId,  # noqa: ARG002
         phase: SpecPhase,  # noqa: ARG002
         context_id: str | None = None,  # noqa: ARG002
+        limit: int = 200,  # noqa: ARG002
+        before: str | None = None,  # noqa: ARG002
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None:
+        selected = [
+            msg
+            for msg, sid in self._message_sessions
+            if (session_id is None and sid is None) or (session_id is not None and sid == session_id)
+        ]
+        if not selected:
+            return None
         return HistorialChat(
             id=ChatHistoryId("hist_test"),
             project_id=project_id,
             phase=phase,
             context_id=context_id,
-            messages=tuple(self.messages),
+            session_id=session_id,
+            messages=tuple(selected),
         )
 
     async def save_history(self, history: HistorialChat) -> HistorialChat:
         self.messages = list(history.messages)
         return history
 
-    async def add_plan_change(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase,  # noqa: ARG002
-        change: PlanCambio,
-    ) -> PlanCambio:
-        self.plans.append(change)
-        return change
+    async def create_session(self, session: ChatSession) -> ChatSession:
+        self.sessions.append(session)
+        return session
 
-    async def list_plan_changes(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase | None = None,  # noqa: ARG002
-    ) -> list[PlanCambio]:
-        return self.plans
+    async def delete_session(self, session_id: ChatSessionId) -> None:
+        self.sessions = [s for s in self.sessions if s.id != session_id]
+        self._message_sessions = [(msg, sid) for msg, sid in self._message_sessions if sid != session_id]
 
-    async def update_plan_change_status(
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        project_sessions = {s.id for s in self.sessions if str(s.project_id) == str(project_id)}
+        self.sessions = [s for s in self.sessions if s.id not in project_sessions]
+        self._message_sessions = [
+            (msg, sid) for msg, sid in self._message_sessions if sid is None or sid not in project_sessions
+        ]
+        self.messages = [msg for msg, _sid in self._message_sessions]
+
+    async def list_sessions(
         self,
         project_id: ProjectId,  # noqa: ARG002
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None:
-        for idx, item in enumerate(self.plans):
-            if item.id == change_id:
-                updated = PlanCambio(
-                    id=item.id,
-                    section=item.section,
-                    description=item.description,
-                    diff=item.diff,
-                    status=status,
-                    origin=item.origin,
-                    rationale=item.rationale,
-                    user_version=user_version or item.user_version,
-                    context_id=item.context_id,
+        phase: SpecPhase,
+        *,
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> list[ChatSessionSummary]:
+        summaries: list[ChatSessionSummary] = []
+        for session in self.sessions:
+            if session.phase != phase:
+                continue
+            count = sum(1 for _msg, sid in self._message_sessions if sid == session.id)
+            summaries.append(
+                ChatSessionSummary(
+                    id=session.id,
+                    phase=session.phase,
+                    context_id=session.context_id,
+                    created_at=session.created_at,
+                    message_count=count,
                 )
-                self.plans[idx] = updated
-                return updated
-        return None
-
-    async def remove_plan_change(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        change_id: PlanChangeId,
-    ) -> bool:
-        initial_len = len(self.plans)
-        self.plans = [p for p in self.plans if p.id != change_id]
-        return len(self.plans) < initial_len
-
-    async def clear_plan(
-        self,
-        project_id: ProjectId,  # noqa: ARG002
-        phase: SpecPhase | None = None,  # noqa: ARG002
-    ) -> None:
-        self.plans.clear()
+            )
+        return summaries
 
 
 class FakeConsistencyEvaluator:
@@ -387,7 +575,7 @@ class FakeConsistencyEvaluator:
         source_phase: SpecPhase,  # noqa: ARG002
         target_phase: SpecPhase,
         project_id: ProjectId,  # noqa: ARG002
-        applied_changes: list[PlanCambio],  # noqa: ARG002
+        applied_changes: list[object],  # noqa: ARG002
     ) -> Any:
         from kosmo.contracts.consistency import ConsistencyEvaluationOutput
 

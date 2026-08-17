@@ -8,21 +8,13 @@ from typing import Any, Protocol, cast
 from pydantic import BaseModel, model_validator
 
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ChatHistoryId, ChatMessageId, ChatSessionId, ProjectId
 
 
 class ChatRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
-
-
-class EstadoPlanCambio(StrEnum):
-    PENDING = "pending"
-    ADDED = "added"
-    CONFLICT = "conflict"
-    APPLIED = "applied"
-    DISCARDED = "discarded"
 
 
 @dataclass(frozen=True)
@@ -32,25 +24,37 @@ class DiffCambio:
 
 
 @dataclass(frozen=True)
+class AppliedChange:
+    """Cambio aplicado sobre un artefacto, usado como entrada de las evaluaciones de consistencia."""
+
+    id: str
+    section: str
+    description: str = ""
+    diff: DiffCambio = field(default_factory=lambda: DiffCambio(before="", after=""))
+    rationale: str | None = None
+    change_class: str = ""
+
+
+@dataclass(frozen=True)
 class SugerenciaCambio:
     id: str
     section: str
     description: str
     diff: DiffCambio
     rationale: str | None = None
+    applied: bool = True
+    not_applied_reason: str | None = None
 
 
 @dataclass(frozen=True)
-class PlanCambio:
-    id: PlanChangeId
-    section: str
-    description: str
-    diff: DiffCambio
-    status: EstadoPlanCambio = EstadoPlanCambio.PENDING
-    origin: str = "Chat Descubrimiento"
-    rationale: str | None = None
-    user_version: str | None = None
-    context_id: str | None = None
+class ModificacionChat:
+    applied: bool
+    modified_section: str | None = None
+    change_description: str | None = None
+    modified_document: str | None = None
+    before: str | None = None
+    after: str | None = None
+    clarification_message: str | None = None
 
 
 @dataclass(frozen=True, init=False)
@@ -60,6 +64,7 @@ class MensajeChat:
     content: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     suggested_changes: list[SugerenciaCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    modification: ModificacionChat | None = None
     error: str | None = None
 
     def __init__(
@@ -69,6 +74,7 @@ class MensajeChat:
         content: str,
         timestamp: datetime | None = None,
         suggested_changes: list[SugerenciaCambio] | None = None,
+        modification: ModificacionChat | None = None,
         error: str | None = None,
         *,
         suggested_change: SugerenciaCambio | None = None,
@@ -82,6 +88,7 @@ class MensajeChat:
         object.__setattr__(self, "content", content)
         object.__setattr__(self, "timestamp", timestamp or datetime.now(UTC))
         object.__setattr__(self, "suggested_changes", normalized_changes)
+        object.__setattr__(self, "modification", modification)
         object.__setattr__(self, "error", error)
 
     @property
@@ -96,6 +103,7 @@ class HistorialChat:
     project_id: ProjectId
     phase: SpecPhase
     context_id: str | None = None
+    session_id: ChatSessionId | None = None
     messages: tuple[MensajeChat, ...] = field(default_factory=tuple)
     has_more: bool = False
     next_cursor: str | None = None
@@ -106,6 +114,7 @@ class HistorialChat:
             project_id=self.project_id,
             phase=self.phase,
             context_id=self.context_id,
+            session_id=self.session_id,
             messages=(*self.messages, message),
         )
 
@@ -122,6 +131,26 @@ class HistorialChat:
         return f"{self.project_id}:{self.phase.value}:{self.context_id or ''}"
 
 
+@dataclass(frozen=True)
+class ChatSession:
+    id: ChatSessionId
+    project_id: ProjectId
+    phase: SpecPhase
+    context_id: str | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class ChatSessionSummary:
+    id: ChatSessionId
+    phase: SpecPhase
+    context_id: str | None
+    created_at: datetime
+    message_count: int = 0
+    last_message_at: datetime | None = None
+    title: str = ""
+
+
 class ChatRepository(Protocol):
     async def save_message(
         self,
@@ -129,6 +158,7 @@ class ChatRepository(Protocol):
         phase: SpecPhase,
         message: MensajeChat,
         context_id: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat: ...
 
     async def get_history(
@@ -138,6 +168,7 @@ class ChatRepository(Protocol):
         context_id: str | None = None,
         limit: int = 200,
         before: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None: ...
 
     async def save_history(
@@ -145,38 +176,19 @@ class ChatRepository(Protocol):
         history: HistorialChat,
     ) -> HistorialChat: ...
 
-    async def add_plan_change(
+    async def create_session(self, session: ChatSession) -> ChatSession: ...
+
+    async def delete_session(self, session_id: ChatSessionId) -> None: ...
+
+    async def delete_by_project(self, project_id: ProjectId) -> None: ...
+
+    async def list_sessions(
         self,
         project_id: ProjectId,
         phase: SpecPhase,
-        change: PlanCambio,
-    ) -> PlanCambio: ...
-
-    async def list_plan_changes(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase | None = None,
-    ) -> list[PlanCambio]: ...
-
-    async def update_plan_change_status(
-        self,
-        project_id: ProjectId,
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None: ...
-
-    async def remove_plan_change(
-        self,
-        project_id: ProjectId,
-        change_id: PlanChangeId,
-    ) -> bool: ...
-
-    async def clear_plan(
-        self,
-        project_id: ProjectId,
-        phase: SpecPhase | None = None,
-    ) -> None: ...
+        *,
+        context_id: str | None = None,
+    ) -> list[ChatSessionSummary]: ...
 
 
 class SugerenciaCambioLLM(BaseModel):

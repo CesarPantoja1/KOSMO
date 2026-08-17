@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from kosmo.application.requirements.delete_requirements import (
+    DeleteRequirementsInput,
+    DeleteRequirementsUseCase,
+)
 from kosmo.application.requirements.generate_ears import (
     GenerateEARSInput,
     GenerateEARSOutput,
@@ -25,6 +29,8 @@ from kosmo.application.requirements.regenerate_requirements import (
 from kosmo.application.requirements.save_requirements import SaveRequirementsUseCase
 
 __all__ = [
+    "DeleteRequirementsInput",
+    "DeleteRequirementsUseCase",
     "GenerateEARSInput",
     "GenerateEARSOutput",
     "GenerateEARSUseCase",

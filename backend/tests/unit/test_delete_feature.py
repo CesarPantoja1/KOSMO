@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+import pytest
+
+from kosmo.application.features.delete_feature import DeleteFeatureUseCase
+from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.ids import ActivityDiagramId, FeatureId, ProjectId, UserId
+from kosmo.contracts.sdd.project import Project
+from tests.unit.fakes import (
+    InMemoryActivityDiagramRepository,
+    InMemoryFeatureRepository,
+    InMemoryOutbox,
+    InMemoryProjectRepository,
+    InMemoryRequirementRepository,
+    InMemoryTraceabilityRepository,
+)
+
+
+def _a_project(project_id: str = "prj_del") -> Project:
+    return Project(
+        id=ProjectId(project_id),
+        name="Test Project",
+        slug="test-project",
+        description="Test",
+        owner_id=UserId("usr_01"),
+    )
+
+
+def _a_feature(project: Project, feature_id: str = "feat_del") -> Feature:
+    return Feature(
+        id=FeatureId(feature_id),
+        number=1,
+        title="Característica a eliminar",
+        slug="caracteristica-a-eliminar",
+        description="Descripción",
+        project_id=project.id,
+    )
+
+
+def _a_diagram(feature: Feature) -> DiagramaActividad:
+    return DiagramaActividad(
+        id=ActivityDiagramId("adg_del"),
+        feature_id=feature.id,
+        diagram_syntax="@startuml\nstart\n:accion;\nstop\n@enduml",
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_feature_enqueues_downstream_evaluation() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    project = _a_project()
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feature = _a_feature(project)
+    await feature_repo.save(feature)
+
+    outbox = InMemoryOutbox()
+    use_case = DeleteFeatureUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=InMemoryRequirementRepository(),
+        diagram_repo=InMemoryActivityDiagramRepository(),
+        traceability_repo=InMemoryTraceabilityRepository(),
+        outbox=outbox,
+    )
+
+    # Act
+    await use_case.execute(project.id, feature.id)
+
+    # Assert — eliminar una característica dispara la verificación de las fases a la derecha
+    assert await feature_repo.by_id(feature.id) is None
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["project_id"] == "prj_del"
+    assert payload["source_phase"] == "caracteristicas"
+    assert payload["changes"][0]["after"] == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_feature_without_outbox_keeps_working() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    project = _a_project("prj_del2")
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feature = _a_feature(project, "feat_del2")
+    await feature_repo.save(feature)
+
+    use_case = DeleteFeatureUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=InMemoryRequirementRepository(),
+        diagram_repo=InMemoryActivityDiagramRepository(),
+    )
+
+    # Act & Assert — sin outbox el caso de uso sigue funcionando
+    await use_case.execute(project.id, feature.id)
+    assert await feature_repo.by_id(feature.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_feature_cascades_requirements_and_diagram() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    project = _a_project("prj_del3")
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feature = _a_feature(project, "feat_del3")
+    await feature_repo.save(feature)
+
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(feature.id, "### REQ-1.1\n\nRequisito uno.")
+    diagram_repo = InMemoryActivityDiagramRepository()
+    await diagram_repo.save(_a_diagram(feature))
+
+    use_case = DeleteFeatureUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        diagram_repo=diagram_repo,
+    )
+
+    # Act
+    await use_case.execute(project.id, feature.id)
+
+    # Assert — requisitos y modelo eliminados en cascada
+    assert await requirement_repo.by_feature_id(feature.id) is None
+    assert await diagram_repo.by_feature_id(feature.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_feature_cascade_tolerates_missing_artifacts() -> None:
+    # Arrange — la característica no tiene requisitos ni modelo
+    project_repo = InMemoryProjectRepository()
+    project = _a_project("prj_del4")
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feature = _a_feature(project, "feat_del4")
+    await feature_repo.save(feature)
+
+    use_case = DeleteFeatureUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=InMemoryRequirementRepository(),
+        diagram_repo=InMemoryActivityDiagramRepository(),
+    )
+
+    # Act & Assert — el cascade no falla cuando los hijos no existen
+    await use_case.execute(project.id, feature.id)
+    assert await feature_repo.by_id(feature.id) is None

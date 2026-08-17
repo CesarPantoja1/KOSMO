@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
+from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import DiscoveryPhaseOutput
-from kosmo.contracts.sdd.document import RichTextDocument
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import ProjectId
@@ -41,6 +43,7 @@ class RegenerateDiscoveryUseCase:
         requirement_repo: RequirementRepository,
         diagram_repo: ActivityDiagramRepository,
         agent: AgentPort,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._document_repo = document_repo
@@ -48,6 +51,7 @@ class RegenerateDiscoveryUseCase:
         self._requirement_repo = requirement_repo
         self._diagram_repo = diagram_repo
         self._agent = agent
+        self._outbox = outbox
 
     async def execute(self, input_data: RegenerateDiscoveryInput) -> RegenerateDiscoveryOutput:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -119,6 +123,20 @@ class RegenerateDiscoveryUseCase:
         saved_doc = await self._document_repo.save_discovery(
             project_id=input_data.project_id,
             document=phase_output.discovery_document,
+        )
+
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=input_data.project_id,
+            source_phase=SpecPhase.DESCUBRIMIENTO,
+            changes=[
+                {
+                    "section": "documento",
+                    "description": "Regeneración con IA del documento de Descubrimiento",
+                    "before": "",
+                    "after": document_to_markdown(saved_doc),
+                }
+            ],
         )
 
         return RegenerateDiscoveryOutput(

@@ -183,3 +183,38 @@ class PlanChangeNotFoundError(SpecError):
             instance=instance,
         )
         super().__init__(problem)
+
+
+class ConsistencyStaleError(SpecError):
+    def __init__(
+        self,
+        *,
+        evaluation_id: str,
+        detail: str,
+        instance: str = "/api/v1/consistency",
+    ) -> None:
+        problem = ProblemDetail(
+            type="urn:kosmo:consistency:stale",
+            title="La sugerencia ya no aplica",
+            status=409,
+            detail=detail,
+            instance=f"{instance}/evaluations/{evaluation_id}/apply",
+        )
+        super().__init__(problem)
+
+
+class ConsistencyEvaluationNotFoundError(SpecError):
+    def __init__(
+        self,
+        *,
+        evaluation_id: str,
+        instance: str = "/api/v1/consistency",
+    ) -> None:
+        problem = ProblemDetail(
+            type="urn:kosmo:consistency:evaluation-not-found",
+            title="Evaluación de consistencia no encontrada",
+            status=404,
+            detail=f"La evaluación {evaluation_id} no existe",
+            instance=f"{instance}/evaluations/{evaluation_id}",
+        )
+        super().__init__(problem)

@@ -1,6 +1,8 @@
 export { apiClient } from './client';
 export { authApi } from './auth';
-export { planApi } from './plan.api';
+export { ApiError, formatApiError, parseApiError } from './errors';
+export type { ApiViolation } from './errors';
+export { authHeaders } from './headers';
 export type {
 	UserPublic,
 	AuthorizationCodeResponse,
@@ -8,4 +10,3 @@ export type {
 	TokenPairResponse,
 	PrincipalView,
 } from './auth';
-export type { PlanStateViewResponse } from './plan.api';

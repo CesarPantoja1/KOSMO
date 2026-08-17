@@ -1,18 +1,21 @@
 'use client';
 
-import { useDiscoveryStore, type DiscoveryChatResponse } from '@/entities/discovery';
-import { usePlanActions } from '@/entities/plan';
+import { useDiscoveryStore } from '@/entities/discovery';
+import { createAssistantError } from '@/entities/chat';
+import type { ChatMessage } from '@/entities/chat';
 import {
-	Chatbot,
-	FloatingPlan,
+	ChatStreamPanel,
 	MarkdownEditor,
 	type MarkdownEditorHandle,
+	type SaveStatus,
 } from '@/feature';
-import type { ChatMessage } from '@/feature/chatbot';
-import { Ai, ArrowRight, Loading, ModalConfirmLeave, toast } from '@/shared/ui';
+import { Ai, ArrowRight, Loading, ModalConfirm, toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
+import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const generatingDiscoveryMessages = [
 	'Analizando información del proyecto...',
@@ -20,26 +23,12 @@ const generatingDiscoveryMessages = [
 	'Generando documento de descubrimiento...',
 ];
 
-/** Adapta el tipo de dominio DiscoveryChatResponse al tipo generico ChatMessage del chatbot UI */
-function toChatMessage(r: DiscoveryChatResponse): ChatMessage {
-	return {
-		id: r.id,
-		role: r.role,
-		content: r.content,
-		created_at: r.created_at,
-		change_suggestions: r.change_suggestions ?? undefined,
-	};
-}
-
 const DiscoveryPage = () => {
 	const editorRef = useRef<MarkdownEditorHandle>(null);
-	const [markdown, setMarkdown] = useState('');
-	const currentProject = useAppStore((s) => s.currentProject);
-	const [isLoading, _setIsLoading] = useState(!!currentProject);
-	const [hasDiscovery, setHasDiscovery] = useState(false);
+	const currentProject = useProjectStore((s) => s.currentProject);
 	const [isGeneratingDiscovery, setIsGeneratingDiscovery] = useState(false);
-	const savedContentRef = useRef('');
 	const router = useRouter();
+	const isSavingRef = useRef(false);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -48,61 +37,56 @@ const DiscoveryPage = () => {
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-	const [isChatLoading, setIsChatLoading] = useState(false);
-	const [hasUnsavedChanges, setHasUnsavedChangesLocal] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
+	const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
 	const chatHistory = useDiscoveryStore((s) => s.chatHistory);
-	const sendChatMessage = useDiscoveryStore((s) => s.sendChatMessage);
+	const appendUserMessage = useDiscoveryStore((s) => s.appendUserMessage);
+	const appendAssistantMessage = useDiscoveryStore((s) => s.appendAssistantMessage);
+	const loadChatHistory = useDiscoveryStore((s) => s.loadChatHistory);
+	const loadOlderChatHistory = useDiscoveryStore((s) => s.loadOlderChatHistory);
+	const historyHasMore = useDiscoveryStore((s) => s.historyHasMore);
+	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
 	const saveDiscovery = useDiscoveryStore((s) => s.saveDiscovery);
 	const generateDiscovery = useDiscoveryStore((s) => s.generateDiscovery);
+	const currentDiscovery = useDiscoveryStore((s) => s.currentDiscovery);
+	const hasDiscovery = !!currentDiscovery?.content;
+	const [markdown, setMarkdown] = useState(currentDiscovery?.content ?? '');
+	const [savedContent, setSavedContent] = useState(currentDiscovery?.content ?? '');
 
+	// Sync markdown with store after Zustand persist hydration.
 	useEffect(() => {
-		setHasUnsavedChangesLocal(markdown !== savedContentRef.current);
-	}, [markdown]);
-
-	useEffect(() => {
-		setHasUnsavedChanges(hasUnsavedChanges);
-	}, [hasUnsavedChanges, setHasUnsavedChanges]);
-
-	const getDiscovery = useDiscoveryStore((s) => s.getDiscovery);
-
-	useEffect(() => {
-		if (!currentProject) {
-			router.push('/proyecto');
-			return;
-		}
-
-		getDiscovery(currentProject.id)
-			.then((data) => {
-				setMarkdown(data.content);
-				savedContentRef.current = data.content;
-				setHasDiscovery(true);
-			})
-			.catch(() => {
-				setMarkdown('');
-				savedContentRef.current = '';
-			})
-			.finally(() => _setIsLoading(false));
-	}, [currentProject, router]); // eslint-disable-line react-hooks/exhaustive-deps
+		if (!currentDiscovery?.content || currentDiscovery.content === savedContent) return;
+		const timer = window.setTimeout(() => {
+			setMarkdown(currentDiscovery.content);
+			setSavedContent(currentDiscovery.content);
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [currentDiscovery, savedContent]);
 
 	const doSave = async (): Promise<boolean> => {
 		if (!currentProject) return false;
 
-		const savingToast = toast.info('Guardando...');
+		setSaveStatus('saving');
 
 		try {
+			isSavingRef.current = true;
 			await saveDiscovery(currentProject.id, markdown);
-			savedContentRef.current = markdown;
-			setHasUnsavedChangesLocal(false);
-			toast.close(savingToast);
-			toast.success('Guardado');
+			setSavedContent(markdown);
+			setSaveStatus('saved');
 			return true;
 		} catch {
-			toast.close(savingToast);
-			toast.error('No se pudo guardar');
+			setSaveStatus('error');
 			return false;
+		} finally {
+			isSavingRef.current = false;
 		}
 	};
+
+	useUnsavedChanges({
+		isDirty: markdown !== savedContent,
+		onAutosave: doSave,
+	});
 
 	const handleNextLink = async () => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
@@ -120,13 +104,9 @@ const DiscoveryPage = () => {
 		try {
 			const data = await generateDiscovery(currentProject.id);
 			setMarkdown(data.content);
-			savedContentRef.current = data.content;
-			setHasDiscovery(true);
-			toast.success('Descubrimiento generado exitosamente');
+			setSavedContent(data.content);
 		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : 'Error al generar el descubrimiento';
-			toast.error(message);
+			toast.error(formatApiError(err, 'Error al generar el descubrimiento'));
 		} finally {
 			setIsGeneratingDiscovery(false);
 		}
@@ -152,150 +132,121 @@ const DiscoveryPage = () => {
 		setPendingNavigationPath(null);
 	};
 
-	useEffect(() => {
-		if (hasUnsavedChanges) {
-			const handler = (e: BeforeUnloadEvent) => {
-				e.preventDefault();
-			};
-			window.addEventListener('beforeunload', handler);
-			return () => window.removeEventListener('beforeunload', handler);
-		}
-	}, [hasUnsavedChanges]);
-
-	useEffect(() => {
-		const handler = () => {
-			if (hasUnsavedChanges) {
-				setPendingNavigationPath(window.location.href);
-			}
-		};
-		window.addEventListener('popstate', handler);
-		return () => window.removeEventListener('popstate', handler);
-	}, [hasUnsavedChanges, setPendingNavigationPath]);
-
-	useEffect(() => {
-		if (markdown === savedContentRef.current) return;
-
-		const timer = setTimeout(() => {
-			doSave();
-		}, 3000);
-
-		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [markdown]);
-
-	const handlePlanAction = usePlanActions(
-		currentProject?.id ?? null,
-		'discovery',
-		currentProject?.id ?? null,
-	);
-
 	const handleSendChat = async (content: string) => {
 		if (!currentProject) return;
-		setIsChatLoading(true);
-		try {
-			await sendChatMessage(currentProject.id, content);
-		} catch (err) {
-			const errorMessage =
-				err instanceof Error ? err.message : 'Error al enviar el mensaje.';
-			toast.error(errorMessage);
-		} finally {
-			setIsChatLoading(false);
+		appendUserMessage(content);
+	};
+
+	const handleChatMessage = async (message: ChatMessage) => {
+		appendAssistantMessage(message);
+		if (message.modification?.applied && currentProject) {
+			const updated = await getDiscovery(currentProject.id);
+			setMarkdown(updated.content);
+			setSavedContent(updated.content);
 		}
 	};
 
-	const chatMessages: ChatMessage[] = chatHistory.map(toChatMessage);
+	const handleChatRedirect = (redirectMessage: string) => {
+		appendAssistantMessage(createAssistantError(redirectMessage));
+	};
+
+	const handleLoadHistory = useCallback(
+		(sessionId: string | null) => {
+			if (!currentProject) return;
+			void loadChatHistory(currentProject.id, sessionId);
+		},
+		[currentProject, loadChatHistory],
+	);
+
+	const handleLoadMore = useCallback(
+		async (sessionId: string | null) => {
+			if (!currentProject) return;
+			setLoadingMore(true);
+			try {
+				await loadOlderChatHistory(currentProject.id, sessionId);
+			} catch (err) {
+				toast.error(formatApiError(err, 'Error al cargar el historial.'));
+			} finally {
+				setLoadingMore(false);
+			}
+		},
+		[currentProject, loadOlderChatHistory],
+	);
 
 	return (
 		<>
 			{isGeneratingDiscovery && (
 				<Loading
-					title='Generando Descubrimiento'
-					description='La IA está analizando la información del proyecto. Por favor, espera un momento.'
+					title='Analizando tu proyecto'
+					description='El asistente está procesando la información y generando el documento de descubrimiento.'
 					messages={generatingDiscoveryMessages}
 				/>
 			)}
 
 			{pendingNavigationPath && (
-				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
 			<div className={`page-container gap-2 ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
 				<div className='page-header flex-8/12'>
-					<h2 className='text-base-800 text-3xl font-bold'>
-						Descubrimiento del proyecto
-					</h2>
-					<p className='text-base-600 text-lg'>
-						Identificar y documentar la información estratégica del proyecto para
-						comprender el problema, el contexto y el alcance del negocio.
-					</p>
-					{!isEditorMaximized && hasDiscovery && (
-						<div className='flex justify-end gap-3'>
-							<button onClick={() => setIsChatbotOpen(true)} className='btn btn-ai'>
-								<Ai size={20} color='' />
-								Refinar
-							</button>
-							<button onClick={handleNextLink} className='btn btn-primary'>
-								<span className='text-center'>Ir a características</span>
-								<ArrowRight size={20} color='' />
-							</button>
+					<div className='flex items-start justify-between gap-4'>
+						<div className='flex flex-col gap-1'>
+							<h2 className='text-neutral-800 text-3xl font-bold'>
+								Descubrimiento del proyecto
+							</h2>
+							<p className='text-neutral-500 text-base'>
+								Identifica y documenta el problema de negocio, el contexto y el alcance de
+								tu proyecto.
+							</p>
 						</div>
-					)}
+
+						{!isEditorMaximized && hasDiscovery && (
+							<div className='flex items-center gap-3 shrink-0'>
+								<button
+									onClick={() => setIsChatbotOpen(true)}
+									className='btn btn-ai'
+									title={
+										!hasDiscovery ? 'Primero genera el documento de descubrimiento' : ''
+									}
+								>
+									<Ai size={18} color='' />
+									Mejorar con IA
+								</button>
+								<button onClick={handleNextLink} className='btn btn-primary'>
+									Continuar
+									<ArrowRight size={18} color='' />
+								</button>
+							</div>
+						)}
+					</div>
+
 					<div className='flex-1 flex flex-col min-h-0'>
-						{isLoading && (
-							<div className='w-full min-h-105 relative'>
-								<div className='flex justify-end gap-3 mb-4'>
-									<button disabled={true} className='btn btn-ai'>
-										<Ai size={20} color='' />
-										<span className='text-center'>Refinar</span>
-									</button>
-									<button disabled={true} className='btn btn-primary'>
-										<span className='text-center'>Ir a características</span>
-										<ArrowRight size={20} color='' />
-									</button>
-								</div>
-
-								<div className='w-full h-full rounded-sm border border-base-300 bg-base-50 shadow-sm overflow-hidden'>
-									<div className='flex items-center justify-between border-b border-base-200 bg-base-100 px-4 py-3'>
-										<div className='flex items-center gap-2'>
-											<div className='h-4 w-20 animate-pulse rounded bg-base-200' />
-											<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
-											<div className='h-4 w-16 animate-pulse rounded bg-base-200' />
-										</div>
-										<div className='h-8 w-8 animate-pulse rounded bg-base-200' />
-									</div>
-
-									<div className='space-y-4 p-6'>
-										<div className='h-5 w-3/4 animate-pulse rounded bg-base-200' />
-										<div className='h-5 w-full animate-pulse rounded bg-base-200' />
-										<div className='h-5 w-5/6 animate-pulse rounded bg-base-200' />
-										<div className='h-5 w-full animate-pulse rounded bg-base-200' />
-										<div className='h-5 w-2/3 animate-pulse rounded bg-base-200' />
-										<div className='h-28 w-full animate-pulse rounded-lg bg-base-200' />
-									</div>
-								</div>
-							</div>
-						)}
-
-						{!isLoading && !isGeneratingDiscovery && !hasDiscovery && (
+						{/* Empty state */}
+						{!isGeneratingDiscovery && !hasDiscovery && (
 							<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
-								<div className='flex flex-col items-center gap-4 text-center px-6'>
-									<Ai color='text-ai' size={70} />
-									<h3 className='text-xl font-semibold text-base-800'>
-										Sin Descubrimiento generado
-									</h3>
-									<p className='text-base-600 max-w-md'>
-										Aún no se ha generado el descubrimiento de este proyecto. Haz clic en
-										el botón para que la IA analice la información y genere el documento.
-									</p>
-									<button onClick={handleGenerateDiscovery} className='btn btn-ai'>
-										<Ai size={20} color='' />
-										<span className='text-center'>Generar</span>
+								<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
+									<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
+										<Ai color='text-ai-500' size={48} />
+									</div>
+									<div className='flex flex-col gap-2'>
+										<h3 className='text-xl font-semibold text-neutral-800'>
+											Aún no hay análisis del problema
+										</h3>
+										<p className='text-neutral-500 text-base'>
+											El asistente analizará tu proyecto y generará un documento que
+											describe el problema de negocio, el contexto y los objetivos.
+										</p>
+									</div>
+									<button onClick={handleGenerateDiscovery} className='btn btn-ai btn-lg'>
+										<Ai size={18} color='' />
+										Analizar mi proyecto
 									</button>
 								</div>
 							</div>
 						)}
 
-						{!isLoading && hasDiscovery && (
+						{/* Editor with content */}
+						{hasDiscovery && (
 							<div className='w-full h-full relative'>
 								<MarkdownEditor
 									ref={editorRef}
@@ -304,34 +255,42 @@ const DiscoveryPage = () => {
 									isMaximized={isEditorMaximized}
 									onMaximize={() => setEditorMaximized(true)}
 									onMinimize={() => setEditorMaximized(false)}
-								/>
-
-								<FloatingPlan
-									phase='discovery'
-									navigateTo='/proyecto/descubrimiento/plan'
-									contextId={currentProject?.id ?? null}
+									saveStatus={saveStatus}
 								/>
 							</div>
 						)}
 					</div>
 				</div>
 
+				{/* Chatbot panel */}
 				<div
-					className={`chatbot
-						${
-							isChatbotOpen
-								? 'opacity-100 translate-x-0 flex-4/12'
-								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-						}
-				`}
+					className={`chatbot ${
+						isChatbotOpen
+							? 'opacity-100 translate-x-0 w-96 shrink-0'
+							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
+					}`}
 				>
-					<Chatbot
+					<ChatStreamPanel
 						placeholder='ej., ¿Qué alcance tiene el módulo de pagos?'
 						onClose={() => setIsChatbotOpen(false)}
-						messages={chatMessages}
-						onSendMessage={handleSendChat}
-						isLoading={isChatLoading}
-						onPlanAction={handlePlanAction}
+						messages={chatHistory}
+						streamUrl={
+							currentProject
+								? `/api/v1/projects/${currentProject.id}/discovery/chat/stream`
+								: null
+						}
+						projectId={currentProject?.id ?? null}
+						phase='discovery'
+						onLoadHistory={handleLoadHistory}
+						hasMore={historyHasMore}
+						loadingMore={loadingMore}
+						onLoadMore={handleLoadMore}
+						onUserMessage={handleSendChat}
+						onMessage={handleChatMessage}
+						onRedirect={handleChatRedirect}
+						onError={(error) =>
+							toast.error(formatApiError(error, 'Error al enviar el mensaje.'))
+						}
 					/>
 				</div>
 			</div>

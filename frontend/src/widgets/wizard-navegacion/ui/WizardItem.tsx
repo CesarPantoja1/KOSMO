@@ -13,15 +13,15 @@ const WizardItem = ({
 		<Link
 			href={href}
 			onClick={onClick}
-			className='relative h-20 flex-none flex flex-col items-center justify-start text-center'
+			className='group relative flex-none flex flex-col items-center justify-start text-center gap-2 px-3 py-1 transition-all duration-200 hover:scale-105'
 		>
 			<span
-				className={`flex h-12 w-12 items-center justify-center rounded-full ${iconContainerStyles}`}
+				className={`flex h-11 w-11 items-center justify-center rounded-full transition-all duration-300 ${iconContainerStyles}`}
 			>
 				{icon}
 			</span>
 			<span
-				className={`absolute left-1/2 top-14 w-max -translate-x-1/2 whitespace-nowrap text-center text-sm font-medium leading-none ${labelStyles}`}
+				className={`whitespace-nowrap text-center text-xs leading-none transition-colors duration-200 tracking-widest ${labelStyles}`}
 			>
 				{label}
 			</span>

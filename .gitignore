@@ -74,3 +74,4 @@ opencode.json
 
 # CodeGraph
 .codegraph/
+.token-savior-cache.json

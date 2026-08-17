@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import re
 
+from ulid import ULID
+
+from kosmo.contracts.chat import AppliedChange, DiffCambio
+from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange
+
 _section_header_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
 
 
@@ -104,3 +109,41 @@ def _apply_normalized_replace(text: str, before: str, after: str) -> str | None:
 
 def _normalize(text: str) -> str:
     return re.sub(r"\s+", "", text).lower()
+
+
+def merge_changes_with_diffs(originals: list[AppliedChange], diffs: list[SectionChange]) -> list[AppliedChange]:
+    """Combina diffs de seccion con descripciones de cambios originales."""
+    desc_by_section: dict[str, str] = {}
+    for pc in originals:
+        section = (pc.section or "").strip()
+        if section and pc.description and pc.description != section:
+            desc_by_section[section.lower()] = pc.description
+
+    result: list[AppliedChange] = []
+    for sc in diffs:
+        section_key = sc.section.strip().lower()
+        description = desc_by_section.get(section_key)
+        if not description:
+            for orig_section, desc in desc_by_section.items():
+                if orig_section in section_key or section_key in orig_section:
+                    description = desc
+                    break
+        if not description:
+            if sc.change_type == ChangeType.ADDED:
+                description = f"Seccion nueva: {sc.section}"
+            elif sc.change_type == ChangeType.REMOVED:
+                description = f"Seccion eliminada: {sc.section}"
+            elif sc.change_class == ChangeClass.COSMETIC:
+                description = f"Cambio cosmetico en {sc.section}"
+            else:
+                description = f"Seccion modificada: {sc.section}"
+        result.append(
+            AppliedChange(
+                id=f"chg_diff_{ULID().hex}",
+                section=sc.section,
+                description=description,
+                diff=DiffCambio(before=sc.before, after=sc.after),
+                change_class=sc.change_class.value,
+            )
+        )
+    return result

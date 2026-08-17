@@ -3,17 +3,15 @@ from __future__ import annotations
 import pytest
 
 from kosmo.contracts import (
+    AppliedChange,
     ArtefactoAfectado,
     ConsistencyEvaluationOutput,
     ConsistencyStatus,
     DiffCambio,
-    EstadoPlanCambio,
     ImpactItem,
-    PlanCambio,
     ReporteConsistencia,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import PlanChangeId
 
 
 @pytest.mark.unit
@@ -41,12 +39,11 @@ def test_artefacto_afectado_creation() -> None:
 @pytest.mark.unit
 def test_reporte_consistencia_creation_with_multiple_affected_artifacts() -> None:
     # Arrange
-    user_change = PlanCambio(
-        id=PlanChangeId("plan_01"),
+    user_change = AppliedChange(
+        id="chg_01",
         section="Alcance",
         description="Modificación del alcance del sistema",
         diff=DiffCambio(before="Alcance 1", after="Alcance 2"),
-        status=EstadoPlanCambio.APPLIED,
     )
     feature_artifact = ArtefactoAfectado(
         artifact_id="feat_01",
@@ -77,7 +74,7 @@ def test_reporte_consistencia_creation_with_multiple_affected_artifacts() -> Non
     assert reporte.source_phase == SpecPhase.DESCUBRIMIENTO
     assert reporte.target_phase == SpecPhase.CARACTERISTICAS
     assert len(reporte.user_changes) == 1
-    assert reporte.user_changes[0].status == EstadoPlanCambio.APPLIED
+    assert reporte.user_changes[0].section == "Alcance"
     assert len(reporte.affected_artifacts) == 2
     assert reporte.affected_artifacts[0].artifact_type == "Feature"
     assert reporte.affected_artifacts[1].artifact_type == "EARSRequirement"

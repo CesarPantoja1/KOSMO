@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 from kosmo.contracts.pipeline.consistency_phase_context import ConsistencyPhaseContext
 from kosmo.contracts.pipeline.phase_contexts import (
+    DirectModificationContext,
     DiscoveryChatContext,
     DiscoveryPhaseContext,
     DiscoveryRefinePhaseContext,
@@ -12,17 +14,17 @@ from kosmo.contracts.pipeline.phase_contexts import (
     FeatureChatContext,
     FeaturesPhaseContext,
     ModeloPhaseContext,
-    PlanChangeResolutionContext,
     RequirementChatContext,
     RequirementsRefinePhaseContext,
     SuggestFeaturesContext,
 )
 from kosmo.contracts.pipeline.phase_outputs import (
+    DirectModificationResult,
     GenerationMetadata,
     ValidationResult,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 
 if TYPE_CHECKING:
     from kosmo.contracts.chat import MensajeChat
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
 
 PhaseContext = (
     ConsistencyPhaseContext
+    | DirectModificationContext
     | DiscoveryChatContext
     | DiscoveryPhaseContext
     | DiscoveryRefinePhaseContext
@@ -37,7 +40,6 @@ PhaseContext = (
     | FeatureChatContext
     | FeaturesPhaseContext
     | ModeloPhaseContext
-    | PlanChangeResolutionContext
     | RequirementChatContext
     | RequirementsRefinePhaseContext
     | SuggestFeaturesContext
@@ -126,3 +128,32 @@ class AgentPort(Protocol):
         *,
         project_id: ProjectId | None = None,
     ) -> MensajeChat: ...
+
+    async def execute_direct_modification(
+        self,
+        skill_name: str,
+        context: DirectModificationContext,
+        *,
+        history: list[MensajeChat] | None = None,
+        project_id: ProjectId | None = None,
+    ) -> DirectModificationResult: ...
+
+    def execute_conversation_stream(
+        self,
+        skill_name: str,
+        messages: list[MensajeChat],
+        context: PhaseContext,
+        *,
+        project_id: ProjectId | None = None,
+    ) -> AsyncIterator[Any]: ...
+
+    async def reflect_and_consolidate(
+        self,
+        *,
+        session_id: AgentMemoryId,
+        phase: SpecPhase,
+        session_type: str,
+        is_completed: bool,
+        current_iteration: int,
+        validation: ValidationResult,
+    ) -> None: ...

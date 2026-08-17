@@ -133,6 +133,8 @@ Genera requisitos distribuidos en al menos 4 categorías:
 
 
 class EARSMode:
+    requires_tool_consultation = False
+
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.REQUISITOS

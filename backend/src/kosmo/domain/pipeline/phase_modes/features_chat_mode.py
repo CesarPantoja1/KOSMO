@@ -4,6 +4,14 @@ from kosmo.contracts.pipeline.phase_contexts import FeatureChatContext
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS, FEATURE_LEVEL_PROHIBITED_TERMS, PROHIBITED_TERMS
 from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
+from kosmo.domain.pipeline.prompts.shared_rules import (
+    CONVERSATIONAL_NULL_RULE,
+    NO_EM_DASH_RULE,
+    SERVER_APPLIES_RULE,
+    formatting_rules,
+    phase_isolation_rule,
+    upstream_guard_rule,
+)
 
 
 def _build_chat_system_prompt() -> str:
@@ -20,25 +28,25 @@ def _build_chat_system_prompt() -> str:
         "- Cada cambio propuesto debe conservar trazabilidad con las secciones del Descubrimiento.\n"
         f"- Secciones validas del Descubrimiento para trazabilidad:\n{sections_list}\n\n"
         "REGLAS:\n"
-        "- Responde siempre en espanol con tildes correctas.\n"
-        "- Separa las ideas en parrafos cortos. Usa saltos de linea entre parrafos.\n"
-        "- Usa listas con guiones (-) o numeradas (1.) para enumerar elementos.\n"
-        "- Usa **negritas** para nombres de atributos y conceptos clave.\n"
-        "- NO escribas toda la respuesta en un solo bloque de texto.\n"
-        "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
-        "incluye el change_suggestion junto con tu respuesta conversacional. No preguntes "
+        + formatting_rules("atributos y conceptos")
+        + "- UNA SOLA INTERACCION: responde en un unico mensaje. Si el usuario pide un cambio, "
+        "incluye los change_suggestions junto con tu respuesta conversacional. No preguntes "
         "'¿quieres que lo agregue?' ni esperes confirmacion. No fragmentes la respuesta.\n"
-        "- Genera una sugerencia cuando el usuario solicite un cambio. El servidor evita "
-        "duplicados activos al agregarla al plan; no afirmes que un cambio fue aplicado "
-        "si no recibes esa confirmación explícita.\n"
-        "- NIVEL DE USUARIO. PROHIBIDO: "
+        + SERVER_APPLIES_RULE
+        + NO_EM_DASH_RULE
+        + "- NIVEL DE USUARIO. PROHIBIDO: "
         f"{terms_tecnicos}.\n"
         "- SIN TERMINOLOGIA DE NEGOCIO ABSTRACTA. PROHIBIDO: "
         f"{terms_negocio}.\n"
-        "- El chat de una fase NO puede modificar documentos de otras fases. Si el usuario pide "
-        "cambios que pertenecen a otra fase (ej. modificar el Descubrimiento), indica amablemente "
-        "que debe dirigirse al chat de la fase correspondiente.\n"
-        "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia tecnica, "
+        + phase_isolation_rule(example=" (ej. modificar el Descubrimiento)")
+        + upstream_guard_rule(
+            "el Descubrimiento",
+            example=(
+                " (por ejemplo, incluir en la característica productos o capacidades "
+                "marcados como Excluido en el Alcance)"
+            ),
+        )
+        + "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud con terminologia tecnica, "
         "reformulala en lenguaje de usuario para la caracteristica.\n\n"
         "REGLAS DE CONTENIDO POR ATRIBUTO:\n"
         "- TITULO: maximo seis palabras. Se redacta como una accion que el usuario desea "
@@ -50,8 +58,11 @@ def _build_chat_system_prompt() -> str:
         "y enumeran las secciones del Descubrimiento que la fundamentan (usar los nombres "
         "exactos de la lista anterior).\n\n"
         "COMPORTAMIENTO:\n"
-        "- Si el usuario pide una modificacion a la caracteristica actual, genera una sugerencia de "
-        "cambio en el campo change_suggestion con los siguientes atributos:\n"
+        "- Si el usuario pide una modificacion a la caracteristica actual, genera una o varias "
+        "sugerencias de cambio en el campo change_suggestions (lista). Cada sugerencia representa "
+        "una modificacion independiente de un atributo. Si el cambio implica ajustar mas de un "
+        "atributo (por ejemplo, cambiar la descripcion y ajustar el titulo para que la refleje), "
+        "genera una sugerencia por cada atributo afectado. Atributos de cada sugerencia:\n"
         "  * section: el atributo afectado de la caracteristica ('Titulo', 'Descripcion', 'Origen').\n"
         "  * description: explicacion breve de lo que cambia.\n"
         "  * diff_before: fragmento textual EXACTO del atributo actual que se reemplazaria "
@@ -59,19 +70,18 @@ def _build_chat_system_prompt() -> str:
         "  * diff_after: contenido sugerido para reemplazar el fragmento, redactado segun "
         "las reglas de contenido del atributo correspondiente.\n"
         "  * rationale: justificacion del cambio conectandolo con la seccion relevante del "
-        "Descubrimiento.\n"
-        "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
-        "change_suggestion en null y responde de forma conversacional.\n\n"
-        "FORMATO DE SALIDA (JSON):\n"
+        "Descubrimiento.\n" + CONVERSATIONAL_NULL_RULE + "FORMATO DE SALIDA (JSON):\n"
         "{\n"
         '  "content": "<tu respuesta conversacional>",\n'
-        '  "change_suggestion": null | {\n'
-        '    "section": "<atributo afectado: Titulo, Descripcion u Origen>",\n'
-        '    "description": "<descripcion breve>",\n'
-        '    "diff_before": "<fragmento textual exacto actual>",\n'
-        '    "diff_after": "<contenido sugerido>",\n'
-        '    "rationale": "<justificacion conectando con la seccion del Descubrimiento>"\n'
-        "  }\n"
+        '  "change_suggestions": null | [\n'
+        "    {\n"
+        '      "section": "<atributo afectado: Titulo, Descripcion u Origen>",\n'
+        '      "description": "<descripcion breve>",\n'
+        '      "diff_before": "<fragmento textual exacto actual>",\n'
+        '      "diff_after": "<contenido sugerido>",\n'
+        '      "rationale": "<justificacion conectando con la seccion del Descubrimiento>"\n'
+        "    }\n"
+        "  ]\n"
         "}\n"
     )
 

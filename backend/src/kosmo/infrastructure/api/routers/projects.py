@@ -4,6 +4,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from kosmo.application.projects import (
     CreateProjectUseCase,
+    DeleteProjectInput,
+    DeleteProjectUseCase,
     GetProjectUseCase,
     ListProjectsUseCase,
 )
@@ -11,6 +13,7 @@ from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     CreateProjectRequest,
     ProjectResponse,
@@ -20,15 +23,19 @@ router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
 
 def _create_project(request: Request) -> CreateProjectUseCase:
-    return request.app.state.create_project
+    return get_container(request).projects.create_project
 
 
 def _get_project(request: Request) -> GetProjectUseCase:
-    return request.app.state.get_project
+    return get_container(request).projects.get_project
 
 
 def _list_projects(request: Request) -> ListProjectsUseCase:
-    return request.app.state.list_projects
+    return get_container(request).projects.list_projects
+
+
+def _delete_project(request: Request) -> DeleteProjectUseCase:
+    return get_container(request).projects.delete_project
 
 
 @router.post(
@@ -145,3 +152,38 @@ async def get_project(
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
+
+
+@router.delete(
+    "/{project_id}",
+    summary="Eliminar proyecto",
+    description=(
+        "Elimina el proyecto y todos sus artefactos en cascada: descubrimiento, "
+        "características, requisitos, modelos, chat y evaluaciones de consistencia. "
+        "Requiere autenticación mediante Bearer token."
+    ),
+    status_code=status.HTTP_200_OK,
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Proyecto eliminado exitosamente.",
+        },
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Token de acceso inválido o ausente.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Proyecto no encontrado.",
+        },
+    },
+)
+async def delete_project(
+    project_id: str,
+    principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[DeleteProjectUseCase, Depends(_delete_project)],
+) -> dict[str, str]:
+    await use_case.execute(
+        DeleteProjectInput(
+            project_id=ProjectId(project_id),
+            owner_id=UserId(principal.subject),
+        )
+    )
+    return {"status": "deleted", "project_id": project_id}

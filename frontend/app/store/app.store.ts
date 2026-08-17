@@ -1,27 +1,26 @@
-import { useConsistencyStore } from '@/entities/consistency';
-import { usePlanStore } from '@/entities/plan';
-import { useDiscoveryStore } from '@/entities/discovery';
+import { useConsistencyGateStore } from '@/entities/consistency';
+import { clearDiscoveryStore, useDiscoveryStore } from '@/entities/discovery';
 import { getDiscovery } from '@/entities/discovery/api/api';
-import { useCharacteristicStore } from '@/entities/characteristic';
+import {
+	clearCharacteristicStore,
+	useCharacteristicStore,
+} from '@/entities/characteristic';
 import { getCharacteristics } from '@/entities/characteristic/api/api';
-import { useModelingStore } from '@/entities/modeling';
+import { clearModelingStore, useModelingStore } from '@/entities/modeling';
 import { getDiagram } from '@/entities/modeling/api/api';
-import { useRequirementsStore } from '@/entities/requirements';
+import { clearRequirementsStore, useRequirementsStore } from '@/entities/requirements';
 import { getRequirements } from '@/entities/requirements/api/api';
-import type { Project } from '@/entities/project/model/types';
+import { useChatSessionsStore } from '@/entities/chat';
+import { ApiError } from '@/shared/api';
+import { clearProjectStore } from '@/entities/project';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { clearProjectStoreExceptProjects } from '@/entities/project/model/store';
 
 interface AppState {
 	initialized: boolean;
 	setInitialized: (v: boolean) => void;
-	currentProject: Project | null;
-	setCurrentProject: (project: Project) => void;
-	clearCurrentProject: () => void;
-	setProjectState: (project: Project) => void;
 	resetProjectState: () => void;
-	isProyectosOpen: boolean;
-	setIsProyectosOpen: (v: boolean) => void;
+	resetStateBeforeChangeProject: () => void;
 	hasUnsavedChanges: boolean;
 	setHasUnsavedChanges: (v: boolean) => void;
 	pendingNavigationPath: string | null;
@@ -31,33 +30,39 @@ interface AppState {
 	initializeProject: (projectId: string) => Promise<void>;
 }
 
-export const useAppStore = create<AppState>()(
-	persist(
-		(set) => ({
-			initialized: false,
-			setInitialized: (v) => set({ initialized: v }),
-			currentProject: null,
-			setCurrentProject: (project) => set({ currentProject: project }),
-			clearCurrentProject: () => set({ currentProject: null, isProyectosOpen: false }),
-			setProjectState: (project) =>
-				set({ currentProject: project, isProyectosOpen: true }),
-			resetProjectState: () => {
+export const useAppStore = create<AppState>()((set) => ({
+	initialized: false,
+	setInitialized: (v) => set({ initialized: v }),
+	resetProjectState: () => {
+				clearProjectStore();
+				clearDiscoveryStore();
+				clearCharacteristicStore();
+				clearModelingStore();
+				clearRequirementsStore();
+				useChatSessionsStore.getState().reset();
+				useConsistencyGateStore.getState().reset();
 				set({
-					currentProject: null,
-					isProyectosOpen: false,
+					initialized: false,
 					hasUnsavedChanges: false,
 					pendingNavigationPath: null,
+					isEditorMaximized: false,
 				});
-				usePlanStore.getState().resetPlan();
-				useDiscoveryStore.getState().resetDiscovery();
-				useCharacteristicStore.getState().clearCharacteristics();
-				useCharacteristicStore.getState().clearAllChatHistories();
-				useModelingStore.getState().resetModeling();
-				useRequirementsStore.getState().resetRequirements();
-				useConsistencyStore.getState().resetConsistency();
 			},
-			isProyectosOpen: false,
-			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),
+			resetStateBeforeChangeProject: () => {
+				clearProjectStoreExceptProjects();
+				clearDiscoveryStore();
+				clearCharacteristicStore();
+				clearModelingStore();
+				clearRequirementsStore();
+				useChatSessionsStore.getState().reset();
+				useConsistencyGateStore.getState().reset();
+				set({
+					initialized: false,
+					hasUnsavedChanges: false,
+					pendingNavigationPath: null,
+					isEditorMaximized: false,
+				});
+			},
 			hasUnsavedChanges: false,
 			setHasUnsavedChanges: (v) => set({ hasUnsavedChanges: v }),
 			pendingNavigationPath: null,
@@ -66,17 +71,21 @@ export const useAppStore = create<AppState>()(
 			setEditorMaximized: (v) => set({ isEditorMaximized: v }),
 			initializeProject: async (projectId) => {
 				try {
-					const discovery = await getDiscovery(projectId);
-					if (!discovery) return;
-					useDiscoveryStore.getState().setCurrentDiscovery(discovery);
-
-					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'discovery');
+					// El 404 es el caso normal cuando aún no existe el documento de descubrimiento
+					try {
+						const discovery = await getDiscovery(projectId);
+						if (discovery) {
+							useDiscoveryStore.getState().setCurrentDiscovery(discovery);
+						}
+					} catch (error) {
+						if (!(error instanceof ApiError && error.status === 404)) {
+							throw error;
+						}
+					}
 
 					const characteristics = await getCharacteristics(projectId);
 					if (!characteristics || characteristics.length === 0) return;
 					useCharacteristicStore.getState().setCurrentCharacteristics(characteristics);
-
-					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'features');
 
 					await Promise.allSettled(
 						characteristics.map(async (c) => {
@@ -86,26 +95,29 @@ export const useAppStore = create<AppState>()(
 							]);
 
 							if (reqResult.status === 'fulfilled') {
-								useRequirementsStore.getState().setHasRequirements(c.id, !!reqResult.value);
+								const content = reqResult.value?.document_markdown ?? '';
+								useRequirementsStore.getState().setHasRequirements(c.id, !!content);
+								if (content) {
+									useRequirementsStore.getState().setCurrentRequirements(c.id, content);
+								}
 							}
 							if (diagramResult.status === 'fulfilled') {
 								useModelingStore.getState().setHasDiagram(c.id, !!diagramResult.value);
 							}
 						}),
 					);
-
-					await usePlanStore.getState().fetchAndHydratePlan(projectId, 'requirements');
-				} catch (error) {
-					console.error('[initializeProject] Error:', error);
-				}
-			},
-		}),
-		{
-			name: 'kosmo-app-store',
-			partialize: (state) => ({
-				currentProject: state.currentProject,
-				isProyectosOpen: state.isProyectosOpen,
-			}),
+			} catch (error) {
+				console.error('[initializeProject] Error:', error);
+			}
 		},
-	),
+	}),
 );
+
+export const clearAppStore = () => {
+	useAppStore.setState({
+		initialized: false,
+		hasUnsavedChanges: false,
+		pendingNavigationPath: null,
+		isEditorMaximized: false,
+	});
+};

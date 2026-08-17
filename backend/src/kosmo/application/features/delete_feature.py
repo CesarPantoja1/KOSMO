@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import structlog
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
-from kosmo.contracts.sdd.repositories import FeatureRepository, ProjectRepository
+from kosmo.contracts.sdd.repositories import (
+    ActivityDiagramRepository,
+    FeatureRepository,
+    ProjectRepository,
+    RequirementRepository,
+)
 
 _log = structlog.get_logger(__name__)
 
@@ -15,11 +23,17 @@ class DeleteFeatureUseCase:
         self,
         project_repo: ProjectRepository,
         feature_repo: FeatureRepository,
+        requirement_repo: RequirementRepository,
+        diagram_repo: ActivityDiagramRepository,
         traceability_repo: TraceabilityRepository | None = None,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
+        self._requirement_repo = requirement_repo
+        self._diagram_repo = diagram_repo
         self._traceability_repo = traceability_repo
+        self._outbox = outbox
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> None:
         project = await self._project_repo.by_id(project_id)
@@ -36,6 +50,8 @@ class DeleteFeatureUseCase:
                 instance=f"/api/v1/projects/{project_id}/features/{feature_id}",
             )
 
+        await self._requirement_repo.delete(feature_id)
+        await self._diagram_repo.delete(feature_id)
         await self._feature_repo.delete(feature_id)
 
         if self._traceability_repo is not None:
@@ -47,6 +63,20 @@ class DeleteFeatureUseCase:
                     feature_id=str(feature_id),
                     exc_info=True,
                 )
+
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=project_id,
+            source_phase=SpecPhase.CARACTERISTICAS,
+            changes=[
+                {
+                    "section": f"Característica {feature.number}",
+                    "description": "Eliminación de la característica",
+                    "before": feature.title,
+                    "after": "",
+                }
+            ],
+        )
 
         _log.info(
             "delete_feature.success",

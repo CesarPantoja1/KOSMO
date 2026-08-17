@@ -4,6 +4,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from kosmo.application.auth import VerifyAccessToken
 from kosmo.config import settings
 from kosmo.contracts.auth import (
     AuthError,
@@ -12,6 +13,7 @@ from kosmo.contracts.auth import (
     TokenExpiredError,
     TokenRevokedError,
 )
+from kosmo.infrastructure.api.dependencies.container import get_container
 
 _bearer_scheme = HTTPBearer(auto_error=False, description="JWT de acceso (RS256)")
 
@@ -25,7 +27,9 @@ async def get_principal(
         return Principal(subject=mock_user, scopes=frozenset({"*"}))
     if credentials is None:
         raise _to_http(MissingTokenError("Missing bearer token"))
-    verify: Any = request.app.state.verify_access_token
+    container = get_container(request)
+    assert container.auth is not None
+    verify: VerifyAccessToken = container.auth.verify_access_token
     try:
         return await verify.execute(credentials.credentials)
     except AuthError as exc:

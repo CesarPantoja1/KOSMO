@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -189,29 +190,32 @@ def client() -> TestClient:
     issue_token_pair = IssueTokenPair(issuer=issuer, revocation_store=token_store)
 
     app = FastAPI()
-    app.state.register_user = RegisterUser(
-        user_repository=user_repository, password_hasher=hasher, audit_sink=audit_sink
+    app.state.container = SimpleNamespace(
+        redis=None,
+        auth=SimpleNamespace(
+            register_user=RegisterUser(user_repository=user_repository, password_hasher=hasher, audit_sink=audit_sink),
+            authorize_with_pkce=AuthorizeWithPkce(
+                user_repository=user_repository,
+                password_hasher=hasher,
+                authorization_code_store=code_store,
+                login_attempt_store=attempt_store,
+                audit_sink=audit_sink,
+            ),
+            exchange_authorization_code=ExchangeAuthorizationCode(
+                authorization_code_store=code_store,
+                issue_token_pair=issue_token_pair,
+            ),
+            issue_token_pair=issue_token_pair,
+            verify_access_token=VerifyAccessToken(verifier=verifier, revocation_store=token_store),
+            refresh_token_pair=RefreshTokenPair(
+                issuer=issuer,
+                verifier=verifier,
+                revocation_store=token_store,
+                audit_sink=audit_sink,
+            ),
+            revoke_session=RevokeSession(verifier=verifier, revocation_store=token_store, audit_sink=audit_sink),
+        ),
     )
-    app.state.authorize_with_pkce = AuthorizeWithPkce(
-        user_repository=user_repository,
-        password_hasher=hasher,
-        authorization_code_store=code_store,
-        login_attempt_store=attempt_store,
-        audit_sink=audit_sink,
-    )
-    app.state.exchange_authorization_code = ExchangeAuthorizationCode(
-        authorization_code_store=code_store,
-        issue_token_pair=issue_token_pair,
-    )
-    app.state.issue_token_pair = issue_token_pair
-    app.state.verify_access_token = VerifyAccessToken(verifier=verifier, revocation_store=token_store)
-    app.state.refresh_token_pair = RefreshTokenPair(
-        issuer=issuer,
-        verifier=verifier,
-        revocation_store=token_store,
-        audit_sink=audit_sink,
-    )
-    app.state.revoke_session = RevokeSession(verifier=verifier, revocation_store=token_store, audit_sink=audit_sink)
     app.include_router(auth_router)
     app.include_router(schemas_router)
     return TestClient(app)

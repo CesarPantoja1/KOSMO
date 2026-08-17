@@ -11,8 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from kosmo.contracts.auth import TokenPair
-from kosmo.contracts.chat import HistorialChat, MensajeChat, PlanCambio
-from kosmo.contracts.sdd.document import SpecPhase
+from kosmo.contracts.chat import HistorialChat, MensajeChat
 
 # Enumeraciones de negocio
 
@@ -549,10 +548,6 @@ class CreateCharacteristicRequest(BaseModel):
         default="",
         description="Origen y trazabilidad de la característica. Si se deja vacío, la IA lo deriva del descubrimiento.",
     )
-    force: bool = Field(
-        default=False,
-        description="Si es true, fuerza la creación aunque la IA detecte inconsistencia con el descubrimiento.",
-    )
 
 
 class EditFeatureManualRequest(BaseModel):
@@ -581,6 +576,10 @@ class ChangeSuggestion(BaseModel):
     diff_before: str = Field(description="Contenido actual de la sección")
     diff_after: str = Field(description="Contenido sugerido por la IA")
     rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
+    applied: bool = Field(default=True, description="True si el servidor aplicó el cambio al instante")
+    not_applied_reason: str | None = Field(
+        default=None, description="Razón por la que el cambio no se pudo aplicar (solo si applied=false)"
+    )
 
 
 class SendChatRequest(BaseModel):
@@ -588,6 +587,37 @@ class SendChatRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     content: str = Field(min_length=1, max_length=4000, description="Mensaje del usuario")
+    session_id: str | None = Field(
+        default=None,
+        description="Hilo de conversación (cht_). Si es null, se usa el contexto actual de la fase.",
+    )
+
+
+class ModificationResultView(BaseModel):
+    """Resultado de la modificacion aplicada por el chat (aplicacion instantanea)."""
+
+    applied: bool = Field(description="True si la modificación fue aplicada al documento")
+    modified_section: str | None = Field(default=None, description="Nombre de la sección o atributo modificado")
+    change_description: str | None = Field(default=None, description="Descripción breve del cambio aplicado")
+    modified_document: str | None = Field(
+        default=None,
+        description="Markdown completo actualizado. En el chat de Características contiene el nuevo título.",
+    )
+    before: str | None = Field(default=None, description="Contenido previo de la sección o atributo modificado")
+    after: str | None = Field(default=None, description="Contenido posterior de la sección o atributo modificado")
+    undo_version_id: str | None = Field(
+        default=None, description="Versión previa al cambio (reservado para el endpoint de undo)"
+    )
+    clarification_message: str | None = Field(
+        default=None, description="Mensaje solicitando detalle cuando la instrucción es ambigua (applied=false)"
+    )
+
+
+class RedirectInfoView(BaseModel):
+    """Redirección cuando el cambio pertenece a otra fase (fuente de verdad a la izquierda)."""
+
+    target_phase: str = Field(description="Fase destino del cambio")
+    redirect_message: str = Field(description="Explicación de por qué el cambio pertenece a esa fase")
 
 
 class ChatMessage(BaseModel):
@@ -599,6 +629,9 @@ class ChatMessage(BaseModel):
     created_at: datetime = Field(description="Fecha y hora del mensaje.")
     change_suggestions: list[ChangeSuggestion] | None = Field(
         default=None, description="Sugerencias de cambio asociadas"
+    )
+    modification: ModificationResultView | None = Field(
+        default=None, description="Modificación aplicada (solo mensajes del asistente)"
     )
 
     @classmethod
@@ -613,15 +646,72 @@ class ChatMessage(BaseModel):
                     diff_before=sc.diff.before,
                     diff_after=sc.diff.after,
                     rationale=sc.rationale,
+                    applied=sc.applied,
+                    not_applied_reason=sc.not_applied_reason,
                 )
                 for sc in msg.suggested_changes
             ]
+        modification = None
+        if msg.modification is not None:
+            modification = ModificationResultView(
+                applied=msg.modification.applied,
+                modified_section=msg.modification.modified_section,
+                change_description=msg.modification.change_description,
+                modified_document=msg.modification.modified_document,
+                before=msg.modification.before,
+                after=msg.modification.after,
+                clarification_message=msg.modification.clarification_message,
+            )
         return cls(
             id=str(msg.id),
             role=str(msg.role),
             content=msg.content,
             created_at=msg.timestamp,
             change_suggestions=suggestions,
+            modification=modification,
+        )
+
+
+class ChatResponse(BaseModel):
+    """Respuesta del chat con modificación aplicada, consistencia o redirección."""
+
+    message: ChatMessage = Field(description="Mensaje del asistente")
+    modification: ModificationResultView | None = Field(
+        default=None, description="Presente si el chat aplicó un cambio al documento"
+    )
+    redirect: RedirectInfoView | None = Field(default=None, description="Presente si el cambio pertenece a otra fase")
+    consistency: list[dict[str, object]] | None = Field(
+        default=None,
+        description="Impactos de consistencia en las fases a la derecha (solo si se aplicó un cambio)",
+    )
+
+    @classmethod
+    def from_message(cls, output: Any) -> "ChatResponse":
+        message = ChatMessage.from_domain(output.message)
+        return cls(
+            message=message,
+            modification=message.modification,
+            consistency=None,
+            redirect=None,
+        )
+
+    @classmethod
+    def from_redirect(cls, target_phase: str, redirect_message: str) -> "ChatResponse":
+        from kosmo.contracts.chat import ChatRole
+        from kosmo.contracts.sdd.ids import ChatMessageId
+        from kosmo.domain.sdd.id_generator import IdGenerator
+
+        redirect_msg = MensajeChat(
+            id=ChatMessageId(IdGenerator.generate("chat_message")),
+            role=ChatRole.ASSISTANT,
+            content=redirect_message,
+        )
+        return cls(
+            message=ChatMessage.from_domain(redirect_msg),
+            redirect=RedirectInfoView(
+                target_phase=target_phase,
+                redirect_message=redirect_message,
+            ),
         )
 
 
@@ -652,131 +742,6 @@ class ContextRedirectResponse(BaseModel):
     target_phase: str = Field(description="Fase destino: discovery, features, requirements")
 
 
-class DiffView(BaseModel):
-    """Diff antes/después simple usado en la vista del plan de cambios."""
-
-    before: str = Field(description="Contenido actual de la sección")
-    after: str = Field(description="Contenido sugerido")
-
-
-class PlanChangeView(BaseModel):
-    """Representa un cambio propuesto en el plan de cambios."""
-
-    id: str = Field(description="ID del cambio (chg_ + ULID)")
-    section: str = Field(description="Sección del documento afectada")
-    description: str = Field(description="Descripción corta del cambio (máx 150 chars)")
-    diff: DiffView = Field(description="Diff antes/después generado por la IA")
-    status: str = Field(description="Estado del cambio: pending, added, discarded, applied, conflict")
-    origin: str = Field(description="Origen del cambio: chat, consistency, manual")
-    created_at: datetime = Field(description="Timestamp de creación")
-    rationale: str | None = Field(default=None, description="Justificación del cambio")
-    context_id: str | None = Field(default=None, description="Recurso específico afectado por el cambio")
-
-    @classmethod
-    def from_domain(cls, change: PlanCambio) -> "PlanChangeView":
-        from datetime import UTC, datetime
-
-        return cls(
-            id=str(change.id),
-            section=change.section,
-            description=change.description,
-            diff=DiffView(
-                before=change.diff.before,
-                after=change.diff.after,
-            ),
-            status=change.status.value if hasattr(change.status, "value") else str(change.status),
-            origin=change.origin,
-            created_at=datetime.now(UTC),
-            rationale=change.rationale,
-            context_id=change.context_id,
-        )
-
-
-class PlanStateView(BaseModel):
-    """Estado actual del plan de cambios de un proyecto."""
-
-    project_id: str = Field(description="ID del proyecto asociado al plan")
-    phase: str = Field(description="Fase del proyecto")
-    context: str = Field(description="Contexto del plan (ej. feature_id o project_id)")
-    changes: list[PlanChangeView] = Field(description="Cambios acumulados en el plan")
-    pending_count: int = Field(description="Número de cambios en estado pending o added")
-    conflict_count: int = Field(description="Número de cambios con conflicto")
-
-    @classmethod
-    def from_domain(cls, state: Any) -> "PlanStateView":
-        return cls(
-            project_id=str(state.project_id),
-            phase=str(state.phase.value if hasattr(state.phase, "value") else state.phase),
-            context=getattr(state, "context", getattr(state, "context_id", "")),
-            changes=[PlanChangeView.from_domain(c) for c in state.changes],
-            pending_count=state.pending_count,
-            conflict_count=state.conflict_count,
-        )
-
-
-class AddPlanChangeRequest(BaseModel):
-    """Payload para agregar un cambio al plan."""
-
-    model_config = ConfigDict(extra="ignore")
-    change_id: str = Field(description="ID de la sugerencia (chg_ + ULID)")
-    section: str = Field(description="Sección del documento afectada")
-    description: str = Field(description="Descripción corta del cambio propuesto")
-    diff_before: str = Field(description="Contenido actual de la sección")
-    diff_after: str = Field(description="Contenido sugerido por la IA")
-    rationale: str | None = Field(default=None, description="Justificación del cambio propuesto")
-
-
-class PhaseNotificationView(BaseModel):
-    """Notificación de fases afectadas por propagación de cambios."""
-
-    phase: str = Field(description="Fase afectada")
-    affected_count: int = Field(description="Cantidad de artefactos afectados en esta fase")
-    affected_ids: list[str] = Field(description="IDs de los artefactos afectados")
-
-
-class PhaseNotificationList(BaseModel):
-    affected_phases: list[PhaseNotificationView] = Field(
-        description="Fases notificadas con sus artefactos desactualizados"
-    )
-
-
-class AppliedChangeItemView(BaseModel):
-    """Cambio aplicado exitosamente."""
-
-    change_id: str = Field(description="ID del cambio aplicado")
-    section: str = Field(description="Sección del documento o atributo afectado")
-
-
-class FailedChangeItemView(BaseModel):
-    """Cambio que falló al aplicarse."""
-
-    change_id: str = Field(description="ID del cambio que falló")
-    section: str = Field(description="Sección del documento o atributo afectado")
-    error: str = Field(description="Motivo del fallo")
-
-
-class BatchResultView(BaseModel):
-    """Resultado de aplicar un lote de cambios."""
-
-    applied_count: int = Field(default=0, description="Número de cambios aplicados")
-    failed_count: int = Field(default=0, description="Número de cambios que fallaron")
-    applied: list[AppliedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
-        default_factory=list, description="Cambios aplicados exitosamente"
-    )
-    failed: list[FailedChangeItemView] = Field(  # type: ignore[reportUnknownVariableType]
-        default_factory=list, description="Cambios que fallaron, con el motivo"
-    )
-
-
-class ApplyBatchRequest(BaseModel):
-    """Payload para aplicar un lote de cambios."""
-
-    model_config = ConfigDict(extra="forbid")
-    phase: SpecPhase = Field(description="Fase a la cual aplicar los cambios")
-    context: str | None = Field(default=None, description="Contexto específico de los cambios")
-    changes: list[str] = Field(description="IDs de los cambios a aplicar")
-
-
 # ═══ Verificación de consistencia en guardado manual (Sprint 4 - HU18/T7) ═══
 
 
@@ -794,19 +759,6 @@ class InconsistencyResultView(BaseModel):
     reason: str | None = Field(default=None, description="Motivo de la inconsistencia (solo si is_consistent = false)")
     conflicting_section: str | None = Field(
         default=None, description="Sección del documento fuente con la que hay conflicto"
-    )
-
-
-# ═══ Propagación bidireccional (Sprint 4 - HU18) ═══
-
-
-class PropagateFeatureChangesRequest(BaseModel):
-    """Payload para solicitar propagación de cambios desde una característica."""
-
-    model_config = ConfigDict(extra="forbid")
-    applied_change_ids: list[str] = Field(
-        default_factory=list,
-        description="IDs de los cambios aplicados en la característica",
     )
 
 
@@ -858,3 +810,45 @@ class ConsistencyReportView(BaseModel):
     upstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases anteriores")
     downstream_impact: list[ImpactItemView] | None = Field(default=None, description="Impacto en fases posteriores")
     created_at: str = Field(description="Timestamp ISO-8601 UTC")
+
+
+# ═══ Modificación directa de documentos vía chat (Sprint 5 - HU-20) ═══
+
+
+class DocumentModifyRequestView(BaseModel):
+    """Payload para solicitar la modificación directa de un documento vía chat sin plan."""
+
+    model_config = ConfigDict(extra="forbid")
+    document_type: Literal["discovery", "features", "requirements", "model"] = Field(
+        description="Tipo de documento a modificar"
+    )
+    document_id: str = Field(description="ID del documento o característica a modificar")
+    instruction: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="Instrucción textual del cambio deseado",
+    )
+
+
+class DocumentModifyResponseView(BaseModel):
+    """Respuesta con el resultado de una modificación directa de documento."""
+
+    document_id: str = Field(description="ID del documento modificado")
+    content: str = Field(description="Contenido completo del documento actualizado")
+    highlighted_section: str | None = Field(
+        default=None,
+        description="Nombre de la sección modificada, para resaltar en la UI",
+    )
+    message: str = Field(description="Mensaje de confirmación para el usuario")
+
+
+class TraceabilityNavigationOutputView(BaseModel):
+    """Respuesta de navegación con guardas de trazabilidad."""
+
+    permitted: bool = Field(description="Indica si la edición está permitida en este nivel.")
+    redirect_message: str | None = Field(
+        default=None, description="Mensaje para mostrar al usuario si no está permitido."
+    )
+    source_entity_name: str | None = Field(default=None, description="Nombre de la entidad de origen.")
+    source_entity_id: str | None = Field(default=None, description="ID de la entidad de origen.")
+    source_level: str | None = Field(default=None, description="Fase de la entidad de origen (ej. caracteristicas).")

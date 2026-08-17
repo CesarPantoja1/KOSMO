@@ -1,4 +1,8 @@
+from typing import Any, cast
+
 from fastapi import HTTPException, Request, status
+
+from kosmo.infrastructure.api.dependencies.container import get_container
 
 
 class IpRateLimiter:
@@ -17,7 +21,7 @@ class IpRateLimiter:
         self._limit = requests_per_minute
 
     async def __call__(self, request: Request) -> None:
-        redis = getattr(request.app.state, "redis", None)
+        redis = cast(Any, get_container(request).redis)
         if redis is None:
             return
         client_ip = request.client.host if request.client else "unknown"
@@ -51,7 +55,7 @@ class ProjectGenerationRateLimiter:
     async def __call__(self, request: Request, project_id: str = "") -> None:
         if not project_id:
             project_id = request.path_params.get("project_id", "unknown")
-        redis = getattr(request.app.state, "redis", None)
+        redis = cast(Any, get_container(request).redis)
         if redis is None:
             return
         key = f"gen:rate:{project_id}"

@@ -1,130 +1,100 @@
+import type { ChatHistory, ChatResponse } from '@/entities/chat';
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type {
-	SuggestCharacteristic,
 	CharacteristicResponse,
-	CharacteristicChatResponse,
 	CreateCharacteristicResponse,
+	SuggestCharacteristic,
 } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // --- Mock data ---
 
-const mockCharacteristics: CharacteristicResponse[] = [
-	{
-		id: '1',
-		project_id: 'mock-project-1',
-		number: 1,
-		title: 'Administración de Perfiles y Permisos de Usuario',
-		slug: 'administracion-de-perfiles-y-permisos-de-usuario',
-		description:
-			'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-		origin: '',
-		display_id: 'C01',
-	},
-	{
-		id: '2',
-		project_id: 'mock-project-1',
-		number: 2,
-		title: 'Gestión de Inventario',
-		slug: 'gestion-de-inventario',
-		description:
-			'Control de stock, entradas y salidas de productos, alertas de inventario bajo y registro de movimientos con trazabilidad.',
-		origin: '',
-		display_id: 'C02',
-	},
-	{
-		id: '3',
-		project_id: 'mock-project-1',
-		number: 3,
-		title: 'Módulo de Ventas',
-		slug: 'modulo-de-ventas',
-		description:
-			'Registro de ventas con cálculo automático de impuestos, descuentos y múltiples métodos de pago. Genera facturas electrónicas y tickets.',
-		origin: '',
-		display_id: 'C03',
-	},
-	{
-		id: '4',
-		project_id: 'mock-project-1',
-		number: 4,
-		title: 'Reportes y Dashboard',
-		slug: 'reportes-y-dashboard',
-		description:
-			'Visualización de indicadores clave como ventas diarias, productos más vendidos, márgenes de ganancia y tendencias de consumo.',
-		origin: '',
-		display_id: 'C04',
-	},
-];
+const mockCharacteristics: CharacteristicResponse[] = [];
 
 const mockSuggestions: SuggestCharacteristic[] = [
 	{
-		number: 1,
-		title: 'Notificaciones y Alertas',
-		description:
-			'Sistema de notificaciones push y por correo electrónico para alertar sobre eventos críticos como stock bajo, ventas grandes o vencimiento de productos.',
-		origin: '',
-	},
-	{
 		number: 2,
-		title: 'Gestión de Clientes y Proveedores',
+		title: 'Gestión de Inventario',
 		description:
-			'Registro y administración de clientes y proveedores con historial de compras, créditos, estados de cuenta y datos de contacto.',
+			'Control de stock, entradas y salidas de productos, alertas de inventario bajo y registro de movimientos con trazabilidad.',
 		origin: '',
 	},
 	{
 		number: 3,
-		title: 'Módulo de Caja Diaria',
+		title: 'Módulo de Ventas',
 		description:
-			'Apertura y cierre de caja, control de ingresos y egresos, arqueo de caja y conciliación con ventas del día.',
+			'Registro de ventas con cálculo automático de impuestos, descuentos y múltiples métodos de pago. Genera facturas electrónicas y tickets.',
+		origin: '',
+	},
+	{
+		number: 4,
+		title: 'Reportes y Dashboard',
+		description:
+			'Visualización de indicadores clave como ventas diarias, productos más vendidos, márgenes de ganancia y tendencias de consumo.',
 		origin: '',
 	},
 ];
 
-const mockChatResponses: CharacteristicChatResponse[] = [
+const mockChatResponses: ChatResponse[] = [
 	{
-		id: 'mock-chat-1',
-		role: 'assistant',
-		content: 'Hola, ¿en qué puedo ayudarte con la característica?',
-		created_at: new Date().toISOString(),
-		change_suggestions: null,
+		message: {
+			id: 'mock-chat-1',
+			role: 'assistant',
+			content: 'Hola, ¿en qué puedo ayudarte con la característica?',
+			created_at: new Date().toISOString(),
+			change_suggestions: null,
+			modification: null,
+		},
+		modification: null,
+		redirect: null,
+		consistency: null,
 	},
 	{
-		id: 'mock-chat-2',
-		role: 'assistant',
-		content:
-			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
-		created_at: new Date().toISOString(),
-		change_suggestions: [{
-			id: 'mock-change-1',
-			section: 'Descripción de la característica',
-			description: 'Refinar la descripción para mayor claridad.',
-			diff_before:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-			diff_after:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
-			rationale:
-				'Se mejoró la claridad y precisión de la descripción de la característica.',
-		}],
-	},
-	{
-		id: 'mock-chat-3',
-		role: 'assistant',
-		content:
-			'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
-		created_at: new Date().toISOString(),
-		change_suggestions: [{
-			id: 'mock-change-1',
-			section: 'Descripción de la característica',
-			description: 'Refinar la descripción para mayor claridad.',
-			diff_before:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
-			diff_after:
-				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
-			rationale:
-				'Se mejoró la claridad y precisión de la descripción de la característica.',
-		}],
+		message: {
+			id: 'mock-chat-2',
+			role: 'assistant',
+			content:
+				'Aquí tienes una sugerencia de cambio para mejorar la descripción de la característica.',
+			created_at: new Date().toISOString(),
+			change_suggestions: [
+				{
+					id: 'mock-chg-1',
+					section: 'Descripción de la característica',
+					description: 'Refinar la descripción para mayor claridad.',
+					diff_before:
+						'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+					diff_after:
+						'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para controlar el acceso a pantallas y funciones críticas del sistema.',
+					rationale: 'Precisión terminológica.',
+					applied: true,
+					not_applied_reason: null,
+				},
+			],
+			modification: {
+				applied: true,
+				modified_section: 'Descripción de la característica',
+				change_description: 'Se aplicaron los cambios sugeridos.',
+				modified_document: null,
+				before: null,
+				after: null,
+				undo_version_id: null,
+				clarification_message: null,
+			},
+		},
+		modification: {
+			applied: true,
+			modified_section: 'Descripción de la característica',
+			change_description: 'Se aplicaron los cambios sugeridos.',
+			modified_document: null,
+			before: null,
+			after: null,
+			undo_version_id: null,
+			clarification_message: null,
+		},
+		redirect: null,
+		consistency: null,
 	},
 ];
 
@@ -135,7 +105,7 @@ let mockStore = [...mockCharacteristics];
 const mockGetCharacteristics = async (
 	_projectId: string,
 ): Promise<CharacteristicResponse[]> => {
-	await delay(800);
+	await delay(3000);
 	return [...mockStore];
 };
 
@@ -143,19 +113,32 @@ const mockGenerateCharacteristics = async (
 	_projectId: string,
 ): Promise<CharacteristicResponse[]> => {
 	await delay(2000);
-	return [...mockStore];
+	return [
+		...mockStore,
+		{
+			id: '1',
+			project_id: 'mock-project-1',
+			number: 1,
+			title: 'Administración de Perfiles y Permisos de Usuario',
+			slug: 'administracion-de-perfiles-y-permisos-de-usuario',
+			description:
+				'Permite crear cuentas para empleados y asignarles roles específicos (Administrador, Cajero, Bodeguero) para restringir el acceso a pantallas y funciones sensibles del sistema.',
+			origin: '',
+			display_id: 'C01',
+		},
+	];
 };
 
 const mockGetSuggestCharacteristics = async (
 	_projectId: string,
 ): Promise<SuggestCharacteristic[]> => {
-	await delay(800);
+	await delay(5000);
 	return [...mockSuggestions];
 };
 
 const mockAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string; origin?: string; force?: boolean },
+	item: { title: string; description: string; origin?: string },
 ): Promise<CreateCharacteristicResponse> => {
 	await delay(600);
 	const nextNum = mockStore.length + 1;
@@ -170,13 +153,18 @@ const mockAddCharacteristic = async (
 		display_id: `C${String(nextNum).padStart(2, '0')}`,
 	};
 	mockStore = [...mockStore, newChar];
-	return { is_saved: true, feature: newChar, origin: newChar.origin, is_consistent: true };
+	return {
+		is_saved: true,
+		feature: newChar,
+		origin: '',
+		is_consistent: true,
+	};
 };
 
 const mockSendChatMessage = async (
 	_featureId: string,
 	_content: string,
-): Promise<CharacteristicChatResponse> => {
+): Promise<ChatResponse> => {
 	await delay(500);
 	return mockChatResponses[Math.floor(Math.random() * mockChatResponses.length)];
 };
@@ -210,7 +198,7 @@ const realGetSuggestCharacteristics = async (
 
 const realAddCharacteristic = async (
 	projectId: string,
-	item: { title: string; description: string; origin?: string; force?: boolean },
+	item: { title: string; description: string; origin?: string },
 ): Promise<CreateCharacteristicResponse> => {
 	return apiClient<CreateCharacteristicResponse>(
 		`/api/v1/projects/${projectId}/features/manual`,
@@ -221,7 +209,6 @@ const realAddCharacteristic = async (
 				title: item.title,
 				description: item.description,
 				origin: item.origin || '',
-				force: item.force || false,
 			}),
 		},
 	);
@@ -230,8 +217,8 @@ const realAddCharacteristic = async (
 const realSendChatMessage = async (
 	featureId: string,
 	content: string,
-): Promise<CharacteristicChatResponse> => {
-	return apiClient<CharacteristicChatResponse>(`/api/v1/features/${featureId}/chat`, {
+): Promise<ChatResponse> => {
+	return apiClient<ChatResponse>(`/api/v1/features/${featureId}/chat`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ content }),
@@ -261,7 +248,7 @@ export const getSuggestCharacteristics = (
 
 export const addCharacteristic = (
 	projectId: string,
-	item: { title: string; description: string; origin?: string; force?: boolean },
+	item: { title: string; description: string; origin?: string },
 ): Promise<CreateCharacteristicResponse> =>
 	USE_MOCKS
 		? mockAddCharacteristic(projectId, item)
@@ -270,10 +257,40 @@ export const addCharacteristic = (
 export const sendChatMessage = (
 	featureId: string,
 	content: string,
-): Promise<CharacteristicChatResponse> =>
+): Promise<ChatResponse> =>
 	USE_MOCKS
 		? mockSendChatMessage(featureId, content)
 		: realSendChatMessage(featureId, content);
+
+const mockGetChatHistory = async (featureId: string): Promise<ChatHistory> => {
+	await delay(300);
+	return {
+		phase: 'features',
+		context: featureId,
+		messages: [],
+		has_more: false,
+		next_cursor: null,
+	};
+};
+
+const realGetChatHistory = (featureId: string, sessionId: string | null, before?: string | null) => {
+	const query = new URLSearchParams();
+	if (sessionId) query.set('session_id', sessionId);
+	if (before) query.set('before', before);
+	const suffix = query.toString() ? `?${query.toString()}` : '';
+	return apiClient<ChatHistory>(`/api/v1/features/${featureId}/chat/history${suffix}`, {
+		method: 'GET',
+	});
+};
+
+export const getChatHistory = (
+	featureId: string,
+	sessionId: string | null = null,
+	before?: string | null,
+): Promise<ChatHistory> =>
+	USE_MOCKS
+		? mockGetChatHistory(featureId)
+		: realGetChatHistory(featureId, sessionId, before);
 
 const realDeleteFeature = async (projectId: string, featureId: string): Promise<void> => {
 	await apiClient<void>(

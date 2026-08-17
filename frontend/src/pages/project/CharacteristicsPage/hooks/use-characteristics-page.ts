@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAppStore } from 'app/store/app.store';
-import { useCharacteristicStore, type CharacteristicResponse } from '@/entities/characteristic';
+import { useProjectStore } from '@/entities/project';
+import {
+	useCharacteristicStore,
+	type CharacteristicResponse,
+} from '@/entities/characteristic';
 import { toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
 
 interface UseCharacteristicsPageReturn {
 	characteristics: CharacteristicResponse[];
@@ -17,10 +21,10 @@ interface UseCharacteristicsPageReturn {
 }
 
 export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
 	const router = useRouter();
 
-	const [isLoading, setIsLoading] = useState(true);
+	const [isLoading, setIsLoading] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
 
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -36,7 +40,7 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 				err && typeof err === 'object' && 'status' in err
 					? (err as { status: unknown }).status
 					: undefined;
-			const errorMessage = err instanceof Error ? err.message : '';
+			const errorMessage = formatApiError(err, '');
 			if (
 				errorStatus === 404 ||
 				errorMessage.includes('404') ||
@@ -46,8 +50,6 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 			} else {
 				toast.error(errorMessage || 'Error al cargar las características');
 			}
-		} finally {
-			setIsLoading(false);
 		}
 	};
 
@@ -57,7 +59,11 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 			return;
 		}
 
-		fetchData();
+		if (characteristics.length === 0) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
+			setIsLoading(true);
+			void fetchData().finally(() => setIsLoading(false));
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentProject, router]);
 
@@ -69,5 +75,13 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 			)
 		: characteristics;
 
-	return { characteristics, isLoading, hasCharacteristics, searchQuery, setSearchQuery, filtered, refetch: fetchData };
+	return {
+		characteristics,
+		isLoading,
+		hasCharacteristics,
+		searchQuery,
+		setSearchQuery,
+		filtered,
+		refetch: fetchData,
+	};
 }

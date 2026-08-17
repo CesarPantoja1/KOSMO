@@ -22,6 +22,7 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
 from tests.unit.fakes import (
     InMemoryFeatureRepository,
+    InMemoryOutbox,
     InMemoryProjectRepository,
     InMemoryRequirementRepository,
 )
@@ -219,3 +220,54 @@ async def test_regenerate_requirements_agent_failure() -> None:
     # Act & Assert
     with pytest.raises(LLMInvocationError, match="Error al regenerar"):
         await uc.execute(RegenerateRequirementsInput(project_id=project_id, feature_id=feature_id))
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_regenerate_requirements_enqueues_downstream_evaluation() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    project_id = ProjectId("prj_chain")
+    await project_repo.save(
+        Project(
+            id=project_id,
+            name="Test Project",
+            slug="test-project",
+            description="Test",
+            owner_id=UserId("usr_test"),
+        )
+    )
+
+    feature_repo = InMemoryFeatureRepository()
+    feature_id = FeatureId("feat_01")
+    await feature_repo.save(
+        Feature(
+            id=feature_id,
+            number=1,
+            title="Procesar pagos",
+            slug="procesar-pagos",
+            description="Gestiona pagos electrónicos",
+            project_id=project_id,
+        )
+    )
+
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(feature_id, "### REQ-1.1\n\nEARS original.\n")
+
+    outbox = InMemoryOutbox()
+    uc = RegenerateRequirementsUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        agent=StubRegenRequirementsAgent(),
+        outbox=outbox,
+    )
+
+    # Act
+    await uc.execute(RegenerateRequirementsInput(project_id=project_id, feature_id=feature_id))
+
+    # Assert — regenerar Requisitos dispara la verificación del Modelo
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["source_phase"] == "requisitos"

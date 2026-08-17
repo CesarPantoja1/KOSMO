@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -9,8 +12,28 @@ from kosmo.infrastructure.persistence.postgres.models import TraceabilityEdgeMod
 
 
 class SqlAlchemyTraceabilityRepository:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        session: AsyncSession | None = None,
+    ) -> None:
+        if session_factory is None and session is None:
+            raise ValueError("Se requiere session_factory o session")
         self._session_factory = session_factory
+        self._session = session
+
+    @asynccontextmanager
+    async def _session_ctx(self) -> AsyncGenerator[AsyncSession]:
+        if self._session is not None:
+            yield self._session
+            return
+        assert self._session_factory is not None
+        async with self._session_factory() as session:
+            yield session
+
+    async def _commit(self, session: AsyncSession) -> None:
+        if self._session is None:
+            await session.commit()
 
     async def add_edge(
         self,
@@ -20,7 +43,7 @@ class SqlAlchemyTraceabilityRepository:
         target_id: str,
         origin: str = "llm",
     ) -> None:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             model = TraceabilityEdgeModel(
                 id=IdGenerator.generate("trace_edge"),
                 source_type=source_type,
@@ -30,13 +53,13 @@ class SqlAlchemyTraceabilityRepository:
                 origin=origin,
             )
             session.add(model)
-            await session.commit()
+            await self._commit(session)
 
     async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
         upstream: list[dict[str, str]] = []
         downstream: list[dict[str, str]] = []
 
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             up_stmt = select(TraceabilityEdgeModel).where(TraceabilityEdgeModel.target_id == artifact_id)
             up_result = await session.execute(up_stmt)
             for edge in up_result.scalars().all():
@@ -62,7 +85,7 @@ class SqlAlchemyTraceabilityRepository:
         return {"upstream": upstream, "downstream": downstream}
 
     async def add_feature_requirement_edges(self, feature_id: FeatureId, requirement_ids: list[RequirementId]) -> None:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             for req_id in requirement_ids:
                 session.add(
                     TraceabilityEdgeModel(
@@ -74,10 +97,10 @@ class SqlAlchemyTraceabilityRepository:
                         origin="llm",
                     )
                 )
-            await session.commit()
+            await self._commit(session)
 
     async def delete_by_entity_id(self, entity_id: str) -> None:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             from sqlalchemy import or_
 
             stmt = select(TraceabilityEdgeModel).where(
@@ -89,4 +112,4 @@ class SqlAlchemyTraceabilityRepository:
             result = await session.execute(stmt)
             for edge in result.scalars().all():
                 await session.delete(edge)
-            await session.commit()
+            await self._commit(session)

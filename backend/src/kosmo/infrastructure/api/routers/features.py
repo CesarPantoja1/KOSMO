@@ -24,7 +24,6 @@ from kosmo.application.features.list_features import (
     ListFeaturesUseCase,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     FeatureNotFoundError,
@@ -32,6 +31,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     CheckConsistencyRequestView,
@@ -40,9 +40,6 @@ from kosmo.infrastructure.api.schemas import (
     FeatureResponse,
     FeatureSuggestionResponse,
     InconsistencyResultView,
-    PhaseNotificationList,
-    PhaseNotificationView,
-    PropagateFeatureChangesRequest,
     SaveSelectedFeaturesRequest,
 )
 
@@ -55,27 +52,27 @@ _generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
 
 
 def _generate_features(request: Request) -> GenerateFeaturesUseCase:
-    return request.app.state.generate_features
+    return get_container(request).features.generate_features
 
 
 def _suggest_features(request: Request) -> SuggestFeaturesUseCase:
-    return request.app.state.suggest_features
+    return get_container(request).features.suggest_features
 
 
 def _save_selected_features(request: Request) -> SaveSelectedFeaturesUseCase:
-    return request.app.state.save_selected_features
+    return get_container(request).features.save_selected_features
 
 
 def _create_characteristic(request: Request) -> CreateCharacteristicUseCase:
-    return request.app.state.create_characteristic
+    return get_container(request).features.create_characteristic
 
 
 def _edit_feature(request: Request) -> EditFeatureUseCase:
-    return request.app.state.edit_feature
+    return get_container(request).features.edit_feature
 
 
 def _list_features(request: Request) -> ListFeaturesUseCase:
-    return request.app.state.list_features
+    return get_container(request).features.list_features
 
 
 @router.post(
@@ -186,8 +183,8 @@ async def suggest_features(
     description=(
         "Crea una nueva característica. Si no se proporciona origin, la IA lo deriva "
         "del descubrimiento y verifica coherencia. Si la IA detecta inconsistencia, "
-        "devuelve is_saved=false con el origin derivado y la razón. Usa force=true para "
-        "forzar el guardado."
+        "devuelve is_saved=false con el origin derivado y la razón. El guardado nunca "
+        "se fuerza: si contradice el Descubrimiento, primero debe modificarse ese documento."
     ),
     status_code=status.HTTP_200_OK,
     responses={
@@ -218,7 +215,6 @@ async def create_characteristic_manual(
                 title=payload.title,
                 description=payload.description,
                 origin=payload.origin,
-                force=payload.force,
             )
         )
     except ValueError as exc:
@@ -350,63 +346,12 @@ def _feature_to_response(f: Any) -> FeatureResponse:
     )
 
 
-def _propagate_feature_changes(request: Request):
-    return request.app.state.propagate_feature_changes
-
-
-@router.post(
-    "/{feature_id}/propagate",
-    summary="Propagar cambios desde característica",
-    description=(
-        "Evalúa el impacto bidireccional de los cambios aplicados en una característica. "
-        "Notifica fases afectadas upstream (Descubrimiento) y downstream (Requisitos, Modelo) "
-        "para la actualización de insignias en el wizard."
-    ),
-    response_model=PhaseNotificationList,
-    status_code=status.HTTP_200_OK,
-)
-async def propagate_feature_changes(
-    project_id: str,
-    feature_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
-    request: Annotated[PropagateFeatureChangesRequest, Body(...)],
-    uc: Annotated[Any, Depends(_propagate_feature_changes)],
-) -> PhaseNotificationList:
-    from kosmo.application.consistency.propagate_changes import (
-        PropagateChangesInput,
-    )
-    from kosmo.contracts.sdd.ids import PlanChangeId
-
-    try:
-        output = await uc.execute(
-            PropagateChangesInput(
-                project_id=ProjectId(project_id),
-                source_phase=SpecPhase.CARACTERISTICAS,
-                applied_change_ids=[PlanChangeId(cid) for cid in request.applied_change_ids],
-                feature_id=FeatureId(feature_id),
-            )
-        )
-    except ProjectNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
-
-    return PhaseNotificationList(
-        affected_phases=[
-            PhaseNotificationView(
-                phase=p.phase,
-                affected_count=p.affected_count,
-                affected_ids=p.affected_ids,
-            )
-            for p in output.affected_phases
-        ]
-    )
-
-
 def _delete_feature_uc(request: Request) -> DeleteFeatureUseCase:
-    return request.app.state.delete_feature
+    return get_container(request).consistency.delete_feature
 
 
 def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCase:
-    return request.app.state.check_feature_consistency
+    return get_container(request).features.check_feature_consistency
 
 
 @router.delete(

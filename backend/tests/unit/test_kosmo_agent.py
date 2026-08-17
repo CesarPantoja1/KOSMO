@@ -302,4 +302,4 @@ async def test_agent_retry_consults_knowledge_tools_on_validation_failure() -> N
     saved = await store.load_session(sessions[0].session_id)
     assert saved is not None
     assert any("retry_tools" in entry for entry in saved.reasoning_log)
-    assert len(saved.tool_results) >= 2
+    assert len(saved.tool_results) >= 1

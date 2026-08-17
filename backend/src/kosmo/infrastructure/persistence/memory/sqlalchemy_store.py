@@ -289,6 +289,14 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             result = await db.execute(stmt)
             return {str(row[0]): int(row[1]) for row in result.fetchall()}
 
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        from sqlalchemy import delete
+
+        async with self._session_factory() as db:
+            stmt = delete(AgentSessionModel).where(AgentSessionModel.project_id == str(project_id))
+            await db.execute(stmt)
+            await db.commit()
+
 
 class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

@@ -139,23 +139,3 @@ def diff_discovery_versions(previous: str, current: str) -> list[SectionChange]:
             )
 
     return changes
-
-
-def diff_from_plan_changes(plan_changes: list[object]) -> list[SectionChange]:
-    changes: list[SectionChange] = []
-    for c in plan_changes:
-        section = getattr(c, "section", "") or ""
-        before = getattr(getattr(c, "diff", None), "before", "") or ""
-        after = getattr(getattr(c, "diff", None), "after", "") or ""
-        change_class = _classify_change(before, after)
-        change_type = ChangeType.ADDED if not before else (ChangeType.REMOVED if not after else ChangeType.MODIFIED)
-        changes.append(
-            SectionChange(
-                section=section,
-                change_type=change_type,
-                change_class=change_class,
-                before=before,
-                after=after,
-            )
-        )
-    return changes

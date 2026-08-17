@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
@@ -32,7 +34,7 @@ def _build_app(limit: int) -> tuple[FastAPI, _MockRedis]:
     mock_redis = _MockRedis()
     limiter = IpRateLimiter(limit)
     app = FastAPI()
-    app.state.redis = mock_redis
+    app.state.container = SimpleNamespace(redis=mock_redis)
 
     @app.get("/probe", dependencies=[Depends(limiter)])
     async def probe() -> dict[str, bool]:
@@ -85,6 +87,7 @@ def test_429_error_message_is_in_spanish() -> None:
 def test_rate_limiter_skips_when_redis_unavailable() -> None:
     limiter = IpRateLimiter(1)
     app = FastAPI()
+    app.state.container = SimpleNamespace(redis=None)
 
     @app.get("/probe", dependencies=[Depends(limiter)])
     async def probe() -> dict[str, bool]:

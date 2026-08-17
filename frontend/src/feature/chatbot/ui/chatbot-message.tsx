@@ -2,19 +2,14 @@
 
 import { Ai } from '@/shared/ui';
 import { MarkdownText } from '@/shared/ui/markdown-text';
-import type { ChangeSuggestion, ChatMessage } from '../types/chatbot';
 import { TarjetaRecepcionPlan } from './TarjetaRecepcionPlan';
+import { ChatMessage } from '@/entities/chat';
 
 interface ChatbotMessageProps {
 	message: ChatMessage;
-	onPlanAction?: (
-		action: 'add' | 'remove' | 'discard',
-		suggestion: ChangeSuggestion,
-		messageId: string,
-	) => void;
 }
 
-export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) => {
+export const ChatbotMessage = ({ message }: ChatbotMessageProps) => {
 	const isUser = message.role === 'user';
 
 	return (
@@ -23,17 +18,17 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
 			>
 				{!isUser && (
-					<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ai'>
-						<Ai size={16} color='text-base-50' />
+					<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ai-500'>
+						<Ai size={14} color='text-neutral-0' />
 					</div>
 				)}
 				<div
 					className={`
-						max-w-[85%] px-5 py-2.5 text-sm leading-6 wrap-break-word whitespace-pre-wrap
+						max-w-[85%] px-4 py-2.5 text-sm leading-6 wrap-break-word whitespace-pre-wrap
 						${
 							isUser
-								? 'rounded-2xl rounded-br-sm bg-ai text-base-50'
-								: 'rounded-2xl rounded-tl-sm bg-stone-100 text-stone-700'
+								? 'rounded-2xl rounded-br-sm bg-ai-500 text-neutral-0'
+								: 'rounded-2xl rounded-tl-sm bg-neutral-0 border border-neutral-200 text-neutral-700 shadow-sm'
 						}
 					`}
 				>
@@ -41,15 +36,21 @@ export const ChatbotMessage = ({ message, onPlanAction }: ChatbotMessageProps) =
 				</div>
 			</div>
 
+			{message.modification &&
+				!message.modification.applied &&
+				message.modification.clarification_message && (
+					<div className='w-full rounded-lg border border-ai-200 bg-ai-50 px-4 py-3'>
+						<p className='text-sm leading-6 text-ai-700'>
+							{message.modification.clarification_message}
+						</p>
+					</div>
+				)}
+
 			{message.change_suggestions &&
 				message.change_suggestions.length > 0 &&
 				message.change_suggestions.map((suggestion) => (
 					<div className='w-full' key={suggestion.id}>
-						<TarjetaRecepcionPlan
-							messageId={message.id}
-							suggestion={suggestion}
-							onAction={(action) => onPlanAction?.(action, suggestion, message.id)}
-						/>
+						<TarjetaRecepcionPlan suggestion={suggestion} />
 					</div>
 				))}
 		</div>

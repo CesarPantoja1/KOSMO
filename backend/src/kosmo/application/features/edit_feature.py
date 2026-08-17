@@ -5,12 +5,14 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 from ulid import ULID
 
-from kosmo.contracts.chat import DiffCambio, PlanCambio
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
+from kosmo.contracts.chat import AppliedChange, DiffCambio
 from kosmo.contracts.consistency import ConsistencyEvaluator, ConsistencyStatus
+from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 
 
@@ -33,9 +35,11 @@ class EditFeatureUseCase:
         self,
         feature_repo: FeatureRepository,
         consistency_evaluator: ConsistencyEvaluator,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._consistency_evaluator = consistency_evaluator
+        self._outbox = outbox
 
     async def execute(self, input_dto: EditFeatureInput) -> EditFeatureOutput:
         feature = await self._feature_repo.by_id(input_dto.feature_id)
@@ -45,8 +49,8 @@ class EditFeatureUseCase:
         if feature.title == input_dto.title and feature.description == input_dto.description:
             return EditFeatureOutput(is_saved=True, feature=feature)
 
-        plan_cambio = PlanCambio(
-            id=PlanChangeId(ULID().hex),
+        plan_cambio = AppliedChange(
+            id=ULID().hex,
             section=f"Característica {feature.number}",
             description="Edición manual de característica",
             diff=DiffCambio(
@@ -84,5 +88,19 @@ class EditFeatureUseCase:
         feature.title = input_dto.title
         feature.description = input_dto.description
         await self._feature_repo.save(feature)
+
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=input_dto.project_id,
+            source_phase=SpecPhase.CARACTERISTICAS,
+            changes=[
+                {
+                    "section": f"Característica {feature.number}",
+                    "description": "Edición manual de característica",
+                    "before": f"Título: {plan_cambio.diff.before}",
+                    "after": f"Título: {plan_cambio.diff.after}",
+                }
+            ],
+        )
 
         return EditFeatureOutput(is_saved=True, feature=feature)

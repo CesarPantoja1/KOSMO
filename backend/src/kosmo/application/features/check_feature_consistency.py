@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 from ulid import ULID
 
-from kosmo.contracts.chat import DiffCambio, PlanCambio
+from kosmo.contracts.chat import AppliedChange, DiffCambio
 from kosmo.contracts.consistency import ConsistencyEvaluator, ConsistencyStatus
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import FeatureRepository
 
 
@@ -41,8 +41,8 @@ class CheckFeatureConsistencyUseCase:
         if feature is None or feature.project_id != input_dto.project_id:
             raise FeatureNotFoundError(feature_id=str(input_dto.feature_id))
 
-        plan_cambio = PlanCambio(
-            id=PlanChangeId(ULID().hex),
+        plan_cambio = AppliedChange(
+            id=ULID().hex,
             section=f"Característica {feature.number}",
             description="Edición manual de característica",
             diff=DiffCambio(

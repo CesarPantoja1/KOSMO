@@ -33,4 +33,20 @@ function loadViz(): Promise<void> {
 	return vizLoading;
 }
 
-export { PLANTUML_MODULE_URL, dynamicImport, loadViz };
+let modulePromise: Promise<Record<string, unknown>> | null = null;
+
+function loadPlantUmlModule(): Promise<Record<string, unknown>> {
+	if (modulePromise) return modulePromise;
+	modulePromise = dynamicImport(PLANTUML_MODULE_URL);
+	modulePromise.catch(() => {
+		modulePromise = null;
+	});
+	return modulePromise;
+}
+
+function preloadPlantUmlEngine(): void {
+	loadViz().catch(() => undefined);
+	loadPlantUmlModule().catch(() => undefined);
+}
+
+export { PLANTUML_MODULE_URL, loadPlantUmlModule, loadViz, preloadPlantUmlEngine };

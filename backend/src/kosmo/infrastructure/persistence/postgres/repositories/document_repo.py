@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
-from kosmo.contracts.sdd.ids import PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.id_generator import IdGenerator
@@ -14,12 +16,39 @@ from kosmo.infrastructure.persistence.postgres.models import DiscoveryDocumentMo
 
 
 class SqlAlchemyDocumentRepository(DocumentRepository):
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        session: AsyncSession | None = None,
+    ) -> None:
+        if session_factory is None and session is None:
+            raise ValueError("Se requiere session_factory o session")
         self._session_factory = session_factory
+        self._session = session
 
-    async def get_discovery(self, project_id: ProjectId) -> RichTextDocument | None:
+    @asynccontextmanager
+    async def _session_ctx(self) -> AsyncGenerator[AsyncSession]:
+        if self._session is not None:
+            yield self._session
+            return
+        assert self._session_factory is not None
         async with self._session_factory() as session:
+            yield session
+
+    async def _commit(self, session: AsyncSession) -> None:
+        if self._session is None:
+            await session.commit()
+
+    async def get_discovery(
+        self,
+        project_id: ProjectId,
+        *,
+        for_update: bool = False,
+    ) -> RichTextDocument | None:
+        async with self._session_ctx() as session:
             stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
+            if for_update:
+                stmt = stmt.with_for_update()
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if model is None:
@@ -30,24 +59,10 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         self,
         project_id: ProjectId,
         document: RichTextDocument,
-        *,
-        _session: AsyncSession | None = None,
     ) -> RichTextDocument:
         markdown = document_to_markdown(document)
 
-        if _session is not None:
-            stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
-            result = await _session.execute(stmt)
-            model = result.scalar_one_or_none()
-            if model is None:
-                model = DiscoveryDocumentModel(project_id=str(project_id), markdown=markdown)
-                _session.add(model)
-            else:
-                model.markdown = markdown
-                model.updated_at = datetime.now(UTC)
-            return document
-
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             stmt = select(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
@@ -62,8 +77,20 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
                 model.markdown = markdown
                 model.updated_at = datetime.now(UTC)
 
-            await session.commit()
+            await self._commit(session)
             return document
+
+    async def delete_discovery(self, project_id: ProjectId) -> None:
+        async with self._session_ctx() as session:
+            stmt = delete(DiscoveryDocumentModel).where(DiscoveryDocumentModel.project_id == str(project_id))
+            await session.execute(stmt)
+            await self._commit(session)
+
+    async def delete_versions_by_project(self, project_id: ProjectId) -> None:
+        async with self._session_ctx() as session:
+            stmt = delete(DocumentVersionModel).where(DocumentVersionModel.project_id == str(project_id))
+            await session.execute(stmt)
+            await self._commit(session)
 
     async def get_requirements(  # type: ignore[override]
         self, feature_id: object
@@ -84,9 +111,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         project_id: ProjectId,
         phase: SpecPhase,
         markdown: str,
-        change_ids: list[PlanChangeId],
-        *,
-        _session: AsyncSession | None = None,
+        change_ids: list[str],
     ) -> str:
         version_id = IdGenerator.generate("doc_version")
         model = DocumentVersionModel(
@@ -96,17 +121,13 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             markdown=markdown,
             change_ids=[str(cid) for cid in change_ids],
         )
-        if _session is not None:
-            _session.add(model)
-            return version_id
-
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             session.add(model)
-            await session.commit()
+            await self._commit(session)
             return version_id
 
     async def get_version(self, version_id: str) -> str | None:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             stmt = select(DocumentVersionModel).where(DocumentVersionModel.id == version_id)
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
@@ -114,7 +135,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
 
     async def get_latest_version(self, project_id: ProjectId, phase: object) -> str | None:  # type: ignore[override]
         phase_value = phase.value if hasattr(phase, "value") else str(phase)  # type: ignore[reportUnknownVariableType, reportUnknownMemberType]  # noqa: E501
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             stmt = (
                 select(DocumentVersionModel)
                 .where(

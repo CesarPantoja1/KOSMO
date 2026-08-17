@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -12,18 +14,38 @@ from kosmo.infrastructure.persistence.postgres.models import FeatureModel
 
 
 class SqlAlchemyFeatureRepository(FeatureRepository):
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        session: AsyncSession | None = None,
+    ) -> None:
+        if session_factory is None and session is None:
+            raise ValueError("Se requiere session_factory o session")
         self._session_factory = session_factory
+        self._session = session
 
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
+    @asynccontextmanager
+    async def _session_ctx(self) -> AsyncGenerator[AsyncSession]:
+        if self._session is not None:
+            yield self._session
+            return
+        assert self._session_factory is not None
         async with self._session_factory() as session:
-            model = await session.get(FeatureModel, str(feature_id))
+            yield session
+
+    async def _commit(self, session: AsyncSession) -> None:
+        if self._session is None:
+            await session.commit()
+
+    async def by_id(self, feature_id: FeatureId, *, for_update: bool = False) -> Feature | None:
+        async with self._session_ctx() as session:
+            model = await session.get(FeatureModel, str(feature_id), with_for_update=for_update)
             if model is None:
                 return None
             return self._to_entity(model)
 
     async def list_by_project(self, project_id: ProjectId) -> list[Feature]:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             stmt = (
                 select(FeatureModel)
                 .where(FeatureModel.project_id == str(project_id))
@@ -34,29 +56,29 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             return [self._to_entity(m) for m in models]
 
     async def save(self, feature: Feature) -> Feature:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             model = await session.get(FeatureModel, str(feature.id))
             if model is None:
                 model = self._to_model(feature)
                 session.add(model)
             else:
                 self._update_model(model, feature)
-            await session.commit()
+            await self._commit(session)
             return feature
 
     async def save_many(self, features: list[Feature]) -> list[Feature]:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             for feature in features:
                 model = await session.get(FeatureModel, str(feature.id))
                 if model is None:
                     session.add(self._to_model(feature))
                 else:
                     self._update_model(model, feature)
-            await session.commit()
+            await self._commit(session)
             return features
 
     async def next_number(self, project_id: ProjectId) -> int:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             stmt = (
                 select(FeatureModel.number)
                 .where(FeatureModel.project_id == str(project_id))
@@ -68,11 +90,11 @@ class SqlAlchemyFeatureRepository(FeatureRepository):
             return (max_number or 0) + 1
 
     async def delete(self, feature_id: FeatureId) -> None:
-        async with self._session_factory() as session:
+        async with self._session_ctx() as session:
             model = await session.get(FeatureModel, str(feature_id))
             if model is not None:
                 await session.delete(model)
-                await session.commit()
+                await self._commit(session)
 
     @staticmethod
     def _to_entity(model: FeatureModel) -> Feature:

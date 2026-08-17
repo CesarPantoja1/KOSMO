@@ -10,7 +10,6 @@ from kosmo.application.chat.process_chat_message import (
     ProcessChatMessageUseCase,
 )
 from kosmo.application.chat.validate_phase_context import (
-    ValidatePhaseContextInput,
     ValidatePhaseContextUseCase,
 )
 from kosmo.application.discovery import (
@@ -25,23 +24,22 @@ from kosmo.application.discovery import (
     SaveDiscoveryInput,
     SaveDiscoveryUseCase,
 )
-from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.chat import ChatRepository
+from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,
     LLMInvocationError,
     ProjectNotFoundError,
 )
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
-    ChatMessage,
-    ContextRedirectResponse,
+    ChatResponse,
     DiscoveryResponse,
     RefineDiscoveryRequest,
     SendChatRequest,
@@ -56,35 +54,35 @@ _generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
 
 
 def _generate_discovery(request: Request) -> GenerateDiscoveryUseCase:
-    return request.app.state.generate_discovery
+    return get_container(request).discovery.generate_discovery
 
 
 def _get_discovery(request: Request) -> GetDiscoveryUseCase:
-    return request.app.state.get_discovery
+    return get_container(request).discovery.get_discovery
 
 
 def _save_discovery(request: Request) -> SaveDiscoveryUseCase:
-    return request.app.state.save_discovery
+    return get_container(request).discovery.save_discovery
 
 
 def _refine_discovery(request: Request) -> RefineDiscoveryUseCase:
-    return request.app.state.refine_discovery
+    return get_container(request).discovery.refine_discovery
 
 
-def _process_discovery_chat(request: Request) -> ProcessChatMessageUseCase:
-    return request.app.state.process_chat_message
+def _chat_uc(request: Request) -> ProcessChatMessageUseCase:
+    return get_container(request).pipeline.process_chat_message
 
 
 def _context_builder(request: Request) -> ContextBuilder:
-    return request.app.state.context_builder
+    return get_container(request).pipeline.context_builder
 
 
 def _validate_phase_context(request: Request) -> ValidatePhaseContextUseCase:
-    return request.app.state.validate_phase_context
+    return get_container(request).pipeline.validate_phase_context
 
 
 def _get_discovery_chat_history(request: Request) -> GetDiscoveryChatHistoryUseCase:
-    return request.app.state.get_discovery_chat_history
+    return get_container(request).discovery.get_discovery_chat_history
 
 
 @router.post(
@@ -274,16 +272,16 @@ def _markdown_to_document(content: str) -> RichTextDocument:
 
 @router.post(
     "/chat",
-    summary="Enviar mensaje al chat de Descubrimiento",
+    summary="Enviar mensaje al chat de Descubrimiento (aplicación instantánea)",
     description=(
-        "Procesa un mensaje del usuario en el contexto de Descubrimiento, validando que "
-        "la solicitud corresponda al ámbito de la fase. Si el mensaje corresponde a otra "
-        "fase, devuelve una redirección."
+        "Procesa el mensaje y aplica el cambio inmediatamente sobre el documento "
+        "cuando corresponde, verificando la consistencia en las fases a la derecha. "
+        "Si el mensaje corresponde a otra fase, devuelve una redirección."
     ),
-    response_model=ChatMessage | ContextRedirectResponse,
+    response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
     responses={
-        status.HTTP_200_OK: {"description": "Mensaje procesado o redirección."},
+        status.HTTP_200_OK: {"description": "Mensaje procesado, modificación aplicada o redirección."},
         status.HTTP_400_BAD_REQUEST: {"description": "Error de validación o tamaño de mensaje."},
         status.HTTP_401_UNAUTHORIZED: {"description": "Token inválido."},
         status.HTTP_404_NOT_FOUND: {"description": "Proyecto no encontrado."},
@@ -294,31 +292,30 @@ async def process_chat_message(
     project_id: str,
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
-    use_case: Annotated[ProcessChatMessageUseCase, Depends(_process_discovery_chat)],
-    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
-) -> ChatMessage | ContextRedirectResponse:
-    validation = await validate_uc.execute(
-        ValidatePhaseContextInput(
-            content=payload.content,
-            current_phase=SpecPhase.DESCUBRIMIENTO,
-        )
-    )
+    context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+) -> ChatResponse:
+    from kosmo.infrastructure.api.async_generation import validate_chat_content
+
+    validation = await validate_chat_content(validate_uc, payload.content, SpecPhase.DESCUBRIMIENTO)
 
     if not validation.is_valid:
-        return ContextRedirectResponse(
-            message=validation.redirect_message or "Este cambio no pertenece a la fase de Descubrimiento.",
+        return ChatResponse.from_redirect(
             target_phase=validation.target_phase or "",
+            redirect_message=validation.redirect_message or "Este cambio no pertenece a la fase de Descubrimiento.",
         )
 
     try:
-        context = await ctx_builder.build_discovery_chat_context(ProjectId(project_id))
-        output = await use_case.execute(
+        ctx = await context_builder.build_discovery_chat_context(ProjectId(project_id))
+        output = await chat_uc.execute(
             ProcessChatMessageInput(
+                content=payload.content,
                 project_id=ProjectId(project_id),
                 phase=SpecPhase.DESCUBRIMIENTO,
-                content=payload.content,
-                context=context,
+                context=ctx,
+                context_id=None,
+                session_id=ChatSessionId(payload.session_id) if payload.session_id else None,
                 instance=f"/api/v1/projects/{project_id}/discovery/chat",
             )
         )
@@ -327,9 +324,14 @@ async def process_chat_message(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    except ProjectNotFoundError as exc:
+    except (DocumentNotFoundError, ProjectNotFoundError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=exc.problem.detail,
+        ) from exc
+    except PhaseTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=exc.problem.detail,
         ) from exc
     except LLMInvocationError as exc:
@@ -338,7 +340,7 @@ async def process_chat_message(
             detail=exc.problem.detail,
         ) from exc
 
-    return ChatMessage.from_domain(output.message)
+    return ChatResponse.from_message(output)
 
 
 @router.get(
@@ -357,9 +359,16 @@ async def get_chat_history(
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetDiscoveryChatHistoryUseCase, Depends(_get_discovery_chat_history)],
     before: str | None = None,
+    session_id: str | None = None,
 ) -> ChatHistoryResponse:
     try:
-        output = await use_case.execute(GetDiscoveryChatHistoryInput(project_id=ProjectId(project_id), before=before))
+        output = await use_case.execute(
+            GetDiscoveryChatHistoryInput(
+                project_id=ProjectId(project_id),
+                before=before,
+                session_id=ChatSessionId(session_id) if session_id else None,
+            )
+        )
     except ProjectNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -382,14 +391,6 @@ async def get_chat_history(
     return ChatHistoryResponse.from_domain(output.history)
 
 
-def _agent_dep(request: Request) -> KOSMOAgent:
-    return request.app.state.agent
-
-
-def _chat_repo_dep(request: Request) -> ChatRepository:
-    return request.app.state.chat_repo
-
-
 @router.post(
     "/chat/stream",
     summary="Enviar mensaje al chat de Descubrimiento con streaming SSE",
@@ -405,23 +406,19 @@ async def stream_chat_message(
     payload: Annotated[SendChatRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
-    ctx_builder: Annotated[ContextBuilder, Depends(_context_builder)],
-    agent: Annotated[KOSMOAgent, Depends(_agent_dep)],
-    chat_repo: Annotated[ChatRepository, Depends(_chat_repo_dep)],
+    chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
+    context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
 ) -> StreamingResponse:
     from kosmo.infrastructure.api.async_generation import sse_chat_response
 
-    pid = ProjectId(project_id)
-    context = await ctx_builder.build_discovery_chat_context(pid)
-
+    ctx = await context_builder.build_discovery_chat_context(ProjectId(project_id))
     return await sse_chat_response(
         content=payload.content,
-        phase=SpecPhase.DESCUBRIMIENTO,
-        skill_name="discovery_chat",
-        context=context,
-        pid=pid,
+        document_type=SpecPhase.DESCUBRIMIENTO,
+        pid=ProjectId(project_id),
         context_id=None,
-        chat_repo=chat_repo,
-        agent=agent,
+        context=ctx,
+        chat_uc=chat_uc,
         validate_uc=validate_uc,
+        session_id=ChatSessionId(payload.session_id) if payload.session_id else None,
     )
