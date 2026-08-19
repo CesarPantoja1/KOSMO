@@ -78,8 +78,14 @@ la tarea completada con validaciones en rojo, no dejes tests rotos "para despué
 entregues código que no compila. Si un test falla por una razón legítima (spec cambió),
 actualiza el test junto con la implementación y vuelve a validar.
 
+## Skills disponibles (Cargar antes de codificar)
+- `.opencode/skills/kosmo-implementation/SKILL.md`: Clean Architecture y TypeScript.
+- `.opencode/skills/kosmo-testing/SKILL.md` (o `tdd`): TDD Vitest, patrón AAA y cobertura obligatoria.
+- `.opencode/skills/kosmo-drizzle/SKILL.md`: Drizzle ORM sobre SQLite, tipado de esquemas y queries.
+- `.opencode/skills/kosmo-nextjs/SKILL.md`: Next.js 16 App Router con Server Components y APIs.
+
 ## TDD (obligatorio)
-Antes de escribir cualquier test, carga la skill `.opencode/skills/tdd/SKILL.md`.
+Antes de escribir cualquier test, carga la skill `.opencode/skills/tdd/SKILL.md` (o `kosmo-testing`).
 Sigue estrictamente **Red-Green-Refactor**: test que falla → implementación mínima → refactor.
 Toda funcionalidad nueva debe tener al menos happy path + error path cubiertos.
 
@@ -127,153 +133,447 @@ tests/           ← Tests Vitest
 """
 
 
-def _generate_tdd_skill_md() -> str:
-    """Genera la skill TDD adaptada a Vitest/TypeScript para el workspace de implementación."""
+def _generate_implementation_skill_md() -> str:
+    """Genera la skill kosmo-implementation para el workspace de implementación."""
     return """---
-name: tdd
-description: TDD for Vitest + TypeScript: Red-Green-Refactor, AAA, it.each, builders. Trigger: test, tests, TDD.
+name: kosmo-implementation
+description: Directrices de Clean Architecture y TypeScript para KOSMO. Trigger: architecture, implement, clean.
 ---
 
-# TDD Skill — Test-Driven Development (Vitest + TypeScript)
+# Clean Architecture & Implementación en KOSMO
 
-No es una guía académica: es el contrato ejecutable que todo test debe cumplir.
+Esta skill define las reglas de diseño arquitectónico y de código que el agente debe seguir obligatoriamente.
 
 ---
 
-## 1. Principio fundacional: Red-Green-Refactor
+## 1. Principios Fundacionales de Clean Architecture
 
-El orden es innegociable. Nunca escribas implementación antes del test.
+El proyecto organiza el código en capas concéntricas con regla de dependencia unidireccional:
+**el código de negocio nunca depende de detalles de infraestructura o frameworks**.
 
 ```
-RED      — escribe el test mínimo que falla (aún no existe la implementación)
-GREEN    — escribe la implementación mínima que hace pasar el test
-REFACTOR — mejora el código sin cambiar comportamiento (test sigue verde)
+┌────────────────────────────────────────────────────────┐
+│  Presentación & UI (src/app/, src/components/)        │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Lógica de Negocio / Dominio (src/lib/, services)│  │
+│  │  ┌────────────────────────────────────────────┐  │  │
+│  │  │  Acceso a Datos & ORM (src/db/)            │  │  │
+│  │  └────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
 ```
 
-Con IA generativa: tú (el agente) escribes el test. La implementación se genera para
-hacerlo pasar. Esto ancla la generación a expectativas concretas y previene alucinaciones.
+1. **Dominio / Lógica Pura (`src/lib/`, `src/services/`)**:
+   - Funciones puras, cálculo de reglas de negocio, validaciones y transformaciones de datos.
+   - Sin dependencias de Next.js, React ni hooks de cliente.
+   - Diseñado para ser probado de forma 100% aislada con Vitest en memoria.
+
+2. **Acceso a Datos / Infraestructura (`src/db/`)**:
+   - Definición de esquemas Drizzle ORM (`src/db/schema.ts`) e inicialización (`src/db/index.ts`).
+   - Consultas SQL tipadas encapsuladas en funciones auxiliares o repositorios.
+   - Nunca expone SQL crudo a las capas superiores.
+
+3. **Presentación & Rutas (`src/app/`, `src/components/`)**:
+   - Server Components por defecto para obtener datos directamente.
+   - Client Components (`'use client'`) únicamente en hojas interactivas.
+   - Componentes modulares con responsabilidad única en `src/components/`.
 
 ---
 
-## 2. Estructura AAA (Arrange, Act, Assert)
+## 2. Convenciones de TypeScript Estricto
 
-Todo test sin excepción sigue AAA, delimitado con comentarios `// Arrange`, `// Act`, `// Assert`.
+1. **Cero `any`:** Prohibido el uso de `any`. Usa `unknown`, `never`, genéricos o interfaces tipadas.
+2. **Inmutabilidad:** Prefiere `readonly`, `const` y spread `...` sobre mutaciones directas.
+3. **Manejo de Errores con Tipos:** Usa excepciones tipadas o tipos de resultado estructurados.
+4. **Nomenclatura:** Código e identificadores en inglés; textos y etiquetas de UI en español.
+
+---
+
+## 3. Anti-patrones Prohibidos para el Agente (LLM Guardrails)
+
+| Anti-patrón | Por qué está prohibido | Solución requerida |
+|-------------|------------------------|-------------------|
+| **Lógica en UI** | Rompe la testabilidad y mezcla presentación con negocio | Extraer a funciones puras en `src/lib/` |
+| **SQL en Cliente** | Inseguro y no compila en el cliente | Mover consultas a Server Components / APIs |
+| **Monolito en `page.tsx`** | Dificulta mantenimiento y testing | Dividir en subcomponentes en `src/components/` |
+| **Mutaciones Globales** | Provoca efectos secundarios no deterministas | Funciones puras que retornan nuevos estados |
+| **Silenciar tipos (`@ts-ignore`)** | Oculta bugs críticos | Corregir tipos hasta que `tsc --noEmit` pase |
+
+---
+
+## 4. Checklist de Calidad para el Agente
+
+Antes de dar una característica por implementada, verifica:
+- [ ] La lógica pura está separada de los componentes React.
+- [ ] No existen tipos `any` ni directivas `@ts-ignore`.
+- [ ] Cada función exportada cuenta con tests unitarios en `tests/`.
+- [ ] Las consultas de base de datos usan Drizzle ORM con tipado estricto.
+- [ ] El pipeline de validación (`tsc`, `eslint`, `vitest`, `build`) pasa al 100%.
+"""
+
+
+def _generate_testing_skill_md() -> str:
+    """Genera la skill kosmo-testing (TDD con Vitest) para el workspace de implementación."""
+    return """---
+name: kosmo-testing
+description: Metodología TDD con Vitest, patrón AAA y cobertura obligatoria. Trigger: test, tests, vitest, TDD.
+---
+
+# Testing & TDD con Vitest en KOSMO
+
+Esta skill define el contrato ejecutable de pruebas unitarias y de integración que todo código generado debe cumplir.
+
+---
+
+## 1. Principio Fundacional: Red-Green-Refactor
+
+El orden es innegociable. Nunca generes código de implementación sin su prueba correspondiente:
+
+```
+1. RED      — Escribe el test que falla (comportamiento esperado).
+2. GREEN    — Escribe la implementación mínima para hacer pasar el test.
+3. REFACTOR — Limpia y optimiza manteniendo el test en verde.
+```
+
+---
+
+## 2. Estructura AAA Obligatoria (Arrange, Act, Assert)
+ 
+Todo test unitario debe estar delimitado con comentarios `// Arrange`, `// Act`, `// Assert`:
 
 ```typescript
 import { describe, expect, it } from "vitest";
+import { calculateDiscount } from "@/lib/discount";
 
-describe("expenseCalculator.split", () => {
-  it("distributes the amount evenly across participants", () => {
+describe("calculateDiscount", () => {
+  it("applies 10 percent discount for premium members", () => {
     // Arrange
-    const calculator = new ExpenseCalculator();
+    const amount = 100;
+    const isPremium = true;
 
     // Act
-    const result = calculator.split(90, 3);
+    const result = calculateDiscount(amount, isPremium);
 
     // Assert
-    expect(result).toEqual([30, 30, 30]);
+    expect(result).toBe(90);
   });
 
-  it("throws when there are no participants", () => {
+  it("throws ValidationError when amount is negative", () => {
     // Arrange
-    const calculator = new ExpenseCalculator();
+    const negativeAmount = -50;
 
     // Act & Assert
-    expect(() => calculator.split(90, 0)).toThrow("participants must be greater than zero");
+    expect(() => calculateDiscount(negativeAmount, false)).toThrow("Amount cannot be negative");
   });
 });
 ```
 
 ---
 
-## 3. Naming de tests
+## 3. Regla Innegociable de Cobertura de Casos
 
-Formato: `describe("<subjecto>.<acción>", () => { it("<escenario>") })`.
-
-| Tipo | Patrón | Ejemplo |
-|------|--------|---------|
-| Happy path | `it("returns <resultado> when <condición>")` | `it("returns the total when items exist")` |
-| Error | `it("throws when <condición>")` | `it("throws when the feature is not found")` |
-| Edge case | `it("handles <caso borde>")` | `it("handles zero cents without rounding drift")` |
+Para cada función, método o ruta pública, es **obligatorio** escribir como mínimo:
+1. **Happy Path (Camino Feliz)**: Caso estándar con entradas válidas donde todo funciona correctamente.
+2. **Error Path (Camino de Error)**: Entradas inválidas, valores fuera de rango o excepciones esperadas.
+3. **Edge Case (Caso Borde)**: Valores cero, arrays vacíos, strings vacíos o límites numéricos.
 
 ---
 
-## 4. Checklist de calidad (cada test responde SÍ)
+## 4. Pruebas Parametrizadas con `it.each`
 
-1. **¿Prueba lógica o es relleno?** — Fallaría si la lógica se rompe. Si solo sube cobertura, elimínalo.
-2. **¿Cubre happy path + error path + un edge case?** — Toda unidad pública tiene mínimo 3 tests.
-3. **¿Los asserts son concretos?** — Prohibido `expect(result).toBeTruthy()` como único assert.
-4. **¿Usa AAA?** — Las tres secciones están delimitadas y visibles.
-5. **¿El nombre describe el escenario?** — Con leerlo sabes qué falló sin abrir el test.
-6. **¿Sin mock innecesario?** — Solo se mockean puertos externos (red, DB, clock); la lógica pura se prueba real.
-
----
-
-## 5. `it.each` (no clones)
-
-Cuando pruebas la misma lógica con distintas entradas, usa `it.each` en vez de copiar el test.
+Cuando pruebes la misma lógica con diferentes combinaciones de datos, usa `it.each` para evitar duplicación:
 
 ```typescript
 it.each([
-  [90, 3, [30, 30, 30]],
-  [100, 3, [33.34, 33.33, 33.33]], // redondeo
-  [0, 2, [0, 0]],
-])("split(%i, %i) => %j", (amount, participants, expected) => {
-  const calculator = new ExpenseCalculator();
-  expect(calculator.split(amount, participants)).toEqual(expected);
+  [100, true, 90],
+  [100, false, 100],
+  [0, true, 0],
+])("calculateDiscount(%i, %s) => %i", (amount, isPremium, expected) => {
+  // Arrange & Act
+  const result = calculateDiscount(amount, isPremium);
+
+  // Assert
+  expect(result).toBe(expected);
 });
 ```
 
 ---
 
-## 6. Test Data Builders
+## 5. Test Data Builders / Factories
 
-Construye los datos con helpers con defaults sensibles; el test solo sobrescribe lo relevante.
+Crea helpers de datos en `tests/factories.ts` para mantener los tests concisos y legibles:
 
 ```typescript
-// tests/factories.ts
-export function anExpense(overrides: Partial<Expense> = {}): Expense {
-  return { id: "exp_01", amount: 100, currency: "EUR", ...overrides };
+export function aUser(overrides: Partial<User> = {}): User {
+  return {
+    id: "usr_01",
+    name: "Juan Pérez",
+    email: "juan@example.com",
+    role: "member",
+    createdAt: new Date("2026-01-01"),
+    ...overrides,
+  };
 }
 ```
 
+---
+
+## 6. Anti-patrones de Testing Prohibidos
+
+| Anti-patrón | Síntoma | Corrección |
+|-------------|---------|------------|
+| **Assertion Roulette** | Múltiples asertos sin claridad | Un aserto por comportamiento |
+| **Test de Relleno** | `expect(true).toBe(true)` de relleno | Probar comportamiento real y asertos calculados |
+| **Mystery Guest** | Dependencia de red o DB real | Todo en memoria o con SQLite local aislado |
+| **Sin Caso de Error** | Solo probar entradas correctas | Escribir tests explícitos para errores |
+"""
+
+
+def _generate_tdd_skill_md() -> str:
+    """Mantiene compatibilidad con alias tdd."""
+    return _generate_testing_skill_md()
+
+
+def _generate_drizzle_skill_md() -> str:
+    """Genera la skill kosmo-drizzle para modelado y consultas con Drizzle ORM sobre SQLite."""
+    return """---
+name: kosmo-drizzle
+description: Persistencia con Drizzle ORM sobre SQLite, tipado estricto y queries seguras. Trigger: drizzle, db, sqlite.
+---
+
+# Drizzle ORM & Persistencia SQLite en KOSMO
+
+Esta skill define directrices para modelar esquemas y consultas tipadas con Drizzle ORM y SQLite (`better-sqlite3`).
+
+---
+
+## 1. Definición de Esquemas Tipados (`src/db/schema.ts`)
+
+Todos los esquemas de base de datos se declaran en `src/db/schema.ts` usando `drizzle-orm/sqlite-core`:
+
 ```typescript
-const expense = anExpense({ amount: 0 }); // sobrescribe solo lo relevante
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+
+export const expenses = sqliteTable("expenses", {
+  id: text("id").primaryKey(),
+  description: text("description").notNull(),
+  amount: real("amount").notNull(),
+  category: text("category").notNull().default("general"),
+  userId: text("user_id").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+// Tipos inferidos automáticos para inserción y lectura
+export type Expense = typeof expenses.$inferSelect;
+export type NewExpense = typeof expenses.$inferInsert;
 ```
 
 ---
 
-## 7. Test smells prohibidos
+## 2. Consultas Tipadas con el Query Builder
 
-| Smell | Síntoma | Corrección |
-|-------|---------|------------|
-| **Assertion Roulette** | Muchos asserts sin mensaje | Un assert por comportamiento; mensaje en asserts críticos |
-| **Mystery Guest** | Depende de estado externo (DB real, red, reloj) | Todo en memoria; usa fake timers si hay fechas |
-| **Erratic Test** | A veces pasa, a veces falla | Elimina dependencias de tiempo/red/orden |
-| **Conditional Test Logic** | `if`/`for` dentro del test | Test lineal; si necesitas variar, usa `it.each` |
-| **Slow Test** | > 200ms en unitarios | Revisa I/O real accidental |
-| **Coverage-Driven Test** | Solo existe para tocar una línea | Añade asserts concretos o elimínalo |
+Toda operación de lectura o escritura debe usar la instancia `db` tipada de `src/db/index.ts`.
+
+### Inserción
+```typescript
+import { db } from "@/db";
+import { expenses, type NewExpense, type Expense } from "@/db/schema";
+
+export async function createExpense(data: NewExpense): Promise<Expense> {
+  const [created] = await db.insert(expenses).values(data).returning();
+  return created;
+}
+```
+
+### Consultas con Filtros (`eq`, `and`, `gte`, etc.)
+```typescript
+import { eq, desc } from "drizzle-orm";
+import { db } from "@/db";
+import { expenses, type Expense } from "@/db/schema";
+
+export async function getExpensesByUser(userId: string): Promise<Expense[]> {
+  return db
+    .select()
+    .from(expenses)
+    .where(eq(expenses.userId, userId))
+    .orderBy(desc(expenses.createdAt));
+}
+```
+
+### Actualización y Eliminación
+```typescript
+export async function updateExpenseAmount(id: string, newAmount: number): Promise<void> {
+  await db
+    .update(expenses)
+    .set({ amount: newAmount })
+    .where(eq(expenses.id, id));
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  await db.delete(expenses).where(eq(expenses.id, id));
+}
+```
 
 ---
 
-## 8. Cobertura como side effect
+## 3. Reglas Innegociables de Persistencia
 
-- Cobertura alta es consecuencia de buen testing, no objetivo.
-- Nunca escribas un test solo para subir el porcentaje.
-- Nunca uses comentarios de exclusión para silenciar código no testeado.
+1. **Cero SQL Crudo (Raw SQL):** Prohibido el uso de `db.run(sql"...")` o consultas de texto concatenadas.
+2. **Tipos Exportados:** Siempre exporta los tipos inferidos `$inferSelect` y `$inferInsert` de la tabla.
+3. **Claves Primarias y Fechas:** Usa identificadores unívocos y marcas de tiempo estándar.
+4. **Relaciones Explícitas:** Usa `references(() => otherTable.id)` en claves foráneas.
 
 ---
 
-## 9. Flujo TDD completo para una feature nueva
+## 4. Anti-patrones de Base de Datos
 
-1. Lee los requirements de la feature (`get_requirements`) y el AGENTS.md.
-2. Escribe el test del happy path (RED — no compila, falta la implementación).
-3. Escribe el test del error path (RED).
-4. Escribe el test del edge case (RED).
-5. Implementa lo mínimo para pasar los 3 tests (GREEN).
-6. Refactoriza sin romper verde (REFACTOR).
-7. Ejecuta `npx vitest run && npx tsc --noEmit && npx eslint . && npx next build`.
-8. Si encontraste un bug que ningún test detecta, escribe el test primero (RED) y luego corrígelo.
+| Anti-patrón | Riesgo | Solución |
+|-------------|--------|----------|
+| **Tipos desincronizados** | Errores esquema-código | Usar `typeof table.$inferSelect` y `$inferInsert` |
+| **SQL sin tipar** | Inyecciones SQL y runtime bugs | Usar operadores `eq`, `like`, `and` de Drizzle |
+| **Conexiones duplicadas** | Bloqueos y memory leaks | Importar el singleton `db` desde `@/db` |
+"""
+
+
+def _generate_nextjs_skill_md() -> str:
+    """Genera la skill kosmo-nextjs para App Router, React 19 y Server Components."""
+    return """---
+name: kosmo-nextjs
+description: Convenciones de Next.js 16 App Router, React 19 y Server Components. Trigger: nextjs, react, api route.
+---
+
+# Next.js 16 App Router & React 19 en KOSMO
+
+Esta skill define directrices para páginas, layouts, componentes interactivos y rutas de API en Next.js 16.
+
+---
+
+## 1. Server Components por Defecto
+
+En Next.js 16 App Router, todos los componentes en `src/app/` son **Server Components** por defecto.
+
+```tsx
+// src/app/expenses/page.tsx (Server Component)
+import { getExpensesByUser } from "@/db/queries/expenses";
+import { ExpenseList } from "@/components/ExpenseList";
+
+export default async function ExpensesPage() {
+  // Obtención directa de datos en el servidor
+  const expenses = await getExpensesByUser("usr_01");
+
+  return (
+    <main className="container mx-auto p-6 space-y-6">
+      <h1 className="text-2xl font-bold tracking-tight">Registro de Gastos</h1>
+      <ExpenseList initialExpenses={expenses} />
+    </main>
+  );
+}
+```
+
+---
+
+## 2. Uso Restrictivo de `'use client'`
+
+Solo se agrega `'use client'` en componentes de hoja pequeños en `src/components/` que requieran:
+- Manejo de estado de cliente (`useState`, `useReducer`).
+- Efectos y ciclo de vida del navegador (`useEffect`).
+- Eventos de interacción del DOM (`onClick`, `onChange`, `onSubmit`).
+
+```tsx
+// src/components/ExpenseFilter.tsx (Client Component)
+"use client";
+
+import { useState } from "react";
+
+interface ExpenseFilterProps {
+  onFilterChange: (category: string) => void;
+}
+
+export function ExpenseFilter({ onFilterChange }: ExpenseFilterProps) {
+  const [selected, setSelected] = useState("all");
+
+  const handleChange = (cat: string) => {
+    setSelected(cat);
+    onFilterChange(cat);
+  };
+
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => handleChange("all")}
+        className={selected === "all" ? "bg-primary text-white px-3 py-1 rounded" : "px-3 py-1"}
+      >
+        Todos
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+## 3. Rutas de API Estructuradas (`src/app/api/.../route.ts`)
+
+Las rutas de API deben retornar `NextResponse.json` con códigos HTTP estándar y formato estructurado:
+
+```typescript
+// src/app/api/expenses/route.ts
+import { NextResponse } from "next/server";
+import { getExpensesByUser, createExpense } from "@/db/queries/expenses";
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("userId");
+
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Bad Request", detail: "El parámetro userId es obligatorio." },
+      { status: 400 }
+    );
+  }
+
+  const items = await getExpensesByUser(userId);
+  return NextResponse.json({ data: items }, { status: 200 });
+}
+```
+
+---
+
+## 4. Estilos y Utilidades Tailwind CSS
+
+1. Usa clases utilitarias de Tailwind CSS v4.
+2. Para composición condicional de clases, usa `cn()` desde `@/lib/utils`:
+   ```tsx
+   import { cn } from "@/lib/utils";
+
+   export function Badge({ variant, className, children }: BadgeProps) {
+     return (
+       <span
+         className={cn(
+           "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+           variant === "success" && "bg-green-100 text-green-800",
+           variant === "error" && "bg-red-100 text-red-800",
+           className
+         )}
+       >
+         {children}
+       </span>
+     );
+   }
+   ```
+
+---
+
+## 5. Anti-patrones de Next.js Prohibidos
+
+| Anti-patrón | Consecuencia | Corrección |
+|-------------|--------------|------------|
+| **`'use client'` en páginas** | Deshabilita Server-Side Rendering | Extraer componentes interactivos |
+| **`fetch()` a APIs propias en Server** | Overhead de red HTTP | Llamar directamente al servicio o DB |
+| **Errores con strings sueltos** | Dificulta parseo en cliente | Retornar JSON `{ error, detail }` estructurado |
 """
 
 
@@ -409,11 +709,20 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 encoding="utf-8",
             )
 
-        # Generar la skill TDD si no existe
-        tdd_skill_file = target_dir / ".opencode" / "skills" / "tdd" / "SKILL.md"
-        if not tdd_skill_file.exists():
-            tdd_skill_file.parent.mkdir(parents=True, exist_ok=True)
-            tdd_skill_file.write_text(_generate_tdd_skill_md(), encoding="utf-8")
+        # Generar las skills en .opencode/skills si no existen
+        skills_dir = target_dir / ".opencode" / "skills"
+        skills_map = {
+            "kosmo-implementation": _generate_implementation_skill_md(),
+            "kosmo-testing": _generate_testing_skill_md(),
+            "kosmo-drizzle": _generate_drizzle_skill_md(),
+            "kosmo-nextjs": _generate_nextjs_skill_md(),
+            "tdd": _generate_tdd_skill_md(),
+        }
+        for skill_name, skill_content in skills_map.items():
+            skill_file = skills_dir / skill_name / "SKILL.md"
+            if not skill_file.exists():
+                skill_file.parent.mkdir(parents=True, exist_ok=True)
+                skill_file.write_text(skill_content, encoding="utf-8")
 
         if self._git_init and created_new:
             with contextlib.suppress(Exception):

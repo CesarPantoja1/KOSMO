@@ -71,6 +71,8 @@ backend/.opencode/skills/tdd/SKILL.md
 docs/
 opencode.json
 .opencode/
+!backend/src/kosmo/infrastructure/codegen/templates/**/.opencode/
+!backend/src/kosmo/infrastructure/codegen/templates/**/.opencode/**
 
 # CodeGraph
 .codegraph/

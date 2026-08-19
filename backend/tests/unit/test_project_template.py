@@ -39,6 +39,11 @@ def test_default_template_directory_exists_and_has_required_files() -> None:
         "src/lib/utils.ts",
         "tests/setup.ts",
         "tests/example.test.ts",
+        ".opencode/skills/kosmo-implementation/SKILL.md",
+        ".opencode/skills/kosmo-testing/SKILL.md",
+        ".opencode/skills/kosmo-drizzle/SKILL.md",
+        ".opencode/skills/kosmo-nextjs/SKILL.md",
+        ".opencode/skills/tdd/SKILL.md",
     ]
 
     for expected_file in expected_files:
