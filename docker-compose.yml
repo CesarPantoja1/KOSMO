@@ -3,6 +3,7 @@
 # Services:
 # - frontend: Next.js + Bun
 # - backend: FastAPI + uvicorn
+# - opencode: servidor headless OpenCode para generación de código
 # - postgres: pgvector/Postgres for relational data and vector support
 # - redis: auth/session/rate-limit cache
 
@@ -74,6 +75,11 @@ services:
 
       API_VERSION: ${API_VERSION:-v1}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+
+      OPENCODE_BASE_URL: http://opencode:4096
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
+      KOSMO_WORKSPACES_DIR: /workspaces
+
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-kosmo-backend}
       OTEL_ENVIRONMENT: ${OTEL_ENVIRONMENT:-development}
@@ -82,6 +88,7 @@ services:
       - ./backend/src:/app/src
       - ./backend/alembic:/app/alembic
       - ./backend/alembic.ini:/app/alembic.ini
+      - kosmo_workspaces:/workspaces
     command: sh -c "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload"
     depends_on:
       postgres:
@@ -96,6 +103,27 @@ services:
       timeout: 5s
       retries: 10
       start_period: 40s
+    restart: unless-stopped
+
+  opencode:
+    image: node:22
+    container_name: kosmo-opencode
+    init: true
+    ports:
+      - "${OPENCODE_PORT:-4096}:4096"
+    environment:
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
+      # Claves de proveedores LLM para que los agentes plan/build generen en local
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - kosmo_workspaces:/workspaces
+    # Configura el password del servidor (clave server.password) y arranca headless
+    command: >
+      sh -c "npm install -g opencode-ai@latest &&
+             mkdir -p /root/.config/opencode &&
+             printf '{\"server\":{\"password\":\"%s\"}}\n' \"$${OPENCODE_SERVER_PASSWORD}\" > /root/.config/opencode/opencode.json &&
+             opencode serve --hostname 0.0.0.0 --port 4096"
     restart: unless-stopped
 
   postgres:
@@ -122,3 +150,4 @@ volumes:
   frontend_node_modules:
   frontend_next_cache:
   kosmo_postgres_data:
+  kosmo_workspaces:
