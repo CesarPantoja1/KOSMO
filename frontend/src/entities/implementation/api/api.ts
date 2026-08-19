@@ -118,11 +118,13 @@ export const generateImplementation = async (
 				String(raw.timestamp ?? new Date().toISOString()),
 			);
 		} else if (eventType === 'error') {
-			throw new Error(
-				data.status === 'requires_review'
-					? 'La validación falló tras agotar los reintentos. Revisa los errores y reintenta.'
-					: 'Ocurrió un error durante la generación.',
-			);
+			const detail =
+				typeof data.error === 'string' && data.error
+					? data.error
+					: data.status === 'requires_review'
+						? 'La validación falló tras agotar los reintentos. Revisa los errores y reintenta.'
+						: 'Ocurrió un error durante la generación.';
+			throw new Error(detail);
 		} else {
 			const message = PROGRESS_MESSAGES[eventType];
 			if (message) onProgress?.(message);

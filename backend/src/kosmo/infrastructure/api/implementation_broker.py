@@ -7,7 +7,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
     GenerateFeatureImplementationUseCase,
 )
-from kosmo.contracts.codegen import OpenCodeEvent
+from kosmo.contracts.codegen import OpenCodeEvent, OpenCodeEventType
 
 _log = structlog.get_logger(__name__)
 
@@ -28,6 +28,12 @@ class ImplementationEventBroker:
         # Tasks en ejecución
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
+    def _publish(self, implementation_id: str, event: OpenCodeEvent) -> None:
+        self._history.setdefault(implementation_id, []).append(event)
+        if implementation_id in self._queues:
+            for queue in self._queues[implementation_id]:
+                queue.put_nowait(event)
+
     async def _run_implementation(
         self,
         implementation_id: str,
@@ -36,22 +42,26 @@ class ImplementationEventBroker:
     ) -> None:
         try:
             async for event in use_case.execute_stream(input_data):
-                # Guardar en historial
-                if implementation_id not in self._history:
-                    self._history[implementation_id] = []
-                self._history[implementation_id].append(event)
-
-                # Publicar a todos los subscriptores activos
-                if implementation_id in self._queues:
-                    for q in self._queues[implementation_id]:
-                        q.put_nowait(event)
-        except Exception:
+                self._publish(implementation_id, event)
+        except Exception as exc:
             _log.exception("implementation_broker.run_error", implementation_id=implementation_id)
+            self._publish(
+                implementation_id,
+                OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id="",
+                    data={
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "implementation_id": implementation_id,
+                    },
+                ),
+            )
         finally:
             # Enviar señal de fin (None) a todos los subscriptores
             if implementation_id in self._queues:
-                for q in self._queues[implementation_id]:
-                    q.put_nowait(None)
+                for queue in self._queues[implementation_id]:
+                    queue.put_nowait(None)
 
             # Limpiar la tarea terminada
             if implementation_id in self._tasks:
@@ -85,11 +95,11 @@ class ImplementationEventBroker:
             for event in history:
                 yield event
 
-            # Si ya no está corriendo y ya enviamos el historial, cerramos
-            if implementation_id not in self._tasks and implementation_id not in self._history:
+            # 2. Si la tarea ya terminó (o nunca existió), el historial es todo lo que hay
+            if implementation_id not in self._tasks:
                 return
 
-            # 2. Escuchar nuevos eventos
+            # 3. Escuchar nuevos eventos
             while True:
                 event = await q.get()
                 if event is None:

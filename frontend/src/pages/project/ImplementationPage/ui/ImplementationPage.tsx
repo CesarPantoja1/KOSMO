@@ -23,6 +23,7 @@ const ImplementationPage = () => {
 
 	const status = useImplementationStore((s) => s.status);
 	const progress = useImplementationStore((s) => s.progress);
+	const errorMessage = useImplementationStore((s) => s.errorMessage);
 	const implementations = useImplementationStore((s) => s.implementations);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
 
@@ -60,6 +61,22 @@ const ImplementationPage = () => {
 					}
 					messages={generatingMessages}
 				/>
+			)}
+
+			{status === 'failed' && errorMessage && (
+				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
+					<svg
+						className='h-5 w-5 shrink-0 text-warning-600'
+						viewBox='0 0 24 24'
+						fill='none'
+						stroke='currentColor'
+						strokeWidth='2'
+					>
+						<circle cx='12' cy='12' r='9' />
+						<path d='M12 8v4M12 16h.01' />
+					</svg>
+					<p className='text-sm text-warning-700'>{errorMessage}</p>
+				</div>
 			)}
 
 			<section className='page-container px-0'>

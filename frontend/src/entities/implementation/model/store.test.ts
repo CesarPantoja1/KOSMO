@@ -59,7 +59,7 @@ describe('useImplementationStore', () => {
 		expect(useImplementationStore.getState().progress).toBeNull();
 	});
 
-	it('marca failed si la generación lanza error', async () => {
+	it('marca failed y guarda el mensaje si la generación lanza error', async () => {
 		// Arrange
 		mockedGenerate.mockRejectedValue(new Error('fallo de validación'));
 
@@ -70,6 +70,7 @@ describe('useImplementationStore', () => {
 
 		// Assert
 		expect(useImplementationStore.getState().status).toBe('failed');
+		expect(useImplementationStore.getState().errorMessage).toBe('fallo de validación');
 		expect(useImplementationStore.getState().implementations['feat_01']).toBeUndefined();
 	});
 });

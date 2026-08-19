@@ -7,6 +7,7 @@ interface ImplementationStore {
 	status: ImplementationStatus;
 	summary: ImplementationSummary | null;
 	progress: string | null;
+	errorMessage: string | null;
 	implementations: Record<string, boolean>;
 	startGeneration: (
 		featureId: string,
@@ -22,10 +23,16 @@ export const useImplementationStore = create<ImplementationStore>()(
 			status: 'idle',
 			summary: null,
 			progress: null,
+			errorMessage: null,
 			implementations: {},
 
 			startGeneration: async (featureId, featureTitle, featureDisplayId) => {
-				set({ status: 'generating', summary: null, progress: 'Preparando generación...' });
+				set({
+					status: 'generating',
+					summary: null,
+					progress: 'Preparando generación...',
+					errorMessage: null,
+				});
 				try {
 					const summary = await generateImplementation(
 						featureId,
@@ -42,12 +49,17 @@ export const useImplementationStore = create<ImplementationStore>()(
 							[featureId]: true,
 						},
 					}));
-				} catch {
-					set({ status: 'failed', progress: null });
+				} catch (error) {
+					set({
+						status: 'failed',
+						progress: null,
+						errorMessage:
+							error instanceof Error ? error.message : 'Error desconocido durante la generación.',
+					});
 				}
 			},
 
-			reset: () => set({ status: 'idle', summary: null, progress: null }),
+			reset: () => set({ status: 'idle', summary: null, progress: null, errorMessage: null }),
 		}),
 		{
 			name: 'kosmo-implementation-store',
@@ -64,6 +76,7 @@ export const clearImplementationStore = () => {
 		status: 'idle',
 		summary: null,
 		progress: null,
+		errorMessage: null,
 		implementations: {},
 	});
 };
