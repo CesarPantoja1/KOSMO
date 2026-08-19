@@ -23,6 +23,9 @@ DEFAULT_STEP_COMMANDS: dict[ValidationStep, str] = {
     ValidationStep.BUILD: "npx next build",
 }
 
+INSTALL_COMMAND: str = "npm install"
+INSTALL_TIMEOUT_SECONDS: int = 600
+
 DEFAULT_ALLOWED_COMMAND_PREFIXES: frozenset[str] = frozenset(
     {
         "npm",
@@ -201,6 +204,23 @@ class SubprocessCodeRunner(CodeRunnerPort):
         ),
     ) -> ValidationRunResult:
         """Ejecuta secuencialmente los pasos deteniéndose en el primer fallo (gate secuencial)."""
+        if not (Path(workspace_dir) / "node_modules").is_dir():
+            install_result = await self.run_command(
+                workspace_dir,
+                INSTALL_COMMAND,
+                timeout_seconds=INSTALL_TIMEOUT_SECONDS,
+            )
+            if not install_result.success:
+                output_lines = install_result.raw_output.strip().splitlines()
+                detail = output_lines[0] if output_lines else "sin salida"
+                return ValidationRunResult(
+                    steps=(),
+                    all_passed=False,
+                    total_duration_ms=install_result.duration_ms,
+                    executed_at=datetime.now(UTC),
+                    error_summary=(f"{INSTALL_COMMAND} falló (exit {install_result.exit_code}): {detail}",),
+                )
+
         results: list[ValidationStepResult] = []
 
         for step in steps:

@@ -123,9 +123,10 @@ async def test_run_command_executes_allowed_command() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_pipeline_stops_on_first_failure() -> None:
+async def test_run_pipeline_stops_on_first_failure(tmp_path) -> None:
     # Arrange
     runner = SubprocessCodeRunner()
+    (tmp_path / "node_modules").mkdir()
 
     typecheck_output = b"src/index.ts:1:1: error TS2304: Cannot find name 'foo'.\n"
 
@@ -136,7 +137,7 @@ async def test_run_pipeline_stops_on_first_failure() -> None:
     with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_fail)) as mock_shell:
         # Act
         pipeline_result = await runner.run_pipeline(
-            "/tmp/workspace",
+            str(tmp_path),
             steps=(
                 ValidationStep.TYPECHECK,
                 ValidationStep.LINT,
@@ -151,15 +152,16 @@ async def test_run_pipeline_stops_on_first_failure() -> None:
         assert pipeline_result.steps[0].step == ValidationStep.TYPECHECK
         assert pipeline_result.steps[0].success is False
         assert len(pipeline_result.error_summary) > 0
-        # Only typecheck was executed
+        # Only typecheck was executed (no npm install)
         assert mock_shell.await_count == 1
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_pipeline_all_success() -> None:
+async def test_run_pipeline_all_success(tmp_path) -> None:
     # Arrange
     runner = SubprocessCodeRunner()
+    (tmp_path / "node_modules").mkdir()
 
     mock_proc_ok = MagicMock()
     mock_proc_ok.returncode = 0
@@ -168,7 +170,7 @@ async def test_run_pipeline_all_success() -> None:
     with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)) as mock_shell:
         # Act
         pipeline_result = await runner.run_pipeline(
-            "/tmp/workspace",
+            str(tmp_path),
             steps=(
                 ValidationStep.TYPECHECK,
                 ValidationStep.LINT,
@@ -180,6 +182,80 @@ async def test_run_pipeline_all_success() -> None:
         assert len(pipeline_result.steps) == 2
         assert mock_shell.await_count == 2
         assert len(pipeline_result.error_summary) == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_runs_npm_install_when_node_modules_missing(tmp_path) -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+
+    mock_proc_ok = MagicMock()
+    mock_proc_ok.returncode = 0
+    mock_proc_ok.communicate = AsyncMock(return_value=(b"added 200 packages", b""))
+
+    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)) as mock_shell:
+        # Act
+        pipeline_result = await runner.run_pipeline(
+            str(tmp_path),
+            steps=(ValidationStep.TYPECHECK,),
+        )
+
+        # Assert
+        assert pipeline_result.all_passed is True
+        assert mock_shell.await_count == 2
+        assert mock_shell.call_args_list[0][0][0] == "npm install"
+        assert mock_shell.call_args_list[1][0][0] == "npx tsc --noEmit"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_skips_install_when_node_modules_exists(tmp_path) -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+    (tmp_path / "node_modules").mkdir()
+
+    mock_proc_ok = MagicMock()
+    mock_proc_ok.returncode = 0
+    mock_proc_ok.communicate = AsyncMock(return_value=(b"ok", b""))
+
+    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)) as mock_shell:
+        # Act
+        await runner.run_pipeline(str(tmp_path), steps=(ValidationStep.TYPECHECK,))
+
+        # Assert
+        assert mock_shell.await_count == 1
+        assert mock_shell.call_args_list[0][0][0] == "npx tsc --noEmit"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_fails_fast_when_npm_install_fails(tmp_path) -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+
+    mock_proc_fail = MagicMock()
+    mock_proc_fail.returncode = 1
+    mock_proc_fail.communicate = AsyncMock(return_value=(b"npm ERR! network timeout", b""))
+
+    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_fail)) as mock_shell:
+        # Act
+        pipeline_result = await runner.run_pipeline(
+            str(tmp_path),
+            steps=(
+                ValidationStep.TYPECHECK,
+                ValidationStep.LINT,
+                ValidationStep.TESTS,
+                ValidationStep.BUILD,
+            ),
+        )
+
+        # Assert
+        assert pipeline_result.all_passed is False
+        assert len(pipeline_result.steps) == 0
+        assert mock_shell.await_count == 1
+        assert any("npm install" in err for err in pipeline_result.error_summary)
+        assert any("network timeout" in err for err in pipeline_result.error_summary)
 
 
 @pytest.mark.unit
