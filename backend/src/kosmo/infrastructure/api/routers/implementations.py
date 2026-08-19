@@ -3,14 +3,15 @@ from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sse_starlette.sse import EventSourceResponse
 
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.contracts.sdd.ids import FeatureId, ImplementationId
+from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
 from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
@@ -18,6 +19,7 @@ from kosmo.infrastructure.api.implementation_broker import broker
 from kosmo.infrastructure.api.schemas import (
     GenerateImplementationRequest,
     GenerateImplementationResponse,
+    ImplementationFileContentResponse,
 )
 
 _log = structlog.get_logger(__name__)
@@ -83,3 +85,47 @@ async def stream_implementation_events(
             }
 
     return EventSourceResponse(event_publisher())
+
+
+@router.get(
+    "/{implementation_id}/files/content",
+    response_model=ImplementationFileContentResponse,
+    summary="Leer contenido de un archivo generado",
+    description="Devuelve el contenido de un archivo del workspace de la implementación, "
+    "validando que la ruta permanezca dentro del workspace.",
+)
+async def get_implementation_file_content(
+    implementation_id: str,
+    path: Annotated[str, Query(min_length=1, description="Ruta relativa del archivo dentro del workspace")],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    container: Annotated[AppContainer, Depends(get_container)],
+) -> ImplementationFileContentResponse:
+    impl = await container.repos.implementations.by_id(ImplementationId(implementation_id))
+    if impl is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró la implementación {implementation_id}",
+        )
+
+    workspace = await container.repos.workspaces.by_project_id(impl.project_id)
+    if workspace is None or not workspace.workspace_dir:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El workspace de la implementación no está disponible",
+        )
+
+    try:
+        file_path = ensure_safe_path(path, workspace.workspace_dir)
+    except UnsafePathError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"La ruta '{path}' no es válida: debe permanecer dentro del workspace",
+        ) from None
+
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró el archivo '{path}' en el workspace",
+        )
+
+    return ImplementationFileContentResponse(path=path, content=file_path.read_text(encoding="utf-8"))

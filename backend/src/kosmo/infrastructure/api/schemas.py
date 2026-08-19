@@ -865,3 +865,10 @@ class GenerateImplementationResponse(BaseModel):
     """Respuesta tras iniciar la generación asíncrona."""
 
     implementation_id: str = Field(description="ID del proceso iniciado para consumir sus eventos")
+
+
+class ImplementationFileContentResponse(BaseModel):
+    """Contenido de un archivo generado en el workspace."""
+
+    path: str = Field(description="Ruta relativa del archivo solicitado")
+    content: str = Field(description="Contenido del archivo en texto plano")
