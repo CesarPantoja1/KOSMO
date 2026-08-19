@@ -1,5 +1,6 @@
+from collections.abc import AsyncGenerator
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, status
@@ -7,6 +8,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
+    GenerateFeatureImplementationUseCase,
 )
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.ids import FeatureId
@@ -33,11 +35,11 @@ router = APIRouter(prefix="/api/v1/implementations", tags=["Implementations"])
 async def start_implementation(
     request: GenerateImplementationRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
-    container: Annotated[object, Depends(get_container)],
+    container: Annotated[Any, Depends(get_container)],
 ) -> GenerateImplementationResponse:
     # 1. Obtener UseCase desde el container
     # Hacemos type ignore o importamos el container real
-    use_case = container.pipeline.generate_feature_implementation  # type: ignore[attr-defined]
+    use_case: GenerateFeatureImplementationUseCase = container.pipeline.generate_feature_implementation  # type: ignore[attr-defined]
 
     # 2. Generar el input y el ID
     feature_id_obj = FeatureId(request.feature_id)
@@ -69,10 +71,10 @@ async def stream_implementation_events(
 ) -> EventSourceResponse:
     # El broker devuelve un AsyncGenerator[OpenCodeEvent, None]
     # SseEventSourceResponse itera sobre él y lo expone como Server-Sent Events.
-    async def event_publisher():
+    async def event_publisher() -> AsyncGenerator[dict[str, Any], None]:
         async for event in broker.subscribe(implementation_id):
             yield {
-                "event": event.event_type.value,
+                "event": getattr(event.event_type, "value", str(event.event_type)),
                 "data": json.dumps(
                     {"session_id": event.session_id, "data": event.data, "timestamp": event.timestamp.isoformat()}
                 ),
