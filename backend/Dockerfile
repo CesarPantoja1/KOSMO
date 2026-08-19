@@ -72,8 +72,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 1000 kosmo \
  && useradd --system --uid 1000 --gid kosmo --home /app --shell /usr/sbin/nologin kosmo \
- && mkdir -p /workspaces \
- && chown -R kosmo:kosmo /workspaces
+ && mkdir -p /workspaces /app \
+ && chown -R kosmo:kosmo /workspaces \
+ && chown kosmo:kosmo /app
 
 WORKDIR /app
 
