@@ -92,7 +92,7 @@ describe('GateReviewCard', () => {
 		const viewers = screen.getAllByTestId('plantuml-viewer');
 		expect(viewers).toHaveLength(2);
 		expect(viewers[0]).toHaveAttribute('data-source', fullBefore);
-		expect(viewers[0]).toHaveAttribute('data-controls', 'true');
+		expect(viewers[0]).toHaveAttribute('data-controls', 'false');
 		expect(viewers[1]).toHaveAttribute('data-source', fullAfter);
 	});
 
