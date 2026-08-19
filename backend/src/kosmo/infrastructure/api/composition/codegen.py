@@ -46,6 +46,7 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=repos.implementations,
+        traceability_repo=repos.traceability,
     )
     return CodegenComponents(
         generate_feature_implementation=use_case,

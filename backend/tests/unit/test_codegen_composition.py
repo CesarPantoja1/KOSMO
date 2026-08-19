@@ -66,6 +66,7 @@ def test_build_codegen_components_cablea_use_case_con_adaptadores() -> None:
     assert use_case._opencode_client is components.opencode_client
     assert use_case._code_runner is components.code_runner
     assert use_case._implementation_repo is repos.implementations
+    assert use_case._register_traceability._traceability_repo is repos.traceability
 
 
 @pytest.mark.unit

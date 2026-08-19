@@ -5,6 +5,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from kosmo.application.codegen.register_code_traceability import (
+    RegisterCodeTraceabilityInput,
+    RegisterCodeTraceabilityUseCase,
+)
 from kosmo.contracts.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
@@ -20,6 +24,7 @@ from kosmo.contracts.codegen import (
     ValidationRunResult,
     WorkspaceManagerPort,
 )
+from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId
 from kosmo.contracts.sdd.repositories import (
@@ -82,6 +87,7 @@ class GenerateFeatureImplementationUseCase:
         opencode_client: OpenCodeClientPort,
         code_runner: CodeRunnerPort,
         implementation_repo: FeatureImplementationRepository,
+        traceability_repo: TraceabilityRepository,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -90,6 +96,10 @@ class GenerateFeatureImplementationUseCase:
         self._opencode_client = opencode_client
         self._code_runner = code_runner
         self._implementation_repo = implementation_repo
+        self._register_traceability = RegisterCodeTraceabilityUseCase(
+            traceability_repo=traceability_repo,
+            requirement_repo=requirement_repo,
+        )
 
     async def execute_stream(
         self,
@@ -341,10 +351,33 @@ class GenerateFeatureImplementationUseCase:
                 await self._implementation_repo.save(impl)
                 await self._opencode_client.close_session(session_id)
 
+                # Registro de trazabilidad post-commit: best-effort, no revierte una implementación exitosa
+                traceability_edges = 0
+                try:
+                    traceability_output = await self._register_traceability.execute(
+                        RegisterCodeTraceabilityInput(
+                            feature_id=feature.id,
+                            generated_files=tuple(sorted(generated_files)),
+                        )
+                    )
+                    traceability_edges = traceability_output.edges_count
+                except Exception as exc:
+                    await _emit(
+                        OpenCodeEvent(
+                            event_type=OpenCodeEventType.ERROR,
+                            session_id=session_id,
+                            data={"error": "traceability", "detail": str(exc)},
+                        )
+                    )
+
                 done_event = OpenCodeEvent(
                     event_type=OpenCodeEventType.DONE,
                     session_id=session_id,
-                    data={"status": "implemented", "generated_files": list(generated_files)},
+                    data={
+                        "status": "implemented",
+                        "generated_files": list(generated_files),
+                        "traceability_edges": traceability_edges,
+                    },
                 )
                 await _emit(done_event)
 

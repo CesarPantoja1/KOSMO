@@ -45,6 +45,7 @@ from tests.unit.fakes import (
     InMemoryActivityDiagramRepository,
     InMemoryFeatureRepository,
     InMemoryRequirementRepository,
+    InMemoryTraceabilityRepository,
 )
 
 
@@ -255,6 +256,14 @@ class FakeFeatureImplementationRepository(FeatureImplementationRepository):
         self.implementations.pop(str(feature_id), None)
 
 
+class RaisingTraceabilityRepository(InMemoryTraceabilityRepository):
+    async def add_edge(self, *args: object, **kwargs: object) -> None:
+        raise RuntimeError("db down")
+
+    async def delete_by_entity_id(self, entity_id: str) -> None:
+        raise RuntimeError("db down")
+
+
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_generate_feature_implementation_success() -> None:
@@ -266,6 +275,7 @@ async def test_generate_feature_implementation_success() -> None:
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(should_pass=True)
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_01HT_GASTOS")
     prj_id = ProjectId("prj_01HT_APP")
@@ -295,6 +305,7 @@ async def test_generate_feature_implementation_success() -> None:
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act
@@ -326,6 +337,7 @@ async def test_generate_feature_implementation_raises_when_feature_not_found() -
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner()
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     use_case = GenerateFeatureImplementationUseCase(
         feature_repo=feature_repo,
@@ -335,6 +347,7 @@ async def test_generate_feature_implementation_raises_when_feature_not_found() -
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act & Assert
@@ -355,6 +368,7 @@ async def test_generate_feature_implementation_raises_when_requirements_missing(
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner()
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_02_NOTIF")
     prj_id = ProjectId("prj_01")
@@ -377,6 +391,7 @@ async def test_generate_feature_implementation_raises_when_requirements_missing(
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act & Assert
@@ -399,6 +414,7 @@ async def test_generate_feature_implementation_raises_when_activity_diagram_miss
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner()
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_03_EXP")
     prj_id = ProjectId("prj_01")
@@ -422,6 +438,7 @@ async def test_generate_feature_implementation_raises_when_activity_diagram_miss
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act & Assert
@@ -444,6 +461,7 @@ async def test_generate_feature_implementation_retries_on_validation_failure_and
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(fail_count_before_pass=1)  # Falla en intento 1, pasa en intento 2
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_04_CALC")
     prj_id = ProjectId("prj_01")
@@ -473,6 +491,7 @@ async def test_generate_feature_implementation_retries_on_validation_failure_and
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act
@@ -499,6 +518,7 @@ async def test_generate_feature_implementation_exhausts_retries_and_marks_requir
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(should_pass=False)  # Siempre falla
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_05_FAIL")
     prj_id = ProjectId("prj_01")
@@ -528,6 +548,7 @@ async def test_generate_feature_implementation_exhausts_retries_and_marks_requir
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act
@@ -554,6 +575,7 @@ async def test_generate_feature_implementation_execute_stream_yields_events() ->
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(should_pass=True)
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_06_STREAM")
     prj_id = ProjectId("prj_01")
@@ -583,6 +605,7 @@ async def test_generate_feature_implementation_execute_stream_yields_events() ->
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act
@@ -616,6 +639,7 @@ async def test_generate_feature_implementation_always_releases_lock_on_error() -
     opencode_client = CrashingOpenCodeClient()
     code_runner = FakeCodeRunner()
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_07_CRASH")
     prj_id = ProjectId("prj_01")
@@ -645,6 +669,7 @@ async def test_generate_feature_implementation_always_releases_lock_on_error() -
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act & Assert
@@ -665,6 +690,7 @@ async def test_retry_emits_retry_events() -> None:
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(fail_count_before_pass=2)  # Falla 2 veces, pasa en el 3ro
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_T17_RETRY_EVENTS")
     prj_id = ProjectId("prj_01")
@@ -694,6 +720,7 @@ async def test_retry_emits_retry_events() -> None:
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
@@ -717,6 +744,7 @@ async def test_exhausted_retries_calls_rollback() -> None:
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(should_pass=False)
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_T17_ROLLBACK")
     prj_id = ProjectId("prj_01")
@@ -746,6 +774,7 @@ async def test_exhausted_retries_calls_rollback() -> None:
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
@@ -766,6 +795,7 @@ async def test_retry_history_accumulated() -> None:
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(should_pass=False)
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_T17_HISTORY")
     prj_id = ProjectId("prj_01")
@@ -795,6 +825,7 @@ async def test_retry_history_accumulated() -> None:
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
@@ -806,6 +837,7 @@ async def test_retry_history_accumulated() -> None:
     for errors in output.retry_history:
         assert len(errors) > 0
     assert "Intento 1" in (output.error_message or "")
+    assert len(trace_repo.edges) == 0
 
 
 @pytest.mark.asyncio
@@ -819,6 +851,7 @@ async def test_build_prompt_incluye_plan_y_requisitos() -> None:
     opencode_client = FakeOpenCodeClient()
     code_runner = FakeCodeRunner(should_pass=True)
     impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
 
     feat_id = FeatureId("feat_01HT_GASTOS")
     prj_id = ProjectId("prj_01HT_APP")
@@ -848,6 +881,7 @@ async def test_build_prompt_incluye_plan_y_requisitos() -> None:
         opencode_client=opencode_client,
         code_runner=code_runner,
         implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
     )
 
     # Act
@@ -861,3 +895,117 @@ async def test_build_prompt_incluye_plan_y_requisitos() -> None:
     assert "Plan aprobado" in build_prompt
     assert "[create] src/calc.ts" in build_prompt
     assert "[create] tests/calc.test.ts" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_registers_traceability_post_commit() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert ("feature", str(feat_id), "code_file", "src/calc.ts", "codegen") in trace_repo.edges
+    assert ("feature", str(feat_id), "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
+    assert ("requirement", f"{feat_id}:REQ-1.1", "code_file", "src/calc.ts", "codegen") in trace_repo.edges
+    assert ("requirement", f"{feat_id}:REQ-1.1", "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
+    done_events = [e for e in output.events if e.event_type == OpenCodeEventType.DONE]
+    assert len(done_events) == 1
+    assert done_events[0].data.get("traceability_edges") == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_emits_error_event_si_trazabilidad_falla() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = RaisingTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert output.status == FeatureImplementationStatus.IMPLEMENTED
+    error_events = [
+        e for e in output.events if e.event_type == OpenCodeEventType.ERROR and "traceability" in str(e.data)
+    ]
+    assert len(error_events) == 1
