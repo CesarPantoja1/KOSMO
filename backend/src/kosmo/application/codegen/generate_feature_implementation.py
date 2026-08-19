@@ -243,8 +243,14 @@ class GenerateFeatureImplementationUseCase:
             await self._implementation_repo.save(impl)
 
             # 7. Fase Build: enviar prompt al Build Agent
+            plan_lines = "\n".join(
+                f"- [{op.action}] {op.path}" + (f" — {op.description}" if op.description else "")
+                for op in impl_plan.operations
+            )
             build_prompt = (
-                f"Eres el agente de construcción para la feature '{feature.title}'.\n"
+                f"Eres el agente de construcción para la feature '{feature.title}'.\n\n"
+                f"## Plan aprobado\n{plan_lines}\n\n"
+                f"## Requisitos EARS\n{req_markdown}\n\n"
                 "Implementa el código y las pruebas respetando el plan aprobado."
             )
 

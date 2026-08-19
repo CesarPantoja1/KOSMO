@@ -806,3 +806,58 @@ async def test_retry_history_accumulated() -> None:
     for errors in output.retry_history:
         assert len(errors) > 0
     assert "Intento 1" in (output.error_message or "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_build_prompt_incluye_plan_y_requisitos() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+    )
+
+    # Act
+    await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    build_prompts = [prompt for (_, prompt, agent) in opencode_client.prompts_sent if agent == "build"]
+    assert len(build_prompts) == 1
+    build_prompt = build_prompts[0]
+    assert "# REQ-1.1: El sistema registrará los gastos" in build_prompt
+    assert "Plan aprobado" in build_prompt
+    assert "[create] src/calc.ts" in build_prompt
+    assert "[create] tests/calc.test.ts" in build_prompt
