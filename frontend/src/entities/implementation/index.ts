@@ -5,4 +5,4 @@ export type { ImplementationStatus, ImplementationSummary, ImplementationMetric 
 export { useImplementationStore, clearImplementationStore } from './model/store';
 
 // API
-export { generateImplementation, getImplementationSummary } from './api/api';
+export { generateImplementation } from './api/api';

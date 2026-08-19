@@ -77,5 +77,6 @@ def test_stream_implementation_events(client: TestClient, mock_broker, valid_tok
 
     # Assert
     assert "event: plan_progress" in content
+    assert '"event_type": "plan_progress"' in content
     assert '"msg":"hello"' in content.replace(" ", "")
     assert "event: done" in content

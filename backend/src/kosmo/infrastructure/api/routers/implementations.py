@@ -69,10 +69,16 @@ async def stream_implementation_events(
     # SseEventSourceResponse itera sobre él y lo expone como Server-Sent Events.
     async def event_publisher() -> AsyncGenerator[dict[str, Any]]:
         async for event in broker.subscribe(implementation_id):
+            event_type = getattr(event.event_type, "value", str(event.event_type))
             yield {
-                "event": getattr(event.event_type, "value", str(event.event_type)),
+                "event": event_type,
                 "data": json.dumps(
-                    {"session_id": event.session_id, "data": event.data, "timestamp": event.timestamp.isoformat()}
+                    {
+                        "event_type": event_type,
+                        "session_id": event.session_id,
+                        "data": event.data,
+                        "timestamp": event.timestamp.isoformat(),
+                    }
                 ),
             }
 

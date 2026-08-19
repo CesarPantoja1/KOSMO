@@ -1,21 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { generateImplementation, getImplementationSummary } from '../api/api';
+import { generateImplementation } from '../api/api';
 import type { ImplementationStatus, ImplementationSummary } from './types';
 
 interface ImplementationStore {
 	status: ImplementationStatus;
 	summary: ImplementationSummary | null;
+	progress: string | null;
 	implementations: Record<string, boolean>;
 	startGeneration: (
 		featureId: string,
 		featureTitle: string,
 		featureDisplayId: string,
 	) => Promise<void>;
-	completeGeneration: () => void;
-	failGeneration: () => void;
-	loadSummary: (featureId: string) => Promise<void>;
-	setImplemented: (featureId: string, value: boolean) => void;
 	reset: () => void;
 }
 
@@ -24,48 +21,33 @@ export const useImplementationStore = create<ImplementationStore>()(
 		(set) => ({
 			status: 'idle',
 			summary: null,
+			progress: null,
 			implementations: {},
 
 			startGeneration: async (featureId, featureTitle, featureDisplayId) => {
-				set({ status: 'generating', summary: null });
+				set({ status: 'generating', summary: null, progress: 'Preparando generación...' });
 				try {
 					const summary = await generateImplementation(
 						featureId,
 						featureTitle,
 						featureDisplayId,
+						(progress) => set({ progress }),
 					);
 					set((state) => ({
 						status: 'completed',
 						summary,
+						progress: null,
 						implementations: {
 							...state.implementations,
 							[featureId]: true,
 						},
 					}));
 				} catch {
-					set({ status: 'failed' });
+					set({ status: 'failed', progress: null });
 				}
 			},
 
-			completeGeneration: () => set({ status: 'completed' }),
-			failGeneration: () => set({ status: 'failed' }),
-
-			loadSummary: async (featureId) => {
-				const summary = await getImplementationSummary(featureId);
-				if (summary) {
-					set({ summary });
-				}
-			},
-
-			setImplemented: (featureId, value) =>
-				set((state) => ({
-					implementations: {
-						...state.implementations,
-						[featureId]: value,
-					},
-				})),
-
-			reset: () => set({ status: 'idle', summary: null }),
+			reset: () => set({ status: 'idle', summary: null, progress: null }),
 		}),
 		{
 			name: 'kosmo-implementation-store',
@@ -81,6 +63,7 @@ export const clearImplementationStore = () => {
 	useImplementationStore.setState({
 		status: 'idle',
 		summary: null,
+		progress: null,
 		implementations: {},
 	});
 };

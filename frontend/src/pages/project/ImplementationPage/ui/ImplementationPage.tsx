@@ -22,6 +22,7 @@ const ImplementationPage = () => {
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
 
 	const status = useImplementationStore((s) => s.status);
+	const progress = useImplementationStore((s) => s.progress);
 	const implementations = useImplementationStore((s) => s.implementations);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
 
@@ -54,7 +55,9 @@ const ImplementationPage = () => {
 			{isGenerating && (
 				<Loading
 					title='Generando implementación'
-					description='Analizando la funcionalidad para construir la estructura del código.'
+					description={
+						progress ?? 'Analizando la funcionalidad para construir la estructura del código.'
+					}
 					messages={generatingMessages}
 				/>
 			)}
