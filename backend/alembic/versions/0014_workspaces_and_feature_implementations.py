@@ -1,6 +1,6 @@
 """create workspaces and feature_implementations tables
 
-Revision ID: 0014_workspaces_and_feature_implementations
+Revision ID: 0014_workspaces_codegen
 Revises: 0013_consistency_operation_id
 Create Date: 2026-08-19
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "0014_workspaces_and_feature_implementations"
+revision: str = "0014_workspaces_codegen"
 down_revision: str | None = "0013_consistency_operation_id"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

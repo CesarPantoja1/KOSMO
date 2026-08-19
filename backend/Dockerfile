@@ -59,14 +59,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-# Solo libs de RUNTIME
+# Solo libs de RUNTIME + toolchain para ejecución y validación de código generado
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libpq5 \
         ca-certificates \
+        git \
+        curl \
+ && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && apt-get purge -y --auto-remove curl \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 1000 kosmo \
- && useradd --system --uid 1000 --gid kosmo --home /app --shell /usr/sbin/nologin kosmo
+ && useradd --system --uid 1000 --gid kosmo --home /app --shell /usr/sbin/nologin kosmo \
+ && mkdir -p /workspaces \
+ && chown -R kosmo:kosmo /workspaces
 
 WORKDIR /app
 
