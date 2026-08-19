@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +13,7 @@ from kosmo.infrastructure.codegen.workspace import (
     LocalWorkspaceManager,
     WorkspaceLockedError,
 )
+from kosmo.infrastructure.git import GitError
 
 
 class FakeWorkspaceRepository(WorkspaceRepository):
@@ -632,3 +634,54 @@ async def test_rollback_workspace_reverts_uncommitted_changes() -> None:
         # Assert
         assert agents_file.read_text(encoding="utf-8") == initial_content
         assert not untracked.exists()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_commit_workspace_propaga_error_de_git_add() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=True)
+        project_id = ProjectId("prj_commit_err_add")
+        await manager.ensure_workspace(project_id)
+
+        # Act & Assert
+        with patch(
+            "kosmo.infrastructure.codegen.workspace.git_add",
+            side_effect=GitError("fallo de git add"),
+        ), pytest.raises(GitError, match="fallo de git add"):
+            await manager.commit_workspace(project_id, "feat: x")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_commit_workspace_propaga_error_de_git_commit() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=True)
+        project_id = ProjectId("prj_commit_err_commit")
+        await manager.ensure_workspace(project_id)
+
+        # Act & Assert
+        with patch(
+            "kosmo.infrastructure.codegen.workspace.git_commit",
+            side_effect=GitError("fallo de git commit"),
+        ), pytest.raises(GitError, match="fallo de git commit"):
+            await manager.commit_workspace(project_id, "feat: x")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_rollback_workspace_propaga_error_de_git() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=True)
+        project_id = ProjectId("prj_rollback_err")
+        await manager.ensure_workspace(project_id)
+
+        # Act & Assert
+        with patch(
+            "kosmo.infrastructure.codegen.workspace.git_rollback",
+            side_effect=GitError("fallo de git reset"),
+        ), pytest.raises(GitError, match="fallo de git reset"):
+            await manager.rollback_workspace(project_id)

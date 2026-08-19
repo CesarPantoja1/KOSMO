@@ -833,8 +833,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         if not target_dir.exists():
             return
 
-        with contextlib.suppress(Exception):
-            git_rollback(target_dir)
+        git_rollback(target_dir)
 
         manifest = self._extract_manifest(target_dir)
         if self._workspace_repo:
@@ -849,10 +848,8 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         if not target_dir.exists():
             return False
 
-        committed = False
-        with contextlib.suppress(Exception):
-            git_add(target_dir)
-            committed = git_commit(target_dir, message)
+        git_add(target_dir)
+        committed = git_commit(target_dir, message)
 
         manifest = self._extract_manifest(target_dir)
         if self._workspace_repo:
