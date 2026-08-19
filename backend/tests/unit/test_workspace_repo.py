@@ -223,16 +223,28 @@ async def test_update_lock_and_release_lock() -> None:
     mock_session = _make_async_session_mock(returned_model=existing_model)
     repo = SqlAlchemyWorkspaceRepository(session=mock_session)
 
-    # Act 1: Acquire lock
+    # Act 1: Acquire lock — el RETURNING del UPDATE condicional devuelve la fila actualizada
+    locked_model = WorkspaceModel(
+        id="ws_01",
+        project_id="prj_01",
+        current_branch="main",
+        is_locked=True,
+        locked_at=now,
+        locked_by="user_77",
+        path="/workspaces/prj_01",
+        created_at=now,
+        updated_at=now,
+    )
+    mock_session.execute.return_value.scalar_one_or_none.return_value = locked_model
     locked_ws = await repo.update_lock(ProjectId("prj_01"), is_locked=True, locked_by="user_77")
 
     # Assert 1
     assert locked_ws is not None
     assert locked_ws.is_locked is True
     assert locked_ws.locked_by == "user_77"
-    assert existing_model.is_locked is True
 
-    # Act 2: Release lock
+    # Act 2: Release lock — la liberación muta la fila en el SELECT (sin condición)
+    mock_session.execute.return_value.scalar_one_or_none.return_value = existing_model
     unlocked_ws = await repo.release_lock(ProjectId("prj_01"))
 
     # Assert 2
@@ -240,6 +252,78 @@ async def test_update_lock_and_release_lock() -> None:
     assert unlocked_ws.is_locked is False
     assert unlocked_ws.locked_by is None
     assert existing_model.is_locked is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_lock_usa_update_condicional_al_adquirir() -> None:
+    # Arrange
+    mock_session = _make_async_session_mock(returned_model=None)
+    repo = SqlAlchemyWorkspaceRepository(session=mock_session)
+
+    # Act
+    await repo.update_lock(ProjectId("prj_01"), is_locked=True)
+
+    # Assert — CAS: UPDATE con WHERE is_locked = false (no un SELECT previo)
+    stmt = mock_session.execute.call_args_list[0][0][0]
+    assert stmt.table.name == "workspaces"
+    assert "WHERE workspaces.project_id" in str(stmt)
+    assert "workspaces.is_locked = false" in str(stmt).replace("IS false", "= false").lower()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_lock_returns_none_when_cas_conflict() -> None:
+    # Arrange — el UPDATE condicional no afectó filas y el INSERT compite con otra fila
+    mock_session = _make_async_session_mock(returned_model=None)
+    repo = SqlAlchemyWorkspaceRepository(session=mock_session)
+
+    # Act
+    result = await repo.update_lock(ProjectId("prj_01"), is_locked=True)
+
+    # Assert — ambos statements devolvieron vacío → conflicto
+    assert result is None
+    assert mock_session.execute.await_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_lock_inserta_fila_bloqueada_en_primera_adquisicion() -> None:
+    # Arrange — CAS sin filas (aún no existe) y luego INSERT exitoso con ON CONFLICT
+    from sqlalchemy.dialects import postgresql as pg
+
+    now = datetime.now(UTC)
+    inserted_model = WorkspaceModel(
+        id="ws_prj_new",
+        project_id="prj_new",
+        current_branch="main",
+        is_locked=True,
+        locked_at=now,
+        locked_by=None,
+        path="",
+        created_at=now,
+        updated_at=now,
+    )
+    mock_session = _make_async_session_mock(returned_model=None)
+    cas_result = MagicMock()
+    cas_result.scalar_one_or_none.return_value = None
+    insert_result = MagicMock()
+    insert_result.scalar_one_or_none.return_value = inserted_model
+    mock_session.execute = AsyncMock(side_effect=[cas_result, insert_result])
+    repo = SqlAlchemyWorkspaceRepository(session=mock_session)
+
+    # Act
+    result = await repo.update_lock(ProjectId("prj_new"), is_locked=True)
+
+    # Assert — la primera adquisición crea la fila ya bloqueada
+    assert result is not None
+    assert result.is_locked is True
+    insert_stmt = mock_session.execute.call_args_list[1][0][0]
+    assert isinstance(insert_stmt, pg.Insert)
+    rendered = str(insert_stmt).upper()
+    assert "INSERT INTO WORKSPACES" in rendered
+    assert "ON CONFLICT" in rendered
+    assert "DO NOTHING" in rendered
 
 
 @pytest.mark.unit

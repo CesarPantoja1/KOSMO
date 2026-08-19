@@ -655,8 +655,8 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._mcp_url = mcp_url
         self._project_repo = project_repo
         self._in_memory_locks: set[str] = set()
-        # ponytail: guard global del proceso; cubre la carrera check-then-add entre tasks.
-        # El techo real es multi-worker (set no compartido): usar advisory lock en DB si importa.
+        # ponytail: guard global del proceso; la carrera multi-worker se cierra con el
+        # CAS (UPDATE condicional) de update_lock en el repositorio SQL.
         self._lock_guard = asyncio.Lock()
 
     @staticmethod
@@ -812,13 +812,18 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
     async def acquire_lock(self, project_id: ProjectId) -> None:
         """Adquiere el bloqueo para un proyecto o lanza WorkspaceLockedError."""
         async with self._lock_guard:
-            if await self.is_locked(project_id):
+            if str(project_id) in self._in_memory_locks:
                 raise WorkspaceLockedError(
                     f"Workspace for project '{project_id}' is currently locked by another process."
                 )
-            self._in_memory_locks.add(str(project_id))
             if self._workspace_repo:
-                await self._workspace_repo.update_lock(project_id, is_locked=True)
+                updated = await self._workspace_repo.update_lock(project_id, is_locked=True)
+                if updated is None:
+                    # El CAS/INSERT de la DB decidió que otro proceso tiene el lock
+                    raise WorkspaceLockedError(
+                        f"Workspace for project '{project_id}' is currently locked by another process."
+                    )
+            self._in_memory_locks.add(str(project_id))
 
     async def release_lock(self, project_id: ProjectId) -> None:
         """Libera el bloqueo para un proyecto."""

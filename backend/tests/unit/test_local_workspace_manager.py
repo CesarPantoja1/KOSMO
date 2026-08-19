@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -84,6 +85,38 @@ class SlowFakeWorkspaceRepository(FakeWorkspaceRepository):
         locked_by: str | None = None,
     ) -> CodeWorkspace | None:
         self.update_lock_calls += 1
+        return await super().update_lock(project_id, is_locked, locked_by)
+
+
+class CasWorkspaceRepository(FakeWorkspaceRepository):
+    """Espejo del repo SQL con CAS: decide según la fila existente y su estado de lock."""
+
+    async def update_lock(
+        self,
+        project_id: ProjectId | str,
+        is_locked: bool,
+        locked_by: str | None = None,
+    ) -> CodeWorkspace | None:
+        if not is_locked:
+            return await super().update_lock(project_id, is_locked, locked_by)
+        ws = self.workspaces.get(str(project_id))
+        if ws is None:
+            # INSERT bloqueado: primera adquisición, el proceso crea la fila ya tomada
+            now = datetime.now(UTC)
+            created = CodeWorkspace(
+                id=WorkspaceId(f"ws_{project_id}"),
+                project_id=ProjectId(str(project_id)),
+                status=WorkspaceStatus.NOT_CREATED,
+                workspace_dir=None,
+                is_locked=True,
+                locked_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            self.workspaces[str(project_id)] = created
+            return created
+        if ws.is_locked:
+            return None
         return await super().update_lock(project_id, is_locked, locked_by)
 
 
@@ -272,6 +305,52 @@ async def test_acquire_lock_es_atomico_bajo_concurrencia() -> None:
         assert sum(isinstance(result, WorkspaceLockedError) for result in results) == 2
         assert await manager.is_locked(project_id) is True
         assert repo.update_lock_calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_acquire_lock_detecta_conflicto_cas_de_otro_proceso() -> None:
+    # Arrange — la fila existe en DB y otro proceso ya la bloqueó
+    with tempfile.TemporaryDirectory() as tmp_root:
+        repo = CasWorkspaceRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            workspace_repo=repo,
+            git_init=False,
+        )
+        project_id = ProjectId("prj_01")
+        await manager.ensure_workspace(project_id)
+        # Otro worker tomó el lock directamente en la DB
+        await repo.update_lock(project_id, is_locked=True)
+
+        # Act & Assert
+        with pytest.raises(WorkspaceLockedError, match="currently locked"):
+            await manager.acquire_lock(project_id)
+
+        # Assert — el lock no queda registrado en memoria
+        assert str(project_id) not in manager._in_memory_locks
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_acquire_lock_procede_si_fila_aun_no_existe() -> None:
+    # Arrange — primera generación: el repo crea la fila ya bloqueada (INSERT)
+    with tempfile.TemporaryDirectory() as tmp_root:
+        repo = CasWorkspaceRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            workspace_repo=repo,
+            git_init=False,
+        )
+        project_id = ProjectId("prj_new")
+
+        # Act
+        await manager.acquire_lock(project_id)
+
+        # Assert — el lock queda en memoria y se persiste en ensure_workspace
+        assert str(project_id) in manager._in_memory_locks
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.is_locked is True
 
 
 @pytest.mark.unit

@@ -4,7 +4,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.codegen import CodeWorkspace, WorkspaceRepository, WorkspaceStatus
@@ -119,16 +120,60 @@ class SqlAlchemyWorkspaceRepository(WorkspaceRepository):
         locked_by: str | None = None,
     ) -> CodeWorkspace | None:
         async with self._session_ctx() as session:
+            now = datetime.now(UTC)
+
+            if is_locked:
+                # CAS atómico entre procesos: solo gana quien vea is_locked=false
+                now = datetime.now(UTC)
+                cas_stmt = (
+                    update(WorkspaceModel)
+                    .where(
+                        WorkspaceModel.project_id == str(project_id),
+                        WorkspaceModel.is_locked.is_(False),
+                    )
+                    .values(is_locked=True, locked_at=now, locked_by=locked_by, updated_at=now)
+                    .returning(WorkspaceModel)
+                )
+                result = await session.execute(cas_stmt)
+                model = result.scalar_one_or_none()
+                if model is not None:
+                    await self._commit(session)
+                    return self._to_entity(model)
+
+                # Primera adquisición: la fila aún no existe — INSERT bloqueado, un solo proceso gana.
+                # El id sigue la convención ws_{project_id} de LocalWorkspaceManager.ensure_workspace.
+                insert_stmt = (
+                    pg.insert(WorkspaceModel)
+                    .values(
+                        id=f"ws_{project_id}",
+                        project_id=str(project_id),
+                        current_branch="main",
+                        is_locked=True,
+                        locked_at=now,
+                        locked_by=locked_by,
+                        path="",
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    .on_conflict_do_nothing(index_elements=[WorkspaceModel.id])
+                    .returning(WorkspaceModel)
+                )
+                insert_result = await session.execute(insert_stmt)
+                inserted = insert_result.scalar_one_or_none()
+                await self._commit(session)
+                if inserted is None:
+                    return None
+                return self._to_entity(inserted)
+
             stmt = select(WorkspaceModel).where(WorkspaceModel.project_id == str(project_id))
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
             if model is None:
                 return None
 
-            now = datetime.now(UTC)
-            model.is_locked = is_locked
-            model.locked_at = now if is_locked else None
-            model.locked_by = locked_by if is_locked else None
+            model.is_locked = False
+            model.locked_at = None
+            model.locked_by = None
             model.updated_at = now
 
             await self._commit(session)
