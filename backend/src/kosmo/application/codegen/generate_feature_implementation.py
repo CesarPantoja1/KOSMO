@@ -55,6 +55,16 @@ class MissingDiagramError(ValueError):
         super().__init__(message)
 
 
+class OpenCodeUnavailableError(ValueError):
+    """Lanzada cuando el servidor OpenCode no responde antes de iniciar la generación."""
+
+    def __init__(
+        self,
+        message: str = "El servidor OpenCode no está disponible. Verifica que 'opencode serve' esté en ejecución.",
+    ) -> None:
+        super().__init__(message)
+
+
 @dataclass(frozen=True)
 class GenerateFeatureImplementationInput:
     feature_id: FeatureId
@@ -145,6 +155,10 @@ class GenerateFeatureImplementationUseCase:
         if diagram is None or not diagram.diagram_syntax.strip():
             raise MissingDiagramError(_DEFAULT_DIAG_MSG)
 
+        # 4. Verificar disponibilidad de OpenCode antes de adquirir recursos
+        if not await self._opencode_client.health_check():
+            raise OpenCodeUnavailableError()
+
         collected_events: list[OpenCodeEvent] = []
 
         async def _emit(event: OpenCodeEvent) -> None:
@@ -154,7 +168,7 @@ class GenerateFeatureImplementationUseCase:
             if event_collector is not None:
                 await event_collector(event)
 
-        # 4. Adquirir lock y preparar workspace
+        # 5. Adquirir lock y preparar workspace
         await self._workspace_manager.acquire_lock(feature.project_id)
         workspace: CodeWorkspace | None = None
         session_id: str | None = None
@@ -184,7 +198,7 @@ class GenerateFeatureImplementationUseCase:
                 )
             await self._implementation_repo.save(impl)
 
-            # 5. Crear sesión en OpenCode
+            # 6. Crear sesión en OpenCode
             session = await self._opencode_client.create_session(
                 workspace_dir=workspace_dir,
                 title=f"Feature implementation: {feature.title}",
@@ -201,7 +215,7 @@ class GenerateFeatureImplementationUseCase:
                 )
             )
 
-            # 6. Fase Plan: enviar prompt al Plan Agent
+            # 7. Fase Plan: enviar prompt al Plan Agent
             plan_prompt = (
                 f"Eres el agente de planificación para la feature '{feature.title}'.\n\n"
                 f"## Descripción\n{feature.description}\n\n"
@@ -252,7 +266,7 @@ class GenerateFeatureImplementationUseCase:
             impl = dataclasses.replace(impl, plan=impl_plan)
             await self._implementation_repo.save(impl)
 
-            # 7. Fase Build: enviar prompt al Build Agent
+            # 8. Fase Build: enviar prompt al Build Agent
             plan_lines = "\n".join(
                 f"- [{op.action}] {op.path}" + (f" — {op.description}" if op.description else "")
                 for op in impl_plan.operations
@@ -282,7 +296,7 @@ class GenerateFeatureImplementationUseCase:
                 for op in plan_operations:
                     generated_files.add(op.path)
 
-            # 8. Fase Validación & Reintentos (hasta max_retries)
+            # 9. Fase Validación & Reintentos (hasta max_retries)
             attempt = 0
             validation_result: ValidationRunResult | None = None
             retry_history: list[tuple[str, ...]] = []
@@ -336,7 +350,7 @@ class GenerateFeatureImplementationUseCase:
                             if file_path_fix is not None:
                                 generated_files.add(str(file_path_fix))
 
-            # 9. Conclusión del pipeline
+            # 10. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:
                 await self._workspace_manager.commit_workspace(
                     feature.project_id,

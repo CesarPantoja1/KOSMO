@@ -646,10 +646,13 @@ async def test_commit_workspace_propaga_error_de_git_add() -> None:
         await manager.ensure_workspace(project_id)
 
         # Act & Assert
-        with patch(
-            "kosmo.infrastructure.codegen.workspace.git_add",
-            side_effect=GitError("fallo de git add"),
-        ), pytest.raises(GitError, match="fallo de git add"):
+        with (
+            patch(
+                "kosmo.infrastructure.codegen.workspace.git_add",
+                side_effect=GitError("fallo de git add"),
+            ),
+            pytest.raises(GitError, match="fallo de git add"),
+        ):
             await manager.commit_workspace(project_id, "feat: x")
 
 
@@ -663,10 +666,13 @@ async def test_commit_workspace_propaga_error_de_git_commit() -> None:
         await manager.ensure_workspace(project_id)
 
         # Act & Assert
-        with patch(
-            "kosmo.infrastructure.codegen.workspace.git_commit",
-            side_effect=GitError("fallo de git commit"),
-        ), pytest.raises(GitError, match="fallo de git commit"):
+        with (
+            patch(
+                "kosmo.infrastructure.codegen.workspace.git_commit",
+                side_effect=GitError("fallo de git commit"),
+            ),
+            pytest.raises(GitError, match="fallo de git commit"),
+        ):
             await manager.commit_workspace(project_id, "feat: x")
 
 
@@ -680,8 +686,11 @@ async def test_rollback_workspace_propaga_error_de_git() -> None:
         await manager.ensure_workspace(project_id)
 
         # Act & Assert
-        with patch(
-            "kosmo.infrastructure.codegen.workspace.git_rollback",
-            side_effect=GitError("fallo de git reset"),
-        ), pytest.raises(GitError, match="fallo de git reset"):
+        with (
+            patch(
+                "kosmo.infrastructure.codegen.workspace.git_rollback",
+                side_effect=GitError("fallo de git reset"),
+            ),
+            pytest.raises(GitError, match="fallo de git reset"),
+        ):
             await manager.rollback_workspace(project_id)
