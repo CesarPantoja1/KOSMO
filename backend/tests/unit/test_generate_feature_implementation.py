@@ -52,6 +52,7 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
     def __init__(self, workspace_dir: str = "/workspaces/prj_01") -> None:
         self.workspace_dir = workspace_dir
         self.locked_projects: set[str] = set()
+        self.rollback_called_for: set[str] = set()
         self.manifest: tuple[str, ...] = ("package.json", "tsconfig.json", "src/index.ts")
 
     async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace:
@@ -79,6 +80,9 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
 
     async def release_lock(self, project_id: ProjectId) -> None:
         self.locked_projects.discard(str(project_id))
+
+    async def rollback_workspace(self, project_id: ProjectId) -> None:
+        self.rollback_called_for.add(str(project_id))
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):
@@ -641,3 +645,157 @@ async def test_generate_feature_implementation_always_releases_lock_on_error() -
         await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
 
     assert await workspace_manager.is_locked(prj_id) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_retry_emits_retry_events() -> None:
+    """T17: Verificar que se emitan eventos RETRY con los errores parseados en cada reintento."""
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(fail_count_before_pass=2)  # Falla 2 veces, pasa en el 3ro
+    impl_repo = FakeFeatureImplementationRepository()
+
+    feat_id = FeatureId("feat_T17_RETRY_EVENTS")
+    prj_id = ProjectId("prj_01")
+    feature = Feature(
+        id=feat_id,
+        number=17,
+        title="Retry events test",
+        slug="retry-events-test",
+        description="Test retry events",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-17.1: Retry")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_17"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+    )
+
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
+
+    assert output.success is True
+    retry_events = [e for e in output.events if e.event_type == OpenCodeEventType.RETRY]
+    assert len(retry_events) == 2
+    assert retry_events[0].data["attempt"] == 1
+    assert retry_events[1].data["attempt"] == 2
+    assert "error_summary" in retry_events[0].data
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_exhausted_retries_calls_rollback() -> None:
+    """T17: Verificar que al agotar reintentos se invoque rollback_workspace."""
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=False)
+    impl_repo = FakeFeatureImplementationRepository()
+
+    feat_id = FeatureId("feat_T17_ROLLBACK")
+    prj_id = ProjectId("prj_01")
+    feature = Feature(
+        id=feat_id,
+        number=18,
+        title="Rollback test",
+        slug="rollback-test",
+        description="Test rollback",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-18.1: Rollback")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_18"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+    )
+
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
+
+    assert output.success is False
+    assert output.status == FeatureImplementationStatus.REQUIRES_REVIEW
+    assert str(prj_id) in workspace_manager.rollback_called_for
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_retry_history_accumulated() -> None:
+    """T17: Verificar que el historial de errores por intento se acumule correctamente."""
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=False)
+    impl_repo = FakeFeatureImplementationRepository()
+
+    feat_id = FeatureId("feat_T17_HISTORY")
+    prj_id = ProjectId("prj_01")
+    feature = Feature(
+        id=feat_id,
+        number=19,
+        title="History test",
+        slug="history-test",
+        description="Test history",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-19.1: History")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_19"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+    )
+
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
+
+    assert output.success is False
+    assert len(output.retry_history) == 3
+    assert output.implementation is not None
+    assert len(output.implementation.retry_history) == 3
+    for errors in output.retry_history:
+        assert len(errors) > 0
+    assert "Intento 1" in (output.error_message or "")

@@ -66,6 +66,7 @@ class GenerateFeatureImplementationOutput:
     validation_result: ValidationRunResult | None = None
     generated_files: tuple[str, ...] = field(default_factory=tuple)
     error_message: str | None = None
+    retry_history: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
     events: tuple[OpenCodeEvent, ...] = field(default_factory=tuple)
 
 
@@ -268,6 +269,7 @@ class GenerateFeatureImplementationUseCase:
             # 8. Fase Validación & Reintentos (hasta max_retries)
             attempt = 0
             validation_result: ValidationRunResult | None = None
+            retry_history: list[tuple[str, ...]] = []
 
             while attempt < input_data.max_retries:
                 attempt += 1
@@ -284,11 +286,28 @@ class GenerateFeatureImplementationUseCase:
                 if validation_result.all_passed:
                     break
 
+                # Acumular historial de errores del intento actual
+                retry_history.append(validation_result.error_summary)
+
                 if attempt < input_data.max_retries:
                     error_feedback = truncate_error_output(
                         "\n".join(validation_result.error_summary),
                         max_chars=2000,
                     )
+
+                    # Emitir evento RETRY para notificar al frontend
+                    await _emit(
+                        OpenCodeEvent(
+                            event_type=OpenCodeEventType.RETRY,
+                            session_id=session_id,
+                            data={
+                                "attempt": attempt,
+                                "max_retries": input_data.max_retries,
+                                "error_summary": list(validation_result.error_summary),
+                            },
+                        )
+                    )
+
                     fix_prompt = (
                         f"La validación falló en el intento {attempt}/{input_data.max_retries}.\n"
                         f"## Errores detectados:\n{error_feedback}\n\n"
@@ -326,14 +345,24 @@ class GenerateFeatureImplementationUseCase:
                     workspace=workspace,
                     validation_result=validation_result,
                     generated_files=tuple(sorted(generated_files)),
+                    retry_history=tuple(retry_history),
                     events=tuple(collected_events),
                 )
             else:
-                # CA-04: Reintentos agotados -> REQUIRES_REVIEW
+                # CA-04: Reintentos agotados -> rollback + REQUIRES_REVIEW
+                await self._workspace_manager.rollback_workspace(feature.project_id)
+
+                # Construir mensaje de error con historial
+                history_lines: list[str] = []
+                for idx, errors in enumerate(retry_history, 1):
+                    history_lines.append(f"Intento {idx}: {'; '.join(errors)}")
+                error_detail = "\n".join(history_lines) if history_lines else "Sin detalles"
+
                 impl = dataclasses.replace(
                     impl,
                     status=FeatureImplementationStatus.REQUIRES_REVIEW,
                     generated_files=tuple(sorted(generated_files)),
+                    retry_history=tuple(retry_history),
                     updated_at=datetime.now(UTC),
                 )
                 await self._implementation_repo.save(impl)
@@ -345,6 +374,7 @@ class GenerateFeatureImplementationUseCase:
                     data={
                         "error": "Validación fallida tras agotar reintentos",
                         "status": "requires_review",
+                        "retry_history": [list(errs) for errs in retry_history],
                     },
                 )
                 await _emit(error_event)
@@ -356,7 +386,11 @@ class GenerateFeatureImplementationUseCase:
                     workspace=workspace,
                     validation_result=validation_result,
                     generated_files=tuple(sorted(generated_files)),
-                    error_message="Validación fallida tras agotar reintentos de corrección.",
+                    error_message=(
+                        f"Validación fallida tras agotar {input_data.max_retries} reintentos de corrección.\n"
+                        f"{error_detail}"
+                    ),
+                    retry_history=tuple(retry_history),
                     events=tuple(collected_events),
                 )
 

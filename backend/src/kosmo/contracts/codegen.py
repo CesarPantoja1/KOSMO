@@ -49,6 +49,7 @@ class OpenCodeEventType(StrEnum):
     BUILD_PROGRESS = "build_progress"
     BUILD_COMPLETE = "build_complete"
     FILE_EDIT = "file_edit"
+    RETRY = "retry"
     ERROR = "error"
     DONE = "done"
 
@@ -144,6 +145,7 @@ class FeatureImplementation:
     attempt_count: int = 0
     max_attempts: int = 3
     generated_files: tuple[str, ...] = field(default_factory=tuple)
+    retry_history: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -160,6 +162,8 @@ class WorkspaceManagerPort(Protocol):
     async def acquire_lock(self, project_id: ProjectId) -> None: ...
 
     async def release_lock(self, project_id: ProjectId) -> None: ...
+
+    async def rollback_workspace(self, project_id: ProjectId) -> None: ...
 
 
 class CodeRunnerPort(Protocol):
