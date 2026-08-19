@@ -1,5 +1,5 @@
-from collections.abc import AsyncGenerator
 import json
+from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
 import structlog
@@ -71,7 +71,7 @@ async def stream_implementation_events(
 ) -> EventSourceResponse:
     # El broker devuelve un AsyncGenerator[OpenCodeEvent, None]
     # SseEventSourceResponse itera sobre él y lo expone como Server-Sent Events.
-    async def event_publisher() -> AsyncGenerator[dict[str, Any], None]:
+    async def event_publisher() -> AsyncGenerator[dict[str, Any]]:
         async for event in broker.subscribe(implementation_id):
             yield {
                 "event": getattr(event.event_type, "value", str(event.event_type)),
