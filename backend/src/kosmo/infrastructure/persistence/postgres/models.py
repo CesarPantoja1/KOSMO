@@ -304,13 +304,13 @@ class FeatureImplementationModel(Base):
         nullable=False,
         index=True,
     )
-    branch: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
-    current_step: Mapped[str] = mapped_column(String(32), nullable=False, default="init")
-    iteration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plan: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
-    validation_results: Mapped[list[Any]] = mapped_column(
-        pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb")
-    )
+    last_validation: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    generated_files: Mapped[list[str]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+    retry_history: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

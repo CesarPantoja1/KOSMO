@@ -80,25 +80,36 @@ def test_feature_implementation_model_metadata() -> None:
     fk_prj = next(iter(table.columns["project_id"].foreign_keys))
     assert fk_prj.target_fullname == "projects.id"
 
-    assert "branch" in table.columns
-    assert isinstance(table.columns["branch"].type, String)
-
     assert "status" in table.columns
     assert isinstance(table.columns["status"].type, String)
 
-    assert "current_step" in table.columns
-    assert isinstance(table.columns["current_step"].type, String)
-
-    assert "iteration" in table.columns
-    assert isinstance(table.columns["iteration"].type, Integer)
+    assert "session_id" in table.columns
+    assert isinstance(table.columns["session_id"].type, String)
+    assert table.columns["session_id"].nullable is True
 
     assert "plan" in table.columns
     assert isinstance(table.columns["plan"].type, pg.JSONB)
     assert table.columns["plan"].nullable is True
 
-    assert "validation_results" in table.columns
-    assert isinstance(table.columns["validation_results"].type, pg.JSONB)
-    assert table.columns["validation_results"].nullable is False
+    assert "last_validation" in table.columns
+    assert isinstance(table.columns["last_validation"].type, pg.JSONB)
+    assert table.columns["last_validation"].nullable is True
+
+    assert "attempt_count" in table.columns
+    assert isinstance(table.columns["attempt_count"].type, Integer)
+    assert table.columns["attempt_count"].nullable is False
+
+    assert "max_attempts" in table.columns
+    assert isinstance(table.columns["max_attempts"].type, Integer)
+    assert table.columns["max_attempts"].nullable is False
+
+    assert "generated_files" in table.columns
+    assert isinstance(table.columns["generated_files"].type, pg.JSONB)
+    assert table.columns["generated_files"].nullable is False
+
+    assert "retry_history" in table.columns
+    assert isinstance(table.columns["retry_history"].type, pg.JSONB)
+    assert table.columns["retry_history"].nullable is False
 
     assert "created_at" in table.columns
     assert isinstance(table.columns["created_at"].type, DateTime)
@@ -128,12 +139,14 @@ def test_models_instantiation() -> None:
         id="impl_01",
         feature_id="feat_01",
         project_id="prj_01",
-        branch="feature/feat_01",
         status="in_progress",
-        current_step="plan",
-        iteration=1,
+        session_id="oc_sess_1",
         plan={"feature_id": "feat_01", "operations": []},
-        validation_results=[],
+        last_validation=None,
+        attempt_count=1,
+        max_attempts=3,
+        generated_files=[],
+        retry_history=[],
         created_at=now,
         updated_at=now,
     )
@@ -143,4 +156,5 @@ def test_models_instantiation() -> None:
     assert ws.is_locked is True
     assert impl.id == "impl_01"
     assert impl.status == "in_progress"
+    assert impl.session_id == "oc_sess_1"
     assert impl.plan == {"feature_id": "feat_01", "operations": []}
