@@ -8,10 +8,10 @@ from sse_starlette.sse import EventSourceResponse
 
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
-    GenerateFeatureImplementationUseCase,
 )
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.ids import FeatureId
+from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.implementation_broker import broker
@@ -35,13 +35,10 @@ router = APIRouter(prefix="/api/v1/implementations", tags=["Implementations"])
 async def start_implementation(
     request: GenerateImplementationRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
-    container: Annotated[Any, Depends(get_container)],
+    container: Annotated[AppContainer, Depends(get_container)],
 ) -> GenerateImplementationResponse:
-    # 1. Obtener UseCase desde el container
-    # Hacemos type ignore o importamos el container real
-    use_case: GenerateFeatureImplementationUseCase = container.pipeline.generate_feature_implementation  # type: ignore[attr-defined]
+    use_case = container.codegen.generate_feature_implementation
 
-    # 2. Generar el input y el ID
     feature_id_obj = FeatureId(request.feature_id)
     impl_id = f"impl_{feature_id_obj}"
 
@@ -50,7 +47,6 @@ async def start_implementation(
         max_retries=request.max_retries,
     )
 
-    # 3. Delegar al broker en memoria (background)
     broker.start_implementation(
         implementation_id=impl_id,
         use_case=use_case,
