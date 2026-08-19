@@ -18,6 +18,7 @@ from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
 _CODEGEN_ENV_VARS = (
     "OPENCODE_BASE_URL",
     "OPENCODE_SERVER_PASSWORD",
+    "OPENCODE_SERVER_USERNAME",
     "KOSMO_WORKSPACES_DIR",
     "KOSMO_MCP_BASE_URL",
 )
@@ -76,6 +77,7 @@ def test_build_codegen_components_propaga_settings_a_adaptadores(tmp_path) -> No
     settings = _make_settings(
         opencode_base_url="http://opencode.local:4096",
         opencode_server_password=SecretStr("tok"),
+        opencode_server_username="kosmo-agent",
         kosmo_workspaces_dir=workspaces_dir,
         kosmo_mcp_base_url="http://api.local:8000/mcp",
     )
@@ -86,6 +88,7 @@ def test_build_codegen_components_propaga_settings_a_adaptadores(tmp_path) -> No
 
     # Assert
     assert components.opencode_client._base_url == "http://opencode.local:4096"
+    assert components.opencode_client._server_username == "kosmo-agent"
     assert components.opencode_client._server_password == "tok"
     assert components.workspace_manager._workspaces_root == workspaces_dir
     assert components.workspace_manager._mcp_url == "http://api.local:8000/mcp"

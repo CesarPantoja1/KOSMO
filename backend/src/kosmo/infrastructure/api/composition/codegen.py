@@ -25,6 +25,7 @@ class CodegenComponents:
 def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> CodegenComponents:
     opencode_client = OpenCodeHttpClient(
         base_url=settings.opencode_base_url,
+        server_username=settings.opencode_server_username,
         server_password=(
             settings.opencode_server_password.get_secret_value()
             if settings.opencode_server_password is not None

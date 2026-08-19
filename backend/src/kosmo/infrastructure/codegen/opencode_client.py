@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -41,11 +42,13 @@ class OpenCodeHttpClient(OpenCodeClientPort):
     def __init__(
         self,
         base_url: str = "http://127.0.0.1:4096",
+        server_username: str = "opencode",
         server_password: str | None = None,
         timeout_seconds: float = 600.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._server_username = server_username
         self._server_password = server_password
         self._timeout_seconds = timeout_seconds
 
@@ -53,13 +56,10 @@ class OpenCodeHttpClient(OpenCodeClientPort):
             self._client = client
             self._owns_client = False
         else:
-            headers: dict[str, str] = {}
-            if self._server_password:
-                headers["Authorization"] = f"Bearer {self._server_password}"
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=httpx.Timeout(self._timeout_seconds, connect=10.0),
-                headers=headers,
+                headers=self._get_auth_headers(),
             )
             self._owns_client = True
 
@@ -67,7 +67,9 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         """Obtiene las cabeceras requeridas incluyendo autenticación si está configurada."""
         headers: dict[str, str] = {}
         if self._server_password:
-            headers["Authorization"] = f"Bearer {self._server_password}"
+            credentials = f"{self._server_username}:{self._server_password}"
+            encoded = base64.b64encode(credentials.encode("utf-8")).decode("ascii")
+            headers["Authorization"] = f"Basic {encoded}"
         if extra_headers:
             headers.update(extra_headers)
         return headers

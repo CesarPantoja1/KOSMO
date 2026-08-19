@@ -404,7 +404,56 @@ async def test_authentication_header_sent_when_password_configured() -> None:
 
     # Assert
     assert len(captured_auth_headers) == 1
-    assert captured_auth_headers[0] == "Bearer secret_opencode_password_123"
+    assert captured_auth_headers[0] == "Basic b3BlbmNvZGU6c2VjcmV0X29wZW5jb2RlX3Bhc3N3b3JkXzEyMw=="
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_authentication_header_uses_configured_username() -> None:
+    # Arrange
+    captured_auth_headers: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_auth_headers.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json={"status": "ok"})
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(
+        client=http_client,
+        server_username="kosmo-agent",
+        server_password="tok",
+    )
+
+    # Act
+    await client.health_check()
+
+    # Assert
+    assert len(captured_auth_headers) == 1
+    assert captured_auth_headers[0] == "Basic a29zbW8tYWdlbnQ6dG9r"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_no_authentication_header_when_no_password() -> None:
+    # Arrange
+    captured_auth_headers: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_auth_headers.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json={"status": "ok"})
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    await client.health_check()
+
+    # Assert
+    assert captured_auth_headers == [""]
     await client.aclose()
 
 

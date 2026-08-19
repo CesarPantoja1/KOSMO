@@ -11,6 +11,7 @@ from kosmo.config import Settings
 _CODEGEN_ENV_VARS = (
     "OPENCODE_BASE_URL",
     "OPENCODE_SERVER_PASSWORD",
+    "OPENCODE_SERVER_USERNAME",
     "KOSMO_WORKSPACES_DIR",
     "KOSMO_MCP_BASE_URL",
 )
@@ -43,6 +44,7 @@ def test_codegen_settings_usan_valores_por_defecto() -> None:
     # Assert
     assert settings.opencode_base_url == "http://127.0.0.1:4096"
     assert settings.opencode_server_password is None
+    assert settings.opencode_server_username == "opencode"
     assert settings.kosmo_workspaces_dir == expected_workspaces_dir
     assert settings.kosmo_mcp_base_url == "http://127.0.0.1:8000/mcp"
 
@@ -56,6 +58,7 @@ def test_codegen_settings_se_leen_desde_entorno(
     workspace_dir = tmp_path / "workspaces"
     monkeypatch.setenv("OPENCODE_BASE_URL", "http://opencode.local:4096")
     monkeypatch.setenv("OPENCODE_SERVER_PASSWORD", "tok-secreto")
+    monkeypatch.setenv("OPENCODE_SERVER_USERNAME", "kosmo-agent")
     monkeypatch.setenv("KOSMO_WORKSPACES_DIR", str(workspace_dir))
     monkeypatch.setenv("KOSMO_MCP_BASE_URL", "http://api.local:8000/mcp")
 
@@ -65,6 +68,7 @@ def test_codegen_settings_se_leen_desde_entorno(
     # Assert
     assert settings.opencode_base_url == "http://opencode.local:4096"
     assert settings.opencode_server_password == SecretStr("tok-secreto")
+    assert settings.opencode_server_username == "kosmo-agent"
     assert settings.kosmo_workspaces_dir == workspace_dir
     assert settings.kosmo_mcp_base_url == "http://api.local:8000/mcp"
 
