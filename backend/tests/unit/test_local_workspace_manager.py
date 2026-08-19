@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from pathlib import Path
 
@@ -60,6 +61,28 @@ class FakeWorkspaceRepository(WorkspaceRepository):
 
     async def release_lock(self, project_id: ProjectId | str) -> CodeWorkspace | None:
         return await self.update_lock(project_id, is_locked=False, locked_by=None)
+
+
+class SlowFakeWorkspaceRepository(FakeWorkspaceRepository):
+    """Fake que lee el estado y luego cede el control, exponiendo la carrera check-then-add."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.update_lock_calls = 0
+
+    async def by_project_id(self, project_id: ProjectId) -> CodeWorkspace | None:
+        ws = self.workspaces.get(str(project_id))
+        await asyncio.sleep(0)
+        return ws
+
+    async def update_lock(
+        self,
+        project_id: ProjectId | str,
+        is_locked: bool,
+        locked_by: str | None = None,
+    ) -> CodeWorkspace | None:
+        self.update_lock_calls += 1
+        return await super().update_lock(project_id, is_locked, locked_by)
 
 
 @pytest.mark.unit
@@ -217,6 +240,36 @@ async def test_locking_prevents_concurrent_access() -> None:
         # Act 5: Can acquire lock again after release
         await manager.acquire_lock(project_id)
         assert await manager.is_locked(project_id) is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_acquire_lock_es_atomico_bajo_concurrencia() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        repo = SlowFakeWorkspaceRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            workspace_repo=repo,
+            git_init=False,
+        )
+        project_id = ProjectId("prj_01")
+        await manager.ensure_workspace(project_id)
+
+        # Act
+        results = await asyncio.gather(
+            manager.acquire_lock(project_id),
+            manager.acquire_lock(project_id),
+            manager.acquire_lock(project_id),
+            return_exceptions=True,
+        )
+
+        # Assert
+        acquired = [result for result in results if not isinstance(result, WorkspaceLockedError)]
+        assert len(acquired) == 1
+        assert sum(isinstance(result, WorkspaceLockedError) for result in results) == 2
+        assert await manager.is_locked(project_id) is True
+        assert repo.update_lock_calls == 1
 
 
 @pytest.mark.unit

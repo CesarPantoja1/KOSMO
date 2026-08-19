@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import json
@@ -654,6 +655,9 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._mcp_url = mcp_url
         self._project_repo = project_repo
         self._in_memory_locks: set[str] = set()
+        # ponytail: guard global del proceso; cubre la carrera check-then-add entre tasks.
+        # El techo real es multi-worker (set no compartido): usar advisory lock en DB si importa.
+        self._lock_guard = asyncio.Lock()
 
     @staticmethod
     def _extract_manifest(workspace_path: Path) -> tuple[str, ...]:
@@ -807,17 +811,21 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
 
     async def acquire_lock(self, project_id: ProjectId) -> None:
         """Adquiere el bloqueo para un proyecto o lanza WorkspaceLockedError."""
-        if await self.is_locked(project_id):
-            raise WorkspaceLockedError(f"Workspace for project '{project_id}' is currently locked by another process.")
-        self._in_memory_locks.add(str(project_id))
-        if self._workspace_repo:
-            await self._workspace_repo.update_lock(project_id, is_locked=True)
+        async with self._lock_guard:
+            if await self.is_locked(project_id):
+                raise WorkspaceLockedError(
+                    f"Workspace for project '{project_id}' is currently locked by another process."
+                )
+            self._in_memory_locks.add(str(project_id))
+            if self._workspace_repo:
+                await self._workspace_repo.update_lock(project_id, is_locked=True)
 
     async def release_lock(self, project_id: ProjectId) -> None:
         """Libera el bloqueo para un proyecto."""
-        self._in_memory_locks.discard(str(project_id))
-        if self._workspace_repo:
-            await self._workspace_repo.release_lock(project_id)
+        async with self._lock_guard:
+            self._in_memory_locks.discard(str(project_id))
+            if self._workspace_repo:
+                await self._workspace_repo.release_lock(project_id)
 
     async def rollback_workspace(self, project_id: ProjectId) -> None:
         """Revierte el workspace al último commit exitoso y limpia archivos no rastreados."""
