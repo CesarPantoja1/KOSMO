@@ -514,3 +514,68 @@ async def test_ensure_workspace_preserves_custom_agents_md_and_opencode_json() -
         assert ws1.workspace_dir == ws2.workspace_dir
         assert (ws_dir / "AGENTS.md").read_text(encoding="utf-8") == "# Custom Agents Config"
         assert (ws_dir / "opencode.json").read_text(encoding="utf-8") == '{"custom": true}'
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_commit_workspace_creates_git_commit_and_updates_manifest() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        repo = FakeWorkspaceRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            workspace_repo=repo,
+            git_init=True,
+        )
+        project_id = ProjectId("prj_commit_test")
+
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+
+        # Crear nuevo archivo para commitear
+        (ws_dir / "src").mkdir(parents=True, exist_ok=True)
+        (ws_dir / "src" / "feature.ts").write_text("export const val = 42;", encoding="utf-8")
+
+        # Act
+        committed = await manager.commit_workspace(project_id, "feat: implement feature C01")
+
+        # Assert
+        assert committed is True
+        updated_ws = await manager.get_workspace(project_id)
+        assert updated_ws is not None
+        assert "src/feature.ts" in updated_ws.manifest_files
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_rollback_workspace_reverts_uncommitted_changes() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        repo = FakeWorkspaceRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            workspace_repo=repo,
+            git_init=True,
+        )
+        project_id = ProjectId("prj_rollback_test")
+
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+
+        # Modificar archivo inicial
+        agents_file = ws_dir / "AGENTS.md"
+        initial_content = agents_file.read_text(encoding="utf-8")
+        agents_file.write_text("bad broken agent config", encoding="utf-8")
+
+        # Crear archivo no rastreado
+        untracked = ws_dir / "bad_code.ts"
+        untracked.write_text("throw new Error()", encoding="utf-8")
+
+        # Act: Ejecutar rollback
+        await manager.rollback_workspace(project_id)
+
+        # Assert
+        assert agents_file.read_text(encoding="utf-8") == initial_content
+        assert not untracked.exists()

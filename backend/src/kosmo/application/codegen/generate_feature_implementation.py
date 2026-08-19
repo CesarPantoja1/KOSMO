@@ -322,6 +322,10 @@ class GenerateFeatureImplementationUseCase:
 
             # 9. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:
+                await self._workspace_manager.commit_workspace(
+                    feature.project_id,
+                    f"feat({feature.slug}): implement feature {feature.display_id} - {feature.title}",
+                )
                 impl = dataclasses.replace(
                     impl,
                     status=FeatureImplementationStatus.IMPLEMENTED,

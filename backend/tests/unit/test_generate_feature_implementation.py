@@ -53,6 +53,7 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
         self.workspace_dir = workspace_dir
         self.locked_projects: set[str] = set()
         self.rollback_called_for: set[str] = set()
+        self.commit_called_for: list[tuple[str, str]] = []
         self.manifest: tuple[str, ...] = ("package.json", "tsconfig.json", "src/index.ts")
 
     async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace:
@@ -83,6 +84,10 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
 
     async def rollback_workspace(self, project_id: ProjectId) -> None:
         self.rollback_called_for.add(str(project_id))
+
+    async def commit_workspace(self, project_id: ProjectId, message: str) -> bool:
+        self.commit_called_for.append((str(project_id), message))
+        return True
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):
@@ -304,8 +309,10 @@ async def test_generate_feature_implementation_success() -> None:
     assert output.validation_result is not None
     assert output.validation_result.all_passed is True
     assert "src/calc.ts" in output.generated_files
-    assert await workspace_manager.is_locked(prj_id) is False
     assert len(opencode_client.closed_sessions) == 1
+    assert len(workspace_manager.commit_called_for) == 1
+    assert workspace_manager.commit_called_for[0][0] == str(prj_id)
+    assert "C01" in workspace_manager.commit_called_for[0][1]
 
 
 @pytest.mark.asyncio

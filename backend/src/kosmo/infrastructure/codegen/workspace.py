@@ -5,7 +5,6 @@ import dataclasses
 import json
 import os
 import shutil
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,6 +16,12 @@ from kosmo.contracts.codegen import (
 )
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.contracts.sdd.repositories import ProjectRepository
+from kosmo.infrastructure.git import (
+    git_add,
+    git_commit,
+    git_init,
+    git_rollback,
+)
 
 _IGNORED_DIRS: frozenset[str] = frozenset(
     {
@@ -382,12 +387,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
 
             if self._git_init:
                 with contextlib.suppress(Exception):
-                    subprocess.run(
-                        ["git", "init"],
-                        cwd=target_dir,
-                        capture_output=True,
-                        check=False,
-                    )
+                    git_init(target_dir)
 
         # Generar AGENTS.md y opencode.json si no existen
         agents_file = target_dir / "AGENTS.md"
@@ -412,6 +412,11 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         if not tdd_skill_file.exists():
             tdd_skill_file.parent.mkdir(parents=True, exist_ok=True)
             tdd_skill_file.write_text(_generate_tdd_skill_md(), encoding="utf-8")
+
+        if self._git_init and created_new:
+            with contextlib.suppress(Exception):
+                git_add(target_dir)
+                git_commit(target_dir, "chore: initialize workspace template and configurations")
 
         manifest = self._extract_manifest(target_dir)
         now = datetime.now(UTC)
@@ -502,3 +507,39 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._in_memory_locks.discard(str(project_id))
         if self._workspace_repo:
             await self._workspace_repo.release_lock(project_id)
+
+    async def rollback_workspace(self, project_id: ProjectId) -> None:
+        """Revierte el workspace al último commit exitoso y limpia archivos no rastreados."""
+        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        if not target_dir.exists():
+            return
+
+        with contextlib.suppress(Exception):
+            git_rollback(target_dir)
+
+        manifest = self._extract_manifest(target_dir)
+        if self._workspace_repo:
+            ws = await self._workspace_repo.by_project_id(project_id)
+            if ws is not None:
+                updated = dataclasses.replace(ws, manifest_files=manifest, updated_at=datetime.now(UTC))
+                await self._workspace_repo.save(updated)
+
+    async def commit_workspace(self, project_id: ProjectId, message: str) -> bool:
+        """Consolida los cambios del workspace en un commit de git y actualiza el manifiesto."""
+        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        if not target_dir.exists():
+            return False
+
+        committed = False
+        with contextlib.suppress(Exception):
+            git_add(target_dir)
+            committed = git_commit(target_dir, message)
+
+        manifest = self._extract_manifest(target_dir)
+        if self._workspace_repo:
+            ws = await self._workspace_repo.by_project_id(project_id)
+            if ws is not None:
+                updated = dataclasses.replace(ws, manifest_files=manifest, updated_at=datetime.now(UTC))
+                await self._workspace_repo.save(updated)
+
+        return committed

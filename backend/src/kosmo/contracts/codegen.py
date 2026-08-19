@@ -165,6 +165,8 @@ class WorkspaceManagerPort(Protocol):
 
     async def rollback_workspace(self, project_id: ProjectId) -> None: ...
 
+    async def commit_workspace(self, project_id: ProjectId, message: str) -> bool: ...
+
 
 class CodeRunnerPort(Protocol):
     async def run_step(
