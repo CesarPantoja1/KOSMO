@@ -852,3 +852,16 @@ class TraceabilityNavigationOutputView(BaseModel):
     source_entity_name: str | None = Field(default=None, description="Nombre de la entidad de origen.")
     source_entity_id: str | None = Field(default=None, description="ID de la entidad de origen.")
     source_level: str | None = Field(default=None, description="Fase de la entidad de origen (ej. caracteristicas).")
+
+
+class GenerateImplementationRequest(BaseModel):
+    """Petición para iniciar la generación asíncrona de implementación."""
+
+    feature_id: str = Field(description="ID de la característica a implementar")
+    max_retries: int = Field(default=3, ge=1, le=5)
+
+
+class GenerateImplementationResponse(BaseModel):
+    """Respuesta tras iniciar la generación asíncrona."""
+
+    implementation_id: str = Field(description="ID del proceso iniciado para consumir sus eventos")
