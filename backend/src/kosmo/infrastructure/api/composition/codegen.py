@@ -31,6 +31,7 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
             if settings.opencode_server_password is not None
             else None
         ),
+        model=settings.opencode_model,
     )
     workspace_manager = LocalWorkspaceManager(
         workspaces_root=settings.kosmo_workspaces_dir,
@@ -48,6 +49,8 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         code_runner=code_runner,
         implementation_repo=repos.implementations,
         traceability_repo=repos.traceability,
+        project_repo=repos.projects,
+        document_repo=repos.documents,
     )
     return CodegenComponents(
         generate_feature_implementation=use_case,

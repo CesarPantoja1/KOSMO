@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +15,9 @@ from kosmo.infrastructure.codegen.workspace import (
     WorkspaceLockedError,
 )
 from kosmo.infrastructure.git import GitError
+from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
+    LOCK_STALE_AFTER_MINUTES,
+)
 
 
 class FakeWorkspaceRepository(WorkspaceRepository):
@@ -116,7 +119,10 @@ class CasWorkspaceRepository(FakeWorkspaceRepository):
             self.workspaces[str(project_id)] = created
             return created
         if ws.is_locked:
-            return None
+            stale_cutoff = datetime.now(UTC) - timedelta(minutes=LOCK_STALE_AFTER_MINUTES)
+            if ws.locked_at is None or ws.locked_at > stale_cutoff:
+                return None
+            # Lock stale de un proceso muerto: se permite el takeover
         return await super().update_lock(project_id, is_locked, locked_by)
 
 
@@ -238,8 +244,9 @@ async def test_get_manifest_filters_ignored_directories() -> None:
         # Assert
         assert "src/app.ts" in manifest
         assert "README.md" in manifest
+        assert ".gitignore" in manifest
         assert not any("node_modules" in f for f in manifest)
-        assert not any(".git" in f for f in manifest)
+        assert not any(f.startswith(".git/") for f in manifest)
         assert not any(".next" in f for f in manifest)
 
 
@@ -329,6 +336,41 @@ async def test_acquire_lock_detecta_conflicto_cas_de_otro_proceso() -> None:
 
         # Assert — el lock no queda registrado en memoria
         assert str(project_id) not in manager._in_memory_locks
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_acquire_lock_toma_control_de_lock_stale_de_proceso_muerto() -> None:
+    # Arrange — un proceso murió hace más del umbral y dejó el lock clavado en la DB
+    with tempfile.TemporaryDirectory() as tmp_root:
+        repo = CasWorkspaceRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            workspace_repo=repo,
+            git_init=False,
+        )
+        project_id = ProjectId("prj_stale")
+        await manager.ensure_workspace(project_id)
+        await repo.update_lock(project_id, is_locked=True)
+        stale_ws = repo.workspaces[str(project_id)]
+        repo.workspaces[str(project_id)] = CodeWorkspace(
+            id=stale_ws.id,
+            project_id=stale_ws.project_id,
+            status=stale_ws.status,
+            workspace_dir=stale_ws.workspace_dir,
+            is_locked=True,
+            locked_at=datetime.now(UTC) - timedelta(minutes=LOCK_STALE_AFTER_MINUTES + 5),
+            created_at=stale_ws.created_at,
+            updated_at=stale_ws.updated_at,
+        )
+
+        # Act — el lock stale permite el takeover
+        await manager.acquire_lock(project_id)
+
+        # Assert
+        assert str(project_id) in manager._in_memory_locks
+        ws = repo.workspaces[str(project_id)]
+        assert ws.is_locked is True
 
 
 @pytest.mark.unit
@@ -471,6 +513,11 @@ async def test_agents_md_content_and_structure() -> None:
         assert "completada" in content
         assert "verde" in content
 
+        # Assert — UI funcional y navegación
+        assert "UI, Navegación y Diseño" in content
+        assert "src/features/<slug>/" in content
+        assert "feature-registry.ts" in content
+
         # Assert — TDD obligatorio con skill
         assert ".opencode/skills/tdd/SKILL.md" in content
         assert "Red-Green-Refactor" in content
@@ -525,21 +572,14 @@ async def test_opencode_json_content_and_permissions() -> None:
         # Permissions: read
         assert config["permission"]["read"] == {"*": "allow"}
 
-        # Permissions: edit (src, tests, drizzle allowed, rest denied)
-        assert config["permission"]["edit"]["src/**"] == "allow"
-        assert config["permission"]["edit"]["tests/**"] == "allow"
-        assert config["permission"]["edit"]["drizzle/**"] == "allow"
-        assert config["permission"]["edit"]["*"] == "deny"
+        # Permissions: edit/bash en todo el workspace para que el agente tenga
+        # disponibles las herramientas de escritura (si se niega todo, opencode
+        # oculta las tools y el agente no puede generar código).
+        assert config["permission"]["edit"] == {"*": "allow"}
+        assert config["permission"]["bash"] == {"*": "allow"}
 
-        # Permissions: bash whitelist
-        bash_rules = config["permission"]["bash"]
-        assert bash_rules["npm install"] == "allow"
-        assert bash_rules["npm run build"] == "allow"
-        assert bash_rules["npx tsc --noEmit"] == "allow"
-        assert bash_rules["npx vitest run"] == "allow"
-        assert bash_rules["npx eslint ."] == "allow"
-        assert bash_rules["npx drizzle-kit push"] == "allow"
-        assert bash_rules["*"] == "deny"
+        # Tools: la pregunta interactiva está deshabilitada (flujo headless)
+        assert config["tools"] == {"question": False}
 
 
 @pytest.mark.unit
@@ -773,3 +813,21 @@ async def test_rollback_workspace_propaga_error_de_git() -> None:
             pytest.raises(GitError, match="fallo de git reset"),
         ):
             await manager.rollback_workspace(project_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_publish_preview_escribe_pointer_del_workspace() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_preview_01")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+
+        # Act
+        await manager.publish_preview(project_id)
+
+        # Assert
+        pointer = Path(tmp_root) / ".preview"
+        assert pointer.read_text(encoding="utf-8").strip() == ws.workspace_dir

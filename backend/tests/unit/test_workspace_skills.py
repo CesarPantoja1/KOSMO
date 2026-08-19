@@ -22,6 +22,7 @@ def test_skills_in_template_exist_and_have_valid_frontmatter() -> None:
         "kosmo-testing",
         "kosmo-drizzle",
         "kosmo-nextjs",
+        "kosmo-ui",
     ]
 
     for skill_name in expected_skills:
@@ -102,6 +103,26 @@ def test_kosmo_nextjs_skill_content() -> None:
 
 
 @pytest.mark.unit
+def test_kosmo_ui_skill_content() -> None:
+    skill_file = DEFAULT_TEMPLATE_DIR / ".opencode" / "skills" / "kosmo-ui" / "SKILL.md"
+    content = skill_file.read_text(encoding="utf-8")
+
+    # Feature-slices desacoplados y registro de navegación
+    assert "src/features/<slug>/" in content
+    assert "manifest.ts" in content
+    assert "feature-registry.ts" in content
+    assert "Desacople" in content
+
+    # Diseño: modelo mental, arquetipos y anti-IA
+    assert "modelo mental" in content
+    assert "Storefront" in content
+    assert "Dashboard" in content
+    assert "No parecer hecho con IA" in content
+    assert "src/components/ui/" in content
+    assert "Español" in content or "español" in content
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_ensure_workspace_generates_all_skills() -> None:
     with tempfile.TemporaryDirectory() as tmp_root:
@@ -120,6 +141,7 @@ async def test_ensure_workspace_generates_all_skills() -> None:
             "kosmo-testing",
             "kosmo-drizzle",
             "kosmo-nextjs",
+            "kosmo-ui",
             "tdd",
         ]
 

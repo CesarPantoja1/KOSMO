@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.codegen import CodeWorkspace, WorkspaceRepository, WorkspaceStatus
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.infrastructure.persistence.postgres.models import WorkspaceModel
+
+# ponytail: umbral de lock stale tras un kill duro del proceso; si un run legítimo
+# supera este umbral otro proceso podría robarle el lock — renovar locked_at
+# periódicamente si las generaciones llegan a durar más de 30 minutos.
+LOCK_STALE_AFTER_MINUTES: int = 30
 
 
 class SqlAlchemyWorkspaceRepository(WorkspaceRepository):
@@ -123,13 +128,19 @@ class SqlAlchemyWorkspaceRepository(WorkspaceRepository):
             now = datetime.now(UTC)
 
             if is_locked:
-                # CAS atómico entre procesos: solo gana quien vea is_locked=false
+                # CAS atómico entre procesos: gana quien vea is_locked=false o un lock
+                # stale (proceso muerto sin release) según LOCK_STALE_AFTER_MINUTES.
                 now = datetime.now(UTC)
+                stale_cutoff = now - timedelta(minutes=LOCK_STALE_AFTER_MINUTES)
                 cas_stmt = (
                     update(WorkspaceModel)
                     .where(
                         WorkspaceModel.project_id == str(project_id),
-                        WorkspaceModel.is_locked.is_(False),
+                        or_(
+                            WorkspaceModel.is_locked.is_(False),
+                            WorkspaceModel.locked_at.is_(None),
+                            WorkspaceModel.locked_at < stale_cutoff,
+                        ),
                     )
                     .values(is_locked=True, locked_at=now, locked_by=locked_by, updated_at=now)
                     .returning(WorkspaceModel)

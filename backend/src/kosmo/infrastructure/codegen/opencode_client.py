@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any, Self
@@ -44,12 +43,14 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         base_url: str = "http://127.0.0.1:4096",
         server_username: str = "opencode",
         server_password: str | None = None,
+        model: str | None = None,
         timeout_seconds: float = 600.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._server_username = server_username
         self._server_password = server_password
+        self._model = model
         self._timeout_seconds = timeout_seconds
 
         if client is not None:
@@ -107,9 +108,14 @@ class OpenCodeHttpClient(OpenCodeClientPort):
     ) -> OpenCodeSession:
         """Crea una nueva sesión en el servidor OpenCode para el workspace especificado."""
         headers = self._get_auth_headers()
-        payload = {"workspace_dir": workspace_dir, "title": title}
+        payload: dict[str, object] = {"title": title}
         try:
-            response = await self._client.post("/session", json=payload, headers=headers)
+            response = await self._client.post(
+                "/session",
+                params={"directory": workspace_dir},
+                json=payload,
+                headers=headers,
+            )
             if not response.is_success:
                 raise OpenCodeClientError(
                     f"Error al crear sesión en OpenCode (HTTP {response.status_code}): {response.text}"
@@ -135,52 +141,30 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         except httpx.HTTPError as exc:
             raise OpenCodeConnectionError(f"Error HTTP al conectar con OpenCode: {exc}") from exc
 
-    def _normalize_event_type(self, raw_type: str | None, default_agent: str) -> OpenCodeEventType | str:
-        """Normaliza el tipo de evento al enum OpenCodeEventType o string."""
-        if not raw_type:
-            return f"{default_agent}_progress"
-
-        clean_type = raw_type.strip().lower()
-        for event_type in OpenCodeEventType:
-            if event_type.value == clean_type:
-                return event_type
-        return clean_type
-
-    def _parse_event(
-        self,
-        session_id: str,
-        event_type_str: str | None,
-        data_lines: list[str],
-        default_agent: str,
-    ) -> OpenCodeEvent | None:
-        """Parsea las líneas de datos SSE en un objeto OpenCodeEvent."""
-        raw_data = "\n".join(data_lines).strip()
-        data_obj: dict[str, Any] = {}
-
-        if raw_data:
-            try:
-                parsed_json: Any = json.loads(raw_data)
-                if isinstance(parsed_json, dict):
-                    data_obj = dict(parsed_json)  # type: ignore[reportUnknownVariableType]
-                    if not event_type_str and "type" in data_obj:
-                        event_type_str = str(data_obj["type"])
-                    elif not event_type_str and "event_type" in data_obj:
-                        event_type_str = str(data_obj["event_type"])
-                else:
-                    data_obj = {"content": parsed_json}
-            except json.JSONDecodeError:
-                data_obj = {"content": raw_data}
-
-        if not event_type_str and not data_obj:
+    def _model_payload(self) -> dict[str, str] | None:
+        """Convierte el modelo configurado (provider/model) al objeto que espera la API."""
+        if not self._model:
             return None
+        if "/" in self._model:
+            provider, _, model_id = self._model.partition("/")
+            return {"providerID": provider, "modelID": model_id}
+        return {"modelID": self._model}
 
-        event_type = self._normalize_event_type(event_type_str, default_agent)
-        return OpenCodeEvent(
-            event_type=event_type,
-            session_id=session_id,
-            data=data_obj,
-            timestamp=datetime.now(UTC),
-        )
+    def _progress_event_type(self, agent: str) -> OpenCodeEventType | str:
+        """Tipo de evento de progreso según el agente."""
+        if agent == "plan":
+            return OpenCodeEventType.PLAN_PROGRESS
+        if agent == "build":
+            return OpenCodeEventType.BUILD_PROGRESS
+        return f"{agent}_progress"
+
+    def _complete_event_type(self, agent: str) -> OpenCodeEventType | str:
+        """Tipo de evento de completitud según el agente."""
+        if agent == "plan":
+            return OpenCodeEventType.PLAN_COMPLETE
+        if agent == "build":
+            return OpenCodeEventType.BUILD_COMPLETE
+        return f"{agent}_complete"
 
     async def send_prompt(
         self,
@@ -189,62 +173,79 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         *,
         agent: str = "plan",
     ) -> AsyncIterator[OpenCodeEvent]:
-        """Envía una instrucción al agente en OpenCode y consume el flujo SSE de eventos."""
-        headers = self._get_auth_headers({"Accept": "text/event-stream"})
-        payload = {"prompt": prompt, "agent": agent}
-        url = f"/session/{session_id}/prompt"
+        """Envía una instrucción al agente en OpenCode (POST /session/{id}/message) y
+        traduce el mensaje final de respuesta al vocabulario de eventos KOSMO."""
+        headers = self._get_auth_headers({"Accept": "application/json"})
+        payload: dict[str, object] = {"parts": [{"type": "text", "text": prompt}], "agent": agent}
+        model_payload = self._model_payload()
+        if model_payload:
+            payload["model"] = model_payload
+        url = f"/session/{session_id}/message"
 
         try:
-            async with self._client.stream("POST", url, json=payload, headers=headers) as response:
-                if not response.is_success:
-                    error_bytes = await response.aread()
-                    error_detail = error_bytes.decode("utf-8", errors="replace")
-                    yield OpenCodeEvent(
-                        event_type=OpenCodeEventType.ERROR,
-                        session_id=session_id,
-                        data={
-                            "error": f"HTTP {response.status_code}",
-                            "detail": error_detail,
-                        },
-                        timestamp=datetime.now(UTC),
-                    )
-                    return
+            response = await self._client.post(url, json=payload, headers=headers)
+            if not response.is_success:
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id=session_id,
+                    data={
+                        "error": f"HTTP {response.status_code}",
+                        "detail": response.text[:500],
+                    },
+                    timestamp=datetime.now(UTC),
+                )
+                return
 
-                current_event_type: str | None = None
-                current_data_lines: list[str] = []
+            message: dict[str, Any] = response.json()
+            info: dict[str, Any] = message.get("info") if isinstance(message.get("info"), dict) else {}
+            parts: list[object] = message.get("parts") if isinstance(message.get("parts"), list) else []
 
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line:
-                        if current_event_type or current_data_lines:
-                            event = self._parse_event(
-                                session_id,
-                                current_event_type,
-                                current_data_lines,
-                                agent,
-                            )
-                            if event:
-                                yield event
-                            current_event_type = None
-                            current_data_lines = []
-                        continue
+            error_info: object = info.get("error")
+            if error_info is not None:
+                error_text = error_info if isinstance(error_info, str) else str(error_info)
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id=session_id,
+                    data={"error": error_text},
+                    timestamp=datetime.now(UTC),
+                )
+                return
 
-                    if line.startswith("event:"):
-                        current_event_type = line[6:].strip()
-                    elif line.startswith("data:"):
-                        current_data_lines.append(line[5:].strip())
-                    elif line.startswith("{") and line.endswith("}"):
-                        current_data_lines.append(line)
+            files: list[str] = []
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                part_type = part.get("type")
+                if part_type == "file":
+                    file_obj = part.get("file") if isinstance(part.get("file"), dict) else {}
+                    path = part.get("path") or file_obj.get("path")
+                    if path:
+                        files.append(str(path))
+                        yield OpenCodeEvent(
+                            event_type=OpenCodeEventType.FILE_EDIT,
+                            session_id=session_id,
+                            data={
+                                "path": str(path),
+                                "content": part.get("content") or part.get("text") or file_obj.get("content"),
+                            },
+                            timestamp=datetime.now(UTC),
+                        )
+                elif part_type == "text":
+                    text = str(part.get("text") or "").strip()
+                    if text:
+                        yield OpenCodeEvent(
+                            event_type=self._progress_event_type(agent),
+                            session_id=session_id,
+                            data={"delta": text},
+                            timestamp=datetime.now(UTC),
+                        )
 
-                if current_event_type or current_data_lines:
-                    event = self._parse_event(
-                        session_id,
-                        current_event_type,
-                        current_data_lines,
-                        agent,
-                    )
-                    if event:
-                        yield event
+            yield OpenCodeEvent(
+                event_type=self._complete_event_type(agent),
+                session_id=session_id,
+                data={"files": files},
+                timestamp=datetime.now(UTC),
+            )
 
         except Exception as exc:
             yield OpenCodeEvent(

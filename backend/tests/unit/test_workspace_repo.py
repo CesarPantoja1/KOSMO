@@ -273,6 +273,23 @@ async def test_update_lock_usa_update_condicional_al_adquirir() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_update_lock_permite_tomar_lock_stale() -> None:
+    # Arrange — un proceso murió con el lock tomado; el CAS debe permitir el takeover
+    mock_session = _make_async_session_mock(returned_model=None)
+    repo = SqlAlchemyWorkspaceRepository(session=mock_session)
+
+    # Act
+    await repo.update_lock(ProjectId("prj_01"), is_locked=True)
+
+    # Assert — el WHERE incluye la condición de staleness sobre locked_at
+    stmt = mock_session.execute.call_args_list[0][0][0]
+    rendered = str(stmt)
+    assert "workspaces.locked_at <" in rendered
+    assert "workspaces.locked_at IS NULL" in rendered
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_update_lock_returns_none_when_cas_conflict() -> None:
     # Arrange — el UPDATE condicional no afectó filas y el INSERT compite con otra fila
     mock_session = _make_async_session_mock(returned_model=None)

@@ -39,12 +39,17 @@ from kosmo.contracts.sdd.ids import (
     FeatureId,
     ImplementationId,
     ProjectId,
+    UserId,
     WorkspaceId,
 )
+from kosmo.contracts.sdd.project import Project
+from kosmo.domain.sdd.document_converters import markdown_to_document
 from kosmo.infrastructure.codegen.workspace import WorkspaceLockedError
 from tests.unit.fakes import (
     InMemoryActivityDiagramRepository,
+    InMemoryDocumentRepository,
     InMemoryFeatureRepository,
+    InMemoryProjectRepository,
     InMemoryRequirementRepository,
     InMemoryTraceabilityRepository,
 )
@@ -56,6 +61,7 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
         self.locked_projects: set[str] = set()
         self.rollback_called_for: set[str] = set()
         self.commit_called_for: list[tuple[str, str]] = []
+        self.preview_published_for: set[str] = set()
         self.manifest: tuple[str, ...] = ("package.json", "tsconfig.json", "src/index.ts")
 
     async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace:
@@ -90,6 +96,9 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
     async def commit_workspace(self, project_id: ProjectId, message: str) -> bool:
         self.commit_called_for.append((str(project_id), message))
         return True
+
+    async def publish_preview(self, project_id: ProjectId) -> None:
+        self.preview_published_for.add(str(project_id))
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):
@@ -330,6 +339,87 @@ async def test_generate_feature_implementation_success() -> None:
     assert len(workspace_manager.commit_called_for) == 1
     assert workspace_manager.commit_called_for[0][0] == str(prj_id)
     assert "C01" in workspace_manager.commit_called_for[0][1]
+    assert str(prj_id) in workspace_manager.preview_published_for
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_implementation_incluye_contexto_y_ui_en_prompts() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    project_repo = InMemoryProjectRepository()
+    document_repo = InMemoryDocumentRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_UI")
+    prj_id = ProjectId("prj_01HT_APP")
+    await project_repo.save(
+        Project(
+            id=prj_id,
+            name="Papelería",
+            slug="papeleria",
+            description="Papelería de barrio en Quito",
+            owner_id=UserId("usr_01"),
+        )
+    )
+    await document_repo.save_discovery(
+        prj_id,
+        markdown_to_document("# Visión del producto\n\nVenta de útiles escolares para niños y jóvenes de colegio."),
+    )
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar productos",
+        slug="registrar-productos",
+        description="Permite registrar productos con su precio",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los productos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_ui"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar producto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+        project_repo=project_repo,
+        document_repo=document_repo,
+    )
+
+    # Act
+    await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert — los prompts llevan contexto del proyecto (nombre, descripción, visión)
+    assert len(opencode_client.prompts_sent) == 2
+    plan_prompt = opencode_client.prompts_sent[0][1]
+    build_prompt = opencode_client.prompts_sent[1][1]
+    assert "Papelería" in plan_prompt
+    assert "Papelería de barrio en Quito" in plan_prompt
+    assert "Visión del producto" in build_prompt
+    assert "útiles escolares" in build_prompt
+
+    # Assert — los prompts exigen la UI funcional (slice, ruta, registro)
+    assert "src/features/<slug>/" in plan_prompt
+    assert "src/app/<slug>/page.tsx" in plan_prompt
+    assert "feature-registry.ts" in build_prompt
+    assert "src/components/ui/" in build_prompt
 
 
 @pytest.mark.asyncio

@@ -102,8 +102,9 @@ async def test_create_session_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/session"
         assert request.method == "POST"
+        assert request.url.params["directory"] == "/workspaces/prj_01"
         body = json.loads(request.content.decode("utf-8"))
-        assert body["workspace_dir"] == "/workspaces/prj_01"
+        assert "workspace_dir" not in body
         assert body["title"] == "Feature 1 implementation"
         return httpx.Response(
             201,
@@ -126,6 +127,37 @@ async def test_create_session_success() -> None:
     assert session.session_id == "oc_sess_12345"
     assert session.workspace_dir == "/workspaces/prj_01"
     assert session.title == "Feature 1 implementation"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_create_session_sends_directory_query_param() -> None:
+    # Arrange
+    captured_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_urls.append(str(request.url))
+        return httpx.Response(
+            200,
+            json={
+                "id": "oc_sess_dir_1",
+                "workspace_dir": "/workspaces/prj_99",
+                "title": "Dir session",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    await client.create_session("/workspaces/prj_99", title="Dir session")
+
+    # Assert
+    assert len(captured_urls) == 1
+    query = dict(httpx.QueryParams(httpx.URL(captured_urls[0]).query))
+    assert query.get("directory") == "/workspaces/prj_99"
     await client.aclose()
 
 
@@ -196,64 +228,88 @@ async def test_create_session_raises_on_missing_id_in_response() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_send_prompt_sse_streaming_events() -> None:
-    # Arrange
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/session/oc_sess_100/prompt"
-        assert request.method == "POST"
-        body = json.loads(request.content.decode("utf-8"))
-        assert body["prompt"] == "Planifica la feature"
-        assert body["agent"] == "plan"
+async def test_create_session_omite_model_del_payload() -> None:
+    # Arrange — el endpoint de create rechaza el campo model (400); el modelo
+    # se envía por mensaje en send_prompt.
+    captured_bodies: list[dict[str, object]] = []
 
-        sse_content = (
-            b"event: plan_progress\n"
-            b'data: {"delta": "Analizando requisitos EARS..."}\n\n'
-            b"event: plan_progress\n"
-            b'data: {"delta": "Identificando archivos a crear..."}\n\n'
-            b"event: plan_complete\n"
-            b'data: {"plan": "CREATE src/lib/calc.ts"}\n\n'
-        )
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_bodies.append(json.loads(request.content.decode("utf-8")))
         return httpx.Response(
             200,
-            content=sse_content,
-            headers={"content-type": "text/event-stream"},
+            json={
+                "id": "oc_sess_model_1",
+                "workspace_dir": "/workspaces/prj_01",
+                "title": "Model session",
+            },
         )
 
     transport = httpx.MockTransport(handler)
     http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
-    client = OpenCodeHttpClient(client=http_client)
+    client = OpenCodeHttpClient(client=http_client, model="deepseek/deepseek-v4-flash")
 
     # Act
-    events: list[OpenCodeEvent] = []
-    async for event in client.send_prompt("oc_sess_100", "Planifica la feature", agent="plan"):
-        events.append(event)
+    await client.create_session("/workspaces/prj_01", title="Model session")
 
     # Assert
-    assert len(events) == 3
-    assert events[0].event_type == OpenCodeEventType.PLAN_PROGRESS
-    assert events[0].session_id == "oc_sess_100"
-    assert events[0].data.get("delta") == "Analizando requisitos EARS..."
-
-    assert events[1].event_type == OpenCodeEventType.PLAN_PROGRESS
-    assert events[1].session_id == "oc_sess_100"
-
-    assert events[2].event_type == OpenCodeEventType.PLAN_COMPLETE
-    assert events[2].session_id == "oc_sess_100"
-    assert events[2].data.get("plan") == "CREATE src/lib/calc.ts"
+    assert len(captured_bodies) == 1
+    assert "model" not in captured_bodies[0]
+    assert captured_bodies[0]["title"] == "Model session"
     await client.aclose()
 
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_send_prompt_handles_json_event_data_format() -> None:
+async def test_send_prompt_includes_model_object_when_configured() -> None:
     # Arrange
-    def handler(_request: httpx.Request) -> httpx.Response:
-        sse_content = (
-            b'data: {"type": "build_progress", "message": "Generando src/lib/calc.ts"}\n\n'
-            b'data: {"type": "file_edit", "path": "src/lib/calc.ts", "action": "create"}\n\n'
-            b'data: {"type": "build_complete", "status": "success"}\n\n'
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8"))
+        assert body["model"] == {"providerID": "deepseek", "modelID": "deepseek-v4-flash"}
+        return httpx.Response(
+            200,
+            json={
+                "info": {"id": "msg_1", "sessionID": "oc_sess_100", "role": "assistant", "finish": "stop"},
+                "parts": [],
+            },
         )
-        return httpx.Response(200, content=sse_content, headers={"content-type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client, model="deepseek/deepseek-v4-flash")
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_100", "Implementa", agent="build"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 1
+    assert events[0].event_type == OpenCodeEventType.BUILD_COMPLETE
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_posts_message_with_parts_and_agent() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/session/oc_sess_100/message"
+        assert request.method == "POST"
+        body = json.loads(request.content.decode("utf-8"))
+        assert body["agent"] == "build"
+        assert body["parts"] == [{"type": "text", "text": "Implementa la feature"}]
+        return httpx.Response(
+            200,
+            json={
+                "info": {
+                    "id": "msg_1",
+                    "sessionID": "oc_sess_100",
+                    "role": "assistant",
+                    "finish": "stop",
+                },
+                "parts": [],
+            },
+        )
 
     transport = httpx.MockTransport(handler)
     http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
@@ -261,15 +317,122 @@ async def test_send_prompt_handles_json_event_data_format() -> None:
 
     # Act
     events: list[OpenCodeEvent] = []
-    async for event in client.send_prompt("oc_sess_200", "Implementa el código", agent="build"):
+    async for event in client.send_prompt("oc_sess_100", "Implementa la feature", agent="build"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 1
+    assert events[0].event_type == OpenCodeEventType.BUILD_COMPLETE
+    assert events[0].session_id == "oc_sess_100"
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_yields_file_edits_from_message_parts() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "info": {"id": "msg_1", "sessionID": "oc_sess_100", "role": "assistant", "finish": "stop"},
+                "parts": [
+                    {"id": "prt_1", "type": "step-start", "snapshot": "abc"},
+                    {
+                        "id": "prt_2",
+                        "type": "file",
+                        "path": "src/calc.ts",
+                        "content": "export const ok = true;",
+                    },
+                    {"id": "prt_3", "type": "text", "text": "Archivo creado."},
+                ],
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_100", "Implementa la feature", agent="build"):
         events.append(event)
 
     # Assert
     assert len(events) == 3
-    assert events[0].event_type == OpenCodeEventType.BUILD_PROGRESS
-    assert events[1].event_type == OpenCodeEventType.FILE_EDIT
-    assert events[1].data.get("path") == "src/lib/calc.ts"
+    assert events[0].event_type == OpenCodeEventType.FILE_EDIT
+    assert events[0].data.get("path") == "src/calc.ts"
+    assert events[0].data.get("content") == "export const ok = true;"
+    assert events[1].event_type == OpenCodeEventType.BUILD_PROGRESS
+    assert events[1].data.get("delta") == "Archivo creado."
     assert events[2].event_type == OpenCodeEventType.BUILD_COMPLETE
+    assert events[2].data.get("files") == ["src/calc.ts"]
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_yields_plan_progress_and_complete_for_plan_agent() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "info": {"id": "msg_1", "sessionID": "oc_sess_100", "role": "assistant", "finish": "stop"},
+                "parts": [
+                    {"id": "prt_1", "type": "text", "text": "Analizando requisitos..."},
+                ],
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_100", "Planifica", agent="plan"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 2
+    assert events[0].event_type == OpenCodeEventType.PLAN_PROGRESS
+    assert events[0].data.get("delta") == "Analizando requisitos..."
+    assert events[1].event_type == OpenCodeEventType.PLAN_COMPLETE
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_emits_error_event_when_message_has_error() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "info": {
+                    "id": "msg_1",
+                    "sessionID": "oc_sess_100",
+                    "role": "assistant",
+                    "error": {"name": "APICallError", "message": "Rate limit excedido"},
+                },
+                "parts": [],
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_100", "Prompt", agent="build"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 1
+    assert events[0].event_type == OpenCodeEventType.ERROR
+    assert "Rate limit" in str(events[0].data.get("error", ""))
     await client.aclose()
 
 

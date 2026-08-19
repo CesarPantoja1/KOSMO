@@ -26,19 +26,23 @@ from kosmo.contracts.codegen import (
 )
 from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, ImplementationId
+from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
+    DocumentRepository,
     FeatureRepository,
+    ProjectRepository,
     RequirementRepository,
 )
 from kosmo.domain.codegen.parse_validation_output import truncate_error_output
 from kosmo.domain.codegen.plan_rules import validate_plan
+from kosmo.domain.sdd.document_converters import document_to_markdown
 
 _DEFAULT_REQ_MSG = "Esta característica no tiene requisitos EARS generados. Genera los requisitos antes de continuar."
 _DEFAULT_DIAG_MSG = (
     "Esta característica no tiene diagrama de actividad generado. Genera el diagrama antes de continuar."
 )
+_MAX_PROJECT_CONTEXT_CHARS = 2500
 
 
 class MissingRequirementsError(ValueError):
@@ -98,6 +102,8 @@ class GenerateFeatureImplementationUseCase:
         code_runner: CodeRunnerPort,
         implementation_repo: FeatureImplementationRepository,
         traceability_repo: TraceabilityRepository,
+        project_repo: ProjectRepository | None = None,
+        document_repo: DocumentRepository | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -106,10 +112,35 @@ class GenerateFeatureImplementationUseCase:
         self._opencode_client = opencode_client
         self._code_runner = code_runner
         self._implementation_repo = implementation_repo
+        self._project_repo = project_repo
+        self._document_repo = document_repo
         self._register_traceability = RegisterCodeTraceabilityUseCase(
             traceability_repo=traceability_repo,
             requirement_repo=requirement_repo,
         )
+
+    async def _build_project_context(self, project_id: ProjectId) -> str:
+        """Construye el bloque de contexto del proyecto (nombre, descripción y visión) para los prompts."""
+        lines: list[str] = ["## Contexto del proyecto"]
+        if self._project_repo is not None:
+            project = await self._project_repo.by_id(project_id)
+            if project is not None:
+                lines.append(f"- Nombre: {project.name}")
+                if project.description:
+                    lines.append(f"- Descripción: {project.description}")
+
+        if self._document_repo is not None:
+            discovery = await self._document_repo.get_discovery(project_id)
+            if discovery is not None:
+                try:
+                    vision = document_to_markdown(discovery)
+                except Exception:
+                    vision = ""
+                if vision:
+                    truncated = vision[:_MAX_PROJECT_CONTEXT_CHARS]
+                    lines.append(f"\n### Visión del producto (descubrimiento)\n{truncated}")
+
+        return "\n".join(lines)
 
     async def execute_stream(
         self,
@@ -216,12 +247,22 @@ class GenerateFeatureImplementationUseCase:
             )
 
             # 7. Fase Plan: enviar prompt al Plan Agent
+            project_context = await self._build_project_context(feature.project_id)
+
             plan_prompt = (
+                f"{project_context}\n\n"
                 f"Eres el agente de planificación para la feature '{feature.title}'.\n\n"
                 f"## Descripción\n{feature.description}\n\n"
                 f"## Requisitos EARS\n{req_markdown}\n\n"
                 f"## Diagrama de Actividad\n{diagram.diagram_syntax}\n\n"
-                "Propón un plan de implementación detallando los archivos a crear y modificar."
+                "Propón un plan de implementación detallando los archivos a crear y modificar.\n"
+                "OBLIGATORIO: la feature debe entregar una UI funcional. El plan debe incluir:\n"
+                "1. El slice autocontenido en `src/features/<slug>/` (manifest.ts, logic.ts, components/).\n"
+                "2. La ruta de la feature en `src/app/<slug>/page.tsx`.\n"
+                "3. El registro del manifest en `src/lib/feature-registry.ts` "
+                "(la navegación del shell se deriva del registro).\n"
+                "4. Los tests de la lógica.\n"
+                "Lee las skills `kosmo-ui` y `kosmo-nextjs` antes de planificar la UI."
             )
 
             plan_operations: list[FileOperation] = []
@@ -272,10 +313,23 @@ class GenerateFeatureImplementationUseCase:
                 for op in impl_plan.operations
             )
             build_prompt = (
+                f"{project_context}\n\n"
                 f"Eres el agente de construcción para la feature '{feature.title}'.\n\n"
                 f"## Plan aprobado\n{plan_lines}\n\n"
                 f"## Requisitos EARS\n{req_markdown}\n\n"
-                "Implementa el código y las pruebas respetando el plan aprobado."
+                "Implementa el código y las pruebas respetando el plan aprobado.\n"
+                "OBLIGATORIO: entrega la UI funcional completa de la feature:\n"
+                "1. Lógica de negocio pura en `src/features/<slug>/logic.ts` (con tests).\n"
+                "2. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
+                "`src/components/ui/` (Button, Card, Input, Label, Badge, Textarea, EmptyState, "
+                "PageHeader) y tokens del tema.\n"
+                "3. Ruta en `src/app/<slug>/page.tsx` que renderiza el componente principal de la feature.\n"
+                "4. Registro del manifest en `src/lib/feature-registry.ts` (importa el manifest del slice).\n"
+                "5. Actualiza `src/lib/site.ts` con el nombre y la descripción reales del proyecto.\n"
+                "La UI debe adaptarse a la naturaleza del negocio (ver la visión del producto), mantener el "
+                "modelo mental del usuario (navegación derivada del registro, estados vacío/error/loading claros) "
+                "y usar textos en español neutro con los mensajes de validación reales de la lógica. "
+                "No dejes la feature sin pantalla."
             )
 
             generated_files: set[str] = set()
@@ -356,6 +410,7 @@ class GenerateFeatureImplementationUseCase:
                     feature.project_id,
                     f"feat({feature.slug}): implement feature {feature.display_id} - {feature.title}",
                 )
+                await self._workspace_manager.publish_preview(feature.project_id)
                 impl = dataclasses.replace(
                     impl,
                     status=FeatureImplementationStatus.IMPLEMENTED,
