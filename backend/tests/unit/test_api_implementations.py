@@ -1,11 +1,11 @@
-import json
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from kosmo.infrastructure.api.main import app
+
 from kosmo.contracts.codegen import OpenCodeEvent, OpenCodeEventType
+from kosmo.infrastructure.api.main import app
 
 
 @pytest.fixture
@@ -24,10 +24,11 @@ def valid_token_headers():
     # In KOSMO, we might need a real-ish token, or we can mock get_principal.
     # Usually we mock get_principal or the route depends on it.
     # For unit tests, we can just override the dependency:
+    from unittest.mock import MagicMock
+
     from kosmo.contracts.auth import Principal
     from kosmo.infrastructure.api.dependencies.auth import get_principal
     from kosmo.infrastructure.api.dependencies.container import get_container
-    from unittest.mock import MagicMock
 
     app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
     app.dependency_overrides[get_container] = lambda: MagicMock()
@@ -62,7 +63,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
 
 def test_stream_implementation_events(client: TestClient, mock_broker, valid_token_headers: dict[str, str]) -> None:
     # Arrange
-    async def fake_subscribe(*args, **kwargs) -> AsyncGenerator[OpenCodeEvent, None]:
+    async def fake_subscribe(*_args, **_kwargs) -> AsyncGenerator[OpenCodeEvent]:
         yield OpenCodeEvent(event_type=OpenCodeEventType.PLAN_PROGRESS, session_id="sess_123", data={"msg": "hello"})
         yield OpenCodeEvent(event_type=OpenCodeEventType.DONE, session_id="sess_123", data={})
 
