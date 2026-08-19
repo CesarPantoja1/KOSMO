@@ -37,6 +37,8 @@ _IGNORED_DIRS: frozenset[str] = frozenset(
     }
 )
 
+DEFAULT_TEMPLATE_DIR: Path = Path(__file__).parent / "templates" / "basic-next-app"
+
 
 def _generate_agents_md(project_name: str) -> str:
     """Genera el contenido de AGENTS.md para el workspace de implementación."""
@@ -347,7 +349,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
     ) -> None:
         self._workspaces_root = Path(workspaces_root)
         self._workspace_repo = workspace_repo
-        self._template_dir = Path(template_dir) if template_dir else None
+        self._template_dir = Path(template_dir) if template_dir is not None else DEFAULT_TEMPLATE_DIR
         self._git_init = git_init
         self._mcp_url = mcp_url
         self._project_repo = project_repo
