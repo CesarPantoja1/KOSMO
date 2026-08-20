@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any, Self
+from typing import Any, Self, cast
 
 import httpx
 
@@ -196,9 +196,12 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                 )
                 return
 
-            message: dict[str, Any] = response.json()
-            info: dict[str, Any] = message.get("info") if isinstance(message.get("info"), dict) else {}
-            parts: list[object] = message.get("parts") if isinstance(message.get("parts"), list) else []
+            raw_json = response.json()
+            message: dict[str, Any] = cast(dict[str, Any], raw_json) if isinstance(raw_json, dict) else {}
+            raw_info = message.get("info")
+            info: dict[str, Any] = cast(dict[str, Any], raw_info) if isinstance(raw_info, dict) else {}
+            raw_parts = message.get("parts")
+            parts: list[object] = cast(list[object], raw_parts) if isinstance(raw_parts, list) else []
 
             error_info: object = info.get("error")
             if error_info is not None:
@@ -215,23 +218,30 @@ class OpenCodeHttpClient(OpenCodeClientPort):
             for part in parts:
                 if not isinstance(part, dict):
                     continue
-                part_type = part.get("type")
+                part_dict: dict[str, Any] = cast(dict[str, Any], part)
+                part_type: object = part_dict.get("type")
                 if part_type == "file":
-                    file_obj = part.get("file") if isinstance(part.get("file"), dict) else {}
-                    path = part.get("path") or file_obj.get("path")
-                    if path:
-                        files.append(str(path))
+                    raw_file = part_dict.get("file")
+                    file_obj: dict[str, Any] = cast(dict[str, Any], raw_file) if isinstance(raw_file, dict) else {}
+                    raw_path: object = part_dict.get("path") or file_obj.get("path")
+                    if raw_path is not None:
+                        path_str = str(raw_path)
+                        files.append(path_str)
+                        content_val: object = (
+                            part_dict.get("content") or part_dict.get("text") or file_obj.get("content")
+                        )
                         yield OpenCodeEvent(
                             event_type=OpenCodeEventType.FILE_EDIT,
                             session_id=session_id,
                             data={
-                                "path": str(path),
-                                "content": part.get("content") or part.get("text") or file_obj.get("content"),
+                                "path": path_str,
+                                "content": content_val,
                             },
                             timestamp=datetime.now(UTC),
                         )
                 elif part_type == "text":
-                    text = str(part.get("text") or "").strip()
+                    raw_text: object = part_dict.get("text")
+                    text = str(raw_text or "").strip()
                     if text:
                         yield OpenCodeEvent(
                             event_type=self._progress_event_type(agent),

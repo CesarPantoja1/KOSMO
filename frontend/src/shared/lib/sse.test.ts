@@ -108,4 +108,15 @@ describe('consumeSse', () => {
 		expect(onEvent).toHaveBeenCalledTimes(1);
 		expect(onEvent.mock.calls[0][0]).toEqual(fixtureChunk);
 	});
+
+	it('propaga los errores lanzados por el manejador onEvent', async () => {
+		const onEvent = vi.fn().mockImplementation(() => {
+			throw new Error('Error en procesamiento SSE');
+		});
+		const payload = `data: ${JSON.stringify(fixtureStart)}\n\n`;
+
+		await expect(consumeSse(sseResponse(payload), onEvent)).rejects.toThrow(
+			'Error en procesamiento SSE',
+		);
+	});
 });

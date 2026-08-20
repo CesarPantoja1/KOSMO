@@ -21,6 +21,8 @@ const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => 
 		return () => clearInterval(interval);
 	}, [messages]);
 
+	const currentMessage = messages[messageIndex] ?? messages[0] ?? '';
+
 	return (
 		<div className='warning-popup'>
 			<div
@@ -33,7 +35,7 @@ const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => 
 						<p className='text-sm text-neutral-500'>{description}</p>
 					</div>
 					<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
-					<span className='text-xs text-neutral-400'>{messages[messageIndex]}</span>
+					<span className='text-xs text-neutral-400'>{currentMessage}</span>
 				</div>
 			</div>
 		</div>

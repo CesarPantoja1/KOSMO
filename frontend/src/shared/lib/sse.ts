@@ -14,10 +14,15 @@ export async function consumeSse(response: Response, onEvent: SseEventHandler): 
 			if (!line.startsWith('data: ')) continue;
 			const data = line.slice(6).trim();
 			if (!data) continue;
+			let parsed: Record<string, unknown> | null = null;
 			try {
-				onEvent(JSON.parse(data) as Record<string, unknown>);
+				parsed = JSON.parse(data) as Record<string, unknown>;
 			} catch {
 				// ignorar líneas malformadas
+				continue;
+			}
+			if (parsed) {
+				onEvent(parsed);
 			}
 		}
 	};

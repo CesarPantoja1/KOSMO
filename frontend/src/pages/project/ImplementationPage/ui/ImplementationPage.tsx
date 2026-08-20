@@ -4,17 +4,10 @@ import Link from 'next/link';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
-import { useRequirementsStore } from '@/entities/requirements';
 import { useModelingStore } from '@/entities/modeling';
 import { AsideCharacteristic } from '@/widgets';
 import { Implementation } from '@/widgets/main-navbar/ui/icons';
 import { Ai, ArrowLeft, CursorClickFill, Loading } from '@/shared/ui';
-
-const generatingMessages = [
-	'Analizando funcionalidad...',
-	'Generando estructura de implementación...',
-	'Finalizando generación...',
-];
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -27,14 +20,12 @@ const ImplementationPage = () => {
 	const implementations = useImplementationStore((s) => s.implementations);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
 
-	const hasRequirements = useRequirementsStore((s) => s.hasRequirements);
 	const hasDiagram = useModelingStore((s) => s.hasDiagram);
 
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasCharacteristics = characteristics.length > 0;
 	const hasAnyImplementation = Object.values(implementations).some(Boolean);
 	const currentHasImpl = selectedId ? !!implementations[selectedId] : false;
-	const selectedHasReqs = selectedId ? !!hasRequirements[selectedId] : false;
 	const selectedHasDiagram = selectedId ? !!hasDiagram[selectedId] : false;
 	const isGenerating = status === 'generating';
 
@@ -55,11 +46,11 @@ const ImplementationPage = () => {
 		<>
 			{isGenerating && (
 				<Loading
-					title='Generando implementación'
+					title='Generando implementación con OpenCode'
 					description={
 						progress ?? 'Analizando la funcionalidad para construir la estructura del código.'
 					}
-					messages={generatingMessages}
+					messages={[progress ?? 'Conectando con OpenCode...']}
 				/>
 			)}
 
