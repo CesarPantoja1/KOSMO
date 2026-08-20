@@ -8,7 +8,13 @@ from unittest.mock import patch
 
 import pytest
 
-from kosmo.contracts.codegen import CodeWorkspace, WorkspaceRepository, WorkspaceStatus
+from kosmo.contracts.codegen import (
+    CodeWorkspace,
+    ValidationStep,
+    ValidationStepResult,
+    WorkspaceRepository,
+    WorkspaceStatus,
+)
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.infrastructure.codegen.workspace import (
     LocalWorkspaceManager,
@@ -67,6 +73,29 @@ class FakeWorkspaceRepository(WorkspaceRepository):
 
     async def release_lock(self, project_id: ProjectId | str) -> CodeWorkspace | None:
         return await self.update_lock(project_id, is_locked=False, locked_by=None)
+
+
+class FakeCodeRunner:
+    """Registra los comandos pedidos y responde un resultado configurable."""
+
+    def __init__(self, install_success: bool = True) -> None:
+        self.install_success = install_success
+        self.commands: list[tuple[str, int]] = []
+
+    async def run_command(
+        self,
+        workspace_dir: str,
+        command: str,
+        *,
+        timeout_seconds: int = 300,
+    ) -> ValidationStepResult:
+        self.commands.append((command, timeout_seconds))
+        return ValidationStepResult(
+            step=ValidationStep.TESTS,
+            success=self.install_success,
+            exit_code=0 if self.install_success else 1,
+            raw_output="dependencies installed" if self.install_success else "npm error: registry down",
+        )
 
 
 class SlowFakeWorkspaceRepository(FakeWorkspaceRepository):
@@ -815,8 +844,8 @@ async def test_rollback_workspace_propaga_error_de_git() -> None:
             await manager.rollback_workspace(project_id)
 
 
-@pytest.mark.asyncio
 @pytest.mark.unit
+@pytest.mark.asyncio
 async def test_publish_preview_escribe_marker_de_proyecto_activo() -> None:
     # Arrange
     with tempfile.TemporaryDirectory() as tmp_root:
@@ -831,3 +860,68 @@ async def test_publish_preview_escribe_marker_de_proyecto_activo() -> None:
         # Assert — el marker vive en .preview-active/<project_id> y apunta al workspace
         marker = Path(tmp_root) / ".preview-active" / "prj_preview_01"
         assert marker.read_text(encoding="utf-8").strip() == ws.workspace_dir
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_runs_npm_install_when_created_new() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        code_runner = FakeCodeRunner()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            code_runner=code_runner,
+        )
+        project_id = ProjectId("prj_install_new")
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert — npm install se ejecuta una sola vez con el timeout de instalación
+        assert ws.status == WorkspaceStatus.READY
+        assert code_runner.commands == [("npm install", 600)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_skips_npm_install_when_reusing_workspace() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        code_runner = FakeCodeRunner()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            code_runner=code_runner,
+        )
+        project_id = ProjectId("prj_install_reuse")
+        await manager.ensure_workspace(project_id)
+
+        # Act — segunda llamada sobre un workspace existente
+        await manager.ensure_workspace(project_id)
+
+        # Assert — no se reinstala al reutilizar
+        assert code_runner.commands == [("npm install", 600)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_continues_when_npm_install_fails() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        code_runner = FakeCodeRunner(install_success=False)
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            code_runner=code_runner,
+        )
+        project_id = ProjectId("prj_install_fail")
+
+        # Act — el fallo de npm install no bloquea la creación del workspace
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.status == WorkspaceStatus.READY
+        assert ws.workspace_dir is not None
+        assert Path(ws.workspace_dir).exists()
+        assert code_runner.commands == [("npm install", 600)]

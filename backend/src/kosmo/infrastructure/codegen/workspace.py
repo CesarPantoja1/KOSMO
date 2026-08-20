@@ -9,7 +9,10 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
+import structlog
+
 from kosmo.contracts.codegen import (
+    CodeRunnerPort,
     CodeWorkspace,
     WorkspaceManagerPort,
     WorkspaceRepository,
@@ -23,6 +26,9 @@ from kosmo.infrastructure.git import (
     git_init,
     git_rollback,
 )
+from kosmo.infrastructure.sandbox.code_runner import INSTALL_COMMAND, INSTALL_TIMEOUT_SECONDS
+
+_log = structlog.get_logger("kosmo.codegen.workspace")
 
 _IGNORED_DIRS: frozenset[str] = frozenset(
     {
@@ -743,6 +749,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         git_init: bool = True,
         mcp_url: str = "http://127.0.0.1:8000/mcp",
         project_repo: ProjectRepository | None = None,
+        code_runner: CodeRunnerPort | None = None,
     ) -> None:
         self._workspaces_root = Path(workspaces_root)
         self._workspace_repo = workspace_repo
@@ -750,6 +757,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._git_init = git_init
         self._mcp_url = mcp_url
         self._project_repo = project_repo
+        self._code_runner = code_runner
         self._in_memory_locks: set[str] = set()
         # ponytail: guard global del proceso; la carrera multi-worker se cierra con el
         # CAS (UPDATE condicional) de update_lock en el repositorio SQL.
@@ -829,6 +837,22 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             with contextlib.suppress(Exception):
                 git_add(target_dir)
                 git_commit(target_dir, "chore: initialize workspace template and configurations")
+
+        # Pre-instalar dependencias al crear el workspace para que la primera
+        # validación no consuma el timeout de npm install dentro del pipeline.
+        if created_new and self._code_runner is not None:
+            with contextlib.suppress(Exception):
+                install = await self._code_runner.run_command(
+                    str(target_dir),
+                    INSTALL_COMMAND,
+                    timeout_seconds=INSTALL_TIMEOUT_SECONDS,
+                )
+                if not install.success:
+                    _log.warning(
+                        "workspace.npm_install_failed",
+                        project_id=str(project_id),
+                        exit_code=install.exit_code,
+                    )
 
         manifest = self._extract_manifest(target_dir)
         now = datetime.now(UTC)

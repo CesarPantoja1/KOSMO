@@ -33,13 +33,14 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         ),
         model=settings.opencode_model,
     )
+    code_runner = SubprocessCodeRunner()
     workspace_manager = LocalWorkspaceManager(
         workspaces_root=settings.kosmo_workspaces_dir,
         workspace_repo=repos.workspaces,
         mcp_url=settings.kosmo_mcp_base_url,
         project_repo=repos.projects,
+        code_runner=code_runner,
     )
-    code_runner = SubprocessCodeRunner()
     use_case = GenerateFeatureImplementationUseCase(
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
