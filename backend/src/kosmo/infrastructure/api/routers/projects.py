@@ -1,5 +1,7 @@
+import json
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from kosmo.application.projects import (
@@ -12,12 +14,16 @@ from kosmo.application.projects import (
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
+from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     CreateProjectRequest,
+    ProjectPreviewResponse,
     ProjectResponse,
 )
+
+_log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 
@@ -152,6 +158,38 @@ async def get_project(
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
+
+
+@router.get(
+    "/{project_id}/preview",
+    response_model=ProjectPreviewResponse,
+    summary="URL de la vista previa del proyecto",
+    description="Devuelve la URL de la vista previa del proyecto si está activo "
+    "(tiene una implementación exitosa y el servicio preview le asignó un puerto); "
+    "404 si aún no hay vista previa.",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "El proyecto no tiene una vista previa activa.",
+        },
+    },
+)
+async def get_project_preview(
+    project_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    container: Annotated[AppContainer, Depends(get_container)],
+) -> ProjectPreviewResponse:
+    ports_file = container.settings.kosmo_workspaces_dir / ".preview-ports.json"
+    try:
+        manifest = json.loads(ports_file.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        manifest = {}
+    entry = manifest.get(project_id)
+    if entry is None or not entry.get("url"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"El proyecto {project_id} no tiene una vista previa activa",
+        )
+    return ProjectPreviewResponse(url=str(entry["url"]))
 
 
 @router.delete(

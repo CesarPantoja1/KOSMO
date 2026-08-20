@@ -20,6 +20,7 @@ from kosmo.infrastructure.api.schemas import (
     GenerateImplementationRequest,
     GenerateImplementationResponse,
     ImplementationFileContentResponse,
+    ImplementationRecordResponse,
 )
 
 _log = structlog.get_logger(__name__)
@@ -56,6 +57,35 @@ async def start_implementation(
     )
 
     return GenerateImplementationResponse(implementation_id=impl_id)
+
+
+@router.get(
+    "",
+    response_model=ImplementationRecordResponse,
+    summary="Obtener implementación por característica",
+    description="Devuelve el registro persistido de la implementación de una característica, "
+    "o 404 si aún no existe. Es la fuente de verdad para que el frontend no pida "
+    "regenerar lo ya implementado.",
+)
+async def get_implementation_by_feature(
+    feature_id: Annotated[str, Query(min_length=1, description="ID de la característica")],
+    _principal: Annotated[Principal, Depends(get_principal)],
+    container: Annotated[AppContainer, Depends(get_container)],
+) -> ImplementationRecordResponse:
+    impl = await container.repos.implementations.by_feature_id(FeatureId(feature_id))
+    if impl is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró una implementación para la característica {feature_id}",
+        )
+    return ImplementationRecordResponse(
+        implementation_id=str(impl.id),
+        feature_id=str(impl.feature_id),
+        project_id=str(impl.project_id),
+        status=str(getattr(impl.status, "value", impl.status)),
+        generated_files=list(impl.generated_files),
+        updated_at=impl.updated_at,
+    )
 
 
 @router.get(

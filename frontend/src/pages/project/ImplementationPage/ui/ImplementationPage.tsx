@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
@@ -19,6 +20,7 @@ const ImplementationPage = () => {
 	const errorMessage = useImplementationStore((s) => s.errorMessage);
 	const implementations = useImplementationStore((s) => s.implementations);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
+	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 
 	const hasDiagram = useModelingStore((s) => s.hasDiagram);
 
@@ -28,6 +30,17 @@ const ImplementationPage = () => {
 	const currentHasImpl = selectedId ? !!implementations[selectedId] : false;
 	const selectedHasDiagram = selectedId ? !!hasDiagram[selectedId] : false;
 	const isGenerating = status === 'generating';
+
+	// La verdad de la implementación vive en el backend: al abrir el proyecto o
+	// cambiar de característica se hidrata el estado desde el servidor.
+	useEffect(() => {
+		if (!selectedCharacteristic) return;
+		loadImplementation(
+			selectedCharacteristic.id,
+			selectedCharacteristic.title,
+			selectedCharacteristic.display_id,
+		);
+	}, [selectedCharacteristic, loadImplementation]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		setSelectedId(id);

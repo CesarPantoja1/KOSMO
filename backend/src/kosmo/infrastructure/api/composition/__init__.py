@@ -58,6 +58,7 @@ __all__ = [
 class AppContainer:
     """Contenedor tipado de dependencias expuesto via ``app.state.container``."""
 
+    settings: Settings
     auth: AuthComponents | None
     projects: ProjectComponents
     pipeline: PipelineComponents
@@ -106,6 +107,7 @@ def build_app_components(settings: Settings) -> AppContainer:
     codegen = build_codegen_components(settings, repos)
 
     return AppContainer(
+        settings=settings,
         auth=auth,
         projects=projects,
         pipeline=pipeline,

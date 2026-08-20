@@ -872,3 +872,20 @@ class ImplementationFileContentResponse(BaseModel):
 
     path: str = Field(description="Ruta relativa del archivo solicitado")
     content: str = Field(description="Contenido del archivo en texto plano")
+
+
+class ImplementationRecordResponse(BaseModel):
+    """Registro persistido de una implementación (fuente de verdad para el frontend)."""
+
+    implementation_id: str = Field(description="ID de la implementación")
+    feature_id: str = Field(description="ID de la característica implementada")
+    project_id: str = Field(description="ID del proyecto al que pertenece la característica")
+    status: str = Field(description="Estado actual de la implementación")
+    generated_files: list[str] = Field(default_factory=list, description="Archivos generados")
+    updated_at: datetime = Field(description="Última actualización del registro")
+
+
+class ProjectPreviewResponse(BaseModel):
+    """URL de la vista previa del proyecto activo."""
+
+    url: str = Field(description="URL pública de la vista previa del proyecto")

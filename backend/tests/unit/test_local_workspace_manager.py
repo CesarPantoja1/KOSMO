@@ -817,7 +817,7 @@ async def test_rollback_workspace_propaga_error_de_git() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_publish_preview_escribe_pointer_del_workspace() -> None:
+async def test_publish_preview_escribe_marker_de_proyecto_activo() -> None:
     # Arrange
     with tempfile.TemporaryDirectory() as tmp_root:
         manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
@@ -828,6 +828,6 @@ async def test_publish_preview_escribe_pointer_del_workspace() -> None:
         # Act
         await manager.publish_preview(project_id)
 
-        # Assert
-        pointer = Path(tmp_root) / ".preview"
-        assert pointer.read_text(encoding="utf-8").strip() == ws.workspace_dir
+        # Assert — el marker vive en .preview-active/<project_id> y apunta al workspace
+        marker = Path(tmp_root) / ".preview-active" / "prj_preview_01"
+        assert marker.read_text(encoding="utf-8").strip() == ws.workspace_dir
