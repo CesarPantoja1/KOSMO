@@ -214,7 +214,7 @@ export const generateImplementation = async (
 			});
 		} else if (eventType === 'file_edit') {
 			const filePath = typeof data.path === 'string' && data.path ? data.path : '';
-			const msg = filePath ? `Generando ${filePath}...` : 'Generando archivo...';
+			const msg = filePath ? `Se generó \`${filePath}\`` : 'Generando archivo...';
 			onProgress?.(msg, {
 				id: logId,
 				type: 'file',
@@ -252,18 +252,28 @@ export const generateImplementation = async (
 			throw new Error(detail);
 		} else {
 			const thought = typeof data.thought === 'string' ? data.thought : null;
+			const tool = typeof data.tool === 'string' ? data.tool : null;
 			const delta = typeof data.delta === 'string' ? data.delta : null;
 			const stage = typeof data.stage === 'string' ? data.stage : '';
 
-			if (thought) {
-				onProgress?.(thought, {
+			if (tool) {
+				const msg = `Se llamó a \`${tool}\``;
+				onProgress?.(msg, {
+					id: logId,
+					type: 'tool',
+					message: msg,
+					timestamp: eventTimestamp,
+					detail: typeof data.detail === 'string' ? data.detail : undefined,
+				});
+			} else if (thought || stage === 'thinking') {
+				onProgress?.('Pensando', {
 					id: logId,
 					type: 'thought',
-					message: thought,
+					message: thought || 'Pensando',
 					timestamp: eventTimestamp,
 				});
 			} else if (delta) {
-				const logType = stage === 'validating' || stage === 'validation_passed' ? 'validation' : stage === 'tool' ? 'tool' : 'code';
+				const logType = stage === 'validating' || stage === 'validation_passed' ? 'validation' : 'code';
 				onProgress?.(delta, {
 					id: logId,
 					type: logType,

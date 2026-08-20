@@ -236,7 +236,7 @@ describe('generateImplementation', () => {
 		expect(progressMessages).toContain('Sesión iniciada');
 		expect(progressMessages).toContain('Planificando...');
 		expect(progressMessages).toContain('Plan aprobado, preparando generación...');
-		expect(progressMessages).toContain('Generando src/features/gastos/logic.ts...');
+		expect(progressMessages).toContain('Se generó `src/features/gastos/logic.ts`');
 		expect(progressMessages).toContain('Código generado, ejecutando validaciones...');
 	});
 
@@ -347,7 +347,7 @@ describe('generateImplementation', () => {
 		await generateImplementation('feat_th', 'Thought Feature', 'F-TH', onProgress);
 
 		// Assert
-		expect(logs.some((l) => l.type === 'thought' && l.message.includes('Pensando cómo estructurar'))).toBe(true);
+		expect(logs.some((l) => l.type === 'thought' && l.message.includes('Pensando'))).toBe(true);
 		expect(logs.some((l) => l.type === 'code' && l.message.includes('Generando schema'))).toBe(true);
 		expect(logs.some((l) => l.type === 'validation' && l.message.includes('Validando tipados'))).toBe(true);
 	});

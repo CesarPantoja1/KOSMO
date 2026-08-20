@@ -18,7 +18,6 @@ const ImplementationPage = () => {
 
 	const status = useImplementationStore((s) => s.status);
 	const progress = useImplementationStore((s) => s.progress);
-	const currentThought = useImplementationStore((s) => s.currentThought);
 	const errorMessage = useImplementationStore((s) => s.errorMessage);
 	const implementations = useImplementationStore((s) => s.implementations);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
@@ -59,12 +58,7 @@ const ImplementationPage = () => {
 
 	return (
 		<>
-			{isGenerating && (
-				<ImplementationLiveProgress
-					progress={progress}
-					currentThought={currentThought}
-				/>
-			)}
+			{isGenerating && <ImplementationLiveProgress progress={progress} />}
 
 			{status === 'failed' && errorMessage && (
 				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
