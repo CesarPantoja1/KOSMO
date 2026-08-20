@@ -22,7 +22,7 @@ let modulePromise: Promise<Record<string, unknown>> | null = null;
 
 function loadPlantUmlModule(): Promise<Record<string, unknown>> {
 	if (modulePromise) return modulePromise;
-	modulePromise = import('@plantuml/core/plantuml.js');
+	modulePromise = import('@plantuml/core/plantuml.js') as unknown as Promise<Record<string, unknown>>;
 	modulePromise.catch(() => {
 		modulePromise = null;
 	});
