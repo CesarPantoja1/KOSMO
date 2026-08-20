@@ -20,19 +20,33 @@ class ImplementationEventBroker:
     eventos en colas de asyncio que luego el GET consumirá en streaming.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, history_ttl_seconds: float = 300) -> None:
         # Colas activas por cada id de implementación (puede haber múltiples subscriptores)
         self._queues: dict[str, list[asyncio.Queue[OpenCodeEvent | None]]] = {}
         # Historial de eventos ya emitidos para esta implementación (por si el GET llega tarde)
         self._history: dict[str, list[OpenCodeEvent]] = {}
         # Tasks en ejecución
         self._tasks: dict[str, asyncio.Task[None]] = {}
+        # Tasks de purga del historial programadas al terminar cada generación
+        self._cleanup_tasks: set[asyncio.Task[None]] = set()
+        self._history_ttl_seconds = history_ttl_seconds
 
     def _publish(self, implementation_id: str, event: OpenCodeEvent) -> None:
         self._history.setdefault(implementation_id, []).append(event)
         if implementation_id in self._queues:
             for queue in self._queues[implementation_id]:
                 queue.put_nowait(event)
+
+    def _schedule_history_purge(self, implementation_id: str) -> None:
+        """Programa la purga del historial de una implementación terminada tras el TTL."""
+
+        async def _purge() -> None:
+            await asyncio.sleep(self._history_ttl_seconds)
+            self._history.pop(implementation_id, None)
+
+        task = asyncio.create_task(_purge())
+        self._cleanup_tasks.add(task)
+        task.add_done_callback(lambda _: self._cleanup_tasks.discard(task))
 
     async def _run_implementation(
         self,
@@ -66,6 +80,9 @@ class ImplementationEventBroker:
             # Limpiar la tarea terminada
             if implementation_id in self._tasks:
                 del self._tasks[implementation_id]
+
+            # El historial queda disponible un tiempo para replay de suscriptores tardíos
+            self._schedule_history_purge(implementation_id)
 
     def start_implementation(
         self,

@@ -97,3 +97,35 @@ async def test_broker_replay_error_para_suscriptores_tardios() -> None:
     assert len(second) == 1
     assert first[0].event_type == OpenCodeEventType.ERROR
     assert second[0].data["error_type"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_purges_history_after_ttl() -> None:
+    # Arrange
+    broker = ImplementationEventBroker(history_ttl_seconds=0)
+    broker.start_implementation("impl_ttl", HappyUseCase(), _input_data())
+
+    # Act
+    await broker._tasks["impl_ttl"]
+    for task in list(broker._cleanup_tasks):
+        await task
+
+    # Assert — el historial se purga tras el TTL
+    assert "impl_ttl" not in broker._history
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_keeps_history_for_replay_until_ttl() -> None:
+    # Arrange
+    broker = ImplementationEventBroker(history_ttl_seconds=300)
+    broker.start_implementation("impl_keep", HappyUseCase(), _input_data())
+
+    # Act
+    await broker._tasks["impl_keep"]
+    events = await _collect(broker, "impl_keep")
+
+    # Assert — el historial sigue disponible para replay antes del TTL
+    assert len(events) == 2
+    assert "impl_keep" in broker._history
