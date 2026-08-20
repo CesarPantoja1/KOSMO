@@ -78,6 +78,7 @@ services:
 
       OPENCODE_BASE_URL: http://opencode:4096
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-deepseek/deepseek-v4-flash}
       KOSMO_WORKSPACES_DIR: /workspaces
       KOSMO_MCP_BASE_URL: ${KOSMO_MCP_BASE_URL:-http://backend:8000/mcp}
 
@@ -110,9 +111,13 @@ services:
     image: node:22
     container_name: kosmo-opencode
     init: true
+    # Mismo UID que el backend (kosmo=1000) para que los archivos que genere el
+    # agente en /workspaces sean escribibles por la validación del backend.
+    user: "1000:1000"
     ports:
       - "${OPENCODE_PORT:-4096}:4096"
     environment:
+      HOME: /home/node
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
       # Claves de proveedores LLM para que los agentes plan/build generen en local
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -121,12 +126,35 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     volumes:
       - kosmo_workspaces:/workspaces
-    # Configura el password del servidor (clave server.password) y arranca headless
+    # Configura el password del servidor (clave server.password), el modelo LLM y
+    # arranca headless. opencode se instala en el home del usuario 1000 porque
+    # /usr/local (prefijo global por defecto) no es escribible por uid 1000.
     command: >
-      sh -c "npm install -g opencode-ai@latest &&
-             mkdir -p /root/.config/opencode &&
-             printf '{\"server\":{\"password\":\"%s\"}}\n' \"$${OPENCODE_SERVER_PASSWORD}\" > /root/.config/opencode/opencode.json &&
+      sh -c "npm install -g --prefix /home/node/opencode opencode-ai@latest &&
+             mkdir -p /home/node/.config/opencode &&
+             printf '{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"}}\n' \"$${OPENCODE_SERVER_PASSWORD}\" > /home/node/.config/opencode/opencode.json &&
+             export PATH=/home/node/opencode/bin:$$PATH &&
              opencode serve --hostname 0.0.0.0 --port 4096"
+    restart: unless-stopped
+
+  # Preview: un servidor por proyecto activo (sigue los markers de
+  # /workspaces/.preview-active que escribe el backend tras cada implementación
+  # exitosa). Cada proyecto obtiene un puerto propio del rango.
+  preview:
+    image: node:22
+    container_name: kosmo-preview
+    init: true
+    user: "1000:1000"
+    ports:
+      - "${PREVIEW_PORTS:-3001-3016}:3000-3015"
+    environment:
+      HOME: /home/node
+      CONTAINER_BASE: "3000"
+      HOST_BASE: "3001"
+    volumes:
+      - kosmo_workspaces:/workspaces
+      - ./docker/preview/run.sh:/run-preview.sh:ro
+    command: ["sh", "/run-preview.sh"]
     restart: unless-stopped
 
   postgres:
