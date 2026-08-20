@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -166,9 +166,20 @@ class WorkspaceManagerPort(Protocol):
 
     async def rollback_workspace(self, project_id: ProjectId) -> None: ...
 
-    async def commit_workspace(self, project_id: ProjectId, message: str) -> bool: ...
+    async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None: ...
 
     async def publish_preview(self, project_id: ProjectId) -> None: ...
+
+    async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]: ...
+
+    async def update_text_file(
+        self,
+        project_id: ProjectId,
+        relative_path: str,
+        transform: Callable[[str], str],
+    ) -> None: ...
+
+    async def revert_commit(self, project_id: ProjectId, commit: str) -> None: ...
 
 
 class CodeRunnerPort(Protocol):

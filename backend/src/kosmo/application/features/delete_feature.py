@@ -7,6 +7,7 @@ from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
+from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -35,7 +36,7 @@ class DeleteFeatureUseCase:
         self._traceability_repo = traceability_repo
         self._outbox = outbox
 
-    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> None:
+    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> Feature:
         project = await self._project_repo.by_id(project_id)
         if project is None:
             raise ProjectNotFoundError(
@@ -84,3 +85,5 @@ class DeleteFeatureUseCase:
             feature_id=str(feature_id),
             display_id=feature.display_id,
         )
+
+        return feature

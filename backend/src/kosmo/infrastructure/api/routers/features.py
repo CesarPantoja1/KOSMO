@@ -4,6 +4,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
+from kosmo.application.codegen.delete_feature_code import DeleteFeatureCodeInput
 from kosmo.application.features import (
     CheckFeatureConsistencyInput,
     CheckFeatureConsistencyUseCase,
@@ -30,9 +31,11 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
+from kosmo.infrastructure.api.implementation_broker import broker
 from kosmo.infrastructure.api.schemas import (
     CheckConsistencyRequestView,
     CreateCharacteristicRequest,
@@ -357,7 +360,9 @@ def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCa
 @router.delete(
     "/{feature_id}",
     summary="Eliminar característica",
-    description="Elimina una característica y todos sus artefactos asociados (requisitos, diagrama).",
+    description="Elimina una característica y todos sus artefactos asociados (requisitos, diagrama). "
+    "Si tenía código generado, se elimina en background y la aplicación se valida para que "
+    "siempre quede funcional.",
     status_code=status.HTTP_200_OK,
 )
 async def delete_feature(
@@ -365,9 +370,10 @@ async def delete_feature(
     feature_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     uc: Annotated[DeleteFeatureUseCase, Depends(_delete_feature_uc)],
+    container: Annotated[AppContainer, Depends(get_container)],
 ) -> dict[str, str]:
     try:
-        await uc.execute(
+        feature = await uc.execute(
             project_id=ProjectId(project_id),
             feature_id=FeatureId(feature_id),
         )
@@ -375,6 +381,15 @@ async def delete_feature(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
     except ProjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.problem.detail) from e
+
+    # Eliminación del código generado en background: el frontend observa los eventos
+    # en GET /implementations/impl_<feature_id>/events
+    broker.start_implementation(
+        implementation_id=f"impl_{feature_id}",
+        use_case=container.codegen.delete_feature_code,
+        input_data=DeleteFeatureCodeInput(feature=feature),
+    )
+
     return {"status": "deleted", "feature_id": feature_id}
 
 

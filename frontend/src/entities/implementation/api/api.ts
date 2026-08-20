@@ -299,3 +299,41 @@ export const generateImplementation = async (
 	}
 	return done;
 };
+
+export interface ImplementationEventHandlers {
+	onDelta?: (delta: string) => void;
+	onDone?: (delta: string) => void;
+	onError?: (error: string) => void;
+}
+
+export async function subscribeImplementationEvents(
+	implementationId: string,
+	handlers: ImplementationEventHandlers,
+): Promise<void> {
+	const res = await fetch(`${API_BASE_URL}/api/v1/implementations/${implementationId}/events`, {
+		headers: authHeaders(),
+		cache: 'no-store',
+	});
+	if (!res.ok) {
+		throw parseApiError(res, await res.json().catch(() => null));
+	}
+
+	const onEvent: SseEventHandler = (raw) => {
+		const eventType = String(raw.event_type ?? '');
+		const data = (raw.data ?? {}) as Record<string, unknown>;
+		if (eventType === 'done') {
+			const delta = typeof data.delta === 'string' && data.delta ? data.delta : 'Proceso completado.';
+			handlers.onDone?.(delta);
+		} else if (eventType === 'error') {
+			const detail =
+				typeof data.error === 'string' && data.error
+					? data.error
+					: 'Ocurrió un error durante el proceso.';
+			handlers.onError?.(detail);
+		} else {
+			const delta = typeof data.delta === 'string' ? data.delta : null;
+			if (delta) handlers.onDelta?.(delta);
+		}
+	};
+	await consumeSse(res, onEvent);
+}

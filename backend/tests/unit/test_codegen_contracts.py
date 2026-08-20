@@ -355,6 +355,20 @@ async def test_workspace_manager_port_protocol_compliance() -> None:
         async def publish_preview(self, project_id: ProjectId) -> None:
             return None
 
+        async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]:
+            return ()
+
+        async def update_text_file(
+            self,
+            project_id: ProjectId,
+            relative_path: str,
+            transform: object,
+        ) -> None:
+            return None
+
+        async def revert_commit(self, project_id: ProjectId, commit: str) -> None:
+            return None
+
     manager: WorkspaceManagerPort = FakeWorkspaceManager()
     project_id = ProjectId("prj_01TEST")
 

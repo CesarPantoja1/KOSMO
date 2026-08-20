@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kosmo.application.codegen.delete_feature_code import DeleteFeatureCodeUseCase
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationUseCase,
 )
@@ -19,6 +20,7 @@ class CodegenComponents:
 
     generate_feature_implementation: GenerateFeatureImplementationUseCase
     validate_workspace: ValidateWorkspaceUseCase
+    delete_feature_code: DeleteFeatureCodeUseCase
     workspace_manager: LocalWorkspaceManager
     opencode_client: OpenCodeHttpClient
     code_runner: SubprocessCodeRunner
@@ -60,6 +62,12 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         validate_workspace=ValidateWorkspaceUseCase(
             code_runner=code_runner,
             workspace_manager=workspace_manager,
+        ),
+        delete_feature_code=DeleteFeatureCodeUseCase(
+            workspace_manager=workspace_manager,
+            code_runner=code_runner,
+            opencode_client=opencode_client,
+            implementation_repo=repos.implementations,
         ),
         workspace_manager=workspace_manager,
         opencode_client=opencode_client,

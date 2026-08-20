@@ -21,6 +21,7 @@ from kosmo.contracts.codegen import (
     ValidationStepResult,
     WorkspaceStatus,
 )
+from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, WorkspaceId
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
@@ -292,8 +293,7 @@ def test_validate_implementation_workspace_failed(client: TestClient, tmp_path: 
     assert data["error_summary"] == ["Typecheck falló con 1 error"]
 
 
-def test_validate_implementation_workspace_not_found(client: TestClient, tmp_path: Path) -> None:
-    # Arrange
+def test_validate_implementation_workspace_not_found(client: TestClient, tmp_path: Path) -> None:  # Arrange
     app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
     app.dependency_overrides[get_container] = lambda: FakeContainer(str(tmp_path / "workspaces" / "prj_01"))
 
@@ -328,3 +328,61 @@ def test_validate_implementation_workspace_workspace_missing(client: TestClient,
     # Assert
     assert response.status_code == 404
     assert "workspace" in response.json()["detail"]
+
+
+class FakeDeleteFeatureUC:
+    def __init__(self, feature: Feature) -> None:
+        self.feature = feature
+
+    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> Feature:
+        return self.feature
+
+
+class FakeConsistencyContainer:
+    def __init__(self, feature: Feature) -> None:
+        self.delete_feature = FakeDeleteFeatureUC(feature)
+
+
+class FakeDeleteCodegen:
+    def __init__(self) -> None:
+        self.delete_feature_code = object()
+
+
+class FakeDeleteContainer:
+    def __init__(self, feature: Feature) -> None:
+        self.consistency = FakeConsistencyContainer(feature)
+        self.codegen = FakeDeleteCodegen()
+
+
+def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
+    client: TestClient,
+) -> None:
+    # Arrange
+    feature = Feature(
+        id=FeatureId("feat_del_api"),
+        number=1,
+        title="Registrar productos",
+        slug="registrar-productos",
+        description="Permite registrar productos",
+        project_id=ProjectId("prj_01"),
+    )
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    fake_container = FakeDeleteContainer(feature)
+    app.dependency_overrides[get_container] = lambda: fake_container  # type: ignore[arg-type]
+    app.state.container = fake_container  # type: ignore[attr-defined]
+
+    # Act
+    with patch("kosmo.infrastructure.api.routers.features.broker") as mock_broker:
+        response = client.delete(
+            "/api/v1/projects/prj_01/features/feat_del_api",
+            headers={"Authorization": "Bearer mock"},
+        )
+
+    # Assert — la feature se elimina de la especificación y el cleanup del código se agenda en background
+    assert response.status_code == 200
+    assert response.json() == {"status": "deleted", "feature_id": "feat_del_api"}
+    mock_broker.start_implementation.assert_called_once()
+    kwargs = mock_broker.start_implementation.call_args.kwargs
+    assert kwargs["implementation_id"] == "impl_feat_del_api"
+    assert kwargs["input_data"].feature.id == FeatureId("feat_del_api")
+    assert kwargs["input_data"].feature.slug == "registrar-productos"

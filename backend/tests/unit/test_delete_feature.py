@@ -159,3 +159,31 @@ async def test_delete_feature_cascade_tolerates_missing_artifacts() -> None:
     # Act & Assert — el cascade no falla cuando los hijos no existen
     await use_case.execute(project.id, feature.id)
     assert await feature_repo.by_id(feature.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_feature_returns_deleted_feature() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    project = _a_project("prj_del_ret")
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feature = _a_feature(project, "feat_del_ret")
+    await feature_repo.save(feature)
+
+    use_case = DeleteFeatureUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=InMemoryRequirementRepository(),
+        diagram_repo=InMemoryActivityDiagramRepository(),
+    )
+
+    # Act
+    deleted = await use_case.execute(project.id, feature.id)
+
+    # Assert — retorna la feature eliminada (slug disponible para el cleanup de código)
+    assert deleted.id == feature.id
+    assert deleted.slug == "caracteristica-a-eliminar"
+    assert deleted.project_id == project.id

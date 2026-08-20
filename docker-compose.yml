@@ -151,6 +151,10 @@ services:
       HOME: /home/node
       CONTAINER_BASE: "3000"
       HOST_BASE: "3001"
+      # Polling de archivos: sin esto, next dev no detecta borrados/creaciones
+      # en volúmenes Docker Desktop y sirve páginas obsoletas.
+      WATCHPACK_USE_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
     volumes:
       - kosmo_workspaces:/workspaces
       - ./docker/preview/run.sh:/run-preview.sh:ro

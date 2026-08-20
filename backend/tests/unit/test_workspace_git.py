@@ -11,8 +11,10 @@ from kosmo.infrastructure.git import (
     git_add,
     git_commit,
     git_has_commits,
+    git_head_hash,
     git_init,
     git_is_clean,
+    git_revert_commit,
     git_rollback,
     git_status,
 )
@@ -82,6 +84,58 @@ def test_git_commit_no_changes_returns_false() -> None:
         # Intentar commitear sin cambios
         second_commit = git_commit(path, "feat: second commit without changes")
         assert second_commit is False
+
+
+@pytest.mark.unit
+def test_git_head_hash_returns_commit_hash_or_none() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path)
+
+        # Sin commits -> None
+        assert git_head_hash(path) is None
+
+        (path / "hello.txt").write_text("Hello Git!", encoding="utf-8")
+        git_add(path)
+        git_commit(path, "feat: initial commit")
+
+        # Con commits -> hash de 40 chars (SHA-1)
+        head_hash = git_head_hash(path)
+        assert head_hash is not None
+        assert len(head_hash) == 40
+
+
+@pytest.mark.unit
+def test_git_revert_commit_restaura_cambios_sin_tocar_commits_posteriores() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path)
+
+        (path / "base.txt").write_text("base", encoding="utf-8")
+        (path / "extra.ts").write_text("export const x = 1;", encoding="utf-8")
+        git_add(path)
+        git_commit(path, "feat: base con extra")
+
+        # Commit de borrado (a revertir): elimina extra.ts
+        (path / "extra.ts").unlink()
+        git_add(path)
+        git_commit(path, "feat(extra): remove feature")
+        delete_commit = git_head_hash(path)
+        assert delete_commit is not None
+        assert not (path / "extra.ts").exists()
+
+        # Commit posterior (no debe tocarse)
+        (path / "posterior.txt").write_text("posterior", encoding="utf-8")
+        git_add(path)
+        git_commit(path, "feat: posterior")
+
+        # Act — revertir el commit de borrado
+        git_revert_commit(path, delete_commit)
+
+        # Assert — el archivo eliminado vuelve, el commit posterior sigue
+        assert (path / "extra.ts").exists()
+        assert (path / "posterior.txt").exists()
+        assert git_is_clean(path)
 
 
 @pytest.mark.unit

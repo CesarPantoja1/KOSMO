@@ -4,6 +4,7 @@ import { useCharacteristicStore, deleteFeature } from '@/entities/characteristic
 import { useDiscoveryStore } from '@/entities/discovery';
 import { ChatStreamPanel } from '@/feature';
 import { createAssistantError } from '@/entities/chat';
+import { subscribeImplementationEvents } from '@/entities/implementation';
 import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
@@ -66,6 +67,28 @@ const CharacteristicsPage = () => {
 			if (activeFeatureId === featureId) setActiveFeatureId(null);
 			toast.close(toastId);
 			toast.success('Característica eliminada');
+
+			// La eliminación del código corre en background: la aplicación
+			// siempre queda funcional (validada o restaurada). El resultado
+			// llega por SSE al terminar.
+			const deleteCodeToastId = toast.info('Eliminando la funcionalidad del código...', {
+				timeout: 300_000,
+			});
+			void subscribeImplementationEvents(`impl_${featureId}`, {
+				onDelta: (delta) => {
+					toast.info(delta, { timeout: 3000 });
+				},
+				onDone: (delta) => {
+					toast.close(deleteCodeToastId);
+					toast.success(delta);
+				},
+				onError: (error) => {
+					toast.close(deleteCodeToastId);
+					toast.error(error);
+				},
+			}).catch(() => {
+				toast.close(deleteCodeToastId);
+			});
 		} catch (err) {
 			toast.close(toastId);
 			toast.error(formatApiError(err, 'Error al eliminar la característica'));

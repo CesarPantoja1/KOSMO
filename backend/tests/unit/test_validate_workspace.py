@@ -121,6 +121,20 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
     async def publish_preview(self, project_id: ProjectId) -> None:
         pass
 
+    async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]:
+        return ()
+
+    async def update_text_file(
+        self,
+        project_id: ProjectId,
+        relative_path: str,
+        transform: object,
+    ) -> None:
+        pass
+
+    async def revert_commit(self, project_id: ProjectId, commit: str) -> None:
+        pass
+
 
 @pytest.mark.asyncio
 @pytest.mark.unit

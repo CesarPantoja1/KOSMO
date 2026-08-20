@@ -7,6 +7,7 @@ import functools
 import json
 import os
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -24,7 +25,9 @@ from kosmo.contracts.sdd.repositories import ProjectRepository
 from kosmo.infrastructure.git import (
     git_add,
     git_commit,
+    git_head_hash,
     git_init,
+    git_revert_commit,
     git_rollback,
 )
 from kosmo.infrastructure.sandbox.code_runner import INSTALL_COMMAND, INSTALL_TIMEOUT_SECONDS
@@ -370,11 +373,14 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 updated = dataclasses.replace(ws, manifest_files=manifest, updated_at=datetime.now(UTC))
                 await self._workspace_repo.save(updated)
 
-    async def commit_workspace(self, project_id: ProjectId, message: str) -> bool:
-        """Consolida los cambios del workspace en un commit de git y actualiza el manifiesto."""
+    async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None:
+        """Consolida los cambios del workspace en un commit de git y actualiza el manifiesto.
+
+        Retorna el hash del commit creado, o None si no había cambios.
+        """
         target_dir = (self._workspaces_root / str(project_id)).resolve()
         if not target_dir.exists():
-            return False
+            return None
 
         git_add(target_dir)
         committed = git_commit(target_dir, message)
@@ -386,7 +392,68 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 updated = dataclasses.replace(ws, manifest_files=manifest, updated_at=datetime.now(UTC))
                 await self._workspace_repo.save(updated)
 
-        return committed
+        if not committed:
+            return None
+        return git_head_hash(target_dir)
+
+    async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]:
+        """Elimina los archivos del código generado de una feature.
+
+        Escanea el workspace para cubrir tanto el layout documentado
+        (src/features/<slug>/, src/app/<slug>/, tests/<slug>.test.*) como
+        variantes del agente (src/<slug>.ts, tests/<slug>.test.ts). Reglas de
+        coincidencia: directorio llamado exactamente <slug> o basename que
+        empiece con "<slug>.". Nunca coincide con slugs hermanos más largos
+        (ej. borrar "registrar-productos" no toca "registrar-productos-con-s".
+        """
+        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        if not target_dir.exists():
+            return ()
+
+        removed: list[str] = []
+        slug_lower = slug.lower()
+
+        for root, dirs, filenames in os.walk(target_dir):
+            dirs[:] = [d for d in dirs if d not in _IGNORED_DIRS]
+            rel_root = Path(root).relative_to(target_dir)
+
+            for dirname in list(dirs):
+                if dirname.lower() == slug_lower:
+                    shutil.rmtree(Path(root) / dirname, ignore_errors=True)
+                    removed.append((rel_root / dirname).as_posix())
+                    dirs.remove(dirname)
+
+            for fname in filenames:
+                base = fname.lower()
+                if base == slug_lower or base.startswith(f"{slug_lower}."):
+                    (Path(root) / fname).unlink(missing_ok=True)
+                    removed.append((rel_root / fname).as_posix())
+
+        return tuple(sorted(set(removed)))
+
+    async def update_text_file(
+        self,
+        project_id: ProjectId,
+        relative_path: str,
+        transform: Callable[[str], str],
+    ) -> None:
+        """Aplica una transformación al contenido de un archivo del workspace (si existe)."""
+        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        file_path = (target_dir / relative_path).resolve()
+        if not file_path.is_file() or not str(file_path).startswith(str(target_dir)):
+            return
+        content = file_path.read_text(encoding="utf-8")
+        updated = transform(content)
+        if updated != content:
+            file_path.write_text(updated, encoding="utf-8")
+
+    async def revert_commit(self, project_id: ProjectId, commit: str) -> None:
+        """Revierte un commit del workspace conservando el historial posterior (best-effort)."""
+        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        if not target_dir.exists():
+            return
+        with contextlib.suppress(Exception):
+            git_revert_commit(target_dir, commit)
 
     async def publish_preview(self, project_id: ProjectId) -> None:
         """Marca el proyecto como activo para el servicio de preview (un puerto por proyecto).

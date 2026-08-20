@@ -5,8 +5,10 @@ from kosmo.infrastructure.git.workspace_git import (
     git_add,
     git_commit,
     git_has_commits,
+    git_head_hash,
     git_init,
     git_is_clean,
+    git_revert_commit,
     git_rollback,
     git_status,
 )
@@ -16,8 +18,10 @@ __all__ = [
     "git_add",
     "git_commit",
     "git_has_commits",
+    "git_head_hash",
     "git_init",
     "git_is_clean",
+    "git_revert_commit",
     "git_rollback",
     "git_status",
 ]

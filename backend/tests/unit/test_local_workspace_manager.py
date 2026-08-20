@@ -744,7 +744,8 @@ async def test_commit_workspace_creates_git_commit_and_updates_manifest() -> Non
         committed = await manager.commit_workspace(project_id, "feat: implement feature C01")
 
         # Assert
-        assert committed is True
+        assert committed is not None
+        assert len(committed) == 40
         updated_ws = await manager.get_workspace(project_id)
         assert updated_ws is not None
         assert "src/feature.ts" in updated_ws.manifest_files
@@ -881,6 +882,185 @@ async def test_ensure_workspace_runs_npm_install_when_created_new() -> None:
         # Assert — npm install se ejecuta una sola vez con el timeout de instalación
         assert ws.status == WorkspaceStatus.READY
         assert code_runner.commands == [("npm install", 600)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_remove_feature_paths_elimina_slice_ruta_y_tests() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_remove_paths")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+
+        (ws_dir / "src" / "features" / "registrar-productos" / "logic.ts").parent.mkdir(parents=True)
+        (ws_dir / "src" / "features" / "registrar-productos" / "logic.ts").write_text("export const x = 1;")
+        (ws_dir / "src" / "app" / "registrar-productos").mkdir(parents=True)
+        (ws_dir / "src" / "app" / "registrar-productos" / "page.tsx").write_text("export default function Page() {}")
+        (ws_dir / "tests").mkdir(exist_ok=True)
+        (ws_dir / "tests" / "registrar-productos.test.ts").write_text(
+            "import { x } from '../src/features/registrar-productos/logic';"
+        )
+        (ws_dir / "tests" / "otra-feature.test.ts").write_text("export {};")
+
+        # Act
+        removed = await manager.remove_feature_paths(project_id, "registrar-productos")
+
+        # Assert — slice, ruta y tests de la feature desaparecen; la otra feature queda
+        assert not (ws_dir / "src" / "features" / "registrar-productos").exists()
+        assert not (ws_dir / "src" / "app" / "registrar-productos").exists()
+        assert not (ws_dir / "tests" / "registrar-productos.test.ts").exists()
+        assert (ws_dir / "tests" / "otra-feature.test.ts").exists()
+        assert "src/features/registrar-productos" in removed
+        assert "src/app/registrar-productos" in removed
+        assert "tests/registrar-productos.test.ts" in removed
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_remove_feature_paths_elimina_layouts_del_agente_en_raiz() -> None:
+    # Arrange — el agente generó el código fuera del layout documentado (src/<slug>.ts)
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_remove_raiz")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+
+        (ws_dir / "src" / "registrar-ventas-con-detalle.ts").write_text("export const x = 1;")
+        (ws_dir / "src" / "registrar-ventas-con-detalle.helper.ts").write_text("export const y = 2;")
+        (ws_dir / "tests").mkdir(exist_ok=True)
+        (ws_dir / "tests" / "registrar-ventas-con-detalle.test.ts").write_text("import {};")
+        (ws_dir / "src" / "otra-cosa.ts").write_text("export const z = 3;")
+
+        # Act
+        await manager.remove_feature_paths(project_id, "registrar-ventas-con-detalle")
+
+        # Assert — todos los artefactos de la feature desaparecen; lo ajeno queda
+        assert not (ws_dir / "src" / "registrar-ventas-con-detalle.ts").exists()
+        assert not (ws_dir / "src" / "registrar-ventas-con-detalle.helper.ts").exists()
+        assert not (ws_dir / "tests" / "registrar-ventas-con-detalle.test.ts").exists()
+        assert (ws_dir / "src" / "otra-cosa.ts").exists()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_remove_feature_paths_no_toca_slugs_hermanos_mas_largos() -> None:
+    # Arrange — existe una feature con slug prefijo de otra (registrar-productos vs
+    # registrar-productos-con-su-precio): borrar la corta no debe tocar la larga
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_remove_hermanos")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+
+        (ws_dir / "src" / "registrar-productos.ts").write_text("export const corta = 1;")
+        (ws_dir / "src" / "registrar-productos-con-su-precio.ts").write_text("export const larga = 2;")
+        (ws_dir / "tests").mkdir(exist_ok=True)
+        (ws_dir / "tests" / "registrar-productos-con-su-precio.test.ts").write_text("import {};")
+
+        # Act — se elimina la feature "registrar-productos" (la corta)
+        removed = await manager.remove_feature_paths(project_id, "registrar-productos")
+
+        # Assert — la larga (registrar-productos-con-su-precio) queda intacta
+        assert not (ws_dir / "src" / "registrar-productos.ts").exists()
+        assert (ws_dir / "src" / "registrar-productos-con-su-precio.ts").exists()
+        assert (ws_dir / "tests" / "registrar-productos-con-su-precio.test.ts").exists()
+        assert "src/registrar-productos.ts" in removed
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_remove_feature_paths_sin_archivos_retorna_vacio() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_remove_vacio")
+        await manager.ensure_workspace(project_id)
+
+        # Act
+        removed = await manager.remove_feature_paths(project_id, "feature-inexistente")
+
+        # Assert
+        assert removed == ()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_text_file_aplica_transformacion() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_update_text")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+        registry = ws_dir / "src" / "lib" / "feature-registry.ts"
+        registry.write_text("import { x } from '@/features/mi-feature/manifest';\n\nx,\n", encoding="utf-8")
+
+        # Act — transformación que elimina la referencia de la feature
+        await manager.update_text_file(
+            project_id,
+            "src/lib/feature-registry.ts",
+            lambda content: content.replace("mi-feature", "ELIMINADA"),
+        )
+
+        # Assert
+        assert "mi-feature" not in registry.read_text(encoding="utf-8")
+        assert "ELIMINADA" in registry.read_text(encoding="utf-8")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_text_file_no_escribe_si_no_cambia() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_update_noop")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+        registry = ws_dir / "src" / "lib" / "feature-registry.ts"
+        original = registry.read_text(encoding="utf-8")
+
+        # Act — transformación identidad
+        await manager.update_text_file(project_id, "src/lib/feature-registry.ts", lambda content: content)
+
+        # Assert — el archivo no se reescribe (mtime estable)
+        assert registry.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_revert_commit_restaura_archivos_eliminados() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=True)
+        project_id = ProjectId("prj_revert")
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        ws_dir = Path(ws.workspace_dir)
+
+        target = ws_dir / "src" / "extra.ts"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("export const x = 1;", encoding="utf-8")
+        commit_hash = await manager.commit_workspace(project_id, "feat: agregar extra.ts")
+        assert commit_hash is not None
+
+        # Borrar y commitear el borrado
+        target.unlink()
+        delete_hash = await manager.commit_workspace(project_id, "feat: eliminar extra.ts")
+        assert delete_hash is not None
+        assert not target.exists()
+
+        # Act — revertir el commit de borrado
+        await manager.revert_commit(project_id, delete_hash)
+
+        # Assert — el archivo vuelve
+        assert target.exists()
 
 
 @pytest.mark.unit

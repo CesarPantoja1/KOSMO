@@ -93,12 +93,26 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
     async def rollback_workspace(self, project_id: ProjectId) -> None:
         self.rollback_called_for.add(str(project_id))
 
-    async def commit_workspace(self, project_id: ProjectId, message: str) -> bool:
+    async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None:
         self.commit_called_for.append((str(project_id), message))
-        return True
+        return "hash_commit"
 
     async def publish_preview(self, project_id: ProjectId) -> None:
         self.preview_published_for.add(str(project_id))
+
+    async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]:
+        return ()
+
+    async def update_text_file(
+        self,
+        project_id: ProjectId,
+        relative_path: str,
+        transform: object,
+    ) -> None:
+        return None
+
+    async def revert_commit(self, project_id: ProjectId, commit: str) -> None:
+        return None
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):

@@ -1,15 +1,18 @@
 import asyncio
 from collections.abc import AsyncGenerator
+from typing import Protocol, cast
 
 import structlog
 
-from kosmo.application.codegen.generate_feature_implementation import (
-    GenerateFeatureImplementationInput,
-    GenerateFeatureImplementationUseCase,
-)
 from kosmo.contracts.codegen import OpenCodeEvent, OpenCodeEventType
 
 _log = structlog.get_logger(__name__)
+
+
+class StreamUseCase(Protocol):
+    """Cualquier use case con flujo de eventos compatible con el broker (duck-typed)."""
+
+    def execute_stream(self, input_data: object) -> AsyncGenerator[OpenCodeEvent]: ...
 
 
 class ImplementationEventBroker:
@@ -51,11 +54,12 @@ class ImplementationEventBroker:
     async def _run_implementation(
         self,
         implementation_id: str,
-        use_case: GenerateFeatureImplementationUseCase,
-        input_data: GenerateFeatureImplementationInput,
+        use_case: object,
+        input_data: object,
     ) -> None:
         try:
-            async for event in use_case.execute_stream(input_data):
+            stream = cast(StreamUseCase, use_case)
+            async for event in stream.execute_stream(input_data):
                 self._publish(implementation_id, event)
         except Exception as exc:
             _log.exception("implementation_broker.run_error", implementation_id=implementation_id)
@@ -87,10 +91,10 @@ class ImplementationEventBroker:
     def start_implementation(
         self,
         implementation_id: str,
-        use_case: GenerateFeatureImplementationUseCase,
-        input_data: GenerateFeatureImplementationInput,
+        use_case: object,
+        input_data: object,
     ) -> None:
-        """Inicia la generación en background."""
+        """Inicia una tarea de flujo (generación o eliminación de código) en background."""
         if implementation_id in self._tasks:
             # Ya está corriendo
             return

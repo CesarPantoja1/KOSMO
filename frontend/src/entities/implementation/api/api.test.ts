@@ -353,3 +353,82 @@ describe('generateImplementation', () => {
 	});
 });
 
+describe('subscribeImplementationEvents', () => {
+	function sseResponse(payload: string): Response {
+		const encoder = new TextEncoder();
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encoder.encode(payload));
+				controller.close();
+			},
+		});
+		return new Response(stream, {
+			headers: { 'Content-Type': 'text/event-stream' },
+			status: 200,
+		});
+	}
+
+	it('notifica deltas, done y el mensaje ciudadano de éxito', async () => {
+		// Arrange
+		const deltas: string[] = [];
+		let doneDelta = '';
+		const events = [
+			{ event_type: 'plan_progress', data: { delta: 'Eliminando la funcionalidad del código...' } },
+			{
+				event_type: 'build_progress',
+				data: { delta: 'Validando la aplicación después de la eliminación...' },
+			},
+			{
+				event_type: 'done',
+				data: { status: 'deleted', delta: 'La funcionalidad se eliminó y la aplicación sigue funcionando correctamente.' },
+			},
+		];
+		const ssePayload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(() => Promise.resolve(sseResponse(ssePayload))),
+		);
+
+		// Act
+		const { subscribeImplementationEvents } = await import('./api');
+		await subscribeImplementationEvents('impl_feat_del', {
+			onDelta: (delta) => deltas.push(delta),
+			onDone: (delta) => {
+				doneDelta = delta;
+			},
+		});
+
+		// Assert
+		expect(deltas).toHaveLength(2);
+		expect(doneDelta).toContain('sigue funcionando correctamente');
+	});
+
+	it('notifica el error ciudadano cuando la eliminación falla', async () => {
+		// Arrange
+		let errorMsg = '';
+		const events = [
+			{
+				event_type: 'error',
+				data: { error: 'No se pudo eliminar la funcionalidad. La aplicación volvió a su estado anterior.' },
+			},
+		];
+		const ssePayload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(() => Promise.resolve(sseResponse(ssePayload))),
+		);
+
+		// Act
+		const { subscribeImplementationEvents } = await import('./api');
+		await subscribeImplementationEvents('impl_feat_del_fail', {
+			onError: (error) => {
+				errorMsg = error;
+			},
+		});
+
+		// Assert
+		expect(errorMsg).toContain('No se pudo eliminar la funcionalidad');
+		expect(errorMsg).toContain('volvió a su estado anterior');
+	});
+});
+

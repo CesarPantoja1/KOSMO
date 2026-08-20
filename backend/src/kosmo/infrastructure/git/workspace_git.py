@@ -136,3 +136,16 @@ def git_has_commits(workspace_path: Path | str) -> bool:
     """Comprueba si el repositorio tiene al menos un commit en HEAD."""
     res = _run_git(["git", "rev-parse", "--verify", "HEAD"], workspace_path, check=False)
     return res.returncode == 0
+
+
+def git_head_hash(workspace_path: Path | str) -> str | None:
+    """Retorna el hash completo del commit en HEAD, o None si no hay commits."""
+    res = _run_git(["git", "rev-parse", "HEAD"], workspace_path, check=False)
+    if res.returncode != 0:
+        return None
+    return res.stdout.strip() or None
+
+
+def git_revert_commit(workspace_path: Path | str, commit: str) -> None:
+    """Revierte un commit conservando el resto del historial (git revert --no-edit)."""
+    _run_git(["git", "revert", "--no-edit", commit], workspace_path, check=True)
