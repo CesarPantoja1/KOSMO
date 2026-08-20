@@ -24,6 +24,7 @@ build/
 coverage/
 .pytest_cache/
 htmlcov/
+backend/.tmp-pytest-codegen/
 
 # Logs
 *.log
