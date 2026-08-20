@@ -352,6 +352,9 @@ async def test_workspace_manager_port_protocol_compliance() -> None:
         async def release_lock(self, project_id: ProjectId) -> None:
             self._locked_projects.discard(str(project_id))
 
+        async def publish_preview(self, project_id: ProjectId) -> None:
+            return None
+
     manager: WorkspaceManagerPort = FakeWorkspaceManager()
     project_id = ProjectId("prj_01TEST")
 

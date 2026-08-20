@@ -501,6 +501,7 @@ class GenerateFeatureImplementationUseCase:
                     feature.project_id,
                     f"feat({feature.slug}): implement feature {feature.display_id} - {feature.title}",
                 )
+                await self._workspace_manager.publish_preview(feature.project_id)
                 impl = dataclasses.replace(
                     impl,
                     status=FeatureImplementationStatus.IMPLEMENTED,
