@@ -316,7 +316,6 @@ def build_consistency_components(
     apply_evaluation = ApplyConsistencyEvaluationUseCase(
         evaluation_repo=evaluation_repo,
         apply_uc=apply_impacts,
-        outbox=pipeline.outbox,
         document_repo=repos.documents,
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
