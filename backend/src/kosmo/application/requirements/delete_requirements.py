@@ -4,9 +4,6 @@ from dataclasses import dataclass
 
 import structlog
 
-from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
-from kosmo.contracts.persistence import OutboxPort
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     FeatureNotFoundError,
     ProjectNotFoundError,
@@ -42,13 +39,11 @@ class DeleteRequirementsUseCase:
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
         diagram_repo: ActivityDiagramRepository,
-        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._diagram_repo = diagram_repo
-        self._outbox = outbox
 
     async def execute(self, input_data: DeleteRequirementsInput) -> None:
         instance = f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements"
@@ -76,20 +71,6 @@ class DeleteRequirementsUseCase:
 
         await self._requirement_repo.delete(input_data.feature_id)
         await self._diagram_repo.delete(input_data.feature_id)
-
-        await trigger_downstream_evaluation(
-            self._outbox,
-            project_id=input_data.project_id,
-            source_phase=SpecPhase.REQUISITOS,
-            changes=[
-                {
-                    "section": f"Requisitos de {feature.display_id}",
-                    "description": "Eliminación de los requisitos",
-                    "before": "",
-                    "after": "",
-                }
-            ],
-        )
 
         _log.info(
             "delete_requirements.success",

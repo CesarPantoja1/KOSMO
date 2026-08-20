@@ -55,7 +55,7 @@ def _a_diagram(feature: Feature) -> DiagramaActividad:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_delete_requirements_removes_markdown_and_enqueues_downstream_evaluation() -> None:
+async def test_delete_requirements_elimina_sin_disparar_consistencia() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
     project = _a_project()
@@ -67,27 +67,24 @@ async def test_delete_requirements_removes_markdown_and_enqueues_downstream_eval
 
     requirement_repo = InMemoryRequirementRepository()
     await requirement_repo.save(feature.id, "REQ-1.1: El sistema shall...")
+    diagram_repo = InMemoryActivityDiagramRepository()
+    await diagram_repo.save(_a_diagram(feature))
 
     outbox = InMemoryOutbox()
     use_case = DeleteRequirementsUseCase(
         project_repo=project_repo,
         feature_repo=feature_repo,
         requirement_repo=requirement_repo,
-        diagram_repo=InMemoryActivityDiagramRepository(),
-        outbox=outbox,
+        diagram_repo=diagram_repo,
     )
 
     # Act
     await use_case.execute(DeleteRequirementsInput(project_id=project.id, feature_id=feature.id))
 
-    # Assert
+    # Assert — requisitos y modelo eliminados; NO se dispara evaluación de consistencia
     assert await requirement_repo.by_feature_id(feature.id) is None
-    assert len(outbox.jobs) == 1
-    job_type, payload = outbox.jobs[0]
-    assert job_type == "consistency_evaluate"
-    assert payload["project_id"] == str(project.id)
-    assert payload["source_phase"] == "requisitos"
-    assert payload["changes"][0]["after"] == ""
+    assert await diagram_repo.by_feature_id(feature.id) is None
+    assert len(outbox.jobs) == 0
 
 
 @pytest.mark.asyncio
@@ -223,7 +220,7 @@ async def test_delete_requirements_raises_when_requirements_not_found() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_delete_requirements_without_outbox_keeps_working() -> None:
+async def test_delete_requirements_elimina_sin_depender_de_outbox() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
     project = _a_project("prj_del_req5")
