@@ -8,6 +8,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import structlog
+
 from kosmo.contracts.codegen import (
     CodeRunnerPort,
     ValidationRunResult,
@@ -15,6 +17,8 @@ from kosmo.contracts.codegen import (
     ValidationStepResult,
 )
 from kosmo.domain.codegen.parse_validation_output import parse_step_output
+
+_log = structlog.get_logger("kosmo.sandbox.code_runner")
 
 DEFAULT_STEP_COMMANDS: dict[ValidationStep, str] = {
     ValidationStep.TYPECHECK: "npx tsc --noEmit",
@@ -202,6 +206,7 @@ class SubprocessCodeRunner(CodeRunnerPort):
             ValidationStep.TESTS,
             ValidationStep.BUILD,
         ),
+        run_id: str = "",
     ) -> ValidationRunResult:
         """Ejecuta secuencialmente los pasos deteniéndose en el primer fallo (gate secuencial)."""
         if not (Path(workspace_dir) / "node_modules").is_dir():
@@ -211,6 +216,12 @@ class SubprocessCodeRunner(CodeRunnerPort):
                 timeout_seconds=INSTALL_TIMEOUT_SECONDS,
             )
             if not install_result.success:
+                _log.warning(
+                    "code_runner.install_failed",
+                    run_id=run_id,
+                    workspace_dir=workspace_dir,
+                    exit_code=install_result.exit_code,
+                )
                 output_lines = install_result.raw_output.strip().splitlines()
                 detail = output_lines[0] if output_lines else "sin salida"
                 return ValidationRunResult(
@@ -225,6 +236,14 @@ class SubprocessCodeRunner(CodeRunnerPort):
 
         for step in steps:
             result = await self.run_step(workspace_dir, step)
+            _log.info(
+                "code_runner.step_done",
+                run_id=run_id,
+                workspace_dir=workspace_dir,
+                step=str(step),
+                success=result.success,
+                duration_ms=result.duration_ms,
+            )
             results.append(result)
             if not result.success:
                 break

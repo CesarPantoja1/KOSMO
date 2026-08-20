@@ -195,6 +195,7 @@ class CodeRunnerPort(Protocol):
             ValidationStep.TESTS,
             ValidationStep.BUILD,
         ),
+        run_id: str = "",
     ) -> ValidationRunResult: ...
 
 

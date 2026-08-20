@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from structlog.testing import capture_logs
 
 from kosmo.contracts.codegen import (
     ValidationSeverity,
@@ -182,6 +183,37 @@ async def test_run_pipeline_all_success(tmp_path) -> None:
         assert len(pipeline_result.steps) == 2
         assert mock_shell.await_count == 2
         assert len(pipeline_result.error_summary) == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_logs_steps_with_run_id(tmp_path) -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+    (tmp_path / "node_modules").mkdir()
+
+    mock_proc_ok = MagicMock()
+    mock_proc_ok.returncode = 0
+    mock_proc_ok.communicate = AsyncMock(return_value=(b"ok", b""))
+
+    with (
+        patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)),
+        capture_logs() as cap_logs,
+    ):
+        # Act
+        pipeline_result = await runner.run_pipeline(
+            str(tmp_path),
+            steps=(ValidationStep.TYPECHECK,),
+            run_id="run_abc123",
+        )
+
+    # Assert — cada paso se registra con el correlation ID de la generación
+    assert pipeline_result.all_passed is True
+    step_events = [event for event in cap_logs if event["event"] == "code_runner.step_done"]
+    assert len(step_events) == 1
+    assert step_events[0]["run_id"] == "run_abc123"
+    assert step_events[0]["step"] == "typecheck"
+    assert step_events[0]["success"] is True
 
 
 @pytest.mark.unit

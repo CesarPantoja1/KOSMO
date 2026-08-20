@@ -431,7 +431,7 @@ class GenerateFeatureImplementationUseCase:
                         },
                     )
                 )
-                validation_result = await self._code_runner.run_pipeline(workspace_dir)
+                validation_result = await self._code_runner.run_pipeline(workspace_dir, run_id=run_id)
                 impl = dataclasses.replace(
                     impl,
                     attempt_count=attempt,

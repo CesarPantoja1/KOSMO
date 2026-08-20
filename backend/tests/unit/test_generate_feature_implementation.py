@@ -170,6 +170,7 @@ class FakeCodeRunner(CodeRunnerPort):
         self.should_pass = should_pass
         self.fail_count_before_pass = fail_count_before_pass
         self.runs_count = 0
+        self.run_ids: list[str] = []
 
     async def run_step(
         self,
@@ -198,8 +199,10 @@ class FakeCodeRunner(CodeRunnerPort):
             ValidationStep.TESTS,
             ValidationStep.BUILD,
         ),
+        run_id: str = "",
     ) -> ValidationRunResult:
         self.runs_count += 1
+        self.run_ids.append(run_id)
         if self.fail_count_before_pass > 0 and self.runs_count <= self.fail_count_before_pass:
             return ValidationRunResult(
                 all_passed=False,
@@ -415,6 +418,59 @@ async def test_generate_events_include_run_id() -> None:
     run_id = run_ids.pop()
     assert len(run_id) == 32  # ULID en hex
     assert all(event.run_id == run_id for event in output.events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_propaga_run_id_a_la_validacion() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_RUNVAL")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_runval"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert — la validación recibe el mismo run_id que los eventos de la generación
+    assert output.events
+    assert code_runner.run_ids == [output.events[0].run_id]
+    assert code_runner.run_ids[0] != ""
 
 
 @pytest.mark.asyncio
