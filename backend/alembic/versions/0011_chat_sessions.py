@@ -41,7 +41,11 @@ def upgrade() -> None:
         """
         INSERT INTO chat_sessions (id, project_id, phase, context_id, created_at)
         SELECT
-            'cht_' || encode(digest(project_id || ':' || phase || ':' || COALESCE(context_id, ''), 'sha256'), 'hex'),
+            'cht_' || substr(
+                encode(digest(project_id || ':' || phase || ':' || COALESCE(context_id, ''), 'sha256'), 'hex'),
+                1,
+                60
+            ),
             project_id,
             phase,
             context_id,
