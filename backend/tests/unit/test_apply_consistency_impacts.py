@@ -369,6 +369,77 @@ async def test_apply_locks_feature_row() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_apply_feature_description_ignora_origen_en_diff() -> None:
+    # Arrange — el LLM incluye "Origen:" en before/after (contexto interno), la BD está limpia
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    await feature_repo.save(_make_feature(project.id))
+    uc = _make_uc(project_repo, document_repo, feature_repo=feature_repo)
+
+    # Act — reproducción del error real: before con "Origen: ..." contra descripción limpia
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "Feature",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "description",
+                "before": "Descripción original.\nOrigen: Meta Gestion en Metas del producto.",
+                "after": "Descripción actualizada.\nOrigen: Meta Gestion en Metas del producto.",
+            }
+        ],
+    )
+
+    # Assert — aplica sin fallar y la descripción guardada queda limpia (sin Origen)
+    assert len(result.applied) == 1
+    updated = await feature_repo.by_id(FeatureId("feat_01"))
+    assert updated is not None
+    assert updated.description == "Descripción actualizada."
+    assert "Origen" not in updated.description
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_apply_feature_origin_field_se_mantiene_directo() -> None:
+    # Arrange — el campo origin se aplica tal cual (el strip solo aplica a description)
+    project = _make_project()
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    feature = _make_feature(project.id)
+    feature.origin = "Origen: Meta antigua en Metas del producto."
+    await feature_repo.save(feature)
+    uc = _make_uc(project_repo, document_repo, feature_repo=feature_repo)
+
+    # Act — el after empieza con "Origen:" a propósito: no debe ser eliminado
+    result = await uc.execute(
+        project_id=project.id,
+        impacts=[
+            {
+                "artifact_type": "Feature",
+                "target_id": "feat_01",
+                "action": "update",
+                "field": "origin",
+                "before": "Origen: Meta antigua en Metas del producto.",
+                "after": "Origen: Meta nueva en Metas del producto.",
+            }
+        ],
+    )
+
+    # Assert
+    assert len(result.applied) == 1
+    updated = await feature_repo.by_id(FeatureId("feat_01"))
+    assert updated is not None
+    assert updated.origin == "Origen: Meta nueva en Metas del producto."
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_apply_locks_requirement_and_diagram_rows() -> None:
     # Arrange
     project = _make_project()

@@ -19,7 +19,7 @@ from kosmo.contracts.sdd.repositories import (
     RequirementRepository,
 )
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
-from kosmo.domain.sdd.text_normalizer import normalize_for_match
+from kosmo.domain.sdd.text_normalizer import normalize_for_match, strip_origin_line
 
 _log = structlog.get_logger(__name__)
 
@@ -133,10 +133,13 @@ async def enrich_impact_items(
 
         diff: dict[str, object] | None = None
         if action and action.suggested_before and action.suggested_after:
+            # El origen es metadato interno: no se muestra al usuario en el diff
+            before = strip_origin_line(action.suggested_before)
+            after = strip_origin_line(action.suggested_after)
             diff = {
                 "field": action.suggested_field or "description",
-                "before": action.suggested_before,
-                "after": action.suggested_after,
+                "before": before,
+                "after": after,
             }
 
         item_id = f"imp_{ULID().hex}"

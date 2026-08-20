@@ -2,40 +2,68 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.domain.sdd.text_normalizer import normalize_for_match
+from kosmo.domain.sdd.text_normalizer import strip_origin_line
 
 
 @pytest.mark.unit
-def test_normalize_for_match_unifies_line_endings_and_tabs() -> None:
+def test_strip_origin_line_quita_linea_final() -> None:
+    # Arrange
+    text = (
+        "El repartidor del barrio marca el avance del pedido en cada etapa.\n"
+        "Origen: Meta Gestion de pedidos en Metas del producto y Actor Repartidor en Actores."
+    )
+
     # Act
-    result = normalize_for_match("a\r\nb\rc\t d")
+    result = strip_origin_line(text)
 
     # Assert
-    assert result == "a\nb\nc d"
+    assert result == "El repartidor del barrio marca el avance del pedido en cada etapa."
+    assert "Origen" not in result
 
 
 @pytest.mark.unit
-def test_normalize_for_match_collapses_consecutive_blank_lines() -> None:
+def test_strip_origin_line_quita_variante_bold() -> None:
+    # Arrange
+    text = "Descripción de la feature.\n\n**Origen:** Se deriva de la meta Reparto equitativo de gastos."
+
     # Act
-    result = normalize_for_match("a\n\n\nb")
+    result = strip_origin_line(text)
 
     # Assert
-    assert result == "a\nb"
+    assert result == "Descripción de la feature."
 
 
 @pytest.mark.unit
-def test_normalize_for_match_strips_leading_and_trailing_whitespace() -> None:
+def test_strip_origin_line_quita_linea_en_blanco_previa() -> None:
+    # Arrange
+    text = "Descripción de la feature.\n\nOrigen: Meta Gestion en Metas del producto.\n"
+
     # Act
-    result = normalize_for_match("  \n texto \n  ")
+    result = strip_origin_line(text)
 
     # Assert
-    assert result == "texto"
+    assert result == "Descripción de la feature."
 
 
 @pytest.mark.unit
-def test_normalize_for_match_collapses_repeated_spaces() -> None:
+def test_strip_origin_line_no_op_sin_origen() -> None:
+    # Arrange
+    text = "Descripción de la feature sin origen."
+
     # Act
-    result = normalize_for_match("hola    mundo\thoy")
+    result = strip_origin_line(text)
 
     # Assert
-    assert result == "hola mundo hoy"
+    assert result == text
+
+
+@pytest.mark.unit
+def test_strip_origin_line_no_quita_origen_en_medio() -> None:
+    # Arrange — "Origen:" en medio del texto no es la sección de origen
+    text = "La feature menciona el origen del pedido.\nContinúa la descripción."
+
+    # Act
+    result = strip_origin_line(text)
+
+    # Assert
+    assert result == text
