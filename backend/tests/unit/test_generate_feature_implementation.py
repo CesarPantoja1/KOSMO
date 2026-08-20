@@ -279,6 +279,30 @@ class UnhealthyOpenCodeClient(FakeOpenCodeClient):
         return False
 
 
+class ExplodingOpenCodeClient(FakeOpenCodeClient):
+    """Falla en la llamada N de send_prompt para un agente dado (1-based)."""
+
+    def __init__(self, agent: str, explode_on_call: int = 1) -> None:
+        super().__init__()
+        self._agent = agent
+        self._explode_on_call = explode_on_call
+        self._agent_call_counts: dict[str, int] = {}
+
+    async def send_prompt(
+        self,
+        session_id: str,
+        prompt: str,
+        *,
+        agent: str = "plan",
+    ) -> AsyncIterator[OpenCodeEvent]:
+        call = self._agent_call_counts.get(agent, 0) + 1
+        self._agent_call_counts[agent] = call
+        if agent == self._agent and call == self._explode_on_call:
+            raise RuntimeError(f"OpenCode failed during {agent} phase")
+        async for ev in super().send_prompt(session_id, prompt, agent=agent):
+            yield ev
+
+
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_generate_feature_implementation_success() -> None:
@@ -772,6 +796,171 @@ async def test_generate_feature_implementation_always_releases_lock_on_error() -
     with pytest.raises(RuntimeError):
         await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
 
+    assert await workspace_manager.is_locked(prj_id) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_implementation_closes_session_on_plan_exception() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = ExplodingOpenCodeClient(agent="plan", explode_on_call=1)
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_T01_PLAN_CRASH")
+    prj_id = ProjectId("prj_01")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Plan crash",
+        slug="plan-crash",
+        description="Crash en fase plan",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Plan crash")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_plan"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act & Assert
+    with pytest.raises(RuntimeError, match="plan phase"):
+        await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert — la sesión se cierra y el lock se libera aunque la fase Plan explote
+    assert len(opencode_client.created_sessions) == 1
+    session_id = opencode_client.created_sessions[0].session_id
+    assert session_id in opencode_client.closed_sessions
+    assert await workspace_manager.is_locked(prj_id) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_implementation_closes_session_on_build_exception() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = ExplodingOpenCodeClient(agent="build", explode_on_call=1)
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_T01_BUILD_CRASH")
+    prj_id = ProjectId("prj_01")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Build crash",
+        slug="build-crash",
+        description="Crash en fase build",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Build crash")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_build"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act & Assert
+    with pytest.raises(RuntimeError, match="build phase"):
+        await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert — la sesión se cierra y el lock se libera aunque la fase Build explote
+    assert len(opencode_client.created_sessions) == 1
+    session_id = opencode_client.created_sessions[0].session_id
+    assert session_id in opencode_client.closed_sessions
+    assert await workspace_manager.is_locked(prj_id) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_implementation_closes_session_on_fix_exception() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = ExplodingOpenCodeClient(agent="build", explode_on_call=2)
+    code_runner = FakeCodeRunner(should_pass=False)  # Valida falla -> dispara fix
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_T01_FIX_CRASH")
+    prj_id = ProjectId("prj_01")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Fix crash",
+        slug="fix-crash",
+        description="Crash en corrección",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Fix crash")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_fix"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act & Assert
+    with pytest.raises(RuntimeError, match="build phase"):
+        await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=3))
+
+    # Assert — la sesión se cierra y el lock se libera aunque la corrección explote
+    assert len(opencode_client.created_sessions) == 1
+    session_id = opencode_client.created_sessions[0].session_id
+    assert session_id in opencode_client.closed_sessions
     assert await workspace_manager.is_locked(prj_id) is False
 
 

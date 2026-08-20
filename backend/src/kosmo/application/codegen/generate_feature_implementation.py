@@ -507,7 +507,6 @@ class GenerateFeatureImplementationUseCase:
                     updated_at=datetime.now(UTC),
                 )
                 await self._implementation_repo.save(impl)
-                await self._opencode_client.close_session(session_id)
 
                 # Registro de trazabilidad post-commit: best-effort, no revierte una implementación exitosa
                 traceability_edges = 0
@@ -567,7 +566,6 @@ class GenerateFeatureImplementationUseCase:
                     updated_at=datetime.now(UTC),
                 )
                 await self._implementation_repo.save(impl)
-                await self._opencode_client.close_session(session_id)
 
                 error_event = OpenCodeEvent(
                     event_type=OpenCodeEventType.ERROR,
@@ -596,4 +594,7 @@ class GenerateFeatureImplementationUseCase:
                 )
 
         finally:
+            if session_id is not None:
+                with contextlib.suppress(Exception):
+                    await self._opencode_client.close_session(session_id)
             await self._workspace_manager.release_lock(feature.project_id)
