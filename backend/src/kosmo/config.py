@@ -1,8 +1,9 @@
+import tempfile
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -48,6 +49,16 @@ class Settings(BaseSettings):
 
     # Embeddings
     embedding_provider: Literal["auto", "openai", "fastembed", "none"] = "auto"
+
+    # Codegen (OpenCode)
+    opencode_base_url: str = "http://127.0.0.1:4096"
+    opencode_server_username: str = "opencode"
+    opencode_server_password: SecretStr | None = None
+    opencode_model: str | None = None
+    kosmo_workspaces_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "kosmo-workspaces")
+    kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
+    code_runner_base_url: str | None = None
+    code_runner_token: SecretStr | None = None
 
     # API
     api_version: str = "v1"

@@ -6,6 +6,7 @@ import structlog
 
 from kosmo.contracts.agent_memory import AgentMemoryPort
 from kosmo.contracts.chat import ChatRepository
+from kosmo.contracts.codegen import WorkspaceManagerPort
 from kosmo.contracts.consistency import (
     ConsistencyEvaluationRepository,
     TraceabilityRepository,
@@ -47,6 +48,7 @@ class DeleteProjectUseCase:
         consistency_evaluation_repo: ConsistencyEvaluationRepository,
         traceability_repo: TraceabilityRepository | None = None,
         agent_memory: AgentMemoryPort | None = None,
+        workspace_manager: WorkspaceManagerPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
@@ -57,6 +59,7 @@ class DeleteProjectUseCase:
         self._consistency_evaluation_repo = consistency_evaluation_repo
         self._traceability_repo = traceability_repo
         self._agent_memory = agent_memory
+        self._workspace_manager = workspace_manager
 
     async def execute(self, input_data: DeleteProjectInput) -> None:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -65,6 +68,9 @@ class DeleteProjectUseCase:
                 project_id=str(input_data.project_id),
                 instance=f"/api/v1/projects/{input_data.project_id}",
             )
+
+        if self._workspace_manager is not None:
+            await self._workspace_manager.delete_workspace(input_data.project_id)
 
         features = await self._feature_repo.list_by_project(input_data.project_id)
         for feature in features:

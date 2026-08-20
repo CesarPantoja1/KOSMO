@@ -75,6 +75,17 @@ const mockGenerateRequirements = async (
 	};
 };
 
+const mockDeleteRequirements = async (
+	_projectId: string,
+	characteristicId: string,
+): Promise<void> => {
+	await delay(400);
+	const idx = mockStore.findIndex((c) => c.feature_id === characteristicId);
+	if (idx !== -1) {
+		mockStore[idx] = { ...mockStore[idx], document_markdown: '', total: 0 };
+	}
+};
+
 // --- Real implementations ---
 
 const realGetRequirements = async (
@@ -116,6 +127,16 @@ const realGenerateRequirements = async (
 	);
 };
 
+const realDeleteRequirements = async (
+	projectId: string,
+	characteristicId: string,
+): Promise<void> => {
+	await apiClient<void>(
+		`/api/v1/features/${characteristicId}/requirements?project_id=${encodeURIComponent(projectId)}`,
+		{ method: 'DELETE' },
+	);
+};
+
 // --- Exports (switch based on USE_MOCKS) ---
 
 export const getRequirements = (
@@ -142,6 +163,14 @@ export const generateRequirements = (
 	USE_MOCKS
 		? mockGenerateRequirements(projectId, characteristicId)
 		: realGenerateRequirements(projectId, characteristicId);
+
+export const deleteRequirements = (
+	projectId: string,
+	characteristicId: string,
+): Promise<void> =>
+	USE_MOCKS
+		? mockDeleteRequirements(projectId, characteristicId)
+		: realDeleteRequirements(projectId, characteristicId);
 
 const mockChatHistories: Record<string, ChatMessage[]> = {};
 

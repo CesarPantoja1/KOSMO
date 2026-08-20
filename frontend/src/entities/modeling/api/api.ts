@@ -75,6 +75,17 @@ const mockGeneratePlantUmlDiagram = async (
 	return updated;
 };
 
+const mockDeleteDiagram = async (
+	_projectId: string,
+	characteristicId: string,
+): Promise<void> => {
+	await delay(400);
+	const idx = mockStore.findIndex((d) => d.feature_id === characteristicId);
+	if (idx !== -1) {
+		mockStore[idx] = { ...mockStore[idx], diagram_syntax: '' };
+	}
+};
+
 // --- Real implementations ---
 
 const realGetDiagram = async (
@@ -101,6 +112,16 @@ const realGeneratePlantUmlDiagram = async (
 	);
 };
 
+const realDeleteDiagram = async (
+	projectId: string,
+	characteristicId: string,
+): Promise<void> => {
+	await apiClient<void>(
+		`/api/v1/features/${characteristicId}/diagram?project_id=${encodeURIComponent(projectId)}`,
+		{ method: 'DELETE' },
+	);
+};
+
 // --- Exports (switch based on USE_MOCKS) ---
 
 export const getDiagram = (
@@ -118,3 +139,11 @@ export const generatePlantUmlDiagram = (
 	USE_MOCKS
 		? mockGeneratePlantUmlDiagram(projectId, characteristicId)
 		: realGeneratePlantUmlDiagram(projectId, characteristicId);
+
+export const deleteDiagram = (
+	projectId: string,
+	characteristicId: string,
+): Promise<void> =>
+	USE_MOCKS
+		? mockDeleteDiagram(projectId, characteristicId)
+		: realDeleteDiagram(projectId, characteristicId);

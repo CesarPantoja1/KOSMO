@@ -149,11 +149,68 @@ jobs:
             NEXT_PUBLIC_AUTH_DISABLED=true
             NEXT_PUBLIC_USE_MOCKS=false
 
+  build-opencode:
+    name: Build OpenCode image
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      opencode_image: ${{ steps.images.outputs.opencode }}
+      code_runner_image: ${{ steps.images.outputs.code_runner }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Define immutable OpenCode image reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish OpenCode image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/opencode
+          file: ./docker/opencode/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.opencode }}
+
+      - name: Build and publish isolated code-runner image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/code-runner
+          file: ./docker/code-runner/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.code_runner }}
+
   deploy-staging:
     name: Deploy Staging
     needs:
       - build-backend
       - build-frontend
+      - build-opencode
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: staging
@@ -241,19 +298,24 @@ jobs:
         shell: bash
         env:
           STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+          STAGING_CODEGEN_ENV_FILE: ${{ secrets.STAGING_CODEGEN_ENV_FILE }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_TUNNEL_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$STAGING_ENV_FILE"
+          test -n "$STAGING_CODEGEN_ENV_FILE"
           work_dir="${RUNNER_TEMP}/kosmo-staging-deploy"
           install -d -m 700 "$work_dir"
           # GitHub Environment secrets may not end in a newline. Preserve the
           # secret value and terminate it so runtime.env always starts on a
           # separate line when both files are assembled on the server.
           printf '%s\n' "$STAGING_ENV_FILE" > "$work_dir/application.env"
+          printf '%s\n' "$STAGING_CODEGEN_ENV_FILE" >> "$work_dir/application.env"
           printf '%s\n' \
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
+            "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
+            "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" \
             "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" > "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
@@ -288,14 +350,19 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
-             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE; do
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
                  exit 1
                fi
              done
              docker login ghcr.io --username "${{ vars.STAGING_GHCR_USERNAME }}" --password-stdin
+             install -d -m 0750 workspaces
+             docker run --rm -v "$PWD/workspaces:/workspaces" alpine:3.22 chown -R 1000:1000 /workspaces
+             docker network inspect kosmo-staging-network >/dev/null 2>&1 || docker network create kosmo-staging-network >/dev/null
              docker compose -f compose.yaml pull
+             docker run --rm --env-file .env --network kosmo-staging-network \
+               --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
              docker compose -f compose.yaml up -d --remove-orphans
              # Reload the transferred Nginx configuration after app containers
              # have been recreated. --no-deps prevents an unnecessary restart
@@ -320,12 +387,13 @@ jobs:
              for attempt in $(seq 1 15); do
                if docker exec kosmo-staging-nginx wget -q -O /dev/null http://127.0.0.1/ && \
                   docker exec kosmo-staging-nginx wget -q -O /dev/null http://127.0.0.1/api/v1/openapi.json; then
-                 docker compose -f compose.yaml ps
+                  docker compose -f compose.yaml ps
+                  printf "%s\\n" "${{ github.sha }}" > .active-release-sha
                  exit 0
                fi
                sleep 2
              done
-             docker compose -f compose.yaml logs --tail=100 nginx backend
+             docker compose -f compose.yaml logs --tail=100 nginx backend opencode
              exit 1'
 
       - name: Remove this runner SSH access

@@ -1,8 +1,7 @@
 # KOSMO Staging stack (AWS EC2)
 #
-# This stack deliberately contains only the application delivery path:
-# Next.js, FastAPI, Nginx, and the Cloudflare Tunnel. Observability remains
-# exclusive to the existing Production stack on Oracle Cloud.
+# This stack deliberately contains the application delivery path and the
+# code-generation service. Observability remains exclusive to Production.
 #
 # The deployment workflow supplies KOSMO_WEB_IMAGE, KOSMO_API_IMAGE and
 # CLOUDFLARE_TUNNEL_TOKEN at deploy time. Application configuration is read
@@ -27,7 +26,23 @@ services:
       - .env
     environment:
       PORT: "8000"
-      RUN_MIGRATIONS: "1"
+      # The workflow runs Alembic explicitly before recreating this service.
+      RUN_MIGRATIONS: "0"
+      WORKERS: "1"
+      KOSMO_WORKSPACES_DIR: /workspaces
+      KOSMO_MCP_BASE_URL: http://backend:8000/mcp
+      OPENCODE_BASE_URL: http://opencode:4096
+      CODE_RUNNER_BASE_URL: http://code-runner:8081
+      CODE_RUNNER_TOKEN: ${CODE_RUNNER_TOKEN:?CODE_RUNNER_TOKEN must be set}
+    volumes:
+      # Persistent, host-visible source code. Do not replace this with an
+      # anonymous volume: operators must be able to back it up and inspect it.
+      - ./workspaces:/workspaces
+    depends_on:
+      opencode:
+        condition: service_healthy
+      code-runner:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -38,6 +53,62 @@ services:
       timeout: 5s
       retries: 10
       start_period: 40s
+    restart: unless-stopped
+
+  opencode:
+    image: ${KOSMO_OPENCODE_IMAGE:?KOSMO_OPENCODE_IMAGE must be set}
+    container_name: kosmo-staging-opencode
+    init: true
+    user: "1000:1000"
+    environment:
+      HOME: /home/node
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:?OPENCODE_SERVER_PASSWORD must be set}
+      OPENCODE_MODEL: ${OPENCODE_MODEL:?OPENCODE_MODEL must be set}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-${LLM_API_KEY:-}}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-${LLM_API_KEY:-}}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - ./workspaces:/workspaces
+    expose:
+      - "4096"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: "1.5"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://127.0.0.1:4096').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))\""
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  code-runner:
+    image: ${KOSMO_CODE_RUNNER_IMAGE:?KOSMO_CODE_RUNNER_IMAGE must be set}
+    container_name: kosmo-staging-code-runner
+    init: true
+    environment:
+      CODE_RUNNER_TOKEN: ${CODE_RUNNER_TOKEN:?CODE_RUNNER_TOKEN must be set}
+    expose: ["8081"]
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,size=1024m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: "1.5"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   nginx:

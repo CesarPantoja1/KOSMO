@@ -241,15 +241,15 @@ body {
 ========================= */
 
 .btn {
-	@apply text-neutral-0 inline-flex justify-center items-center px-4 py-2 gap-1.5 rounded-md font-medium cursor-pointer transition-colors duration-200 disabled:cursor-not-allowed active:scale-95 hover:shadow-md disabled:opacity-50 lg:px-5 lg:py-2.5;
+	@apply text-neutral-0 inline-flex justify-center items-center px-4 py-2 gap-1.5 rounded-md font-medium cursor-pointer transition-colors duration-200 disabled:cursor-not-allowed active:scale-95 hover:shadow-md disabled:opacity-50 md:px-4 md:py-2 lg:px-5 lg:py-2.5 xl:px-5 xl:py-2.5;
 }
 
 .btn-sm {
-	@apply px-3 py-1.5 text-sm lg:px-3 lg:py-1.5 lg:text-sm;
+	@apply px-3 py-1.5 text-sm md:px-3 md:py-1.5 lg:px-4 lg:py-2;
 }
 
 .btn-lg {
-	@apply px-6 py-3 text-base font-semibold lg:px-6 lg:py-3 lg:text-base;
+	@apply px-5 py-2.5 text-base font-semibold md:px-5 md:py-2.5 lg:px-6 lg:py-3;
 }
 
 .btn-destructive {
@@ -270,6 +270,14 @@ body {
 
 .btn-warning {
 	@apply bg-warning-500 hover:bg-warning-700;
+}
+
+.page-header .btn {
+	@apply text-xs px-2.5 py-1 gap-1 md:text-xs md:px-3 md:py-1.5 lg:text-sm lg:px-4 lg:py-2;
+}
+
+.page-header .btn-sm {
+	@apply text-xs px-2 py-1 gap-1 md:text-xs md:px-2.5 md:py-1 lg:text-xs lg:px-3 lg:py-1.5;
 }
 
 /* =========================
@@ -310,15 +318,16 @@ body {
 ========================= */
 
 .page-container {
-	@apply flex h-full min-h-0 overflow-hidden pt-2;
+	@apply flex h-full min-h-0 overflow-hidden pt-2 gap-2 max-w-screen-2xl mx-auto;
 }
 
 .page-header {
-	@apply flex w-full flex-col gap-6;
+	@apply flex w-full flex-col gap-6 max-w-7xl mx-auto;
 }
 
 .chatbot {
 	@apply overflow-hidden transition-all duration-300 ease-in-out;
+	animation: enter-left-to-right 0.4s ease-in-out;
 }
 
 .warning-popup {
@@ -326,5 +335,16 @@ body {
 }
 
 .btn-chat {
-	@apply text-primary-50 px-2.5 py-1.5 inline-flex items-center gap-1 text-xs min-w-16 cursor-pointer disabled:cursor-not-allowed;
+	@apply text-primary-50 px-2.5 py-1.5 inline-flex items-center gap-1 text-xs min-w-16 cursor-pointer disabled:cursor-not-allowed md:px-2.5 md:py-1.5 lg:px-3 lg:py-2;
+}
+
+@keyframes enter-left-to-right {
+	0% {
+		opacity: 0;
+		transform: translateX(-24px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+	}
 }

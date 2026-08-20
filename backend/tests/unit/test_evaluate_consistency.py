@@ -1235,6 +1235,67 @@ async def test_enrich_impact_requirements_with_actor_subphrase_fragment() -> Non
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_enrich_impact_feature_diff_no_muestra_origen() -> None:
+    """El diff de una feature no expone el 'Origen:' interno al usuario final."""
+    from kosmo.application.consistency.enrich_impact import enrich_impact_items
+    from kosmo.contracts.consistency import (
+        ArtifactAction,
+        ConsistencyEvaluationOutput,
+        ConsistencyStatus,
+    )
+
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_pedidos", "prj_01", "Gestión de pedidos", number=6)
+    feat.description = "El repartidor del barrio marca el avance del pedido en cada etapa."
+    await feature_repo.save(feat)
+
+    result = ConsistencyEvaluationOutput(
+        report_id="cnr_feat_origen",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["feat_pedidos"],
+        actions=[
+            ArtifactAction(
+                artifact_id="feat_pedidos",
+                action="update",
+                rationale="El actor Repartidor del barrio fue eliminado del descubrimiento.",
+                suggested_field="description",
+                suggested_before=(
+                    "El repartidor del barrio marca el avance del pedido en cada etapa.\n"
+                    "Origen: Meta Gestion de pedidos en Metas del producto."
+                ),
+                suggested_after=(
+                    "El avance del pedido se registra en cada etapa.\n"
+                    "Origen: Meta Gestion de pedidos en Metas del producto."
+                ),
+            )
+        ],
+    )
+    requirement_repo = InMemoryRequirementRepository()
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    # Act
+    items = await enrich_impact_items(
+        result,
+        SpecPhase.CARACTERISTICAS,
+        SpecPhase.DESCUBRIMIENTO,
+        feature_repo,
+        requirement_repo,
+        diagram_repo,
+    )
+
+    # Assert — el usuario solo ve la descripción, sin "Origen:"
+    assert len(items) == 1
+    item = items[0]
+    assert item.artifact_type == "Feature"
+    assert item.diff is not None
+    assert item.diff["before"] == "El repartidor del barrio marca el avance del pedido en cada etapa."
+    assert item.diff["after"] == "El avance del pedido se registra en cada etapa."
+    assert "Origen" not in str(item.diff)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_cascading_consistency_end_to_end_actor_removal() -> None:
     """La eliminación de un actor genera impactos en características, requisitos y modelo."""
     from kosmo.application.consistency.cascade_consistency import CascadingConsistencyUseCase

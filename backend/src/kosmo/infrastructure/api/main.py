@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
+from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
@@ -20,7 +21,9 @@ from kosmo.infrastructure.api.routers.discovery import router as discovery_route
 from kosmo.infrastructure.api.routers.documents import router as documents_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
+from kosmo.infrastructure.api.routers.implementations import router as implementations_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
+from kosmo.infrastructure.api.routers.mcp import router as mcp_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
 from kosmo.infrastructure.api.routers.projects import router as projects_router
 from kosmo.infrastructure.api.routers.requirement_chat import router as requirement_chat_router
@@ -241,8 +244,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
     components = build_app_components(settings)
     app.state.container = components
+    app.state.requirement_repo = components.repos.requirements
+    app.state.diagram_repo = components.repos.diagrams
 
     outbox_task = asyncio.create_task(run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components)))
+
+    # Recuperación best-effort de generaciones huérfanas tras un reinicio del backend:
+    # marcar IN_PROGRESS como FAILED, cerrar sesiones OpenCode y liberar locks de workspace.
+    with contextlib.suppress(Exception):
+        await recover_zombie_implementations(
+            implementation_repo=components.repos.implementations,
+            opencode_client=components.codegen.opencode_client,
+            workspace_manager=components.codegen.workspace_manager,
+        )
 
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
@@ -313,6 +327,8 @@ app.include_router(schemas_router)
 app.include_router(knowledge_router)
 app.include_router(documents_router)
 app.include_router(traceability_router)
+app.include_router(mcp_router)
+app.include_router(implementations_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)

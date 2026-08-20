@@ -19,6 +19,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.consistency_repo imp
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.feature_implementation_repo import (
+    SqlAlchemyFeatureImplementationRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
 )
@@ -27,6 +30,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo imp
 )
 from kosmo.infrastructure.persistence.postgres.repositories.traceability_repo import (
     SqlAlchemyTraceabilityRepository,
+)
+from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
+    SqlAlchemyWorkspaceRepository,
 )
 
 
@@ -44,6 +50,8 @@ class RepositoryRegistry:
     users: SqlAlchemyUserRepository
     audit_sink: SqlAlchemyAuditEventSink
     consistency_evaluations: SqlAlchemyConsistencyEvaluationRepository
+    workspaces: SqlAlchemyWorkspaceRepository
+    implementations: SqlAlchemyFeatureImplementationRepository
 
     @classmethod
     def build(cls, session_factory: async_sessionmaker[AsyncSession]) -> RepositoryRegistry:
@@ -58,4 +66,6 @@ class RepositoryRegistry:
             users=SqlAlchemyUserRepository(session_factory),
             audit_sink=SqlAlchemyAuditEventSink(session_factory),
             consistency_evaluations=SqlAlchemyConsistencyEvaluationRepository(session_factory),
+            workspaces=SqlAlchemyWorkspaceRepository(session_factory),
+            implementations=SqlAlchemyFeatureImplementationRepository(session_factory),
         )

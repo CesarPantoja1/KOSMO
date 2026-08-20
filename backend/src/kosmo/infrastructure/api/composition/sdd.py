@@ -51,6 +51,7 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
+from kosmo.contracts.codegen import WorkspaceManagerPort
 from kosmo.contracts.consistency import ConsistencyEvaluator
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -74,6 +75,7 @@ class ProjectComponents:
 def build_project_components(
     repos: RepositoryRegistry,
     pipeline: PipelineComponents,
+    workspace_manager: WorkspaceManagerPort | None = None,
 ) -> ProjectComponents:
     return ProjectComponents(
         create_project=CreateProjectUseCase(project_repository=repos.projects),
@@ -89,6 +91,7 @@ def build_project_components(
             consistency_evaluation_repo=repos.consistency_evaluations,
             traceability_repo=repos.traceability,
             agent_memory=pipeline.agent_memory,
+            workspace_manager=workspace_manager,
         ),
     )
 
@@ -254,7 +257,6 @@ def build_requirements_components(
             feature_repo=repos.features,
             requirement_repo=repos.requirements,
             diagram_repo=repos.diagrams,
-            outbox=pipeline.outbox,
         ),
         get_requirement_chat_history=get_requirement_chat_history,
         requirement_repo=repos.requirements,
@@ -306,7 +308,6 @@ class ConsistencyComponents:
 
 def build_consistency_components(
     repos: RepositoryRegistry,
-    pipeline: PipelineComponents,
     evaluator: ConsistencyEvaluator,
     uow: SqlAlchemyUnitOfWork,
 ) -> ConsistencyComponents:
@@ -316,7 +317,6 @@ def build_consistency_components(
     apply_evaluation = ApplyConsistencyEvaluationUseCase(
         evaluation_repo=evaluation_repo,
         apply_uc=apply_impacts,
-        outbox=pipeline.outbox,
         document_repo=repos.documents,
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
@@ -346,7 +346,6 @@ def build_consistency_components(
             requirement_repo=repos.requirements,
             diagram_repo=repos.diagrams,
             traceability_repo=repos.traceability,
-            outbox=pipeline.outbox,
         ),
         consistency_status=GetConsistencyStatusUseCase(evaluation_repo=evaluation_repo),
         consistency_review=GetConsistencyReviewUseCase(

@@ -40,7 +40,7 @@ export function TocSidebar({ headings, activeId }: Props) {
 							onClick={() => setIsOpen(false)}
 							className='cursor-pointer text-neutral-400 hover:text-neutral-700 transition-colors'
 						>
-							<CloseMarkdownContent />
+							<CloseMarkdownContent size={18} />
 						</button>
 					</div>
 
@@ -74,7 +74,7 @@ export function TocSidebar({ headings, activeId }: Props) {
 						onClick={() => setIsOpen(true)}
 						className='cursor-pointer text-neutral-400 hover:text-neutral-700 transition-colors'
 					>
-						<OpenMarkdownContent />
+						<OpenMarkdownContent size={18} />
 					</button>
 				</div>
 			)}

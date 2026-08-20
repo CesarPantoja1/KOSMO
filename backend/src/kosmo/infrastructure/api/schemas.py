@@ -852,3 +852,62 @@ class TraceabilityNavigationOutputView(BaseModel):
     source_entity_name: str | None = Field(default=None, description="Nombre de la entidad de origen.")
     source_entity_id: str | None = Field(default=None, description="ID de la entidad de origen.")
     source_level: str | None = Field(default=None, description="Fase de la entidad de origen (ej. caracteristicas).")
+
+
+class GenerateImplementationRequest(BaseModel):
+    """Petición para iniciar la generación asíncrona de implementación."""
+
+    feature_id: str = Field(description="ID de la característica a implementar")
+    max_retries: int = Field(default=3, ge=1, le=5)
+
+
+class GenerateImplementationResponse(BaseModel):
+    """Respuesta tras iniciar la generación asíncrona."""
+
+    implementation_id: str = Field(description="ID del proceso iniciado para consumir sus eventos")
+
+
+class ImplementationFileContentResponse(BaseModel):
+    """Contenido de un archivo generado en el workspace."""
+
+    path: str = Field(description="Ruta relativa del archivo solicitado")
+    content: str = Field(description="Contenido del archivo en texto plano")
+
+
+class ImplementationRecordResponse(BaseModel):
+    """Registro persistido de una implementación (fuente de verdad para el frontend)."""
+
+    implementation_id: str = Field(description="ID de la implementación")
+    feature_id: str = Field(description="ID de la característica implementada")
+    project_id: str = Field(description="ID del proyecto al que pertenece la característica")
+    status: str = Field(description="Estado actual de la implementación")
+    generated_files: list[str] = Field(default_factory=list, description="Archivos generados")
+    updated_at: datetime = Field(description="Última actualización del registro")
+
+
+class ValidationStepResultResponse(BaseModel):
+    """Resultado de un paso individual del pipeline de validación."""
+
+    step: str = Field(description="Nombre del paso ejecutado (typecheck, lint, tests, build)")
+    success: bool = Field(description="Si el paso terminó sin errores")
+    duration_ms: int = Field(default=0, description="Duración del paso en milisegundos")
+    exit_code: int = Field(default=0, description="Código de salida del proceso")
+    error_messages: list[str] = Field(default_factory=list, description="Mensajes de error del paso")
+
+
+class ValidateWorkspaceResponse(BaseModel):
+    """Resultado del pipeline de validación de un workspace."""
+
+    all_passed: bool = Field(description="Si todos los pasos pasaron")
+    steps: list[ValidationStepResultResponse] = Field(
+        default_factory=list[ValidationStepResultResponse], description="Resultado por paso"
+    )
+    failed_step: str | None = Field(default=None, description="Primer paso que falló, si hubo")
+    error_summary: list[str] = Field(default_factory=list, description="Resumen de errores")
+    total_duration_ms: int = Field(default=0, description="Duración total en milisegundos")
+
+
+class ProjectPreviewResponse(BaseModel):
+    """URL de la vista previa del proyecto activo."""
+
+    url: str = Field(description="URL pública de la vista previa del proyecto")

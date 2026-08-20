@@ -4,6 +4,7 @@ import { useCharacteristicStore, deleteFeature } from '@/entities/characteristic
 import { useDiscoveryStore } from '@/entities/discovery';
 import { ChatStreamPanel } from '@/feature';
 import { createAssistantError } from '@/entities/chat';
+import { subscribeImplementationEvents } from '@/entities/implementation';
 import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import ArrowRight from '@/shared/ui/icons/ArrowRight';
@@ -36,9 +37,7 @@ const CharacteristicsPage = () => {
 
 	const chatHistories = useCharacteristicStore((s) => s.chatHistories);
 	const appendUserMessage = useCharacteristicStore((s) => s.appendUserMessage);
-	const appendAssistantMessage = useCharacteristicStore(
-		(s) => s.appendAssistantMessage,
-	);
+	const appendAssistantMessage = useCharacteristicStore((s) => s.appendAssistantMessage);
 	const loadChatHistory = useCharacteristicStore((s) => s.loadChatHistory);
 	const loadOlderChatHistory = useCharacteristicStore((s) => s.loadOlderChatHistory);
 	const historyHasMore = useCharacteristicStore((s) => s.historyHasMore);
@@ -68,6 +67,28 @@ const CharacteristicsPage = () => {
 			if (activeFeatureId === featureId) setActiveFeatureId(null);
 			toast.close(toastId);
 			toast.success('Característica eliminada');
+
+			// La eliminación del código corre en background: la aplicación
+			// siempre queda funcional (validada o restaurada). El resultado
+			// llega por SSE al terminar.
+			const deleteCodeToastId = toast.info('Eliminando la funcionalidad del código...', {
+				timeout: 300_000,
+			});
+			void subscribeImplementationEvents(`impl_${featureId}`, {
+				onDelta: (delta) => {
+					toast.info(delta, { timeout: 3000 });
+				},
+				onDone: (delta) => {
+					toast.close(deleteCodeToastId);
+					toast.success(delta);
+				},
+				onError: (error) => {
+					toast.close(deleteCodeToastId);
+					toast.error(error);
+				},
+			}).catch(() => {
+				toast.close(deleteCodeToastId);
+			});
 		} catch (err) {
 			toast.close(toastId);
 			toast.error(formatApiError(err, 'Error al eliminar la característica'));
@@ -80,7 +101,6 @@ const CharacteristicsPage = () => {
 		setIsGeneratingCharacteristics(true);
 		try {
 			await generateCharacteristics(currentProject.id);
-			toast.success('Características generadas exitosamente');
 		} catch (err) {
 			toast.error(formatApiError(err, 'Error al generar las características'));
 		} finally {
@@ -141,14 +161,16 @@ const CharacteristicsPage = () => {
 				/>
 			)}
 
-			<div className='page-container gap-2'>
+			<div className='page-container'>
 				<div className='page-header'>
 					{/* Header row */}
 					<div className='flex flex-col gap-4'>
 						<div className='flex justify-between items-start gap-4'>
 							<div className='flex flex-col gap-1'>
-								<h2 className='text-neutral-800 text-3xl font-bold'>Funcionalidades</h2>
-								<p className='text-neutral-500 text-base'>
+								<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
+									Funcionalidades
+								</h1>
+								<p className='text-neutral-500 text-sm md:text-base'>
 									Gestiona y organiza las funciones principales de tu proyecto.
 								</p>
 							</div>
@@ -276,21 +298,13 @@ const CharacteristicsPage = () => {
 				</div>
 
 				{/* Chatbot panel */}
-				<div
-					className={`chatbot relative ${
-						activeFeatureId
-							? 'opacity-100 translate-x-0 w-96 shrink-0'
-							: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-					}`}
-				>
+				{activeFeatureId && (
 					<ChatStreamPanel
 						placeholder='ej. mejorar característica de búsqueda'
 						onClose={() => setActiveFeatureId(null)}
 						messages={chatMessages}
 						streamUrl={
-							activeFeatureId
-								? `/api/v1/features/${activeFeatureId}/chat/stream`
-								: null
+							activeFeatureId ? `/api/v1/features/${activeFeatureId}/chat/stream` : null
 						}
 						projectId={currentProject?.id ?? null}
 						phase='features'
@@ -306,7 +320,7 @@ const CharacteristicsPage = () => {
 							toast.error(formatApiError(error, 'Error al enviar el mensaje.'))
 						}
 					/>
-				</div>
+				)}
 			</div>
 
 			{confirmDeleteId && (

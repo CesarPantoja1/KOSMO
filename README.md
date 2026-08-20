@@ -85,6 +85,11 @@ Las cuatro piezas críticas de la infraestructura cuentan con healthchecks integ
 * Redis responde al ping interno con `redis-cli ping`.
 * El backend valida su propio endpoint `/health` mediante la librería estándar de Python, sin necesidad de instalar herramientas adicionales en la imagen.
 
+La generación de código añade OpenCode y un workspace por proyecto en el entorno local.
+En staging y producción ese código es persistente y administrado desde la instancia; la
+configuración de secretos, respaldo y acceso está documentada en
+[`deploy/CODEGEN.md`](deploy/CODEGEN.md).
+
 El servicio del backend declara `depends_on` con la condición `service_healthy` sobre las tres bases. Por lo tanto, Compose espera a que cada una reporte estado saludable antes de iniciar la API.
 
 ### Arranque del entorno

@@ -37,6 +37,7 @@ const ModelingPage = () => {
 	const router = useRouter();
 
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
 	const [uml, setUML] = useState('');
 	const [savedContent, setSavedContent] = useState('');
@@ -58,6 +59,7 @@ const ModelingPage = () => {
 	const currentDiagrams = useModelingStore((s) => s.currentDiagrams);
 	const storeGetDiagram = useModelingStore((s) => s.getDiagram);
 	const storeGeneratePlantUmlDiagram = useModelingStore((s) => s.generatePlantUmlDiagram);
+	const storeDeleteDiagram = useModelingStore((s) => s.deleteDiagram);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
@@ -154,6 +156,25 @@ const ModelingPage = () => {
 		}
 	};
 
+	const handleDeleteDiagram = async () => {
+		if (!confirmDeleteId || !currentProject) return;
+		const featureId = confirmDeleteId;
+		setConfirmDeleteId(null);
+		try {
+			await storeDeleteDiagram(currentProject.id, featureId);
+			setPlantumlSource('');
+			setUML('');
+			setSavedContent('');
+			toast.success('Diagrama eliminado');
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al eliminar el diagrama'));
+		}
+	};
+
+	const handleDeleteClick = (id: string) => {
+		setConfirmDeleteId(id);
+	};
+
 	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges: unsaved, setPendingNavigationPath: setPath } =
 			useAppStore.getState();
@@ -194,6 +215,17 @@ const ModelingPage = () => {
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
 			)}
 
+			{confirmDeleteId && (
+				<ModalConfirm
+					title='Eliminar diagrama'
+					description='Esta acción no se puede deshacer. Se eliminará el diagrama de actividad de esta funcionalidad.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setConfirmDeleteId(null)}
+					onConfirm={handleDeleteDiagram}
+				/>
+			)}
+
 			{isGenerating && (
 				<Loading
 					title='Generando diagrama de flujo'
@@ -207,8 +239,8 @@ const ModelingPage = () => {
 					{/* Header row */}
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
-							<h2 className='text-neutral-800 text-3xl font-bold'>Diagrama de flujo</h2>
-							<p className='text-neutral-500 text-base'>
+							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>Diagrama de flujo</h1>
+							<p className='text-neutral-500 text-sm md:text-base'>
 								Genera el diagrama de actividad UML a partir de los criterios de
 								aceptación.
 							</p>
@@ -257,6 +289,7 @@ const ModelingPage = () => {
 								characteristics={characteristics}
 								selectedId={selectedId}
 								onSelectCharacteristic={handleSelectCharacteristic}
+								onDeleteCharacteristic={handleDeleteClick}
 								hasIcon={hasDiagram}
 								icon={Modeling}
 							/>

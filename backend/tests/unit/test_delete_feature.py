@@ -48,7 +48,7 @@ def _a_diagram(feature: Feature) -> DiagramaActividad:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_delete_feature_enqueues_downstream_evaluation() -> None:
+async def test_delete_feature_no_dispara_consistencia() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
     project = _a_project()
@@ -65,25 +65,19 @@ async def test_delete_feature_enqueues_downstream_evaluation() -> None:
         requirement_repo=InMemoryRequirementRepository(),
         diagram_repo=InMemoryActivityDiagramRepository(),
         traceability_repo=InMemoryTraceabilityRepository(),
-        outbox=outbox,
     )
 
     # Act
     await use_case.execute(project.id, feature.id)
 
-    # Assert — eliminar una característica dispara la verificación de las fases a la derecha
+    # Assert — eliminar una característica NO dispara evaluación de consistencia
     assert await feature_repo.by_id(feature.id) is None
-    assert len(outbox.jobs) == 1
-    job_type, payload = outbox.jobs[0]
-    assert job_type == "consistency_evaluate"
-    assert payload["project_id"] == "prj_del"
-    assert payload["source_phase"] == "caracteristicas"
-    assert payload["changes"][0]["after"] == ""
+    assert len(outbox.jobs) == 0
 
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_delete_feature_without_outbox_keeps_working() -> None:
+async def test_delete_feature_elimina_sin_depender_de_outbox() -> None:
     # Arrange
     project_repo = InMemoryProjectRepository()
     project = _a_project("prj_del2")
@@ -159,3 +153,31 @@ async def test_delete_feature_cascade_tolerates_missing_artifacts() -> None:
     # Act & Assert — el cascade no falla cuando los hijos no existen
     await use_case.execute(project.id, feature.id)
     assert await feature_repo.by_id(feature.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_feature_returns_deleted_feature() -> None:
+    # Arrange
+    project_repo = InMemoryProjectRepository()
+    project = _a_project("prj_del_ret")
+    await project_repo.save(project)
+
+    feature_repo = InMemoryFeatureRepository()
+    feature = _a_feature(project, "feat_del_ret")
+    await feature_repo.save(feature)
+
+    use_case = DeleteFeatureUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=InMemoryRequirementRepository(),
+        diagram_repo=InMemoryActivityDiagramRepository(),
+    )
+
+    # Act
+    deleted = await use_case.execute(project.id, feature.id)
+
+    # Assert — retorna la feature eliminada (slug disponible para el cleanup de código)
+    assert deleted.id == feature.id
+    assert deleted.slug == "caracteristica-a-eliminar"
+    assert deleted.project_id == project.id

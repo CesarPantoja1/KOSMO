@@ -14,7 +14,6 @@ from kosmo.contracts.consistency import (
     ConsistencyEvaluationRepository,
     ConsistencyEvaluationStatus,
 )
-from kosmo.contracts.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import (
     ConsistencyEvaluationNotFoundError,
@@ -30,7 +29,6 @@ from kosmo.contracts.sdd.repositories import (
 )
 from kosmo.domain.sdd.consistency_snapshot import compute_snapshot_hash
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
-from kosmo.domain.sdd.traceability_tracer import trace_downstream_phases
 from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
 
 _log = structlog.get_logger(__name__)
@@ -192,7 +190,6 @@ class ApplyConsistencyEvaluationUseCase:
         *,
         evaluation_repo: ConsistencyEvaluationRepository,
         apply_uc: ApplyConsistencyImpactsUseCase,
-        outbox: OutboxPort | None,
         document_repo: DocumentRepository,
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
@@ -200,7 +197,6 @@ class ApplyConsistencyEvaluationUseCase:
     ) -> None:
         self._evaluation_repo = evaluation_repo
         self._apply_uc = apply_uc
-        self._outbox = outbox
         self._document_repo = document_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -237,10 +233,9 @@ class ApplyConsistencyEvaluationUseCase:
                     updated_at=datetime.now(UTC),
                 )
             )
-            await self._requeue(row)
             raise ConsistencyStaleError(
                 evaluation_id=str(evaluation_id),
-                detail="La lógica de origen cambió. La sugerencia se re-evaluará automáticamente.",
+                detail="La lógica de origen cambió. La sugerencia ha sido descartada.",
             )
 
         impact = _impact_for_apply(row)
@@ -268,45 +263,11 @@ class ApplyConsistencyEvaluationUseCase:
             )
         )
 
-        await self._chain_downstream(row, impact)
-
         return {
             "evaluation_id": str(row.id),
             "applied": True,
             "target_id": row.target_artifact_id,
         }
-
-    async def _requeue(self, row: ConsistencyEvaluation) -> None:
-        if self._outbox is None:
-            return
-        await self._outbox.enqueue(
-            "consistency_evaluate",
-            {
-                "project_id": str(row.project_id),
-                "source_phase": row.source_phase.value,
-                "changes": row.source_changes,
-            },
-        )
-
-    async def _chain_downstream(self, row: ConsistencyEvaluation, impact: dict[str, object]) -> None:
-        if self._outbox is None or not trace_downstream_phases(row.target_phase):
-            return
-        changes = [
-            {
-                "section": str(impact.get("field", "")),
-                "description": str(impact.get("before", "")),
-                "before": str(impact.get("before", "")),
-                "after": str(impact.get("after", "")),
-            }
-        ]
-        await self._outbox.enqueue(
-            "consistency_evaluate",
-            {
-                "project_id": str(row.project_id),
-                "source_phase": row.target_phase.value,
-                "changes": changes,
-            },
-        )
 
 
 class DiscardConsistencyEvaluationUseCase:

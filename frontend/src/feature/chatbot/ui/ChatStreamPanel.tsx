@@ -10,7 +10,6 @@ import { SessionSelector } from './SessionSelector';
 
 interface ChatStreamPanelProps {
 	title?: string;
-	subtitle?: string;
 	greeting?: string;
 	placeholder?: string;
 	onClose?: () => void;
@@ -32,7 +31,6 @@ interface ChatStreamPanelProps {
 
 export const ChatStreamPanel = ({
 	title,
-	subtitle,
 	greeting,
 	placeholder,
 	onClose,
@@ -80,7 +78,11 @@ export const ChatStreamPanel = ({
 		onLoadMoreRef.current = onLoadMore;
 	}, [onLoadMore]);
 
-	const { phase: streamPhase, send, stop } = useChatStream({
+	const {
+		phase: streamPhase,
+		send,
+		stop,
+	} = useChatStream({
 		onChunk: (content) => setStreamingContent((prev) => (prev ?? '') + content),
 		onMessage: (message) => {
 			setStreamingContent(null);
@@ -151,7 +153,6 @@ export const ChatStreamPanel = ({
 	return (
 		<Chatbot
 			title={title}
-			subtitle={subtitle}
 			greeting={greeting}
 			placeholder={placeholder}
 			onClose={onClose}
@@ -169,6 +170,7 @@ export const ChatStreamPanel = ({
 			sessionSelector={
 				projectId && phase ? (
 					<SessionSelector
+						title={title}
 						sessions={chatSessions.sessions}
 						activeSessionId={chatSessions.activeSessionId}
 						loading={chatSessions.loading}

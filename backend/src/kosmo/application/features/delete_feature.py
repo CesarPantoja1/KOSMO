@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import structlog
 
-from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.consistency import TraceabilityRepository
-from kosmo.contracts.persistence import OutboxPort
-from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
+from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -26,16 +24,14 @@ class DeleteFeatureUseCase:
         requirement_repo: RequirementRepository,
         diagram_repo: ActivityDiagramRepository,
         traceability_repo: TraceabilityRepository | None = None,
-        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
         self._diagram_repo = diagram_repo
         self._traceability_repo = traceability_repo
-        self._outbox = outbox
 
-    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> None:
+    async def execute(self, project_id: ProjectId, feature_id: FeatureId) -> Feature:
         project = await self._project_repo.by_id(project_id)
         if project is None:
             raise ProjectNotFoundError(
@@ -64,23 +60,11 @@ class DeleteFeatureUseCase:
                     exc_info=True,
                 )
 
-        await trigger_downstream_evaluation(
-            self._outbox,
-            project_id=project_id,
-            source_phase=SpecPhase.CARACTERISTICAS,
-            changes=[
-                {
-                    "section": f"Característica {feature.number}",
-                    "description": "Eliminación de la característica",
-                    "before": feature.title,
-                    "after": "",
-                }
-            ],
-        )
-
         _log.info(
             "delete_feature.success",
             project_id=str(project_id),
             feature_id=str(feature_id),
             display_id=feature.display_id,
         )
+
+        return feature

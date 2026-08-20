@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import {
 	getDiagram as getDiagramApi,
 	generatePlantUmlDiagram as generatePlantUmlDiagramApi,
+	deleteDiagram as deleteDiagramApi,
 } from '../api/api';
 
 interface ModelingStore {
@@ -13,6 +14,7 @@ interface ModelingStore {
 		projectId: string,
 		featureId: string,
 	) => Promise<string>;
+	deleteDiagram: (projectId: string, featureId: string) => Promise<void>;
 
 	hasDiagram: Record<string, boolean>;
 	setHasDiagram: (id: string, has: boolean) => void;
@@ -46,6 +48,16 @@ export const useModelingStore = create<ModelingStore>()(
 					hasDiagram: { ...state.hasDiagram, [featureId]: true },
 				}));
 				return content;
+			},
+			deleteDiagram: async (projectId, featureId) => {
+				await deleteDiagramApi(projectId, featureId);
+				set((state) => {
+					const currentDiagrams = { ...state.currentDiagrams };
+					delete currentDiagrams[featureId];
+					const hasDiagram = { ...state.hasDiagram };
+					delete hasDiagram[featureId];
+					return { currentDiagrams, hasDiagram };
+				});
 			},
 
 			hasDiagram: {},

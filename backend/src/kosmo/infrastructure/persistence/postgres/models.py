@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector  # pyright: ignore[reportMissingTypeStubs]
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -267,3 +267,50 @@ class UserPreferenceModel(Base):
     user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     rule_text: Mapped[str] = mapped_column(Text(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class WorkspaceModel(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    current_branch: Mapped[str] = mapped_column(String(255), nullable=False, default="main")
+    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    path: Mapped[str] = mapped_column(Text(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class FeatureImplementationModel(Base):
+    __tablename__ = "feature_implementations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    feature_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("features.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    plan: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    last_validation: Mapped[dict[str, Any] | None] = mapped_column(pg.JSONB(), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    generated_files: Mapped[list[str]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+    retry_history: Mapped[list[Any]] = mapped_column(pg.JSONB(), nullable=False, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

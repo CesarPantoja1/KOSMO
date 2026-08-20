@@ -169,7 +169,6 @@ def _apply_uc(seed: _Seed) -> ApplyConsistencyEvaluationUseCase:
     return ApplyConsistencyEvaluationUseCase(
         evaluation_repo=seed.evaluations,
         apply_uc=ApplyConsistencyImpactsUseCase(uow=seed.uow()),
-        outbox=seed.outbox,
         document_repo=seed.documents,
         feature_repo=seed.features,
         requirement_repo=seed.requirements,
@@ -390,7 +389,7 @@ async def test_apply_updates_target_and_marks_applied() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_apply_blocks_and_requeues_when_source_changed() -> None:
+async def test_apply_blocks_and_discards_when_source_changed() -> None:
     # Arrange
     seed = _Seed()
     await seed.seed_completed()
@@ -398,7 +397,7 @@ async def test_apply_blocks_and_requeues_when_source_changed() -> None:
         DISCOVERY_VALID.replace("organizar y repartir gastos compartidos", "organizar gastos corporativos")
     )
 
-    # Act & Assert — invariante D2: no hay escritura sobre el target
+    # Act & Assert — invariante D2: no hay escritura sobre el target y no se re-encola
     with pytest.raises(ConsistencyStaleError):
         await _apply_uc(seed).execute(ConsistencyEvaluationId("cev_01"))
 
@@ -406,12 +405,12 @@ async def test_apply_blocks_and_requeues_when_source_changed() -> None:
     row = await seed.evaluations.by_id(ConsistencyEvaluationId("cev_01"))
     assert row is not None
     assert row.status == ConsistencyEvaluationStatus.DISCARDED
-    assert any(job[0] == "consistency_evaluate" for job in seed.outbox.jobs)
+    assert not any(job[0] == "consistency_evaluate" for job in seed.outbox.jobs)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_apply_chains_evaluation_further_right() -> None:
+async def test_apply_does_not_chain_evaluation_downstream() -> None:
     # Arrange
     seed = _Seed()
     await seed.seed_completed()
@@ -419,10 +418,9 @@ async def test_apply_chains_evaluation_further_right() -> None:
     # Act
     await _apply_uc(seed).execute(ConsistencyEvaluationId("cev_01"))
 
-    # Assert — la cadena se dispara desde la fase del artefacto aplicado
+    # Assert — no se encolan jobs en outbox al aplicar
     chain_jobs = [job for job in seed.outbox.jobs if job[0] == "consistency_evaluate"]
-    assert len(chain_jobs) == 1
-    assert chain_jobs[0][1]["source_phase"] == "caracteristicas"
+    assert len(chain_jobs) == 0
 
 
 @pytest.mark.unit

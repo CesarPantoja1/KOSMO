@@ -15,12 +15,14 @@ export function useConsistencyPolling(
 ) {
 	const { intervalMs = 10_000, enabled = true } = options;
 	const [status, setStatus] = useState<ConsistencyStatusResponse | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<unknown>(null);
 	const inFlightRef = useRef(false);
 
 	const refresh = useCallback(async () => {
 		if (!projectId || inFlightRef.current) return;
 		inFlightRef.current = true;
+		setIsLoading(true);
 		try {
 			const data = await getConsistencyStatus(projectId);
 			setStatus(data);
@@ -28,6 +30,7 @@ export function useConsistencyPolling(
 		} catch (err) {
 			setError(err);
 		} finally {
+			setIsLoading(false);
 			inFlightRef.current = false;
 		}
 	}, [projectId]);
@@ -59,5 +62,5 @@ export function useConsistencyPolling(
 
 	const active = enabled && projectId !== null;
 
-	return { status: active ? status : null, error, refresh };
+	return { status: active ? status : null, isLoading: active && isLoading, error, refresh };
 }

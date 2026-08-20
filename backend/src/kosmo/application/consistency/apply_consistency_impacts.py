@@ -12,6 +12,7 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
+from kosmo.domain.sdd.text_normalizer import strip_origin_line
 from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
 
 _log = structlog.get_logger(__name__)
@@ -205,6 +206,12 @@ class ApplyConsistencyImpactsUseCase:
             return f"Campo no modificable: {field}"
 
         current: str = str(getattr(feature, field, ""))
+        # El LLM incluye el origen interno en la descripción sugerida; se elimina
+        # para no contaminar la descripción guardada ni romper el match del diff.
+        if field == "description":
+            current = strip_origin_line(current)
+            before = strip_origin_line(before)
+            after = strip_origin_line(after)
         result = apply_change_diff(current, before=before, after=after)
         if result is None:
             return f"El texto original no se encontro en {field} de la caracteristica"

@@ -50,10 +50,10 @@ const CreateCharacteristic = () => {
 					<div className='flex flex-col gap-4'>
 						<div className='flex justify-between items-start gap-4'>
 							<div className='flex flex-col gap-1'>
-								<h2 className='text-neutral-800 text-3xl font-bold'>
+								<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
 									Nueva funcionalidad
-								</h2>
-								<p className='text-neutral-500 text-base'>
+								</h1>
+								<p className='text-neutral-500 text-sm md:text-base'>
 									Define el propósito e interacción de la nueva funcionalidad
 								</p>
 							</div>

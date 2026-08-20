@@ -1689,6 +1689,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "fastembed" },
+    { name = "httpx" },
     { name = "logfire", extra = ["fastapi", "redis", "sqlalchemy"] },
     { name = "openai" },
     { name = "pgvector" },
@@ -1700,6 +1701,7 @@ dependencies = [
     { name = "python-ulid" },
     { name = "redis", extra = ["hiredis"] },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "sse-starlette" },
     { name = "structlog" },
     { name = "tenacity" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1707,7 +1709,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "hypothesis" },
     { name = "import-linter" },
     { name = "pre-commit" },
@@ -1727,6 +1728,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=46.0.7" },
     { name = "fastapi", specifier = ">=0.136.1" },
     { name = "fastembed", specifier = ">=0.5" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "logfire", extras = ["fastapi", "sqlalchemy", "redis"], specifier = ">=4.32.1" },
     { name = "openai", specifier = ">=2.0.0" },
     { name = "pgvector", specifier = ">=0.4.2" },
@@ -1738,6 +1740,7 @@ requires-dist = [
     { name = "python-ulid", specifier = ">=3.1.0" },
     { name = "redis", extras = ["hiredis"], specifier = ">=7.4.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.49" },
+    { name = "sse-starlette", specifier = ">=2.0.0" },
     { name = "structlog", specifier = ">=25.5.0" },
     { name = "tenacity" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.46.0" },
@@ -1745,7 +1748,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypothesis", specifier = ">=6.152.1" },
     { name = "import-linter", specifier = ">=2.11" },
     { name = "pre-commit", specifier = ">=4.6.0" },

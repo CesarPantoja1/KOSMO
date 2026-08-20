@@ -209,6 +209,9 @@ jobs:
           while IFS= read -r file; do
             case "$file" in
               .github/workflows/ci.yml|\
+              deploy/**|\
+              docker/**|\
+              nginx/**|\
               .github/actions/*|\
               docker-compose.yml|\
               docker-compose.yaml|\
@@ -293,7 +296,7 @@ jobs:
         with:
           enable-cache: true
           working-directory: backend
-          cache-dependency-glob: backend/uv.lock
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: uv sync --locked --all-groups
@@ -394,7 +397,7 @@ jobs:
         with:
           enable-cache: true
           working-directory: backend
-          cache-dependency-glob: backend/uv.lock
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: uv sync --locked --all-groups

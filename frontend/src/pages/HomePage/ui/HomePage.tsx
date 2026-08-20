@@ -94,8 +94,8 @@ export function HomePage() {
 				{/* Header row: title + actions */}
 				<div className='flex items-start justify-between gap-4'>
 					<div className='flex flex-col gap-1'>
-						<h2 className='text-neutral-800 text-3xl font-bold'>Proyectos</h2>
-						<p className='text-neutral-500 text-base'>
+						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>Proyectos</h1>
+						<p className='text-neutral-500 text-sm md:text-base'>
 							Gestiona y realiza seguimiento a tus iniciativas de producto
 						</p>
 					</div>
@@ -105,17 +105,17 @@ export function HomePage() {
 						<div className='flex overflow-hidden'>
 							<button
 								onClick={setViewCard}
-								className={`px-4 py-2 lg:px-5 lg:py-2.5 border-2 rounded-l-md border-neutral-300 cursor-pointer transition-all duration-200 ease-in-out ${stylesToogleView.card.button}`}
+								className={`px-4 lg:px-5 lg:py-1 border rounded-l-md border-neutral-300 cursor-pointer transition-all duration-200 ease-in-out ${stylesToogleView.card.button}`}
 								title='Vista de tarjetas'
 							>
-								<Cards size={22} color={stylesToogleView.card.icon} />
+								<Cards size={18} color={stylesToogleView.card.icon} />
 							</button>
 							<button
 								onClick={setViewList}
-								className={`px-4 py-2 lg:px-5 lg:py-2.5 border-2 rounded-r-md border-neutral-300 cursor-pointer transition-all duration-200 ease-in-out border-l ${stylesToogleView.list.button}`}
+								className={`px-4 lg:px-5 lg:py-2 border rounded-r-md border-neutral-300 cursor-pointer transition-all duration-200 ease-in-out border-l ${stylesToogleView.list.button}`}
 								title='Vista de lista'
 							>
-								<List size={22} color={stylesToogleView.list.icon} />
+								<List size={18} color={stylesToogleView.list.icon} />
 							</button>
 						</div>
 
