@@ -67,7 +67,9 @@ class OpenCodeUnavailableError(ValueError):
 
     def __init__(
         self,
-        message: str = "El servidor OpenCode no está disponible. Verifica que 'opencode serve' esté en ejecución.",
+        message: str = (
+            "El asistente de generación no está disponible en este momento. Inténtalo de nuevo en unos minutos."
+        ),
     ) -> None:
         super().__init__(message)
 
@@ -233,7 +235,7 @@ class GenerateFeatureImplementationUseCase:
                 OpenCodeEvent(
                     event_type=OpenCodeEventType.PLAN_PROGRESS,
                     session_id="",
-                    data={"delta": "Conectando con OpenCode y preparando workspace...", "stage": "workspace"},
+                    data={"delta": "Preparando el espacio de trabajo de tu proyecto...", "stage": "workspace"},
                 )
             )
             workspace = await self._workspace_manager.ensure_workspace(feature.project_id)
@@ -265,7 +267,10 @@ class GenerateFeatureImplementationUseCase:
                 OpenCodeEvent(
                     event_type=OpenCodeEventType.PLAN_PROGRESS,
                     session_id="",
-                    data={"delta": f"Iniciando sesión en OpenCode para '{feature.title}'...", "stage": "session"},
+                    data={
+                        "delta": f"Iniciando la generación de la funcionalidad '{feature.title}'...",
+                        "stage": "session",
+                    },
                 )
             )
             session = await self._opencode_client.create_session(
@@ -296,7 +301,7 @@ class GenerateFeatureImplementationUseCase:
                     event_type=OpenCodeEventType.PLAN_PROGRESS,
                     session_id=session_id,
                     data={
-                        "delta": f"OpenCode analizando requisitos y diagrama de '{feature.title}'...",
+                        "delta": f"El asistente está analizando los requisitos y el diagrama de '{feature.title}'...",
                         "stage": "planning",
                     },
                 )

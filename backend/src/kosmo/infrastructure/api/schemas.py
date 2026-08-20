@@ -899,7 +899,9 @@ class ValidateWorkspaceResponse(BaseModel):
     """Resultado del pipeline de validación de un workspace."""
 
     all_passed: bool = Field(description="Si todos los pasos pasaron")
-    steps: list[ValidationStepResultResponse] = Field(default_factory=list, description="Resultado por paso")
+    steps: list[ValidationStepResultResponse] = Field(
+        default_factory=list[ValidationStepResultResponse], description="Resultado por paso"
+    )
     failed_step: str | None = Field(default=None, description="Primer paso que falló, si hubo")
     error_summary: list[str] = Field(default_factory=list, description="Resumen de errores")
     total_duration_ms: int = Field(default=0, description="Duración total en milisegundos")

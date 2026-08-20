@@ -118,12 +118,12 @@ class OpenCodeHttpClient(OpenCodeClientPort):
             )
             if not response.is_success:
                 raise OpenCodeClientError(
-                    f"Error al crear sesión en OpenCode (HTTP {response.status_code}): {response.text}"
+                    f"No se pudo iniciar la generación (HTTP {response.status_code}): {response.text}"
                 )
             data: dict[str, Any] = response.json()
             session_id = data.get("id") or data.get("session_id")
             if not session_id:
-                raise OpenCodeClientError(f"La respuesta de OpenCode no contiene 'id' o 'session_id': {data}")
+                raise OpenCodeClientError(f"La respuesta del asistente de generación es inválida: {data}")
 
             resolved_dir = str(data.get("workspace_dir") or data.get("directory") or workspace_dir)
             resolved_title = str(data.get("title") or title)
@@ -298,7 +298,7 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                 return
             if not response.is_success:
                 raise OpenCodeClientError(
-                    f"Error al cerrar la sesión {session_id} en OpenCode (HTTP {response.status_code}): {response.text}"
+                    f"No se pudo cerrar la sesión de generación (HTTP {response.status_code}): {response.text}"
                 )
         except OpenCodeClientError:
             raise
