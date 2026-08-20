@@ -29,6 +29,7 @@ from kosmo.infrastructure.api.composition.sdd import (
 )
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.persistence.postgres.uow import SqlAlchemyUnitOfWork
+from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
 
 __all__ = [
     "AppContainer",
@@ -77,6 +78,8 @@ class AppContainer:
         if self.redis is not None:
             await self.redis.aclose()
         await self.codegen.opencode_client.aclose()
+        if isinstance(self.codegen.code_runner, RemoteCodeRunner):
+            await self.codegen.code_runner.aclose()
         await self.db_engine.dispose()
 
 
@@ -102,9 +105,9 @@ def build_app_components(settings: Settings) -> AppContainer:
     features = build_features_components(repos, pipeline, discovery.consistency_evaluator)
     requirements = build_requirements_components(repos, pipeline, uow)
     modelo = build_modelo_components(repos, pipeline)
-    projects = build_project_components(repos, pipeline)
-    consistency = build_consistency_components(repos, discovery.consistency_evaluator, uow)
     codegen = build_codegen_components(settings, repos)
+    projects = build_project_components(repos, pipeline, workspace_manager=codegen.workspace_manager)
+    consistency = build_consistency_components(repos, discovery.consistency_evaluator, uow)
 
     return AppContainer(
         settings=settings,

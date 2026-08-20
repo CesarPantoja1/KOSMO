@@ -14,6 +14,7 @@ from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
+from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
 
 _CODEGEN_ENV_VARS = (
     "OPENCODE_BASE_URL",
@@ -22,6 +23,8 @@ _CODEGEN_ENV_VARS = (
     "OPENCODE_MODEL",
     "KOSMO_WORKSPACES_DIR",
     "KOSMO_MCP_BASE_URL",
+    "CODE_RUNNER_BASE_URL",
+    "CODE_RUNNER_TOKEN",
 )
 
 
@@ -97,6 +100,20 @@ def test_build_codegen_components_propaga_settings_a_adaptadores(tmp_path) -> No
     assert components.workspace_manager._mcp_url == "http://api.local:8000/mcp"
     assert components.workspace_manager._workspace_repo is repos.workspaces
     assert components.workspace_manager._project_repo is repos.projects
+
+
+@pytest.mark.unit
+def test_build_codegen_components_uses_remote_runner_when_configured(tmp_path) -> None:
+    settings = _make_settings(
+        kosmo_workspaces_dir=tmp_path / "workspaces",
+        code_runner_base_url="http://runner.local:8081",
+        code_runner_token=SecretStr("runner-token"),
+    )
+
+    components = build_codegen_components(settings, _make_repos())
+
+    assert isinstance(components.code_runner, RemoteCodeRunner)
+    assert components.code_runner._base_url == "http://runner.local:8081"
 
 
 @pytest.mark.unit

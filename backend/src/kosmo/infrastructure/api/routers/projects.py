@@ -175,9 +175,12 @@ async def get_project(
 )
 async def get_project_preview(
     project_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> ProjectPreviewResponse:
+    project = await container.repos.projects.by_id(ProjectId(project_id))
+    if project is None or str(project.owner_id) != principal.subject:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
     ports_file = container.settings.kosmo_workspaces_dir / ".preview-ports.json"
     manifest: dict[str, object] = {}
     try:

@@ -11,7 +11,8 @@ from kosmo.application.codegen.generate_feature_implementation import (
 )
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceInput, WorkspaceNotFoundError
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.sdd.ids import FeatureId, ImplementationId
+from kosmo.contracts.codegen import FeatureImplementation
+from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
 from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal
@@ -31,6 +32,28 @@ _log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1/implementations", tags=["Implementations"])
 
 
+async def _require_project_owner(container: AppContainer, project_id: ProjectId, principal: Principal) -> None:
+    """Hide cross-tenant resources behind the same 404 contract as absent ones."""
+    project = await container.repos.projects.by_id(project_id)
+    if project is None or str(project.owner_id) != principal.subject:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
+
+
+async def _owned_implementation(
+    container: AppContainer,
+    implementation_id: ImplementationId,
+    principal: Principal,
+) -> FeatureImplementation:
+    implementation = await container.repos.implementations.by_id(implementation_id)
+    if implementation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró la implementación {implementation_id}",
+        )
+    await _require_project_owner(container, implementation.project_id, principal)
+    return implementation
+
+
 @router.post(
     "",
     response_model=GenerateImplementationResponse,
@@ -40,13 +63,17 @@ router = APIRouter(prefix="/api/v1/implementations", tags=["Implementations"])
 )
 async def start_implementation(
     request: GenerateImplementationRequest,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> GenerateImplementationResponse:
     use_case = container.codegen.generate_feature_implementation
 
     feature_id_obj = FeatureId(request.feature_id)
     impl_id = f"impl_{feature_id_obj}"
+    feature = await container.repos.features.by_id(feature_id_obj)
+    if feature is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Característica no encontrada")
+    await _require_project_owner(container, feature.project_id, principal)
 
     input_data = GenerateFeatureImplementationInput(
         feature_id=feature_id_obj,
@@ -57,6 +84,7 @@ async def start_implementation(
         implementation_id=impl_id,
         use_case=use_case,
         input_data=input_data,
+        project_id=str(feature.project_id),
     )
 
     return GenerateImplementationResponse(implementation_id=impl_id)
@@ -72,7 +100,7 @@ async def start_implementation(
 )
 async def get_implementation_by_feature(
     feature_id: Annotated[str, Query(min_length=1, description="ID de la característica")],
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> ImplementationRecordResponse:
     impl = await container.repos.implementations.by_feature_id(FeatureId(feature_id))
@@ -81,6 +109,7 @@ async def get_implementation_by_feature(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No se encontró una implementación para la característica {feature_id}",
         )
+    await _require_project_owner(container, impl.project_id, principal)
     return ImplementationRecordResponse(
         implementation_id=str(impl.id),
         feature_id=str(impl.feature_id),
@@ -98,8 +127,15 @@ async def get_implementation_by_feature(
 )
 async def stream_implementation_events(
     implementation_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
+    container: Annotated[AppContainer, Depends(get_container)],
 ) -> EventSourceResponse:
+    implementation = await container.repos.implementations.by_id(ImplementationId(implementation_id))
+    project_id = implementation.project_id if implementation is not None else broker.project_id_for(implementation_id)
+    if project_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Implementación no encontrada")
+    await _require_project_owner(container, ProjectId(project_id), principal)
+
     # El broker devuelve un AsyncGenerator[OpenCodeEvent, None]
     # SseEventSourceResponse itera sobre él y lo expone como Server-Sent Events.
     async def event_publisher() -> AsyncGenerator[dict[str, Any]]:
@@ -130,15 +166,10 @@ async def stream_implementation_events(
 async def get_implementation_file_content(
     implementation_id: str,
     path: Annotated[str, Query(min_length=1, description="Ruta relativa del archivo dentro del workspace")],
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> ImplementationFileContentResponse:
-    impl = await container.repos.implementations.by_id(ImplementationId(implementation_id))
-    if impl is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró la implementación {implementation_id}",
-        )
+    impl = await _owned_implementation(container, ImplementationId(implementation_id), principal)
 
     workspace = await container.repos.workspaces.by_project_id(impl.project_id)
     if workspace is None or not workspace.workspace_dir:
@@ -173,15 +204,10 @@ async def get_implementation_file_content(
 )
 async def validate_implementation_workspace(
     implementation_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> ValidateWorkspaceResponse:
-    impl = await container.repos.implementations.by_id(ImplementationId(implementation_id))
-    if impl is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontró la implementación {implementation_id}",
-        )
+    impl = await _owned_implementation(container, ImplementationId(implementation_id), principal)
 
     try:
         output = await container.codegen.validate_workspace.execute(ValidateWorkspaceInput(project_id=impl.project_id))

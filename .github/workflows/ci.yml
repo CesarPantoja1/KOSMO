@@ -209,6 +209,9 @@ jobs:
           while IFS= read -r file; do
             case "$file" in
               .github/workflows/ci.yml|\
+              deploy/**|\
+              docker/**|\
+              nginx/**|\
               .github/actions/*|\
               docker-compose.yml|\
               docker-compose.yaml|\

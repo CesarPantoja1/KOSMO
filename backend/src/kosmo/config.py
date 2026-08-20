@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     opencode_model: str | None = None
     kosmo_workspaces_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "kosmo-workspaces")
     kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
+    code_runner_base_url: str | None = None
+    code_runner_token: SecretStr | None = None
 
     # API
     api_version: str = "v1"

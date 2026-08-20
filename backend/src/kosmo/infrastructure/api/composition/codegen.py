@@ -8,10 +8,12 @@ from kosmo.application.codegen.generate_feature_implementation import (
 )
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCase
 from kosmo.config import Settings
+from kosmo.contracts.codegen import CodeRunnerPort
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
+from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +25,7 @@ class CodegenComponents:
     delete_feature_code: DeleteFeatureCodeUseCase
     workspace_manager: LocalWorkspaceManager
     opencode_client: OpenCodeHttpClient
-    code_runner: SubprocessCodeRunner
+    code_runner: CodeRunnerPort
 
 
 def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> CodegenComponents:
@@ -37,7 +39,13 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         ),
         model=settings.opencode_model,
     )
-    code_runner = SubprocessCodeRunner()
+    if settings.code_runner_base_url and settings.code_runner_token is not None:
+        code_runner: CodeRunnerPort = RemoteCodeRunner(
+            settings.code_runner_base_url,
+            settings.code_runner_token.get_secret_value(),
+        )
+    else:
+        code_runner = SubprocessCodeRunner()
     workspace_manager = LocalWorkspaceManager(
         workspaces_root=settings.kosmo_workspaces_dir,
         workspace_repo=repos.workspaces,

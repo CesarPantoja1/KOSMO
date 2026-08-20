@@ -22,7 +22,8 @@ from kosmo.contracts.codegen import (
     WorkspaceStatus,
 )
 from kosmo.contracts.sdd.feature import Feature
-from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, WorkspaceId
+from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, UserId, WorkspaceId
+from kosmo.contracts.sdd.project import Project
 from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.main import app
@@ -63,6 +64,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
     }
 
     # Act
+    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01")
     response = client.post(
         "/api/v1/implementations",
         json=payload,
@@ -79,6 +81,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
     mock_broker.start_implementation.assert_called_once()
     kwargs = mock_broker.start_implementation.call_args.kwargs
     assert kwargs["implementation_id"] == "impl_feat_01ULXGXXXX"
+    assert kwargs["project_id"] == "prj_01"
 
 
 def test_stream_implementation_events(client: TestClient, mock_broker, valid_token_headers: dict[str, str]) -> None:
@@ -90,7 +93,8 @@ def test_stream_implementation_events(client: TestClient, mock_broker, valid_tok
     mock_broker.subscribe.side_effect = fake_subscribe
 
     # Act
-    with client.stream("GET", "/api/v1/implementations/impl_123/events", headers=valid_token_headers) as response:
+    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01")
+    with client.stream("GET", "/api/v1/implementations/impl_feat_01/events", headers=valid_token_headers) as response:
         assert response.status_code == 200
 
         content = response.read().decode()
@@ -120,6 +124,34 @@ class FakeImplementationRepo:
         )
 
 
+class FakeFeatureRepo:
+    async def by_id(self, feature_id: FeatureId) -> Feature:
+        return Feature(
+            id=feature_id,
+            project_id=ProjectId("prj_01"),
+            number=1,
+            title="Feature de prueba",
+            slug="feature-de-prueba",
+            description="Descripción de prueba",
+        )
+
+
+class FakeProjectRepo:
+    def __init__(self, owner_id: UserId | None = None) -> None:
+        self.owner_id = owner_id or UserId("usr_123")
+
+    async def by_id(self, project_id: ProjectId) -> Project | None:
+        if str(project_id) != "prj_01":
+            return None
+        return Project(
+            id=project_id,
+            name="Proyecto de prueba",
+            slug="proyecto-de-prueba",
+            description="Descripción de prueba",
+            owner_id=self.owner_id,
+        )
+
+
 class FakeWorkspaceRepo:
     def __init__(self, workspace_dir: str) -> None:
         self.workspace_dir = workspace_dir
@@ -137,6 +169,8 @@ class FakeRepos:
     def __init__(self, workspace_dir: str) -> None:
         self.implementations = FakeImplementationRepo(("src/app/page.tsx",))
         self.workspaces = FakeWorkspaceRepo(workspace_dir)
+        self.features = FakeFeatureRepo()
+        self.projects = FakeProjectRepo()
 
 
 class FakeValidateUseCase:
@@ -152,6 +186,7 @@ class FakeValidateUseCase:
 class FakeCodegen:
     def __init__(self, validate_workspace: FakeValidateUseCase) -> None:
         self.validate_workspace = validate_workspace
+        self.generate_feature_implementation = object()
 
 
 class FakeContainer:
@@ -328,6 +363,19 @@ def test_validate_implementation_workspace_workspace_missing(client: TestClient,
     # Assert
     assert response.status_code == 404
     assert "workspace" in response.json()["detail"]
+
+
+def test_implementation_file_content_is_hidden_from_another_owner(client: TestClient, tmp_path: Path) -> None:
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_intruso")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(str(tmp_path / "workspaces" / "prj_01"))
+
+    response = client.get(
+        "/api/v1/implementations/impl_feat_01/files/content",
+        params={"path": "src/app/page.tsx"},
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    assert response.status_code == 404
 
 
 class FakeDeleteFeatureUC:

@@ -388,6 +388,7 @@ async def delete_feature(
         implementation_id=f"impl_{feature_id}",
         use_case=container.codegen.delete_feature_code,
         input_data=DeleteFeatureCodeInput(feature=feature),
+        project_id=str(feature.project_id),
     )
 
     return {"status": "deleted", "feature_id": feature_id}

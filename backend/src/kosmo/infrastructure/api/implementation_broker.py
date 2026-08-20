@@ -30,6 +30,9 @@ class ImplementationEventBroker:
         self._history: dict[str, list[OpenCodeEvent]] = {}
         # Tasks en ejecución
         self._tasks: dict[str, asyncio.Task[None]] = {}
+        # Project owner checks must also work between the POST that starts a
+        # generation and the asynchronous creation of its DB record.
+        self._project_ids: dict[str, str] = {}
         # Tasks de purga del historial programadas al terminar cada generación
         self._cleanup_tasks: set[asyncio.Task[None]] = set()
         self._history_ttl_seconds = history_ttl_seconds
@@ -46,6 +49,7 @@ class ImplementationEventBroker:
         async def _purge() -> None:
             await asyncio.sleep(self._history_ttl_seconds)
             self._history.pop(implementation_id, None)
+            self._project_ids.pop(implementation_id, None)
 
         task = asyncio.create_task(_purge())
         self._cleanup_tasks.add(task)
@@ -93,14 +97,23 @@ class ImplementationEventBroker:
         implementation_id: str,
         use_case: object,
         input_data: object,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Inicia una tarea de flujo (generación o eliminación de código) en background."""
         if implementation_id in self._tasks:
             # Ya está corriendo
             return
 
+        if project_id is not None:
+            self._project_ids[implementation_id] = project_id
+
         task = asyncio.create_task(self._run_implementation(implementation_id, use_case, input_data))
         self._tasks[implementation_id] = task
+
+    def project_id_for(self, implementation_id: str) -> str | None:
+        """Returns the project recorded for an active or recently-finished run."""
+        return self._project_ids.get(implementation_id)
 
     async def subscribe(self, implementation_id: str) -> AsyncGenerator[OpenCodeEvent]:
         """Se suscribe al flujo de eventos para una implementación dada."""

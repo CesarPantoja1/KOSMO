@@ -10,6 +10,7 @@ import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import structlog
 
@@ -372,6 +373,36 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             if ws is not None:
                 updated = dataclasses.replace(ws, manifest_files=manifest, updated_at=datetime.now(UTC))
                 await self._workspace_repo.save(updated)
+
+    async def delete_workspace(self, project_id: ProjectId) -> None:
+        """Elimina el código persistido y cualquier preview activo de un proyecto.
+
+        La metadata de base de datos se elimina en cascada al borrar el proyecto,
+        pero el filesystem compartido no tiene ese mecanismo. Esta operación debe
+        completarse antes de borrar el proyecto para no dejar código accesible.
+        """
+        root_dir = self._workspaces_root.resolve()
+        target_dir = (root_dir / str(project_id)).resolve()
+        if not target_dir.is_relative_to(root_dir):
+            raise ValueError(f"Workspace path escapes configured root for project '{project_id}'.")
+
+        markers_dir = root_dir / ".preview-active"
+        (markers_dir / str(project_id)).unlink(missing_ok=True)
+
+        ports_file = root_dir / ".preview-ports.json"
+        try:
+            raw_ports = json.loads(ports_file.read_text(encoding="utf-8"))
+            ports = cast(dict[str, object], raw_ports) if isinstance(raw_ports, dict) else None
+            if ports is not None and str(project_id) in ports:
+                ports.pop(str(project_id), None)
+                temporary_ports_file = ports_file.with_suffix(".json.tmp")
+                temporary_ports_file.write_text(json.dumps(ports, indent=2) + "\n", encoding="utf-8")
+                temporary_ports_file.replace(ports_file)
+        except (FileNotFoundError, ValueError):
+            pass
+
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
 
     async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None:
         """Consolida los cambios del workspace en un commit de git y actualiza el manifiesto.

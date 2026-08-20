@@ -44,6 +44,14 @@ class _AgentMemorySpy:
         self.deleted_projects.append(str(project_id))
 
 
+class _WorkspaceManagerSpy:
+    def __init__(self) -> None:
+        self.deleted_projects: list[str] = []
+
+    async def delete_workspace(self, project_id: ProjectId) -> None:
+        self.deleted_projects.append(str(project_id))
+
+
 def _a_project(project_id: str = "prj_cascade") -> Project:
     return Project(
         id=ProjectId(project_id),
@@ -83,6 +91,7 @@ def _make_uc(
     evaluation_repo: InMemoryConsistencyEvaluationRepository,
     traceability_repo: InMemoryTraceabilityRepository,
     agent_memory: _AgentMemorySpy | None = None,
+    workspace_manager: _WorkspaceManagerSpy | None = None,
 ) -> DeleteProjectUseCase:
     return DeleteProjectUseCase(
         project_repo=project_repo,
@@ -94,6 +103,7 @@ def _make_uc(
         consistency_evaluation_repo=evaluation_repo,
         traceability_repo=traceability_repo,
         agent_memory=agent_memory,
+        workspace_manager=workspace_manager,
     )
 
 
@@ -254,3 +264,28 @@ async def test_delete_project_without_artifacts_keeps_working() -> None:
     # Act & Assert — el borrado solo elimina lo que exista
     await use_case.execute(DeleteProjectInput(project_id=project.id, owner_id=_OWNER))
     assert await project_repo.by_id(project.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_project_removes_persisted_workspace() -> None:
+    project = _a_project("prj_workspace")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+    workspace_manager = _WorkspaceManagerSpy()
+
+    use_case = _make_uc(
+        project_repo,
+        InMemoryFeatureRepository(),
+        InMemoryRequirementRepository(),
+        InMemoryActivityDiagramRepository(),
+        InMemoryDocumentRepository(),
+        InMemoryChatRepository(),
+        InMemoryConsistencyEvaluationRepository(),
+        InMemoryTraceabilityRepository(),
+        workspace_manager=workspace_manager,
+    )
+
+    await use_case.execute(DeleteProjectInput(project_id=project.id, owner_id=_OWNER))
+
+    assert workspace_manager.deleted_projects == [str(project.id)]

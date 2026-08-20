@@ -51,6 +51,7 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
+from kosmo.contracts.codegen import WorkspaceManagerPort
 from kosmo.contracts.consistency import ConsistencyEvaluator
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -74,6 +75,7 @@ class ProjectComponents:
 def build_project_components(
     repos: RepositoryRegistry,
     pipeline: PipelineComponents,
+    workspace_manager: WorkspaceManagerPort | None = None,
 ) -> ProjectComponents:
     return ProjectComponents(
         create_project=CreateProjectUseCase(project_repository=repos.projects),
@@ -89,6 +91,7 @@ def build_project_components(
             consistency_evaluation_repo=repos.consistency_evaluations,
             traceability_repo=repos.traceability,
             agent_memory=pipeline.agent_memory,
+            workspace_manager=workspace_manager,
         ),
     )
 

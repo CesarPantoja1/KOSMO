@@ -787,6 +787,32 @@ async def test_rollback_workspace_reverts_uncommitted_changes() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_delete_workspace_removes_code_preview_marker_and_port_mapping() -> None:
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_delete_workspace")
+        workspace = await manager.ensure_workspace(project_id)
+        assert workspace.workspace_dir is not None
+
+        root = Path(tmp_root)
+        marker_dir = root / ".preview-active"
+        marker_dir.mkdir()
+        (marker_dir / str(project_id)).write_text(workspace.workspace_dir, encoding="utf-8")
+        (root / ".preview-ports.json").write_text(
+            json.dumps({str(project_id): 3001, "prj_other": 3002}), encoding="utf-8"
+        )
+
+        await manager.delete_workspace(project_id)
+
+        assert not Path(workspace.workspace_dir).exists()
+        assert not (marker_dir / str(project_id)).exists()
+        assert json.loads((root / ".preview-ports.json").read_text(encoding="utf-8")) == {"prj_other": 3002}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_commit_workspace_propaga_error_de_git_add() -> None:
     # Arrange
     with tempfile.TemporaryDirectory() as tmp_root:
