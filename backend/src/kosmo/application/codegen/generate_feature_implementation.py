@@ -46,7 +46,6 @@ _DEFAULT_REQ_MSG = "Esta característica no tiene requisitos EARS generados. Gen
 _DEFAULT_DIAG_MSG = (
     "Esta característica no tiene diagrama de actividad generado. Genera el diagrama antes de continuar."
 )
-_MAX_PROJECT_CONTEXT_CHARS = 2500
 
 
 class MissingRequirementsError(ValueError):
@@ -141,8 +140,7 @@ class GenerateFeatureImplementationUseCase:
                 except Exception:
                     vision = ""
                 if vision:
-                    truncated = vision[:_MAX_PROJECT_CONTEXT_CHARS]
-                    lines.append(f"\n### Visión del producto (descubrimiento)\n{truncated}")
+                    lines.append(f"\n### Visión del producto (descubrimiento)\n{vision}")
 
         return "\n".join(lines)
 
@@ -371,7 +369,6 @@ class GenerateFeatureImplementationUseCase:
                 f"{project_context}\n\n"
                 f"Eres el agente de construcción para la feature '{feature.title}'.\n\n"
                 f"## Plan aprobado\n{plan_lines}\n\n"
-                f"## Requisitos EARS\n{req_markdown}\n\n"
                 "Implementa el código y las pruebas respetando el plan aprobado.\n"
                 "OBLIGATORIO: entrega la UI funcional completa de la feature:\n"
                 "1. Lógica de negocio pura en `src/features/<slug>/logic.ts` (con tests).\n"

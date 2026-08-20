@@ -504,6 +504,75 @@ async def test_generate_feature_implementation_incluye_contexto_y_ui_en_prompts(
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_plan_prompt_incluye_documento_completo_sin_truncar() -> None:
+    # Arrange — documento de descubrimiento mayor al antiguo límite de 2500 caracteres
+    project_repo = InMemoryProjectRepository()
+    document_repo = InMemoryDocumentRepository()
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_VISION")
+    prj_id = ProjectId("prj_01HT_VISION")
+    tail_marker = "MARCADOR_FINAL_DEL_DOCUMENTO_12345"
+    long_vision = "El sistema permitirá gestionar gastos compartidos entre amigos y familiares. " * 100 + tail_marker
+    await project_repo.save(
+        Project(
+            id=prj_id,
+            name="GastoJusto",
+            slug="gasto-justo",
+            description="Control de gastos compartidos",
+            owner_id=UserId("usr_01"),
+        )
+    )
+    await document_repo.save_discovery(prj_id, markdown_to_document(f"# Visión del producto\n\n{long_vision}"))
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_vision"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+        project_repo=project_repo,
+        document_repo=document_repo,
+    )
+
+    # Act
+    await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert — el documento de descubrimiento se envía completo a OpenCode, sin truncar
+    plan_prompt = opencode_client.prompts_sent[0][1]
+    assert len(long_vision) > 2500
+    assert tail_marker in plan_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_feature_implementation_raises_when_feature_not_found() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
@@ -1183,7 +1252,7 @@ async def test_retry_history_accumulated() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_build_prompt_incluye_plan_y_requisitos() -> None:
+async def test_build_prompt_excluye_requisitos() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
     requirement_repo = InMemoryRequirementRepository()
@@ -1228,14 +1297,14 @@ async def test_build_prompt_incluye_plan_y_requisitos() -> None:
     # Act
     await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
 
-    # Assert
+    # Assert — el plan aprobado ya sintetiza los requisitos; no se duplican en Build
     build_prompts = [prompt for (_, prompt, agent) in opencode_client.prompts_sent if agent == "build"]
     assert len(build_prompts) == 1
     build_prompt = build_prompts[0]
-    assert "# REQ-1.1: El sistema registrará los gastos" in build_prompt
     assert "Plan aprobado" in build_prompt
     assert "[create] src/calc.ts" in build_prompt
     assert "[create] tests/calc.test.ts" in build_prompt
+    assert "# REQ-1.1" not in build_prompt
 
 
 @pytest.mark.asyncio
