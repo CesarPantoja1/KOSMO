@@ -202,6 +202,13 @@ class SqlAlchemyFeatureImplementationRepository(FeatureImplementationRepository)
             models = result.scalars().all()
             return [self._to_entity(model) for model in models]
 
+    async def list_by_status(self, status: FeatureImplementationStatus) -> list[FeatureImplementation]:
+        async with self._session_ctx() as session:
+            stmt = select(FeatureImplementationModel).where(FeatureImplementationModel.status == str(status))
+            result = await session.execute(stmt)
+            models = result.scalars().all()
+            return [self._to_entity(model) for model in models]
+
     async def save(self, implementation: FeatureImplementation) -> FeatureImplementation:
         async with self._session_ctx() as session:
             stmt = select(FeatureImplementationModel).where(FeatureImplementationModel.id == str(implementation.id))

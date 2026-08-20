@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
+from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
@@ -247,6 +248,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.diagram_repo = components.repos.diagrams
 
     outbox_task = asyncio.create_task(run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components)))
+
+    # Recuperación best-effort de generaciones huérfanas tras un reinicio del backend:
+    # marcar IN_PROGRESS como FAILED, cerrar sesiones OpenCode y liberar locks de workspace.
+    with contextlib.suppress(Exception):
+        await recover_zombie_implementations(
+            implementation_repo=components.repos.implementations,
+            opencode_client=components.codegen.opencode_client,
+            workspace_manager=components.codegen.workspace_manager,
+        )
 
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
