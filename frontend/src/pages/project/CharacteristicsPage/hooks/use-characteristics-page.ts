@@ -59,13 +59,13 @@ export function useCharacteristicsPage(): UseCharacteristicsPageReturn {
 			return;
 		}
 
-		if (characteristics.length === 0) {
-			// eslint-disable-next-line react-hooks/set-state-in-effect
-			setIsLoading(true);
-			void fetchData().finally(() => setIsLoading(false));
-		}
+		// El store no conserva características entre proyectos: cada entrada a la
+		// fase obtiene la fuente de verdad actual del backend.
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setIsLoading(true);
+		void fetchData().finally(() => setIsLoading(false));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentProject, router]);
+	}, [currentProject?.id, router]);
 
 	const hasCharacteristics = characteristics.length > 0;
 

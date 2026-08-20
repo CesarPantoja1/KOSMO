@@ -6,15 +6,20 @@ import Link from 'next/link';
 import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
+import { useProjectStore } from '@/entities/project';
 import { AsideCharacteristic } from '@/widgets';
 import { Implementation } from '@/widgets/main-navbar/ui/icons';
-import { Ai, ArrowLeft, CursorClickFill } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
+import { Ai, ArrowLeft, CursorClickFill, toast } from '@/shared/ui';
 import { ImplementationLiveProgress } from './ImplementationLiveProgress';
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const selectedId = useCharacteristicStore((s) => s.selectedId);
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
+	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
+	const currentProject = useProjectStore((s) => s.currentProject);
+	const currentProjectId = currentProject?.id;
 
 	const status = useImplementationStore((s) => s.status);
 	const progress = useImplementationStore((s) => s.progress);
@@ -31,6 +36,26 @@ const ImplementationPage = () => {
 	const currentHasImpl = selectedId ? !!implementations[selectedId] : false;
 	const selectedHasDiagram = selectedId ? !!hasDiagram[selectedId] : false;
 	const isGenerating = status === 'generating';
+
+	useEffect(() => {
+		if (!currentProjectId) return;
+		let cancelled = false;
+
+		void getCharacteristics(currentProjectId).then((features) => {
+			if (cancelled) return;
+			const currentSelection = useCharacteristicStore.getState().selectedId;
+			if (!features.some((feature) => feature.id === currentSelection)) {
+				setSelectedId(features[0]?.id ?? null);
+			}
+		})
+			.catch((error: unknown) => {
+				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [currentProjectId, getCharacteristics, setSelectedId]);
 
 	// La verdad de la implementación vive en el backend: al abrir el proyecto o
 	// cambiar de característica se hidrata el estado desde el servidor.

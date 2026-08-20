@@ -40,6 +40,7 @@ const RequirementsPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const selectedId = useCharacteristicStore((s) => s.selectedId);
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
+	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 	const [isGenerating, setIsGenerating] = useState(false);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -67,6 +68,7 @@ const RequirementsPage = () => {
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 	const currentProject = useProjectStore((s) => s.currentProject);
+	const currentProjectId = currentProject?.id;
 
 	// Otros estados
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
@@ -74,6 +76,27 @@ const RequirementsPage = () => {
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!currentProjectId) return;
+		let cancelled = false;
+
+		void getCharacteristics(currentProjectId)
+			.then((features) => {
+				if (cancelled) return;
+				const currentSelection = useCharacteristicStore.getState().selectedId;
+				if (!features.some((feature) => feature.id === currentSelection)) {
+					setSelectedId(features[0]?.id ?? null);
+				}
+			})
+			.catch((error: unknown) => {
+				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [currentProjectId, getCharacteristics, setSelectedId]);
 
 	useEffect(() => {
 		if (!hasUnsavedChanges && pendingCharSwitch) {
