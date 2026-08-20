@@ -368,6 +368,62 @@ async def test_generate_feature_implementation_success() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_generate_events_include_run_id() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_RUNID")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_runid"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert — todos los eventos comparten el mismo run_id (correlation ID de la ejecución)
+    assert len(output.events) > 0
+    run_ids = {event.run_id for event in output.events}
+    assert len(run_ids) == 1
+    run_id = run_ids.pop()
+    assert len(run_id) == 32  # ULID en hex
+    assert all(event.run_id == run_id for event in output.events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_generate_feature_implementation_incluye_contexto_y_ui_en_prompts() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()

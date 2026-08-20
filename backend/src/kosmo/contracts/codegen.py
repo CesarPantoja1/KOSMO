@@ -60,6 +60,7 @@ class OpenCodeEvent:
     session_id: str
     data: dict[str, Any] = field(default_factory=dict)  # type: ignore[reportUnknownVariableType]
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    run_id: str = ""
 
 
 @dataclass(frozen=True)

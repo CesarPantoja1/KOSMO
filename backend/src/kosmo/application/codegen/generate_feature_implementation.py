@@ -7,6 +7,8 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from ulid import ULID
+
 from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
     RegisterCodeTraceabilityUseCase,
@@ -211,9 +213,12 @@ class GenerateFeatureImplementationUseCase:
         if not await self._opencode_client.health_check():
             raise OpenCodeUnavailableError()
 
+        run_id = ULID().hex
+
         collected_events: list[OpenCodeEvent] = []
 
         async def _emit(event: OpenCodeEvent) -> None:
+            event = dataclasses.replace(event, run_id=run_id)
             collected_events.append(event)
             if input_data.event_sink is not None:
                 await input_data.event_sink(event)
