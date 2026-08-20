@@ -61,7 +61,6 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
         self.locked_projects: set[str] = set()
         self.rollback_called_for: set[str] = set()
         self.commit_called_for: list[tuple[str, str]] = []
-        self.preview_published_for: set[str] = set()
         self.manifest: tuple[str, ...] = ("package.json", "tsconfig.json", "src/index.ts")
 
     async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace:
@@ -96,9 +95,6 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
     async def commit_workspace(self, project_id: ProjectId, message: str) -> bool:
         self.commit_called_for.append((str(project_id), message))
         return True
-
-    async def publish_preview(self, project_id: ProjectId) -> None:
-        self.preview_published_for.add(str(project_id))
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):
@@ -363,7 +359,6 @@ async def test_generate_feature_implementation_success() -> None:
     assert len(workspace_manager.commit_called_for) == 1
     assert workspace_manager.commit_called_for[0][0] == str(prj_id)
     assert "C01" in workspace_manager.commit_called_for[0][1]
-    assert str(prj_id) in workspace_manager.preview_published_for
 
 
 @pytest.mark.asyncio

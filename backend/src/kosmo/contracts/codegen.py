@@ -168,8 +168,6 @@ class WorkspaceManagerPort(Protocol):
 
     async def commit_workspace(self, project_id: ProjectId, message: str) -> bool: ...
 
-    async def publish_preview(self, project_id: ProjectId) -> None: ...
-
 
 class CodeRunnerPort(Protocol):
     async def run_step(

@@ -387,14 +387,3 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 await self._workspace_repo.save(updated)
 
         return committed
-
-    async def publish_preview(self, project_id: ProjectId) -> None:
-        """Marca el proyecto como activo para el servicio de preview (un puerto por proyecto).
-
-        El marker vive en `<workspaces_root>/.preview-active/<project_id>` con el directorio
-        del workspace como contenido; el servicio preview lo escanea y asigna un puerto.
-        """
-        target_dir = (self._workspaces_root / str(project_id)).resolve()
-        markers_dir = self._workspaces_root / ".preview-active"
-        markers_dir.mkdir(parents=True, exist_ok=True)
-        (markers_dir / str(project_id)).write_text(str(target_dir), encoding="utf-8")

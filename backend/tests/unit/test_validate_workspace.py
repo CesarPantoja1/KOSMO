@@ -118,9 +118,6 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
     async def release_lock(self, project_id: ProjectId) -> None:
         pass
 
-    async def publish_preview(self, project_id: ProjectId) -> None:
-        pass
-
 
 @pytest.mark.asyncio
 @pytest.mark.unit
