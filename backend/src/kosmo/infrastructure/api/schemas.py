@@ -885,6 +885,26 @@ class ImplementationRecordResponse(BaseModel):
     updated_at: datetime = Field(description="Última actualización del registro")
 
 
+class ValidationStepResultResponse(BaseModel):
+    """Resultado de un paso individual del pipeline de validación."""
+
+    step: str = Field(description="Nombre del paso ejecutado (typecheck, lint, tests, build)")
+    success: bool = Field(description="Si el paso terminó sin errores")
+    duration_ms: int = Field(default=0, description="Duración del paso en milisegundos")
+    exit_code: int = Field(default=0, description="Código de salida del proceso")
+    error_messages: list[str] = Field(default_factory=list, description="Mensajes de error del paso")
+
+
+class ValidateWorkspaceResponse(BaseModel):
+    """Resultado del pipeline de validación de un workspace."""
+
+    all_passed: bool = Field(description="Si todos los pasos pasaron")
+    steps: list[ValidationStepResultResponse] = Field(default_factory=list, description="Resultado por paso")
+    failed_step: str | None = Field(default=None, description="Primer paso que falló, si hubo")
+    error_summary: list[str] = Field(default_factory=list, description="Resumen de errores")
+    total_duration_ms: int = Field(default=0, description="Duración total en milisegundos")
+
+
 class ProjectPreviewResponse(BaseModel):
     """URL de la vista previa del proyecto activo."""
 

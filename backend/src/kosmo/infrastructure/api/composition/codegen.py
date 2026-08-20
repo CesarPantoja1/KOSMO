@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationUseCase,
 )
+from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCase
 from kosmo.config import Settings
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
@@ -17,6 +18,7 @@ class CodegenComponents:
     """Dependencias cableadas del subsistema de generación de código."""
 
     generate_feature_implementation: GenerateFeatureImplementationUseCase
+    validate_workspace: ValidateWorkspaceUseCase
     workspace_manager: LocalWorkspaceManager
     opencode_client: OpenCodeHttpClient
     code_runner: SubprocessCodeRunner
@@ -55,6 +57,10 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
     )
     return CodegenComponents(
         generate_feature_implementation=use_case,
+        validate_workspace=ValidateWorkspaceUseCase(
+            code_runner=code_runner,
+            workspace_manager=workspace_manager,
+        ),
         workspace_manager=workspace_manager,
         opencode_client=opencode_client,
         code_runner=code_runner,

@@ -6,12 +6,19 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from kosmo.application.codegen.validate_workspace import (
+    ValidateWorkspaceInput,
+    ValidateWorkspaceOutput,
+    WorkspaceNotFoundError,
+)
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.codegen import (
     CodeWorkspace,
     FeatureImplementation,
     OpenCodeEvent,
     OpenCodeEventType,
+    ValidationStep,
+    ValidationStepResult,
     WorkspaceStatus,
 )
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, WorkspaceId
@@ -131,9 +138,41 @@ class FakeRepos:
         self.workspaces = FakeWorkspaceRepo(workspace_dir)
 
 
+class FakeValidateUseCase:
+    def __init__(self, output: ValidateWorkspaceOutput) -> None:
+        self.output = output
+        self.inputs: list[ValidateWorkspaceInput] = []
+
+    async def execute(self, input_data: ValidateWorkspaceInput) -> ValidateWorkspaceOutput:
+        self.inputs.append(input_data)
+        return self.output
+
+
+class FakeCodegen:
+    def __init__(self, validate_workspace: FakeValidateUseCase) -> None:
+        self.validate_workspace = validate_workspace
+
+
 class FakeContainer:
-    def __init__(self, workspace_dir: str) -> None:
+    def __init__(self, workspace_dir: str, validate_workspace: FakeValidateUseCase | None = None) -> None:
         self.repos = FakeRepos(workspace_dir)
+        if validate_workspace is None:
+            validate_workspace = FakeValidateUseCase(_validation_output())
+        self.codegen = FakeCodegen(validate_workspace)
+
+
+def _validation_output(all_passed: bool = True) -> ValidateWorkspaceOutput:
+    steps = (
+        ValidationStepResult(step=ValidationStep.TYPECHECK, success=all_passed, duration_ms=1234),
+        ValidationStepResult(step=ValidationStep.LINT, success=all_passed),
+    )
+    return ValidateWorkspaceOutput(
+        all_passed=all_passed,
+        steps=steps,
+        failed_step=None if all_passed else ValidationStep.TYPECHECK,
+        error_summary=() if all_passed else ("Typecheck falló con 1 error",),
+        total_duration_ms=1234,
+    )
 
 
 def test_get_implementation_file_content(
@@ -202,3 +241,90 @@ def test_get_implementation_file_content_not_found(
 
     # Assert
     assert response.status_code == 404
+
+
+def test_validate_implementation_workspace_ok(client: TestClient, tmp_path: Path) -> None:
+    # Arrange
+    validate_use_case = FakeValidateUseCase(_validation_output())
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(
+        str(tmp_path / "workspaces" / "prj_01"),
+        validate_workspace=validate_use_case,
+    )
+
+    # Act
+    response = client.post(
+        "/api/v1/implementations/impl_feat_01/validate",
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["all_passed"] is True
+    assert data["total_duration_ms"] == 1234
+    assert data["failed_step"] is None
+    assert [step["step"] for step in data["steps"]] == ["typecheck", "lint"]
+    assert data["steps"][0]["success"] is True
+    assert validate_use_case.inputs[0].project_id == ProjectId("prj_01")
+
+
+def test_validate_implementation_workspace_failed(client: TestClient, tmp_path: Path) -> None:
+    # Arrange
+    validate_use_case = FakeValidateUseCase(_validation_output(all_passed=False))
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(
+        str(tmp_path / "workspaces" / "prj_01"),
+        validate_workspace=validate_use_case,
+    )
+
+    # Act
+    response = client.post(
+        "/api/v1/implementations/impl_feat_01/validate",
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["all_passed"] is False
+    assert data["failed_step"] == "typecheck"
+    assert data["error_summary"] == ["Typecheck falló con 1 error"]
+
+
+def test_validate_implementation_workspace_not_found(client: TestClient, tmp_path: Path) -> None:
+    # Arrange
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(str(tmp_path / "workspaces" / "prj_01"))
+
+    # Act
+    response = client.post(
+        "/api/v1/implementations/impl_missing/validate",
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    # Assert
+    assert response.status_code == 404
+
+
+def test_validate_implementation_workspace_workspace_missing(client: TestClient, tmp_path: Path) -> None:
+    # Arrange
+    class RaisingValidateUseCase(FakeValidateUseCase):
+        async def execute(self, input_data: ValidateWorkspaceInput) -> ValidateWorkspaceOutput:
+            raise WorkspaceNotFoundError("No existe un workspace inicializado para el proyecto 'prj_01'.")
+
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(
+        str(tmp_path / "workspaces" / "prj_01"),
+        validate_workspace=RaisingValidateUseCase(_validation_output()),
+    )
+
+    # Act
+    response = client.post(
+        "/api/v1/implementations/impl_feat_01/validate",
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    # Assert
+    assert response.status_code == 404
+    assert "workspace" in response.json()["detail"]

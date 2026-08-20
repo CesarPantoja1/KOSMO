@@ -9,6 +9,7 @@ from sse_starlette.sse import EventSourceResponse
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
 )
+from kosmo.application.codegen.validate_workspace import ValidateWorkspaceInput, WorkspaceNotFoundError
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId
 from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
@@ -21,6 +22,8 @@ from kosmo.infrastructure.api.schemas import (
     GenerateImplementationResponse,
     ImplementationFileContentResponse,
     ImplementationRecordResponse,
+    ValidateWorkspaceResponse,
+    ValidationStepResultResponse,
 )
 
 _log = structlog.get_logger(__name__)
@@ -159,3 +162,48 @@ async def get_implementation_file_content(
         )
 
     return ImplementationFileContentResponse(path=path, content=file_path.read_text(encoding="utf-8"))
+
+
+@router.post(
+    "/{implementation_id}/validate",
+    response_model=ValidateWorkspaceResponse,
+    summary="Validar workspace de implementación",
+    description="Ejecuta el pipeline de validación determinística (tsc, eslint, vitest, next build) "
+    "sobre el workspace de la implementación, sin regenerar código.",
+)
+async def validate_implementation_workspace(
+    implementation_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    container: Annotated[AppContainer, Depends(get_container)],
+) -> ValidateWorkspaceResponse:
+    impl = await container.repos.implementations.by_id(ImplementationId(implementation_id))
+    if impl is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró la implementación {implementation_id}",
+        )
+
+    try:
+        output = await container.codegen.validate_workspace.execute(ValidateWorkspaceInput(project_id=impl.project_id))
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from None
+
+    return ValidateWorkspaceResponse(
+        all_passed=output.all_passed,
+        steps=[
+            ValidationStepResultResponse(
+                step=str(step_result.step),
+                success=step_result.success,
+                duration_ms=step_result.duration_ms,
+                exit_code=step_result.exit_code,
+                error_messages=list(step_result.error_messages),
+            )
+            for step_result in output.steps
+        ],
+        failed_step=str(output.failed_step) if output.failed_step is not None else None,
+        error_summary=list(output.error_summary),
+        total_duration_ms=output.total_duration_ms,
+    )
