@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { fetchImplementation, generateImplementation } from '../api/api';
 import { buildSummary } from '../api/api';
-import type { ImplementationStatus, ImplementationSummary } from './types';
+import type { ImplementationLog, ImplementationStatus, ImplementationSummary } from './types';
 
 interface ImplementationStore {
 	status: ImplementationStatus;
 	summary: ImplementationSummary | null;
 	progress: string | null;
+	currentThought: string | null;
+	logs: ImplementationLog[];
 	errorMessage: string | null;
 	implementations: Record<string, boolean>;
 	startGeneration: (
@@ -26,6 +28,8 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 	status: 'idle',
 	summary: null,
 	progress: null,
+	currentThought: null,
+	logs: [],
 	errorMessage: null,
 	implementations: {},
 
@@ -34,6 +38,8 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 			status: 'generating',
 			summary: null,
 			progress: 'Preparando generación...',
+			currentThought: null,
+			logs: [],
 			errorMessage: null,
 		});
 		try {
@@ -41,12 +47,19 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 				featureId,
 				featureTitle,
 				featureDisplayId,
-				(progress) => set({ progress }),
+				(message, log) => {
+					set((state) => ({
+						progress: message,
+						currentThought: log?.type === 'thought' ? log.message : state.currentThought,
+						logs: log ? [...state.logs, log] : state.logs,
+					}));
+				},
 			);
 			set((state) => ({
 				status: 'completed',
 				summary,
 				progress: null,
+				currentThought: null,
 				implementations: {
 					...state.implementations,
 					[featureId]: true,
@@ -79,6 +92,7 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 				status: 'completed',
 				summary,
 				progress: null,
+				currentThought: null,
 				implementations: {
 					...state.implementations,
 					[featureId]: true,
@@ -89,7 +103,15 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 		}
 	},
 
-	reset: () => set({ status: 'idle', summary: null, progress: null, errorMessage: null }),
+	reset: () =>
+		set({
+			status: 'idle',
+			summary: null,
+			progress: null,
+			currentThought: null,
+			logs: [],
+			errorMessage: null,
+		}),
 }));
 
 export const clearImplementationStore = () => {
@@ -97,7 +119,10 @@ export const clearImplementationStore = () => {
 		status: 'idle',
 		summary: null,
 		progress: null,
+		currentThought: null,
+		logs: [],
 		errorMessage: null,
 		implementations: {},
 	});
 };
+

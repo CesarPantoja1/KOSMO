@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import dataclasses
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -146,15 +148,34 @@ class GenerateFeatureImplementationUseCase:
         self,
         input_data: GenerateFeatureImplementationInput,
     ) -> AsyncIterator[OpenCodeEvent]:
-        """Ejecuta el pipeline emitiendo eventos de progreso SSE en tiempo real."""
-        events: list[OpenCodeEvent] = []
+        """Ejecuta el pipeline emitiendo eventos de progreso SSE en tiempo real a medida que ocurren."""
+        queue: asyncio.Queue[OpenCodeEvent | None | Exception] = asyncio.Queue()
 
         async def _capture_event(ev: OpenCodeEvent) -> None:
-            events.append(ev)
+            await queue.put(ev)
 
-        output = await self._run_pipeline(input_data, event_collector=_capture_event)
-        for ev in output.events:
-            yield ev
+        async def _run() -> None:
+            try:
+                await self._run_pipeline(input_data, event_collector=_capture_event)
+            except Exception as exc:
+                await queue.put(exc)
+            finally:
+                await queue.put(None)
+
+        task = asyncio.create_task(_run())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
     async def execute(
         self,
@@ -205,6 +226,13 @@ class GenerateFeatureImplementationUseCase:
         session_id: str | None = None
 
         try:
+            await _emit(
+                OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_PROGRESS,
+                    session_id="",
+                    data={"delta": "Conectando con OpenCode y preparando workspace...", "stage": "workspace"},
+                )
+            )
             workspace = await self._workspace_manager.ensure_workspace(feature.project_id)
             workspace_dir = workspace.workspace_dir or "/workspace"
 
@@ -230,6 +258,13 @@ class GenerateFeatureImplementationUseCase:
             await self._implementation_repo.save(impl)
 
             # 6. Crear sesión en OpenCode
+            await _emit(
+                OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_PROGRESS,
+                    session_id="",
+                    data={"delta": f"Iniciando sesión en OpenCode para '{feature.title}'...", "stage": "session"},
+                )
+            )
             session = await self._opencode_client.create_session(
                 workspace_dir=workspace_dir,
                 title=f"Feature implementation: {feature.title}",
@@ -242,12 +277,27 @@ class GenerateFeatureImplementationUseCase:
                 OpenCodeEvent(
                     event_type=OpenCodeEventType.SESSION_CREATED,
                     session_id=session_id,
-                    data={"workspace_dir": workspace_dir, "feature_id": str(feature.id)},
+                    data={
+                        "workspace_dir": workspace_dir,
+                        "feature_id": str(feature.id),
+                        "delta": "Sesión iniciada. Analizando requisitos...",
+                    },
                 )
             )
 
             # 7. Fase Plan: enviar prompt al Plan Agent
             project_context = await self._build_project_context(feature.project_id)
+
+            await _emit(
+                OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_PROGRESS,
+                    session_id=session_id,
+                    data={
+                        "delta": f"OpenCode analizando requisitos y diagrama de '{feature.title}'...",
+                        "stage": "planning",
+                    },
+                )
+            )
 
             plan_prompt = (
                 f"{project_context}\n\n"
@@ -332,6 +382,17 @@ class GenerateFeatureImplementationUseCase:
                 "No dejes la feature sin pantalla."
             )
 
+            await _emit(
+                OpenCodeEvent(
+                    event_type=OpenCodeEventType.BUILD_PROGRESS,
+                    session_id=session_id,
+                    data={
+                        "delta": f"Iniciando generación de código y componentes para '{feature.title}'...",
+                        "stage": "building",
+                    },
+                )
+            )
+
             generated_files: set[str] = set()
             async for ev in self._opencode_client.send_prompt(session_id, build_prompt, agent="build"):
                 await _emit(ev)
@@ -357,6 +418,17 @@ class GenerateFeatureImplementationUseCase:
 
             while attempt < input_data.max_retries:
                 attempt += 1
+                await _emit(
+                    OpenCodeEvent(
+                        event_type=OpenCodeEventType.BUILD_PROGRESS,
+                        session_id=session_id,
+                        data={
+                            "delta": f"Validando código (intento {attempt}/{input_data.max_retries})...",
+                            "stage": "validating",
+                            "attempt": attempt,
+                        },
+                    )
+                )
                 validation_result = await self._code_runner.run_pipeline(workspace_dir)
                 impl = dataclasses.replace(
                     impl,
@@ -368,6 +440,16 @@ class GenerateFeatureImplementationUseCase:
                 await self._implementation_repo.save(impl)
 
                 if validation_result.all_passed:
+                    await _emit(
+                        OpenCodeEvent(
+                            event_type=OpenCodeEventType.BUILD_PROGRESS,
+                            session_id=session_id,
+                            data={
+                                "delta": "Validaciones completadas con éxito en el workspace.",
+                                "stage": "validation_passed",
+                            },
+                        )
+                    )
                     break
 
                 # Acumular historial de errores del intento actual
@@ -406,6 +488,13 @@ class GenerateFeatureImplementationUseCase:
 
             # 10. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:
+                await _emit(
+                    OpenCodeEvent(
+                        event_type=OpenCodeEventType.BUILD_PROGRESS,
+                        session_id=session_id,
+                        data={"delta": "Guardando cambios y publicando vista previa...", "stage": "finishing"},
+                    )
+                )
                 await self._workspace_manager.commit_workspace(
                     feature.project_id,
                     f"feat({feature.slug}): implement feature {feature.display_id} - {feature.title}",

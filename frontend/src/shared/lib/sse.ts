@@ -10,9 +10,10 @@ export async function consumeSse(response: Response, onEvent: SseEventHandler): 
 	let buffer = '';
 
 	const dispatch = (block: string) => {
-		for (const line of block.split('\n')) {
-			if (!line.startsWith('data: ')) continue;
-			const data = line.slice(6).trim();
+		for (const line of block.split(/\r?\n/)) {
+			const trimmed = line.trim();
+			if (!trimmed.startsWith('data:')) continue;
+			const data = trimmed.slice(5).trim();
 			if (!data) continue;
 			let parsed: Record<string, unknown> | null = null;
 			try {
@@ -32,7 +33,7 @@ export async function consumeSse(response: Response, onEvent: SseEventHandler): 
 		if (done) break;
 		buffer += decoder.decode(value, { stream: true });
 
-		const blocks = buffer.split('\n\n');
+		const blocks = buffer.split(/(?:\r?\n){2,}/);
 		buffer = blocks.pop() ?? '';
 		for (const block of blocks) {
 			dispatch(block);

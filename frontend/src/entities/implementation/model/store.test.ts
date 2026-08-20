@@ -115,4 +115,36 @@ describe('useImplementationStore', () => {
 		expect(state.implementations['feat_new']).toBeUndefined();
 		expect(state.summary).toBeNull();
 	});
+
+	it('acumula los logs y actualiza currentThought durante la generación', async () => {
+		// Arrange
+		mockedGenerate.mockImplementation(
+			async (_id, _title, _displayId, onProgress) => {
+				onProgress?.('Pensando lógica...', {
+					id: 'log_1',
+					type: 'thought',
+					message: 'Pensando lógica...',
+					timestamp: '2026-08-19T10:00:00Z',
+				});
+				onProgress?.('Generando archivo...', {
+					id: 'log_2',
+					type: 'file',
+					message: 'Generando archivo...',
+					timestamp: '2026-08-19T10:00:01Z',
+				});
+				return aSummary;
+			},
+		);
+
+		// Act
+		await useImplementationStore
+			.getState()
+			.startGeneration('feat_01', 'Registrar gastos', 'F-01');
+
+		// Assert
+		const state = useImplementationStore.getState();
+		expect(state.status).toBe('completed');
+		expect(state.currentThought).toBeNull();
+	});
 });
+

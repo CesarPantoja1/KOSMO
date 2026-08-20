@@ -4,7 +4,7 @@ import { parseApiError } from '@/shared/api/errors';
 import { authHeaders } from '@/shared/api/headers';
 import { consumeSse } from '@/shared/lib';
 import type { SseEventHandler } from '@/shared/lib';
-import type { ImplementationSummary } from '../model/types';
+import type { ImplementationLog, ImplementationSummary } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -28,14 +28,22 @@ const mockSummary: ImplementationSummary = {
 		'Comparte o publica tu aplicación cuando esté lista',
 	],
 	generatedAt: null,
+	generatedFiles: [
+		'src/app/page.tsx',
+		'src/app/layout.tsx',
+		'src/db/schema.ts',
+		'src/components/button.tsx',
+		'tests/app.test.tsx',
+		'package.json',
+	],
 };
 
 const PROGRESS_MESSAGES: Record<string, string> = {
-	session_created: 'Sesión de OpenCode creada',
+	session_created: 'Sesión iniciada',
 	plan_progress: 'Planificando la implementación...',
-	plan_complete: 'Plan aprobado',
+	plan_complete: 'Plan aprobado, preparando generación...',
 	build_progress: 'Generando código...',
-	build_complete: 'Código generado, validando...',
+	build_complete: 'Código generado, ejecutando validaciones...',
 };
 
 export function buildSummary(
@@ -64,14 +72,92 @@ export function buildSummary(
 			'Comparte o publica tu aplicación cuando esté lista',
 		],
 		generatedAt: timestamp || new Date().toISOString(),
+		generatedFiles: Array.isArray(data.generated_files)
+			? (data.generated_files as string[]).slice().sort()
+			: [],
 	};
 }
+
+export const fetchImplementationFile = async (
+	implementationId: string,
+	path: string,
+): Promise<string> => {
+	const res = await fetch(
+		`${API_BASE_URL}/api/v1/implementations/${implementationId}/files/content?path=${encodeURIComponent(path)}`,
+		{
+			headers: authHeaders(),
+			cache: 'no-store',
+		},
+	);
+	if (!res.ok) {
+		throw parseApiError(res, await res.json().catch(() => null));
+	}
+	const data = (await res.json()) as { content: string };
+	return data.content;
+};
+
+export interface ImplementationRecord {
+	implementationId: string;
+	featureId: string;
+	projectId: string;
+	status: string;
+	generatedFiles: string[];
+	updatedAt: string;
+}
+
+const toRecord = (data: {
+	implementation_id: string;
+	feature_id: string;
+	project_id: string;
+	status: string;
+	generated_files?: string[];
+	updated_at?: string;
+}): ImplementationRecord => ({
+	implementationId: data.implementation_id,
+	featureId: data.feature_id,
+	projectId: data.project_id,
+	status: data.status,
+	generatedFiles: Array.isArray(data.generated_files) ? data.generated_files : [],
+	updatedAt: data.updated_at ?? new Date().toISOString(),
+});
+
+export const fetchImplementation = async (featureId: string): Promise<ImplementationRecord | null> => {
+	const res = await fetch(
+		`${API_BASE_URL}/api/v1/implementations?feature_id=${encodeURIComponent(featureId)}`,
+		{
+			headers: authHeaders(),
+			cache: 'no-store',
+		},
+	);
+	if (res.status === 404) {
+		return null;
+	}
+	if (!res.ok) {
+		throw parseApiError(res, await res.json().catch(() => null));
+	}
+	return toRecord((await res.json()) as Parameters<typeof toRecord>[0]);
+};
+
+export const fetchPreviewUrl = async (projectId: string): Promise<string | null> => {
+	const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/preview`, {
+		headers: authHeaders(),
+		cache: 'no-store',
+	});
+	if (res.status === 404) {
+		return null;
+	}
+	if (!res.ok) {
+		throw parseApiError(res, await res.json().catch(() => null));
+	}
+	const data = (await res.json()) as { url: string };
+	return data.url;
+};
 
 export const generateImplementation = async (
 	featureId: string,
 	featureTitle: string,
 	featureDisplayId: string,
-	onProgress?: (message: string) => void,
+	onProgress?: (message: string, log?: ImplementationLog) => void,
 ): Promise<ImplementationSummary> => {
 	if (USE_MOCKS) {
 		await delay(2000);
@@ -91,7 +177,12 @@ export const generateImplementation = async (
 			body: JSON.stringify({ feature_id: featureId, max_retries: 3 }),
 		},
 	);
-	onProgress?.('Implementación iniciada');
+	onProgress?.('Implementación iniciada', {
+		id: `log_${Date.now()}_init`,
+		type: 'info',
+		message: 'Implementación iniciada',
+		timestamp: new Date().toISOString(),
+	});
 
 	const res = await fetch(`${API_BASE_URL}/api/v1/implementations/${implementation_id}/events`, {
 		headers: authHeaders(),
@@ -102,21 +193,49 @@ export const generateImplementation = async (
 	}
 
 	let done: ImplementationSummary | null = null;
+	let logCounter = 0;
+
 	const onEvent: SseEventHandler = (raw) => {
 		const eventType = String(raw.event_type ?? '');
 		const data = (raw.data ?? {}) as Record<string, unknown>;
+		const eventTimestamp = String(raw.timestamp ?? new Date().toISOString());
+		logCounter += 1;
+		const logId = `log_${Date.now()}_${logCounter}`;
+
 		if (eventType === 'retry') {
 			const attempt = String(data.attempt ?? '?');
 			const max = String(data.max_retries ?? '?');
-			onProgress?.(`Corrigiendo errores de validación (intento ${attempt}/${max})`);
+			const msg = `Corrigiendo errores de validación (intento ${attempt}/${max})`;
+			onProgress?.(msg, {
+				id: logId,
+				type: 'retry',
+				message: msg,
+				timestamp: eventTimestamp,
+			});
+		} else if (eventType === 'file_edit') {
+			const filePath = typeof data.path === 'string' && data.path ? data.path : '';
+			const msg = filePath ? `Generando ${filePath}...` : 'Generando archivo...';
+			onProgress?.(msg, {
+				id: logId,
+				type: 'file',
+				message: msg,
+				timestamp: eventTimestamp,
+				detail: typeof data.content === 'string' ? data.content : undefined,
+			});
 		} else if (eventType === 'done' && data.status === 'implemented') {
 			done = buildSummary(
 				featureId,
 				featureTitle,
 				featureDisplayId,
 				data,
-				String(raw.timestamp ?? new Date().toISOString()),
+				eventTimestamp,
 			);
+			onProgress?.('Implementación completada con éxito', {
+				id: logId,
+				type: 'success',
+				message: 'Implementación completada con éxito',
+				timestamp: eventTimestamp,
+			});
 		} else if (eventType === 'error') {
 			const detail =
 				typeof data.error === 'string' && data.error
@@ -124,10 +243,43 @@ export const generateImplementation = async (
 					: data.status === 'requires_review'
 						? 'La validación falló tras agotar los reintentos. Revisa los errores y reintenta.'
 						: 'Ocurrió un error durante la generación.';
+			onProgress?.(detail, {
+				id: logId,
+				type: 'error',
+				message: detail,
+				timestamp: eventTimestamp,
+			});
 			throw new Error(detail);
 		} else {
-			const message = PROGRESS_MESSAGES[eventType];
-			if (message) onProgress?.(message);
+			const thought = typeof data.thought === 'string' ? data.thought : null;
+			const delta = typeof data.delta === 'string' ? data.delta : null;
+			const stage = typeof data.stage === 'string' ? data.stage : '';
+
+			if (thought) {
+				onProgress?.(thought, {
+					id: logId,
+					type: 'thought',
+					message: thought,
+					timestamp: eventTimestamp,
+				});
+			} else if (delta) {
+				const logType = stage === 'validating' || stage === 'validation_passed' ? 'validation' : stage === 'tool' ? 'tool' : 'code';
+				onProgress?.(delta, {
+					id: logId,
+					type: logType,
+					message: delta,
+					timestamp: eventTimestamp,
+					detail: typeof data.detail === 'string' ? data.detail : undefined,
+				});
+			} else {
+				const message = PROGRESS_MESSAGES[eventType] ?? 'Procesando...';
+				onProgress?.(message, {
+					id: logId,
+					type: 'info',
+					message,
+					timestamp: eventTimestamp,
+				});
+			}
 		}
 	};
 	await consumeSse(res, onEvent);

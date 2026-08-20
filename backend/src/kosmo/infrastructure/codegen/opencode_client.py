@@ -220,7 +220,17 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                     continue
                 part_dict: dict[str, Any] = cast(dict[str, Any], part)
                 part_type: object = part_dict.get("type")
-                if part_type == "file":
+                if part_type in ("thought", "reasoning"):
+                    raw_thought: object = part_dict.get("text") or part_dict.get("thought") or part_dict.get("content")
+                    thought_text = str(raw_thought or "").strip()
+                    if thought_text:
+                        yield OpenCodeEvent(
+                            event_type=self._progress_event_type(agent),
+                            session_id=session_id,
+                            data={"thought": thought_text, "stage": "thinking"},
+                            timestamp=datetime.now(UTC),
+                        )
+                elif part_type == "file":
                     raw_file = part_dict.get("file")
                     file_obj: dict[str, Any] = cast(dict[str, Any], raw_file) if isinstance(raw_file, dict) else {}
                     raw_path: object = part_dict.get("path") or file_obj.get("path")
@@ -239,6 +249,20 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                             },
                             timestamp=datetime.now(UTC),
                         )
+                elif part_type in ("tool", "tool-call", "tool_call", "tool_invocation"):
+                    tool_name = str(part_dict.get("tool") or part_dict.get("name") or "tool")
+                    raw_desc = part_dict.get("description") or part_dict.get("args") or ""
+                    yield OpenCodeEvent(
+                        event_type=self._progress_event_type(agent),
+                        session_id=session_id,
+                        data={
+                            "delta": f"Ejecutando herramienta: {tool_name}",
+                            "tool": tool_name,
+                            "stage": "tool",
+                            "detail": str(raw_desc)[:200] if raw_desc else "",
+                        },
+                        timestamp=datetime.now(UTC),
+                    )
                 elif part_type == "text":
                     raw_text: object = part_dict.get("text")
                     text = str(raw_text or "").strip()
@@ -246,7 +270,7 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                         yield OpenCodeEvent(
                             event_type=self._progress_event_type(agent),
                             session_id=session_id,
-                            data={"delta": text},
+                            data={"delta": text, "stage": "writing"},
                             timestamp=datetime.now(UTC),
                         )
 

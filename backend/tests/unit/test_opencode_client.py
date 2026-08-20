@@ -634,3 +634,47 @@ async def test_async_context_manager_lifecycle() -> None:
     async with OpenCodeHttpClient(client=http_client) as client:
         is_healthy = await client.health_check()
         assert is_healthy is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_yields_thought_and_tool_events() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "info": {"id": "msg_thought_1", "sessionID": "oc_sess_200", "role": "assistant", "finish": "stop"},
+                "parts": [
+                    {"id": "prt_th", "type": "thought", "text": "Analizando la arquitectura de componentes"},
+                    {"id": "prt_tool", "type": "tool", "tool": "file_search", "description": "searching files"},
+                    {"id": "prt_txt", "type": "text", "text": "Código generado correctamente"},
+                ],
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_200", "Genera", agent="build"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 4
+    assert events[0].event_type == OpenCodeEventType.BUILD_PROGRESS
+    assert events[0].data.get("thought") == "Analizando la arquitectura de componentes"
+    assert events[0].data.get("stage") == "thinking"
+
+    assert events[1].event_type == OpenCodeEventType.BUILD_PROGRESS
+    assert events[1].data.get("tool") == "file_search"
+    assert events[1].data.get("stage") == "tool"
+
+    assert events[2].event_type == OpenCodeEventType.BUILD_PROGRESS
+    assert events[2].data.get("delta") == "Código generado correctamente"
+    assert events[2].data.get("stage") == "writing"
+
+    assert events[3].event_type == OpenCodeEventType.BUILD_COMPLETE
+    await client.aclose()

@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { buildSummary } from './api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildSummary, fetchImplementation, fetchImplementationFile, fetchPreviewUrl } from './api';
+
+const fetchMock = vi.fn();
+
+function mockFetchOk(body: unknown) {
+	fetchMock.mockResolvedValue({ ok: true, json: async () => body });
+}
+
+function mockFetchError(status: number, body: unknown) {
+	fetchMock.mockResolvedValue({ ok: false, status, json: async () => body });
+}
+
+afterEach(() => {
+	fetchMock.mockReset();
+	vi.stubGlobal('fetch', undefined);
+});
 
 describe('buildSummary', () => {
 	it('construye el resumen con métricas reales desde el evento done', () => {
@@ -33,6 +48,10 @@ describe('buildSummary', () => {
 		});
 		expect(summary.generatedAt).toBe('2026-08-19T10:00:00Z');
 		expect(summary.technologies).toContain('Next.js');
+		expect(summary.generatedFiles).toEqual([
+			'src/app/page.tsx',
+			'tests/app.test.tsx',
+		]);
 	});
 
 	it('usa cero cuando el evento no trae archivos ni aristas', () => {
@@ -47,3 +66,290 @@ describe('buildSummary', () => {
 		expect(summary.metrics[2].value).toBe('0');
 	});
 });
+
+describe('fetchImplementationFile', () => {
+	it('devuelve el contenido del archivo desde el endpoint', async () => {
+		// Arrange
+		vi.stubGlobal('fetch', fetchMock);
+		mockFetchOk({ path: 'src/a.ts', content: 'export const a = 1;' });
+
+		// Act
+		const content = await fetchImplementationFile('impl_feat_01', 'src/a.ts');
+
+		// Assert
+		expect(content).toBe('export const a = 1;');
+		expect(fetchMock).toHaveBeenCalledWith(
+			expect.stringContaining('/api/v1/implementations/impl_feat_01/files/content?path=src%2Fa.ts'),
+			expect.objectContaining({ cache: 'no-store' }),
+		);
+	});
+
+	it('lanza error si la respuesta no es exitosa', async () => {
+		// Arrange
+		vi.stubGlobal('fetch', fetchMock);
+		mockFetchError(404, { detail: 'No se encontró el archivo' });
+
+		// Act & Assert
+		await expect(fetchImplementationFile('impl_feat_01', 'src/a.ts')).rejects.toThrow(
+			'No se encontró el archivo',
+		);
+	});
+});
+
+describe('fetchImplementation', () => {
+	it('devuelve el registro persistido de la implementación', async () => {
+		// Arrange
+		vi.stubGlobal('fetch', fetchMock);
+		mockFetchOk({
+			implementation_id: 'impl_feat_01',
+			feature_id: 'feat_01',
+			project_id: 'prj_01',
+			status: 'implemented',
+			generated_files: ['src/app/page.tsx'],
+			updated_at: '2026-08-19T10:00:00Z',
+		});
+
+		// Act
+		const record = await fetchImplementation('feat_01');
+
+		// Assert
+		expect(record).toMatchObject({
+			implementationId: 'impl_feat_01',
+			featureId: 'feat_01',
+			projectId: 'prj_01',
+			status: 'implemented',
+			generatedFiles: ['src/app/page.tsx'],
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			expect.stringContaining('/api/v1/implementations?feature_id=feat_01'),
+			expect.anything(),
+		);
+	});
+
+	it('devuelve null cuando la implementación no existe (404)', async () => {
+		// Arrange
+		vi.stubGlobal('fetch', fetchMock);
+		mockFetchError(404, { detail: 'No se encontró una implementación' });
+
+		// Act
+		const record = await fetchImplementation('feat_none');
+
+		// Assert
+		expect(record).toBeNull();
+	});
+});
+
+describe('fetchPreviewUrl', () => {
+	it('devuelve la URL de la vista previa del proyecto', async () => {
+		// Arrange
+		vi.stubGlobal('fetch', fetchMock);
+		mockFetchOk({ url: 'http://localhost:3002' });
+
+		// Act
+		const url = await fetchPreviewUrl('prj_01');
+
+		// Assert
+		expect(url).toBe('http://localhost:3002');
+		expect(fetchMock).toHaveBeenCalledWith(
+			expect.stringContaining('/api/v1/projects/prj_01/preview'),
+			expect.anything(),
+		);
+	});
+
+	it('devuelve null cuando el proyecto no tiene vista previa activa (404)', async () => {
+		// Arrange
+		vi.stubGlobal('fetch', fetchMock);
+		mockFetchError(404, { detail: 'No tiene una vista previa activa' });
+
+		// Act
+		const url = await fetchPreviewUrl('prj_none');
+
+		// Assert
+		expect(url).toBeNull();
+	});
+});
+
+describe('generateImplementation', () => {
+	function sseResponse(payload: string): Response {
+		const encoder = new TextEncoder();
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encoder.encode(payload));
+				controller.close();
+			},
+		});
+		return new Response(stream, {
+			headers: { 'Content-Type': 'text/event-stream' },
+			status: 200,
+		});
+	}
+
+	it('inicia la implementación y procesa eventos SSE de OpenCode hasta done', async () => {
+		// Arrange
+		const progressMessages: string[] = [];
+		const onProgress = (msg: string) => progressMessages.push(msg);
+
+		const events = [
+			{ event_type: 'session_created', data: { feature_id: 'feat_01' } },
+			{ event_type: 'plan_progress', data: { delta: 'Planificando...' } },
+			{ event_type: 'plan_complete', data: { files: ['src/logic.ts'] } },
+			{ event_type: 'build_progress', data: {} },
+			{ event_type: 'file_edit', data: { path: 'src/features/gastos/logic.ts' } },
+			{ event_type: 'build_complete', data: { files: ['src/features/gastos/logic.ts'] } },
+			{
+				event_type: 'done',
+				data: {
+					status: 'implemented',
+					generated_files: ['src/features/gastos/logic.ts'],
+					traceability_edges: 3,
+				},
+			},
+		];
+		const ssePayload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((url: string, init?: RequestInit) => {
+				if (url.includes('/api/v1/implementations') && init?.method === 'POST') {
+					return Promise.resolve(
+						new Response(JSON.stringify({ implementation_id: 'impl_feat_01' }), {
+							status: 202,
+							headers: { 'Content-Type': 'application/json' },
+						}),
+					);
+				}
+				if (url.includes('/api/v1/implementations/impl_feat_01/events')) {
+					return Promise.resolve(sseResponse(ssePayload));
+				}
+				return Promise.reject(new Error(`URL inesperada: ${url}`));
+			}),
+		);
+
+		// Act
+		const { generateImplementation } = await import('./api');
+		const result = await generateImplementation('feat_01', 'Gastos', 'F-01', onProgress);
+
+		// Assert
+		expect(result.status).toBe('completed');
+		expect(result.generatedFiles).toEqual(['src/features/gastos/logic.ts']);
+		expect(progressMessages).toContain('Implementación iniciada');
+		expect(progressMessages).toContain('Sesión iniciada');
+		expect(progressMessages).toContain('Planificando...');
+		expect(progressMessages).toContain('Plan aprobado, preparando generación...');
+		expect(progressMessages).toContain('Generando src/features/gastos/logic.ts...');
+		expect(progressMessages).toContain('Código generado, ejecutando validaciones...');
+	});
+
+	it('notifica reintentos de validación con el número de intento', async () => {
+		// Arrange
+		const progressMessages: string[] = [];
+		const onProgress = (msg: string) => progressMessages.push(msg);
+
+		const events = [
+			{ event_type: 'retry', data: { attempt: 1, max_retries: 3 } },
+			{
+				event_type: 'done',
+				data: { status: 'implemented', generated_files: [] },
+			},
+		];
+		const ssePayload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((url: string, init?: RequestInit) => {
+				if (url.includes('/api/v1/implementations') && init?.method === 'POST') {
+					return Promise.resolve(
+						new Response(JSON.stringify({ implementation_id: 'impl_feat_02' }), {
+							status: 202,
+							headers: { 'Content-Type': 'application/json' },
+						}),
+					);
+				}
+				return Promise.resolve(sseResponse(ssePayload));
+			}),
+		);
+
+		// Act
+		const { generateImplementation } = await import('./api');
+		await generateImplementation('feat_02', 'Login', 'F-02', onProgress);
+
+		// Assert
+		expect(progressMessages).toContain('Corrigiendo errores de validación (intento 1/3)');
+	});
+
+	it('lanza el error específico cuando el backend emite evento error', async () => {
+		// Arrange
+		const events = [
+			{
+				event_type: 'error',
+				data: { error: 'El servidor OpenCode no está disponible. Verifica que esté en ejecución.' },
+			},
+		];
+		const ssePayload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((url: string, init?: RequestInit) => {
+				if (url.includes('/api/v1/implementations') && init?.method === 'POST') {
+					return Promise.resolve(
+						new Response(JSON.stringify({ implementation_id: 'impl_feat_03' }), {
+							status: 202,
+							headers: { 'Content-Type': 'application/json' },
+						}),
+					);
+				}
+				return Promise.resolve(sseResponse(ssePayload));
+			}),
+		);
+
+		// Act & Assert
+		const { generateImplementation } = await import('./api');
+		await expect(
+			generateImplementation('feat_03', 'Error Feature', 'F-03'),
+		).rejects.toThrow('El servidor OpenCode no está disponible. Verifica que esté en ejecución.');
+	});
+
+	it('transmite pensamientos de OpenCode y deltas en tiempo real hacia onProgress', async () => {
+		// Arrange
+		const logs: Array<{ message: string; type?: string }> = [];
+		const onProgress = (msg: string, log?: { type: string; message: string }) => {
+			logs.push({ message: msg, type: log?.type });
+		};
+
+		const events = [
+			{ event_type: 'plan_progress', data: { thought: 'Pensando cómo estructurar la feature...' } },
+			{ event_type: 'build_progress', data: { delta: 'Generando schema de datos...', stage: 'writing' } },
+			{ event_type: 'build_progress', data: { delta: 'Validando tipados...', stage: 'validating' } },
+			{
+				event_type: 'done',
+				data: { status: 'implemented', generated_files: ['src/db/schema.ts'] },
+			},
+		];
+		const ssePayload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((url: string, init?: RequestInit) => {
+				if (url.includes('/api/v1/implementations') && init?.method === 'POST') {
+					return Promise.resolve(
+						new Response(JSON.stringify({ implementation_id: 'impl_feat_thought' }), {
+							status: 202,
+							headers: { 'Content-Type': 'application/json' },
+						}),
+					);
+				}
+				return Promise.resolve(sseResponse(ssePayload));
+			}),
+		);
+
+		// Act
+		const { generateImplementation } = await import('./api');
+		await generateImplementation('feat_th', 'Thought Feature', 'F-TH', onProgress);
+
+		// Assert
+		expect(logs.some((l) => l.type === 'thought' && l.message.includes('Pensando cómo estructurar'))).toBe(true);
+		expect(logs.some((l) => l.type === 'code' && l.message.includes('Generando schema'))).toBe(true);
+		expect(logs.some((l) => l.type === 'validation' && l.message.includes('Validando tipados'))).toBe(true);
+	});
+});
+

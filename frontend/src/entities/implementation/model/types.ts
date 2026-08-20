@@ -17,4 +17,25 @@ export interface ImplementationSummary {
 	technologies: string[];
 	nextSteps: string[];
 	generatedAt: string | null;
+	generatedFiles: string[];
 }
+
+export type ImplementationLogType =
+	| 'info'
+	| 'thought'
+	| 'code'
+	| 'file'
+	| 'tool'
+	| 'validation'
+	| 'retry'
+	| 'error'
+	| 'success';
+
+export interface ImplementationLog {
+	id: string;
+	type: ImplementationLogType;
+	message: string;
+	timestamp: string;
+	detail?: string;
+}
+

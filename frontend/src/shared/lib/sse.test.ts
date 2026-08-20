@@ -119,4 +119,19 @@ describe('consumeSse', () => {
 			'Error en procesamiento SSE',
 		);
 	});
+
+	it('procesa eventos con delimitadores CRLF (\\r\\n\\r\\n) generados por FastAPI/sse_starlette', async () => {
+		const onEvent = vi.fn();
+		const payload = [fixtureStart, fixtureChunk, fixtureMessage]
+			.map((e) => `event: custom\r\ndata: ${JSON.stringify(e)}\r\n\r\n`)
+			.join('');
+
+		await consumeSse(sseResponse(payload), onEvent);
+
+		expect(onEvent).toHaveBeenCalledTimes(3);
+		expect(onEvent.mock.calls[0][0]).toEqual(fixtureStart);
+		expect(onEvent.mock.calls[1][0]).toEqual(fixtureChunk);
+		expect(onEvent.mock.calls[2][0]).toEqual(fixtureMessage);
+	});
 });
+

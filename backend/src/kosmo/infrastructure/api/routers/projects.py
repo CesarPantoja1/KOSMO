@@ -1,5 +1,5 @@
 import json
-from typing import Annotated
+from typing import Annotated, cast
 
 import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -179,17 +179,22 @@ async def get_project_preview(
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> ProjectPreviewResponse:
     ports_file = container.settings.kosmo_workspaces_dir / ".preview-ports.json"
+    manifest: dict[str, object] = {}
     try:
-        manifest = json.loads(ports_file.read_text(encoding="utf-8"))
+        raw = json.loads(ports_file.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            manifest = cast(dict[str, object], raw)
     except (FileNotFoundError, ValueError):
         manifest = {}
-    entry = manifest.get(project_id)
-    if entry is None or not entry.get("url"):
+    raw_entry = manifest.get(project_id)
+    entry: dict[str, object] = cast(dict[str, object], raw_entry) if isinstance(raw_entry, dict) else {}
+    url_val = entry.get("url")
+    if not url_val:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"El proyecto {project_id} no tiene una vista previa activa",
         )
-    return ProjectPreviewResponse(url=str(entry["url"]))
+    return ProjectPreviewResponse(url=str(url_val))
 
 
 @router.delete(

@@ -8,7 +8,8 @@ import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
 import { AsideCharacteristic } from '@/widgets';
 import { Implementation } from '@/widgets/main-navbar/ui/icons';
-import { Ai, ArrowLeft, CursorClickFill, Loading } from '@/shared/ui';
+import { Ai, ArrowLeft, CursorClickFill } from '@/shared/ui';
+import { ImplementationLiveProgress } from './ImplementationLiveProgress';
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -17,6 +18,7 @@ const ImplementationPage = () => {
 
 	const status = useImplementationStore((s) => s.status);
 	const progress = useImplementationStore((s) => s.progress);
+	const currentThought = useImplementationStore((s) => s.currentThought);
 	const errorMessage = useImplementationStore((s) => s.errorMessage);
 	const implementations = useImplementationStore((s) => s.implementations);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
@@ -58,12 +60,9 @@ const ImplementationPage = () => {
 	return (
 		<>
 			{isGenerating && (
-				<Loading
-					title='Generando implementación con OpenCode'
-					description={
-						progress ?? 'Analizando la funcionalidad para construir la estructura del código.'
-					}
-					messages={[progress ?? 'Conectando con OpenCode...']}
+				<ImplementationLiveProgress
+					progress={progress}
+					currentThought={currentThought}
 				/>
 			)}
 
