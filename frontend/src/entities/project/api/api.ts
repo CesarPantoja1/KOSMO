@@ -67,6 +67,13 @@ const mockCreateProject = async (body: {
 	return { ...newProject };
 };
 
+const mockDeleteProject = async (id: string): Promise<void> => {
+	await delay(400);
+	const index = mockProjects.findIndex((p) => p.id === id);
+	if (index === -1) throw new Error(`Mock project not found: ${id}`);
+	mockProjects.splice(index, 1);
+};
+
 // --- Real implementations ---
 
 const realGetProjects = (): Promise<Project[]> =>
@@ -82,6 +89,9 @@ export const realCreateProject = (body: { name: string; description: string }) =
 	});
 };
 
+const realDeleteProject = (id: string): Promise<void> =>
+	apiClient<void>(`/api/v1/projects/${id}`, { method: 'DELETE' });
+
 // --- Exports (switch based on USE_MOCKS) ---
 
 export const getProjects = (): Promise<Project[]> =>
@@ -94,3 +104,6 @@ export const createProject = (body: {
 	name: string;
 	description: string;
 }): Promise<Project> => (USE_MOCKS ? mockCreateProject(body) : realCreateProject(body));
+
+export const deleteProject = (id: string): Promise<void> =>
+	USE_MOCKS ? mockDeleteProject(id) : realDeleteProject(id);

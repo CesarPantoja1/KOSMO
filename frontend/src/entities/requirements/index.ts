@@ -8,6 +8,7 @@ export {
 	getRequirements,
 	saveRequirements,
 	generateRequirements,
+	deleteRequirements,
 	getRequirementChatHistory,
 	sendRequirementChatMessage,
 } from './api/api';

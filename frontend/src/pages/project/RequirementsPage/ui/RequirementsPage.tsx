@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useRequirementsStore } from '@/entities/requirements';
+import { useModelingStore } from '@/entities/modeling';
 import { formatApiError } from '@/shared/api';
 import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
 import {
@@ -40,6 +41,7 @@ const RequirementsPage = () => {
 	const selectedId = useCharacteristicStore((s) => s.selectedId);
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
 	// Requisitos estado
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
@@ -48,6 +50,12 @@ const RequirementsPage = () => {
 	const getRequirements = useRequirementsStore((s) => s.getRequirements);
 	const saveRequirements = useRequirementsStore((s) => s.saveRequirements);
 	const generateRequirements = useRequirementsStore((s) => s.generateRequirements);
+	const deleteRequirementsStore = useRequirementsStore((s) => s.deleteRequirements);
+
+	// Modeling estado (para eliminar diagrama asociado)
+	const hasDiagram = useModelingStore((s) => s.hasDiagram);
+	const deleteDiagramModeling = useModelingStore((s) => s.deleteDiagram);
+
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
 	const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -155,6 +163,29 @@ const RequirementsPage = () => {
 		}
 	};
 
+	const handleDeleteRequirements = async () => {
+		if (!confirmDeleteId || !currentProject) return;
+		const featureId = confirmDeleteId;
+		setConfirmDeleteId(null);
+		try {
+			await deleteRequirementsStore(currentProject.id, featureId);
+
+			if (hasDiagram[featureId]) {
+				await deleteDiagramModeling(currentProject.id, featureId);
+			}
+
+			setMarkdown('');
+			setSavedContent('');
+			toast.success('Requisitos eliminados');
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al eliminar los requisitos'));
+		}
+	};
+
+	const handleDeleteClick = (id: string) => {
+		setConfirmDeleteId(id);
+	};
+
 	const handleSave = useCallback(async () => {
 		if (!selectedId || !currentProject) return;
 
@@ -205,6 +236,17 @@ const RequirementsPage = () => {
 
 			{pendingNavigationPath && (
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
+			)}
+
+			{confirmDeleteId && (
+				<ModalConfirm
+					title='Eliminar requisitos'
+					description='Esta acción no se puede deshacer. Se eliminarán los criterios de aceptación de esta funcionalidad.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setConfirmDeleteId(null)}
+					onConfirm={handleDeleteRequirements}
+				/>
 			)}
 
 			{isGenerating && (
@@ -276,15 +318,16 @@ const RequirementsPage = () => {
 						</div>
 					) : (
 						<div className='flex gap-1 flex-1 min-h-0'>
-							<AsideCharacteristic
-								characteristics={characteristics}
-								selectedId={selectedId}
-								onSelectCharacteristic={handleSelectCharacteristic}
-								hasIcon={hasRequirements}
-								icon={Requirements}
-								isExpanded={isAsideExpanded}
-								onToggleExpand={setIsAsideExpanded}
-							/>
+						<AsideCharacteristic
+							characteristics={characteristics}
+							selectedId={selectedId}
+							onSelectCharacteristic={handleSelectCharacteristic}
+							onDeleteCharacteristic={handleDeleteClick}
+							hasIcon={hasRequirements}
+							icon={Requirements}
+							isExpanded={isAsideExpanded}
+							onToggleExpand={setIsAsideExpanded}
+						/>
 
 							<div className='relative flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
 								{!selectedCharacteristic && (

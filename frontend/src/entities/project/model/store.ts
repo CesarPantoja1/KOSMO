@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Project } from './types';
-import { getProjects, getProject } from '../api/api';
+import { getProjects, getProject, deleteProject } from '../api/api';
 
 interface ProjectStore {
 	projects: Project[];
 	setProjects: (projects: Project[]) => void;
 	addProject: (project: Project) => void;
+	deleteProject: (id: string) => Promise<void>;
 	currentProject: Project | null;
 	setCurrentProject: (project: Project) => void;
 	setProjectState: (project: Project) => void;
@@ -23,6 +24,12 @@ export const useProjectStore = create<ProjectStore>()(
 			setProjects: (projects) => set({ projects }),
 			addProject: (project) =>
 				set((state) => ({ projects: [...state.projects, project] })),
+			deleteProject: async (id) => {
+				await deleteProject(id);
+				set((state) => ({
+					projects: state.projects.filter((p) => p.id !== id),
+				}));
+			},
 			currentProject: null,
 			setCurrentProject: (project) => set({ currentProject: project }),
 			setProjectState: (project) =>

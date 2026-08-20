@@ -79,7 +79,7 @@ export function WizardNavegacion() {
 	const router = useRouter();
 	const isProyectosOpen = useProjectStore((s) => s.isProyectosOpen);
 	const currentProject = useProjectStore((s) => s.currentProject);
-	const { status: consistencyStatus } = useConsistencyPolling(currentProject?.id ?? null);
+	const { status: consistencyStatus, isLoading } = useConsistencyPolling(currentProject?.id ?? null);
 
 	const handleWizardClick = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
@@ -166,7 +166,7 @@ export function WizardNavegacion() {
 								/>
 								{consistencyPhase && (
 									<span className='absolute -top-1 -left-0.5 z-10'>
-										<PhaseStatusBadge status={phaseBadge} />
+										<PhaseStatusBadge status={phaseBadge} isLoading={isLoading} />
 									</span>
 								)}
 							</div>

@@ -1,20 +1,20 @@
 'use client';
 
-import {
-	useConsistencyGateStore,
-	CONSISTENCY_REVIEW_ROUTES,
-} from '@/entities/consistency';
-import type { ConsistencyTargetPhase, ReviewCard } from '@/entities/consistency';
-import { useProjectStore } from '@/entities/project';
 import { useCharacteristicStore } from '@/entities/characteristic';
-import { useRequirementsStore } from '@/entities/requirements';
+import type { ConsistencyTargetPhase, ReviewCard } from '@/entities/consistency';
+import {
+	CONSISTENCY_REVIEW_ROUTES,
+	useConsistencyGateStore,
+} from '@/entities/consistency';
 import { useModelingStore } from '@/entities/modeling';
+import { useProjectStore } from '@/entities/project';
+import { useRequirementsStore } from '@/entities/requirements';
+import { preloadPlantUmlEngine } from '@/feature/plantuml-viewer/lib/engine-loader';
+import { formatApiError } from '@/shared/api';
+import { ArrowLeft, ModalConfirm, toast } from '@/shared/ui';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { preloadPlantUmlEngine } from '@/feature/plantuml-viewer/lib/engine-loader';
-import { ArrowLeft, ModalConfirm, toast } from '@/shared/ui';
-import { formatApiError } from '@/shared/api';
 import { GateReviewCard } from './GateReviewCard';
 
 const TARGET_LABELS: Record<ConsistencyTargetPhase, string> = {

@@ -5,6 +5,7 @@ import {
 	getRequirements as getRequirementsApi,
 	saveRequirements as saveRequirementsApi,
 	generateRequirements as generateRequirementsApi,
+	deleteRequirements as deleteRequirementsApi,
 	sendRequirementChatMessage as sendRequirementChatMessageApi,
 } from '../api/api';
 import type { ChatMessage, ChatResponse } from '@/entities/chat';
@@ -24,6 +25,7 @@ interface RequirementsStore {
 		content: string,
 	) => Promise<void>;
 	generateRequirements: (projectId: string, featureId: string) => Promise<string>;
+	deleteRequirements: (projectId: string, featureId: string) => Promise<void>;
 
 	hasRequirements: Record<string, boolean>;
 	setHasRequirements: (id: string, has: boolean) => void;
@@ -80,6 +82,18 @@ export const useRequirementsStore = create<RequirementsStore>()(
 					hasRequirements: { ...state.hasRequirements, [featureId]: true },
 				}));
 				return content;
+			},
+			deleteRequirements: async (projectId, featureId) => {
+				await deleteRequirementsApi(projectId, featureId);
+				set((state) => {
+					const currentRequirements = { ...state.currentRequirements };
+					delete currentRequirements[featureId];
+					const hasRequirements = { ...state.hasRequirements };
+					delete hasRequirements[featureId];
+					const chatHistories = { ...state.chatHistories };
+					delete chatHistories[featureId];
+					return { currentRequirements, hasRequirements, chatHistories };
+				});
 			},
 
 			hasRequirements: {},

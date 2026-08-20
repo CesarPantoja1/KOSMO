@@ -37,6 +37,7 @@ const ModelingPage = () => {
 	const router = useRouter();
 
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
 	const [uml, setUML] = useState('');
 	const [savedContent, setSavedContent] = useState('');
@@ -58,6 +59,7 @@ const ModelingPage = () => {
 	const currentDiagrams = useModelingStore((s) => s.currentDiagrams);
 	const storeGetDiagram = useModelingStore((s) => s.getDiagram);
 	const storeGeneratePlantUmlDiagram = useModelingStore((s) => s.generatePlantUmlDiagram);
+	const storeDeleteDiagram = useModelingStore((s) => s.deleteDiagram);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
 
@@ -154,6 +156,25 @@ const ModelingPage = () => {
 		}
 	};
 
+	const handleDeleteDiagram = async () => {
+		if (!confirmDeleteId || !currentProject) return;
+		const featureId = confirmDeleteId;
+		setConfirmDeleteId(null);
+		try {
+			await storeDeleteDiagram(currentProject.id, featureId);
+			setPlantumlSource('');
+			setUML('');
+			setSavedContent('');
+			toast.success('Diagrama eliminado');
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al eliminar el diagrama'));
+		}
+	};
+
+	const handleDeleteClick = (id: string) => {
+		setConfirmDeleteId(id);
+	};
+
 	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges: unsaved, setPendingNavigationPath: setPath } =
 			useAppStore.getState();
@@ -192,6 +213,17 @@ const ModelingPage = () => {
 
 			{pendingNavigationPath && (
 				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
+			)}
+
+			{confirmDeleteId && (
+				<ModalConfirm
+					title='Eliminar diagrama'
+					description='Esta acción no se puede deshacer. Se eliminará el diagrama de actividad de esta funcionalidad.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setConfirmDeleteId(null)}
+					onConfirm={handleDeleteDiagram}
+				/>
 			)}
 
 			{isGenerating && (
@@ -257,6 +289,7 @@ const ModelingPage = () => {
 								characteristics={characteristics}
 								selectedId={selectedId}
 								onSelectCharacteristic={handleSelectCharacteristic}
+								onDeleteCharacteristic={handleDeleteClick}
 								hasIcon={hasDiagram}
 								icon={Modeling}
 							/>
