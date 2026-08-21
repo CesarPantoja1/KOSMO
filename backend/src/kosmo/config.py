@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
     code_runner_base_url: str | None = None
     code_runner_token: SecretStr | None = None
+    preview_public_host_suffix: str | None = None
 
     # API
     api_version: str = "v1"

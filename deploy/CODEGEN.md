@@ -8,11 +8,12 @@ historial Git se conservan en filesystem.
 | --- | --- | --- |
 | Desarrollo | volumen `kosmo_workspaces` | `backend`, `opencode`, `preview` |
 | Staging | `/opt/kosmo/staging/workspaces` | `kosmo-staging-backend`, `kosmo-staging-opencode` |
-| Producción | `/opt/kosmo/production/workspaces` | `kosmo-backend`, `kosmo-opencode` |
+| Producción | `/opt/kosmo/production/workspaces` | `kosmo-backend`, `kosmo-opencode`, `kosmo-preview` |
 
-El CD crea estos directorios y asigna UID/GID `1000`. No tienen puertos ni rutas HTTP
-públicas. El usuario accede a sus archivos mediante las rutas autenticadas de KOSMO; un
-administrador los inspecciona únicamente por SSH. Al borrar un proyecto, el backend borra
+El CD crea estos directorios y asigna UID/GID `1000`. El usuario accede a sus archivos mediante
+las rutas autenticadas de KOSMO; un administrador los inspecciona únicamente por SSH. Un preview
+público solo se habilita en Producción. Staging conserva el artefacto de imagen para la promoción,
+pero no levanta el servicio ni requiere wildcard DNS. Al borrar un proyecto, el backend borra
 también su workspace y los metadatos de preview.
 
 ## Secretos de GitHub Environments
@@ -27,6 +28,7 @@ OPENCODE_SERVER_PASSWORD=<secreto-aleatorio-largo>
 OPENCODE_MODEL=deepseek/deepseek-v4-flash
 DEEPSEEK_API_KEY=<clave-de-proveedor-limitada-a-generacion>
 CODE_RUNNER_TOKEN=<secreto-aleatorio-distinto>
+PREVIEW_PUBLIC_HOST_SUFFIX=preview-kosmo.cespan.dev
 ```
 
 Para otros modelos usar `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` o `GEMINI_API_KEY`.
@@ -54,9 +56,14 @@ validar la lectura autenticada de un archivo antes de reanudar generación.
 
 ## Límites de despliegue
 
-OpenCode y `code-runner` tienen 1.5 CPU, 2 GiB, 256 PIDs y sin capacidades Linux añadidas.
+OpenCode tiene 1.5 CPU, 2 GiB y 256 PIDs. `code-runner` tiene 1.5 CPU, 5 GiB,
+256 PIDs y un `/tmp` ejecutable de 4 GiB; no posee capacidades Linux añadidas.
 El runner recibe un archive temporal del workspace, no el volumen persistente ni secretos de
 la aplicación; se destruye tras validar. La API conserva un solo worker porque el broker de
-eventos actual vive en memoria. La preview con `next dev`
-es local: no habilitar 4096 ni 3001-3016 en firewall, Cloudflare Tunnel o Nginx hasta contar
-con un gateway de preview autenticado y sandbox dedicado.
+eventos actual vive en memoria. En producción, la preview se publica exclusivamente mediante
+hosts `prj-<id>-preview-kosmo.cespan.dev`: el gateway lee el puerto interno asignado y Nginx
+no expone el rango 3000-3015. Cloudflare debe enrutar el wildcard `*.cespan.dev` al mismo
+Tunnel; Nginx rechaza cualquier host que no siga ese patrón. No habilitar 4096 ni 3000-3015
+en el firewall ni crear rutas de Tunnel hacia esos puertos. Protege el wildcard en
+Cloudflare Access antes de habilitarlo para usuarios: el código generado se ejecuta
+en el contenedor `kosmo-preview` y no debe quedar disponible para Internet abierto.

@@ -95,13 +95,14 @@ services:
     init: true
     environment:
       CODE_RUNNER_TOKEN: ${CODE_RUNNER_TOKEN:?CODE_RUNNER_TOKEN must be set}
+      HOME: /tmp
     expose: ["8081"]
     read_only: true
-    tmpfs: ["/tmp:rw,nosuid,size=1024m"]
+    tmpfs: ["/tmp:rw,exec,nosuid,nodev,size=4g,mode=1777"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 256
-    mem_limit: 2g
+    mem_limit: 5g
     cpus: "1.5"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8081/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

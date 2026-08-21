@@ -187,6 +187,7 @@ jobs:
     outputs:
       opencode_image: ${{ steps.images.outputs.opencode }}
       code_runner_image: ${{ steps.images.outputs.code_runner }}
+      preview_image: ${{ steps.images.outputs.preview }}
 
     steps:
       - name: Checkout merged source
@@ -202,6 +203,7 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}" >> "$GITHUB_OUTPUT"
           echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}" >> "$GITHUB_OUTPUT"
+          echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -221,6 +223,7 @@ jobs:
         run: |
           docker buildx imagetools inspect "${{ steps.images.outputs.opencode }}"
           docker buildx imagetools inspect "${{ steps.images.outputs.code_runner }}"
+          docker buildx imagetools inspect "${{ steps.images.outputs.preview }}"
 
   deploy-production:
     name: Deploy Production
@@ -280,7 +283,8 @@ jobs:
           printf '%s\n' \
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
-            "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" > "$work_dir/runtime.env"
+            "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
+            "KOSMO_PREVIEW_IMAGE=${{ needs.build-opencode.outputs.preview_image }}" > "$work_dir/runtime.env"
           printf '%s\n' "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" >> "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
@@ -319,7 +323,7 @@ jobs:
              rm -f application.env runtime.env
              grep -q '^DATABASE_URL=.' .env
              grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env
-             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE; do
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
                  exit 1

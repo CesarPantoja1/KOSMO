@@ -160,6 +160,7 @@ jobs:
     outputs:
       opencode_image: ${{ steps.images.outputs.opencode }}
       code_runner_image: ${{ steps.images.outputs.code_runner }}
+      preview_image: ${{ steps.images.outputs.preview }}
 
     steps:
       - name: Checkout release source
@@ -173,6 +174,7 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -204,6 +206,15 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.images.outputs.code_runner }}
+
+      - name: Build and publish preview image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/preview
+          file: ./docker/preview/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.preview }}
 
   deploy-staging:
     name: Deploy Staging

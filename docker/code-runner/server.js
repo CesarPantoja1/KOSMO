@@ -9,12 +9,13 @@ const token = process.env.CODE_RUNNER_TOKEN;
 if (!token) throw new Error("CODE_RUNNER_TOKEN must be set");
 const commands = { typecheck: "npx tsc --noEmit", lint: "npx eslint .", tests: "npx vitest run", build: "npx next build" };
 const allowed = new Set(["npm", "npx", "tsc", "eslint", "vitest", "next", "git", "node", "pnpm", "yarn", "pytest", "python", "pyright", "ruff"]);
+const runnerTmpDir = process.env.RUNNER_TMP_DIR || "/tmp/kosmo-runner";
 
 function respond(res, status, body) { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); }
 function exec(command, cwd, timeoutSeconds) {
   return new Promise((resolve) => {
     const started = Date.now(); let output = ""; let timedOut = false;
-    const child = spawn(command, { cwd, shell: true, detached: true, env: { PATH: process.env.PATH, HOME: os.homedir() } });
+    const child = spawn(command, { cwd, shell: true, detached: true, env: { PATH: process.env.PATH, HOME: process.env.HOME || os.homedir() } });
     child.stdout.on("data", d => output += d); child.stderr.on("data", d => output += d);
     const timer = setTimeout(() => { timedOut = true; try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); } }, Math.min(Math.max(Number(timeoutSeconds) || 300, 1), 600) * 1000);
     child.on("close", code => { clearTimeout(timer); resolve({ output: timedOut ? `${output}\nCommand timed out.` : output, exit_code: timedOut ? -1 : (code ?? 1), duration_ms: Date.now() - started }); });
@@ -22,7 +23,8 @@ function exec(command, cwd, timeoutSeconds) {
 }
 async function unpack(archive) {
   if (typeof archive !== "string" || archive.length > 70_000_000) throw new Error("Invalid workspace archive");
-  const root = await fs.mkdtemp("/tmp/kosmo-runner/run-"); const file = path.join(root, "workspace.tgz"); const workspace = path.join(root, "workspace");
+  await fs.mkdir(runnerTmpDir, { recursive: true });
+  const root = await fs.mkdtemp(path.join(runnerTmpDir, "run-")); const file = path.join(root, "workspace.tgz"); const workspace = path.join(root, "workspace");
   await fs.mkdir(workspace); await fs.writeFile(file, Buffer.from(archive, "base64"));
   const result = await exec(`tar -xzf ${file} --no-same-owner --no-same-permissions -C ${workspace}`, root, 30);
   if (result.exit_code !== 0) throw new Error("Could not unpack workspace"); return { root, workspace };

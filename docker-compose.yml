@@ -132,7 +132,7 @@ services:
     command: >
       sh -c "npm install -g --prefix /home/node/opencode opencode-ai@latest &&
              mkdir -p /home/node/.config/opencode &&
-             printf '{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"}}\n' \"$${OPENCODE_SERVER_PASSWORD}\" > /home/node/.config/opencode/opencode.json &&
+             printf '%s' '{\"server\":{\"password\":\"'\"$${OPENCODE_SERVER_PASSWORD}\"'\",\"model\":\"deepseek/deepseek-v4-flash\"}}' > /home/node/.config/opencode/opencode.json &&
              export PATH=/home/node/opencode/bin:$$PATH &&
              opencode serve --hostname 0.0.0.0 --port 4096"
     restart: unless-stopped
@@ -141,14 +141,17 @@ services:
   # /workspaces/.preview-active que escribe el backend tras cada implementación
   # exitosa). Cada proyecto obtiene un puerto propio del rango.
   preview:
-    image: node:22
+    build:
+      context: ./docker/preview
+      dockerfile: Dockerfile
+    image: kosmo-preview:local
     container_name: kosmo-preview
     init: true
     user: "1000:1000"
     ports:
       - "${PREVIEW_PORTS:-3001-3016}:3000-3015"
     environment:
-      HOME: /home/node
+      HOME: /tmp
       CONTAINER_BASE: "3000"
       HOST_BASE: "3001"
       # Polling de archivos: sin esto, next dev no detecta borrados/creaciones
@@ -157,8 +160,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
     volumes:
       - kosmo_workspaces:/workspaces
-      - ./docker/preview/run.sh:/run-preview.sh:ro
-    command: ["sh", "/run-preview.sh"]
+    command: ["sh", "/app/run.sh"]
     restart: unless-stopped
 
   postgres:
