@@ -12,8 +12,6 @@ services:
     image: ${KOSMO_WEB_IMAGE:?KOSMO_WEB_IMAGE must be set}
     container_name: kosmo-staging-frontend
     init: true
-    env_file:
-      - .env
     environment:
       PORT: "3000"
     restart: unless-stopped
@@ -35,6 +33,10 @@ services:
       CODE_RUNNER_BASE_URL: http://code-runner:8081
       CODE_RUNNER_TOKEN: ${CODE_RUNNER_TOKEN:?CODE_RUNNER_TOKEN must be set}
       PREVIEW_PUBLIC_HOST_SUFFIX: ${PREVIEW_PUBLIC_HOST_SUFFIX:?PREVIEW_PUBLIC_HOST_SUFFIX must be set}
+      CLOUDFLARE_PREVIEW_API_TOKEN: ${CLOUDFLARE_PREVIEW_API_TOKEN:?CLOUDFLARE_PREVIEW_API_TOKEN must be set}
+      CLOUDFLARE_PREVIEW_ACCOUNT_ID: ${CLOUDFLARE_PREVIEW_ACCOUNT_ID:?CLOUDFLARE_PREVIEW_ACCOUNT_ID must be set}
+      CLOUDFLARE_PREVIEW_ZONE_ID: ${CLOUDFLARE_PREVIEW_ZONE_ID:?CLOUDFLARE_PREVIEW_ZONE_ID must be set}
+      CLOUDFLARE_PREVIEW_TUNNEL_ID: ${CLOUDFLARE_PREVIEW_TUNNEL_ID:?CLOUDFLARE_PREVIEW_TUNNEL_ID must be set}
     volumes:
       # Persistent, host-visible source code. Do not replace this with an
       # anonymous volume: operators must be able to back it up and inspect it.

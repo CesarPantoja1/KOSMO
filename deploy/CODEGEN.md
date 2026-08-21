@@ -11,10 +11,9 @@ historial Git se conservan en filesystem.
 | Producción | `/opt/kosmo/production/workspaces` | `kosmo-backend`, `kosmo-opencode`, `kosmo-preview` |
 
 El CD crea estos directorios y asigna UID/GID `1000`. El usuario accede a sus archivos mediante
-las rutas autenticadas de KOSMO; un administrador los inspecciona únicamente por SSH. Un preview
-público solo se habilita en Producción. Staging conserva el artefacto de imagen para la promoción,
-pero no levanta el servicio ni requiere wildcard DNS. Al borrar un proyecto, el backend borra
-también su workspace y los metadatos de preview.
+las rutas autenticadas de KOSMO; un administrador los inspecciona únicamente por SSH. Las previews
+públicas se publican en Staging y Producción sin exponer el rango interno de puertos. Al borrar un
+proyecto, el backend borra su workspace y retira su hostname exacto de Staging.
 
 ## Secretos de GitHub Environments
 
@@ -28,10 +27,13 @@ OPENCODE_SERVER_PASSWORD=<secreto-aleatorio-largo>
 OPENCODE_MODEL=deepseek/deepseek-v4-flash
 DEEPSEEK_API_KEY=<clave-de-proveedor-limitada-a-generacion>
 CODE_RUNNER_TOKEN=<secreto-aleatorio-distinto>
-# En Staging usar preview.staging-kosmo.cespan.dev.
-# En Producción usar preview-kosmo.cespan.dev.
+# Solo en Production: el wildcard existente.
 PREVIEW_PUBLIC_HOST_SUFFIX=preview-kosmo.cespan.dev
 ```
+
+Staging recibe su sufijo y las credenciales de Cloudflare desde `deploy-staging.yml`;
+no incluir `PREVIEW_PUBLIC_HOST_SUFFIX` ni las variables `CLOUDFLARE_PREVIEW_*` en
+`STAGING_CODEGEN_ENV_FILE`.
 
 Para otros modelos usar `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` o `GEMINI_API_KEY`.
 `LLM_API_KEY` sigue siendo la clave de la API de KOSMO; separar una credencial limitada
@@ -72,15 +74,16 @@ en el contenedor `kosmo-preview` y no debe quedar disponible para Internet abier
 
 ## Previews por ambiente
 
-Cada ambiente usa su propio Tunnel y wildcard para no mezclar workspaces ni tráfico:
+Cada ambiente usa su propio Tunnel y sus propios hostnames para no mezclar workspaces ni tráfico:
 
 | Ambiente | Sufijo configurado | Host público por proyecto | Ruta del Tunnel |
 | --- | --- | --- | --- |
-| Staging | `preview.staging-kosmo.cespan.dev` | `prj-<id>-preview.staging-kosmo.cespan.dev` | `*.preview.staging-kosmo.cespan.dev` -> `http://nginx:80` |
+| Staging | `preview-staging-kosmo.cespan.dev` | `prj-<id>-preview-staging-kosmo.cespan.dev` | CNAME exacto automático -> Tunnel de Staging |
 | Producción | `preview-kosmo.cespan.dev` | `prj-<id>-preview-kosmo.cespan.dev` | `*.cespan.dev` -> `http://nginx:80` |
 
-El wildcard multinivel de Staging requiere un certificado que cubra
-`*.preview.staging-kosmo.cespan.dev` (Advanced Certificate Manager o un certificado
-personalizado). Una vez activa esa ruta en el Tunnel de Staging, el mismo CD levanta
-`kosmo-staging-preview` y `kosmo-staging-preview-gateway`, y el backend devuelve la URL
-pública correcta. No habilitar 4096 ni los puertos 3000-3015 en el firewall.
+Al completar una implementación en Staging, KOSMO crea un CNAME proxied exacto hacia
+`<tunnel-id>.cfargotunnel.com` y agrega el ingress exacto `http://nginx:80` al Tunnel remoto.
+Los registros exactos prevalecen sobre el wildcard de Producción y quedan cubiertos por el
+certificado Universal de `*.cespan.dev`; no se necesita Advanced Certificate Manager. El token
+`STAGING_PREVIEW_CLOUDFLARE_TOKEN` debe limitarse a Tunnel Edit, DNS Edit y Zone Read. No habilitar
+4096 ni los puertos 3000-3015 en el firewall.

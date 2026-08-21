@@ -313,10 +313,12 @@ jobs:
           STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
           STAGING_CODEGEN_ENV_FILE: ${{ secrets.STAGING_CODEGEN_ENV_FILE }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_TUNNEL_TOKEN }}
+          CLOUDFLARE_PREVIEW_API_TOKEN: ${{ secrets.STAGING_PREVIEW_CLOUDFLARE_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$STAGING_ENV_FILE"
           test -n "$STAGING_CODEGEN_ENV_FILE"
+          test -n "$CLOUDFLARE_PREVIEW_API_TOKEN"
           work_dir="${RUNNER_TEMP}/kosmo-staging-deploy"
           install -d -m 700 "$work_dir"
           # GitHub Environment secrets may not end in a newline. Preserve the
@@ -330,7 +332,12 @@ jobs:
             "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
             "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" \
             "KOSMO_PREVIEW_IMAGE=${{ needs.build-opencode.outputs.preview_image }}" \
-            "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" > "$work_dir/runtime.env"
+            "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" \
+            "PREVIEW_PUBLIC_HOST_SUFFIX=preview-staging-kosmo.cespan.dev" \
+            "CLOUDFLARE_PREVIEW_API_TOKEN=${CLOUDFLARE_PREVIEW_API_TOKEN}" \
+            "CLOUDFLARE_PREVIEW_ACCOUNT_ID=${{ vars.STAGING_CLOUDFLARE_ACCOUNT_ID }}" \
+            "CLOUDFLARE_PREVIEW_ZONE_ID=${{ vars.STAGING_CLOUDFLARE_ZONE_ID }}" \
+            "CLOUDFLARE_PREVIEW_TUNNEL_ID=${{ vars.STAGING_CLOUDFLARE_TUNNEL_ID }}" > "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
           ssh -i "$SSH_DIR/id_ed25519" \
@@ -370,9 +377,15 @@ jobs:
                  exit 1
                fi
              done
-             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN PREVIEW_PUBLIC_HOST_SUFFIX; do
+             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing required code-generation variable: ${key}" >&2
+                 exit 1
+               fi
+             done
+             for key in PREVIEW_PUBLIC_HOST_SUFFIX CLOUDFLARE_PREVIEW_API_TOKEN CLOUDFLARE_PREVIEW_ACCOUNT_ID CLOUDFLARE_PREVIEW_ZONE_ID CLOUDFLARE_PREVIEW_TUNNEL_ID; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required staging preview variable: ${key}" >&2
                  exit 1
                fi
              done

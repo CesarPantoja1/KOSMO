@@ -41,3 +41,29 @@ def test_preview_publica_host_sin_guion_bajo(tmp_path: Path) -> None:
         assert response.json() == {"url": "https://prj-01abc-preview-kosmo.cespan.dev"}
     finally:
         app.dependency_overrides.clear()
+
+
+def test_preview_publica_host_de_staging_sin_guion_bajo(tmp_path: Path) -> None:
+    # Arrange
+    (tmp_path / ".preview-ports.json").write_text(
+        '{"prj_01ABC":{"port":3000,"url":"http://localhost:3000"}}', encoding="utf-8"
+    )
+    container = SimpleNamespace(
+        repos=SimpleNamespace(projects=_Projects()),
+        settings=SimpleNamespace(
+            kosmo_workspaces_dir=tmp_path,
+            preview_public_host_suffix="preview-staging-kosmo.cespan.dev",
+        ),
+    )
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_01")
+    app.dependency_overrides[get_container] = lambda: container
+
+    try:
+        # Act
+        response = TestClient(app).get("/api/v1/projects/prj_01ABC/preview")
+
+        # Assert
+        assert response.status_code == 200
+        assert response.json() == {"url": "https://prj-01abc-preview-staging-kosmo.cespan.dev"}
+    finally:
+        app.dependency_overrides.clear()
