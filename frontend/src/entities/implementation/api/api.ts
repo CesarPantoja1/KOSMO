@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api';
 import { API_BASE_URL, USE_MOCKS } from '@/shared/api/config';
 import { parseApiError } from '@/shared/api/errors';
-import { authHeaders } from '@/shared/api/headers';
+import { authHeaders } from '@/entities/user';
 import { consumeSse } from '@/shared/lib';
 import type { SseEventHandler } from '@/shared/lib';
 import type { ImplementationLog, ImplementationSummary } from '../model/types';
@@ -14,12 +14,48 @@ const mockSummary: ImplementationSummary = {
 	featureDisplayId: '',
 	status: 'completed',
 	metrics: [
-		{ value: '5', label: 'Pantallas', icon: 'screens', iconBg: 'bg-ai-50', iconColor: 'text-ai-600' },
-		{ value: '3', label: 'Entidades', icon: 'entities', iconBg: 'bg-primary-50', iconColor: 'text-primary-600' },
-		{ value: '8', label: 'Reglas', icon: 'rules', iconBg: 'bg-warning-50', iconColor: 'text-warning-600' },
-		{ value: '4', label: 'Integraciones', icon: 'integrations', iconBg: 'bg-primary-50', iconColor: 'text-primary-600' },
-		{ value: '6', label: 'Validaciones', icon: 'validations', iconBg: 'bg-info-50', iconColor: 'text-info-700' },
-		{ value: '12', label: 'Acciones', icon: 'actions', iconBg: 'bg-ai-50', iconColor: 'text-ai-600' },
+		{
+			value: '5',
+			label: 'Pantallas',
+			icon: 'screens',
+			iconBg: 'bg-ai-50',
+			iconColor: 'text-ai-600',
+		},
+		{
+			value: '3',
+			label: 'Entidades',
+			icon: 'entities',
+			iconBg: 'bg-primary-50',
+			iconColor: 'text-primary-600',
+		},
+		{
+			value: '8',
+			label: 'Reglas',
+			icon: 'rules',
+			iconBg: 'bg-warning-50',
+			iconColor: 'text-warning-600',
+		},
+		{
+			value: '4',
+			label: 'Integraciones',
+			icon: 'integrations',
+			iconBg: 'bg-primary-50',
+			iconColor: 'text-primary-600',
+		},
+		{
+			value: '6',
+			label: 'Validaciones',
+			icon: 'validations',
+			iconBg: 'bg-info-50',
+			iconColor: 'text-info-700',
+		},
+		{
+			value: '12',
+			label: 'Acciones',
+			icon: 'actions',
+			iconBg: 'bg-ai-50',
+			iconColor: 'text-ai-600',
+		},
 	],
 	technologies: ['Next.js', 'TypeScript', 'Tailwind CSS', 'PostgreSQL', 'Node.js'],
 	nextSteps: [
@@ -61,9 +97,27 @@ export function buildSummary(
 		featureDisplayId,
 		status: 'completed',
 		metrics: [
-			{ value: String(files), label: 'Archivos generados', icon: 'screens', iconBg: 'bg-ai-50', iconColor: 'text-ai-600' },
-			{ value: '4/4', label: 'Validaciones en verde', icon: 'validations', iconBg: 'bg-info-50', iconColor: 'text-info-700' },
-			{ value: String(edges), label: 'Aristas de trazabilidad', icon: 'integrations', iconBg: 'bg-primary-50', iconColor: 'text-primary-600' },
+			{
+				value: String(files),
+				label: 'Archivos generados',
+				icon: 'screens',
+				iconBg: 'bg-ai-50',
+				iconColor: 'text-ai-600',
+			},
+			{
+				value: '4/4',
+				label: 'Validaciones en verde',
+				icon: 'validations',
+				iconBg: 'bg-info-50',
+				iconColor: 'text-info-700',
+			},
+			{
+				value: String(edges),
+				label: 'Aristas de trazabilidad',
+				icon: 'integrations',
+				iconBg: 'bg-primary-50',
+				iconColor: 'text-primary-600',
+			},
 		],
 		technologies: ['Next.js', 'TypeScript', 'Tailwind CSS', 'Drizzle ORM', 'Vitest'],
 		nextSteps: [
@@ -121,7 +175,9 @@ const toRecord = (data: {
 	updatedAt: data.updated_at ?? new Date().toISOString(),
 });
 
-export const fetchImplementation = async (featureId: string): Promise<ImplementationRecord | null> => {
+export const fetchImplementation = async (
+	featureId: string,
+): Promise<ImplementationRecord | null> => {
 	const res = await fetch(
 		`${API_BASE_URL}/api/v1/implementations?feature_id=${encodeURIComponent(featureId)}`,
 		{
@@ -184,10 +240,13 @@ export const generateImplementation = async (
 		timestamp: new Date().toISOString(),
 	});
 
-	const res = await fetch(`${API_BASE_URL}/api/v1/implementations/${implementation_id}/events`, {
-		headers: authHeaders(),
-		cache: 'no-store',
-	});
+	const res = await fetch(
+		`${API_BASE_URL}/api/v1/implementations/${implementation_id}/events`,
+		{
+			headers: authHeaders(),
+			cache: 'no-store',
+		},
+	);
 	if (!res.ok) {
 		throw parseApiError(res, await res.json().catch(() => null));
 	}
@@ -273,7 +332,8 @@ export const generateImplementation = async (
 					timestamp: eventTimestamp,
 				});
 			} else if (delta) {
-				const logType = stage === 'validating' || stage === 'validation_passed' ? 'validation' : 'code';
+				const logType =
+					stage === 'validating' || stage === 'validation_passed' ? 'validation' : 'code';
 				onProgress?.(delta, {
 					id: logId,
 					type: logType,
@@ -310,10 +370,13 @@ export async function subscribeImplementationEvents(
 	implementationId: string,
 	handlers: ImplementationEventHandlers,
 ): Promise<void> {
-	const res = await fetch(`${API_BASE_URL}/api/v1/implementations/${implementationId}/events`, {
-		headers: authHeaders(),
-		cache: 'no-store',
-	});
+	const res = await fetch(
+		`${API_BASE_URL}/api/v1/implementations/${implementationId}/events`,
+		{
+			headers: authHeaders(),
+			cache: 'no-store',
+		},
+	);
 	if (!res.ok) {
 		throw parseApiError(res, await res.json().catch(() => null));
 	}
@@ -322,7 +385,8 @@ export async function subscribeImplementationEvents(
 		const eventType = String(raw.event_type ?? '');
 		const data = (raw.data ?? {}) as Record<string, unknown>;
 		if (eventType === 'done') {
-			const delta = typeof data.delta === 'string' && data.delta ? data.delta : 'Proceso completado.';
+			const delta =
+				typeof data.delta === 'string' && data.delta ? data.delta : 'Proceso completado.';
 			handlers.onDone?.(delta);
 		} else if (eventType === 'error') {
 			const detail =

@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { useAuthStore } from '../store/auth.store';
-import { authHeaders } from './headers';
+import { useAuthStore, authHeaders } from '@/entities/User';
 
 describe('authHeaders', () => {
 	beforeEach(() => {

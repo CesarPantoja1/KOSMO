@@ -1,17 +1,18 @@
 'use client';
 
-import { useAuthStore } from '@/shared/store/auth.store';
+import { useAuthStore, authApi } from '@/entities/user';
+import { formatApiError } from '@/shared/api';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
 const RegisterPage = () => {
 	const router = useRouter();
 	const { accessToken } = useAuthStore();
-	
-	const [name, setName] = useState('');
+
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
-	
+
 	const [error, setError] = useState('');
 	const [success, setSuccess] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +27,7 @@ const RegisterPage = () => {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!name || !email || !password || !confirmPassword) {
+		if (!email || !password || !confirmPassword) {
 			setError('Todos los campos son obligatorios');
 			return;
 		}
@@ -46,15 +47,18 @@ const RegisterPage = () => {
 		setSuccess('');
 
 		try {
-			await new Promise(r => setTimeout(r, 1000));
+			await authApi.register(email, password);
 			setSuccess('¡Registro exitoso! Redirigiendo al login...');
 			setTimeout(() => {
 				router.push('/login');
 			}, 2000);
 		} catch (err) {
-			const errorMsg = err instanceof Error ? err.message : 'Error al registrar usuario';
-			console.error('Error al registrar:', err);
-			setError(errorMsg);
+			const status = (err as { status?: number }).status;
+			if (status === 409) {
+				setError('Este correo ya está registrado');
+			} else {
+				setError(formatApiError(err, 'Error al registrar usuario'));
+			}
 		} finally {
 			setIsLoading(false);
 		}
@@ -63,81 +67,91 @@ const RegisterPage = () => {
 	if (isAuthDisabled) return null;
 
 	return (
-		<div className='flex items-center justify-center min-h-screen bg-base-950 p-4'>
-			<form onSubmit={handleSubmit} className='bg-base-900 p-8 rounded-lg shadow-xl max-w-sm w-full border border-base-800'>
-				<div className='mb-8 text-center'>
-					<h1 className='text-3xl font-bold text-primary-300'>KOSMO</h1>
-					<p className='text-base-300 mt-2'>Crear cuenta</p>
-				</div>
-				
-				{error && (
-					<div className='bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded mb-4 text-sm'>
-						{error}
+		<div className='flex items-center justify-center min-h-screen bg-neutral-900 p-4'>
+			<div className='w-full max-w-sm animate-fade-in'>
+				<form
+					onSubmit={handleSubmit}
+					className='bg-neutral-800 p-8 rounded-xl shadow-3 border border-neutral-700'
+				>
+					<div className='mb-8 text-center'>
+						<h1 className='text-3xl font-bold text-primary-500'>KOSMO</h1>
+						<p className='text-neutral-400 mt-2'>Crear cuenta</p>
 					</div>
-				)}
 
-				{success && (
-					<div className='bg-green-500/10 border border-green-500/50 text-green-500 p-3 rounded mb-4 text-sm'>
-						{success}
-					</div>
-				)}
+					{error && (
+						<div className='bg-error-50 border border-error-500/50 text-error-700 p-3 rounded-lg mb-4 text-sm'>
+							{error}
+						</div>
+					)}
 
-				<div className='flex flex-col gap-4'>
-					<div>
-						<label className='block text-base-300 text-sm mb-1'>Nombre</label>
-						<input 
-							type='text' 
-							className='w-full bg-base-800 border border-base-700 text-base-100 rounded px-3 py-2 outline-none focus:border-primary-500 transition-colors'
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							disabled={isLoading}
-						/>
-					</div>
-					<div>
-						<label className='block text-base-300 text-sm mb-1'>Correo electrónico</label>
-						<input 
-							type='email' 
-							className='w-full bg-base-800 border border-base-700 text-base-100 rounded px-3 py-2 outline-none focus:border-primary-500 transition-colors'
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							disabled={isLoading}
-						/>
-					</div>
-					<div>
-						<label className='block text-base-300 text-sm mb-1'>Contraseña (mínimo 12 caracteres)</label>
-						<input 
-							type='password' 
-							className='w-full bg-base-800 border border-base-700 text-base-100 rounded px-3 py-2 outline-none focus:border-primary-500 transition-colors'
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							disabled={isLoading}
-						/>
-					</div>
-					<div>
-						<label className='block text-base-300 text-sm mb-1'>Confirmar contraseña</label>
-						<input 
-							type='password' 
-							className='w-full bg-base-800 border border-base-700 text-base-100 rounded px-3 py-2 outline-none focus:border-primary-500 transition-colors'
-							value={confirmPassword}
-							onChange={(e) => setConfirmPassword(e.target.value)}
-							disabled={isLoading}
-						/>
-					</div>
-					<button 
-						type='submit' 
-						disabled={isLoading}
-						className='w-full bg-primary-400 hover:bg-primary-500 text-base-950 font-semibold py-2 px-4 rounded mt-2 transition-colors disabled:opacity-50'
-					>
-						{isLoading ? 'Registrando...' : 'Registrarse'}
-					</button>
+					{success && (
+						<div className='bg-success-50 border border-success-500/50 text-success-700 p-3 rounded-lg mb-4 text-sm'>
+							{success}
+						</div>
+					)}
 
-					<div className='text-center mt-4'>
-						<a href='/login' className='text-primary-300 hover:text-primary-200 text-sm'>
-							¿Ya tienes cuenta? Inicia sesión
-						</a>
+					<div className='flex flex-col gap-4'>
+						<div>
+							<label className='block text-neutral-300 text-sm font-medium mb-1.5'>
+								Correo electrónico
+							</label>
+							<input
+								type='email'
+								className='w-full bg-neutral-900 border border-neutral-600 text-neutral-100 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-500'
+								placeholder='tu@email.com'
+								value={email}
+								onChange={(e) => setEmail(e.target.value)}
+								disabled={isLoading}
+								autoComplete='email'
+							/>
+						</div>
+						<div>
+							<label className='block text-neutral-300 text-sm font-medium mb-1.5'>
+								Contraseña
+							</label>
+							<input
+								type='password'
+								className='w-full bg-neutral-900 border border-neutral-600 text-neutral-100 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-500'
+								placeholder='Mínimo 12 caracteres'
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								disabled={isLoading}
+								autoComplete='new-password'
+							/>
+						</div>
+						<div>
+							<label className='block text-neutral-300 text-sm font-medium mb-1.5'>
+								Confirmar contraseña
+							</label>
+							<input
+								type='password'
+								className='w-full bg-neutral-900 border border-neutral-600 text-neutral-100 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-500'
+								placeholder='Repite tu contraseña'
+								value={confirmPassword}
+								onChange={(e) => setConfirmPassword(e.target.value)}
+								disabled={isLoading}
+								autoComplete='new-password'
+							/>
+						</div>
+						<button
+							type='submit'
+							disabled={isLoading}
+							className='btn btn-primary btn-lg w-full mt-2'
+						>
+							{isLoading ? 'Registrando...' : 'Registrarse'}
+						</button>
+
+						<div className='text-center mt-2'>
+							<a
+								href='/login'
+								className='text-primary-500 hover:text-primary-600 text-sm font-medium transition-colors'
+							>
+								¿Ya tienes cuenta? Inicia sesión
+							</a>
+						</div>
 					</div>
-				</div>
-			</form>
+				</form>
+			</div>
 		</div>
 	);
 };

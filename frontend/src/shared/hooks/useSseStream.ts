@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { API_BASE_URL } from '@/shared/api/config';
-import { authHeaders } from '@/shared/api/headers';
+import { authHeaders } from '@/entities/user';
 import { parseApiError } from '@/shared/api/errors';
 import { consumeSse } from '@/shared/lib';
 import type { SseEventHandler } from '@/shared/lib';
