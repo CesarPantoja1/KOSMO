@@ -1,10 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-export interface User {
-	subject: string;
-	scopes: string[];
-}
+import type { User } from './types';
 
 export interface AuthState {
 	accessToken: string | null;
@@ -30,7 +26,6 @@ export const useAuthStore = create<AuthState>()(
 			initMockUser: () => {
 				const { mockUserId } = get();
 				if (!mockUserId) {
-					// Generar ID aleatorio tipo usr_xxxx
 					const newId = 'usr_' + Math.random().toString(36).substring(2, 10);
 					set({ mockUserId: newId });
 				}

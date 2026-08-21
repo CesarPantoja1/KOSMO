@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore } from '@/shared/store/auth.store';
+import { useAuthStore } from '@/entities/user';
 
 export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { accessToken, initMockUser } = useAuthStore();
 	const [mounted, setMounted] = useState(false);
-	
+
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 
 	useEffect(() => {
@@ -22,8 +22,14 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 
 	useEffect(() => {
 		if (!mounted) return;
-		
-		if (!isAuthDisabled && !accessToken && pathname && !pathname.startsWith('/login') && !pathname.startsWith('/register')) {
+
+		if (
+			!isAuthDisabled &&
+			!accessToken &&
+			pathname &&
+			!pathname.startsWith('/login') &&
+			!pathname.startsWith('/register')
+		) {
 			// router.push('/login');
 		}
 	}, [accessToken, pathname, router, isAuthDisabled, mounted]);
