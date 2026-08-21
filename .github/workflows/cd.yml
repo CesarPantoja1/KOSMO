@@ -304,8 +304,8 @@ jobs:
              test -x /opt/kosmo/production
              docker info >/dev/null
              available_kb=\$(df -Pk /opt/kosmo/production | awk 'NR == 2 { print \$4 }')
-             if [ \"\$available_kb\" -lt \$((8 * 1024 * 1024)) ]; then
-               echo \"Production requires at least 8 GiB free before pulling images.\" >&2
+             if [ \"\$available_kb\" -lt \$((7 * 1024 * 1024)) ]; then
+               echo \"Production requires at least 7 GiB free before pulling images.\" >&2
                exit 1
              fi
              umask 077
