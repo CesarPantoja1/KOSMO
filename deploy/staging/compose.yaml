@@ -34,6 +34,7 @@ services:
       OPENCODE_BASE_URL: http://opencode:4096
       CODE_RUNNER_BASE_URL: http://code-runner:8081
       CODE_RUNNER_TOKEN: ${CODE_RUNNER_TOKEN:?CODE_RUNNER_TOKEN must be set}
+      PREVIEW_PUBLIC_HOST_SUFFIX: ${PREVIEW_PUBLIC_HOST_SUFFIX:?PREVIEW_PUBLIC_HOST_SUFFIX must be set}
     volumes:
       # Persistent, host-visible source code. Do not replace this with an
       # anonymous volume: operators must be able to back it up and inspect it.
@@ -112,6 +113,46 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  preview:
+    image: ${KOSMO_PREVIEW_IMAGE:?KOSMO_PREVIEW_IMAGE must be set}
+    container_name: kosmo-staging-preview
+    init: true
+    user: "1000:1000"
+    environment:
+      HOME: /tmp
+      CONTAINER_BASE: "3000"
+      HOST_BASE: "3000"
+    volumes:
+      - ./workspaces:/workspaces
+    command: ["sh", "/app/run.sh"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    mem_limit: 5g
+    cpus: "2"
+    restart: unless-stopped
+
+  preview-gateway:
+    image: ${KOSMO_PREVIEW_IMAGE:?KOSMO_PREVIEW_IMAGE must be set}
+    container_name: kosmo-staging-preview-gateway
+    init: true
+    environment:
+      PREVIEW_HOST_SUFFIX: ${PREVIEW_PUBLIC_HOST_SUFFIX:?PREVIEW_PUBLIC_HOST_SUFFIX must be set}
+      PREVIEW_SERVICE_HOST: preview
+    volumes:
+      - ./workspaces:/workspaces:ro
+    command: ["node", "/app/proxy.js"]
+    depends_on:
+      - preview
+    read_only: true
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: "0.25"
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     container_name: kosmo-staging-nginx
@@ -120,6 +161,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - preview-gateway
     restart: unless-stopped
 
   cloudflared:

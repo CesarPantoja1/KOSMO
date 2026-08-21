@@ -329,6 +329,7 @@ jobs:
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
             "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
             "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" \
+            "KOSMO_PREVIEW_IMAGE=${{ needs.build-opencode.outputs.preview_image }}" \
             "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" > "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
@@ -363,9 +364,15 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
-             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE; do
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
+                 exit 1
+               fi
+             done
+             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN PREVIEW_PUBLIC_HOST_SUFFIX; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required code-generation variable: ${key}" >&2
                  exit 1
                fi
              done
@@ -398,8 +405,10 @@ jobs:
                exit 1
              fi
              for attempt in $(seq 1 15); do
-               if docker exec kosmo-staging-nginx wget -q -O /dev/null http://127.0.0.1/ && \
-                  docker exec kosmo-staging-nginx wget -q -O /dev/null http://127.0.0.1/api/v1/openapi.json; then
+               if docker exec kosmo-staging-nginx wget -q -O /dev/null \
+                    --header="Host: staging-kosmo.cespan.dev" http://127.0.0.1/ && \
+                  docker exec kosmo-staging-nginx wget -q -O /dev/null \
+                    --header="Host: staging-kosmo.cespan.dev" http://127.0.0.1/api/v1/openapi.json; then
                   docker compose -f compose.yaml ps
                   printf "%s\\n" "${{ github.sha }}" > .active-release-sha
                  exit 0

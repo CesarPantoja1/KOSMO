@@ -331,6 +331,12 @@ jobs:
                  exit 1
                fi
              done
+             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN PREVIEW_PUBLIC_HOST_SUFFIX; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required code-generation variable: ${key}" >&2
+                 exit 1
+               fi
+             done
              docker network inspect kosmo-network >/dev/null
              docker login ghcr.io --username "${{ vars.PRODUCTION_GHCR_USERNAME }}" --password-stdin
              install -d -m 0750 workspaces
@@ -359,8 +365,10 @@ jobs:
                exit 1
              fi
              for attempt in $(seq 1 15); do
-               if docker exec kosmo-nginx wget -q -O /dev/null http://127.0.0.1/ && \
-                  docker exec kosmo-nginx wget -q -O /dev/null http://127.0.0.1/api/v1/openapi.json; then
+               if docker exec kosmo-nginx wget -q -O /dev/null \
+                    --header="Host: kosmo.cespan.dev" http://127.0.0.1/ && \
+                  docker exec kosmo-nginx wget -q -O /dev/null \
+                    --header="Host: kosmo.cespan.dev" http://127.0.0.1/api/v1/openapi.json; then
                  docker compose -p kosmo -f compose.yaml ps
                  exit 0
                fi

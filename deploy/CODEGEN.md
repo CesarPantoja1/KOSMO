@@ -7,7 +7,7 @@ historial Git se conservan en filesystem.
 | Ambiente | Persistencia | Contenedores con acceso |
 | --- | --- | --- |
 | Desarrollo | volumen `kosmo_workspaces` | `backend`, `opencode`, `preview` |
-| Staging | `/opt/kosmo/staging/workspaces` | `kosmo-staging-backend`, `kosmo-staging-opencode` |
+| Staging | `/opt/kosmo/staging/workspaces` | `kosmo-staging-backend`, `kosmo-staging-opencode`, `kosmo-staging-preview` |
 | Producción | `/opt/kosmo/production/workspaces` | `kosmo-backend`, `kosmo-opencode`, `kosmo-preview` |
 
 El CD crea estos directorios y asigna UID/GID `1000`. El usuario accede a sus archivos mediante
@@ -28,6 +28,8 @@ OPENCODE_SERVER_PASSWORD=<secreto-aleatorio-largo>
 OPENCODE_MODEL=deepseek/deepseek-v4-flash
 DEEPSEEK_API_KEY=<clave-de-proveedor-limitada-a-generacion>
 CODE_RUNNER_TOKEN=<secreto-aleatorio-distinto>
+# En Staging usar preview.staging-kosmo.cespan.dev.
+# En Producción usar preview-kosmo.cespan.dev.
 PREVIEW_PUBLIC_HOST_SUFFIX=preview-kosmo.cespan.dev
 ```
 
@@ -67,3 +69,18 @@ Tunnel; Nginx rechaza cualquier host que no siga ese patrón. No habilitar 4096 
 en el firewall ni crear rutas de Tunnel hacia esos puertos. Protege el wildcard en
 Cloudflare Access antes de habilitarlo para usuarios: el código generado se ejecuta
 en el contenedor `kosmo-preview` y no debe quedar disponible para Internet abierto.
+
+## Previews por ambiente
+
+Cada ambiente usa su propio Tunnel y wildcard para no mezclar workspaces ni tráfico:
+
+| Ambiente | Sufijo configurado | Host público por proyecto | Ruta del Tunnel |
+| --- | --- | --- | --- |
+| Staging | `preview.staging-kosmo.cespan.dev` | `prj-<id>-preview.staging-kosmo.cespan.dev` | `*.preview.staging-kosmo.cespan.dev` -> `http://nginx:80` |
+| Producción | `preview-kosmo.cespan.dev` | `prj-<id>-preview-kosmo.cespan.dev` | `*.cespan.dev` -> `http://nginx:80` |
+
+El wildcard multinivel de Staging requiere un certificado que cubra
+`*.preview.staging-kosmo.cespan.dev` (Advanced Certificate Manager o un certificado
+personalizado). Una vez activa esa ruta en el Tunnel de Staging, el mismo CD levanta
+`kosmo-staging-preview` y `kosmo-staging-preview-gateway`, y el backend devuelve la URL
+pública correcta. No habilitar 4096 ni los puertos 3000-3015 en el firewall.
