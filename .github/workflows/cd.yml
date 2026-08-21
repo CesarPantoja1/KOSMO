@@ -290,12 +290,16 @@ jobs:
           printf '%s\n' "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" >> "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
+          remote_stage_dir="/tmp/kosmo-production-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           ssh -i "$SSH_DIR/id_ed25519" \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
             -p "${{ vars.PRODUCTION_SSH_PORT }}" \
             "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
-            'mkdir -p /opt/kosmo/production'
+            "set -euo pipefail
+             umask 077
+             rm -rf '${remote_stage_dir}'
+             mkdir -p '${remote_stage_dir}'"
 
           scp -i "$SSH_DIR/id_ed25519" \
             -o StrictHostKeyChecking=yes \
@@ -303,7 +307,21 @@ jobs:
             -P "${{ vars.PRODUCTION_SSH_PORT }}" \
             deploy/production/compose.yaml nginx/nginx.conf \
             "$work_dir/application.env" "$work_dir/runtime.env" \
-            "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}:/opt/kosmo/production/"
+            "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}:${remote_stage_dir}/"
+
+          ssh -i "$SSH_DIR/id_ed25519" \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
+            -p "${{ vars.PRODUCTION_SSH_PORT }}" \
+            "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
+            "set -euo pipefail
+             remote_stage_dir='${remote_stage_dir}'
+             sudo -n install -d -m 0750 /opt/kosmo/production
+             sudo -n install -m 0644 \"\$remote_stage_dir/compose.yaml\" /opt/kosmo/production/compose.yaml
+             sudo -n install -m 0644 \"\$remote_stage_dir/nginx.conf\" /opt/kosmo/production/nginx.conf
+             sudo -n install -m 0600 \"\$remote_stage_dir/application.env\" /opt/kosmo/production/application.env
+             sudo -n install -m 0600 \"\$remote_stage_dir/runtime.env\" /opt/kosmo/production/runtime.env
+             rm -rf \"\$remote_stage_dir\""
 
       - name: Migrate and deploy on Production
         shell: bash
@@ -318,7 +336,8 @@ jobs:
             -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
             -p "${{ vars.PRODUCTION_SSH_PORT }}" \
             "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
-            'set -euo pipefail
+            'sudo -n bash -c '"'"'
+             set -euo pipefail
              cd /opt/kosmo/production
              cat application.env runtime.env > .env
              chmod 600 .env
@@ -375,7 +394,8 @@ jobs:
                sleep 2
              done
              docker compose -p kosmo -f compose.yaml logs --tail=100 nginx backend opencode
-             exit 1'
+             exit 1
+             '"'"''
 
   smoke-test-production:
     name: Smoke test Production
