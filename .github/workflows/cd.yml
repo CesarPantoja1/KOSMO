@@ -290,13 +290,24 @@ jobs:
           printf '%s\n' "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" >> "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
-          remote_stage_dir="/tmp/kosmo-production-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # Staging below the destination keeps promotion as an atomic rename
+          # on the same filesystem, even if /tmp is mounted separately.
+          remote_stage_dir="/opt/kosmo/production/.incoming-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           ssh -i "$SSH_DIR/id_ed25519" \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$SSH_DIR/known_hosts" \
             -p "${{ vars.PRODUCTION_SSH_PORT }}" \
             "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
             "set -euo pipefail
+             test -d /opt/kosmo/production
+             test -w /opt/kosmo/production
+             test -x /opt/kosmo/production
+             docker info >/dev/null
+             available_kb=\$(df -Pk /opt/kosmo/production | awk 'NR == 2 { print \$4 }')
+             if [ \"\$available_kb\" -lt \$((8 * 1024 * 1024)) ]; then
+               echo \"Production requires at least 8 GiB free before pulling images.\" >&2
+               exit 1
+             fi
              umask 077
              rm -rf '${remote_stage_dir}'
              mkdir -p '${remote_stage_dir}'"
@@ -316,12 +327,10 @@ jobs:
             "${{ vars.PRODUCTION_USER }}@${{ vars.PRODUCTION_HOST }}" \
             "set -euo pipefail
              remote_stage_dir='${remote_stage_dir}'
-             # The deployment account owns the directory. Move files instead
-             # of truncating files inherited from a previous root deployment.
+             # The deployment account owns the directory. Atomic renames avoid
+             # truncating files inherited from a previous root deployment.
              chmod 0644 \"\$remote_stage_dir/compose.yaml\" \"\$remote_stage_dir/nginx.conf\"
              chmod 0600 \"\$remote_stage_dir/application.env\" \"\$remote_stage_dir/runtime.env\"
-             rm -f /opt/kosmo/production/compose.yaml /opt/kosmo/production/nginx.conf \\
-               /opt/kosmo/production/application.env /opt/kosmo/production/runtime.env
              mv -f \"\$remote_stage_dir/compose.yaml\" /opt/kosmo/production/compose.yaml
              mv -f \"\$remote_stage_dir/nginx.conf\" /opt/kosmo/production/nginx.conf
              mv -f \"\$remote_stage_dir/application.env\" /opt/kosmo/production/application.env
