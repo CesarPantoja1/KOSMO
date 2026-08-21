@@ -172,9 +172,11 @@ jobs:
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          {
+            echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}"
+            echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}"
+            echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${GITHUB_SHA}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
