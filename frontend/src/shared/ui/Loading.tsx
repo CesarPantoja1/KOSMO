@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Load from './icons/Load';
 
 type Props = {
 	title: string;
@@ -22,18 +21,21 @@ const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => 
 		return () => clearInterval(interval);
 	}, [messages]);
 
+	const currentMessage = messages[messageIndex] ?? messages[0] ?? '';
+
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
-			<div className='w-full max-w-2xl rounded-xl bg-base-50 p-10 shadow-2xl outline outline-base-800'>
-				<div className='flex flex-col items-center gap-8 text-center'>
-					<div className='space-y-3'>
-						<h2 className='text-2xl font-semibold text-black'>{title}</h2>
-						<p className='text-base text-base-700'>{description}</p>
+		<div className='warning-popup'>
+			<div
+				className='bg-neutral-0 rounded-xl shadow-lg py-8 px-10 w-full max-w-md mx-4 border border-neutral-200'
+				onClick={(e) => e.stopPropagation()}
+			>
+				<div className='flex flex-col items-center gap-6 text-center'>
+					<div>
+						<h3 className='text-lg font-semibold text-neutral-800 mb-2'>{title}</h3>
+						<p className='text-sm text-neutral-500'>{description}</p>
 					</div>
-					<div className='animate-spin-custom'>
-						<Load color='text-ai' />
-					</div>
-					<span className='font-mono text-sm text-ai'>{messages[messageIndex]}</span>
+					<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
+					<span className='text-xs text-neutral-400'>{currentMessage}</span>
 				</div>
 			</div>
 		</div>

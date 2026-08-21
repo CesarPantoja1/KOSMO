@@ -7,10 +7,11 @@ from kosmo.contracts.sdd.document import AcceptanceCriterion, EARSPattern
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.ids import FeatureId, RequirementId
 
-_req_header_re = re.compile(r"^###\s+(REQ-\d+\.\d+)\s+(.*)$", re.MULTILINE)
+_req_header_re = re.compile(r"^(?:###\s+)?(REQ-\d+\.\d+)\s*(.*)$", re.MULTILINE)
 _req_pattern_re = re.compile(
-    r"\*\*(Ubicuo|Basado en eventos|Determinado por estado"
-    r"|Opcional|Comportamiento no deseado|Complejo)\*\*"
+    r"(?:\*\*|)(Ubicuo|Basado en eventos|Determinado por estado"
+    r"|Opcional|Comportamiento no deseado|Complejo)(?:\*\*|)",
+    re.IGNORECASE,
 )
 _ac_scenario_re = re.compile(r"\*\*Escenario:\s+(.+)\*\*")
 _ac_given_re = re.compile(r"-\s+\*\*Dado\*\*\s+que\s+(.+)")
@@ -29,6 +30,15 @@ _PATTERN_MAP: dict[str, EARSPattern] = {
 }
 
 
+def _normalize_markdown_blocks(markdown: str) -> list[str]:
+    raw_blocks = markdown.split("### ")
+    blocks: list[str] = []
+    for idx, block in enumerate(raw_blocks):
+        if idx == 0 and block.strip().startswith("REQ-") or idx > 0:
+            blocks.append(block)
+    return blocks
+
+
 def parse_requirement_from_markdown(
     markdown: str,
     feature_id: FeatureId,
@@ -36,19 +46,17 @@ def parse_requirement_from_markdown(
     requirement_id: RequirementId,
 ) -> EARSRequirement | None:
     display_prefix = f"REQ-{feature_number}."
-    blocks = markdown.split("### ")
-    for block in blocks[1:]:
+    blocks = _normalize_markdown_blocks(markdown)
+    for block in blocks:
         first_line = block.split("\n")[0] if block else ""
-        prefix = "### " if not block.startswith("REQ-") else ""
-        header_match = _req_header_re.match(f"{prefix}{first_line}")
+        header_match = _req_header_re.match(first_line)
         if not header_match:
-            full_header = block.split("\n")[0] if block else ""
-            header_match = _req_header_re.match(f"### {full_header}")
+            header_match = _req_header_re.match(f"### {first_line}")
         if not header_match:
             continue
 
         display_id = header_match.group(1)
-        if not display_id.startswith(display_prefix):
+        if feature_number > 0 and not display_id.startswith(display_prefix):
             continue
 
         req_num_str = display_id.split(".")[-1]
@@ -84,20 +92,18 @@ def parse_requirements_markdown(
     feature_number: int,
 ) -> list[EARSRequirement]:
     display_prefix = f"REQ-{feature_number}."
-    blocks = markdown.split("### ")
+    blocks = _normalize_markdown_blocks(markdown)
     results: list[EARSRequirement] = []
-    for block in blocks[1:]:
+    for block in blocks:
         first_line = block.split("\n")[0] if block else ""
-        prefix = "### " if not block.startswith("REQ-") else ""
-        header_match = _req_header_re.match(f"{prefix}{first_line}")
+        header_match = _req_header_re.match(first_line)
         if not header_match:
-            full_header = block.split("\n")[0] if block else ""
-            header_match = _req_header_re.match(f"### {full_header}")
+            header_match = _req_header_re.match(f"### {first_line}")
         if not header_match:
             continue
 
         display_id = header_match.group(1)
-        if not display_id.startswith(display_prefix):
+        if feature_number > 0 and not display_id.startswith(display_prefix):
             continue
 
         req_num_str = display_id.split(".")[-1]
@@ -138,7 +144,10 @@ def count_requirements(markdown: str) -> int:
 def _parse_pattern(block: str) -> EARSPattern:
     pattern_match = _req_pattern_re.search(block)
     pattern_str = pattern_match.group(1) if pattern_match else "Ubicuo"
-    return _PATTERN_MAP.get(pattern_str, EARSPattern.ubiquitous)
+    for key, val in _PATTERN_MAP.items():
+        if key.lower() == pattern_str.lower():
+            return val
+    return EARSPattern.ubiquitous
 
 
 def _parse_statement(block: str) -> str:
@@ -151,7 +160,10 @@ def _parse_statement(block: str) -> str:
             continue
         if stripped.startswith("**") and ("Criterios" in stripped or "Escenario" in stripped):
             break
-        if stripped.startswith("**") and not pattern_found:
+        if stripped.startswith("**Origen:"):
+            break
+        clean_stripped = stripped.strip("*").strip()
+        if not pattern_found and any(clean_stripped.lower() == k.lower() for k in _PATTERN_MAP):
             pattern_found = True
             continue
         if stripped and not stripped.startswith("**"):

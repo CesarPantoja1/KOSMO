@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from kosmo.contracts.chat import PlanCambio
 from kosmo.contracts.memory.user_preference import UserPreference
-from kosmo.contracts.sdd.document import RichTextDocument
+from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
@@ -87,7 +86,26 @@ class RequirementChatContext:
 
 
 @dataclass(frozen=True)
-class PlanChangeResolutionContext:
-    section_name: str
-    section_markdown: str
-    changes: list[PlanCambio] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+class DirectModificationContext:
+    current_document: str
+    instruction: str
+    document_type: SpecPhase
+
+
+@dataclass(frozen=True)
+class ImplementationPhaseContext:
+    feature: Feature
+    requirements_markdown: str
+    workspace_manifest: tuple[str, ...] = field(default_factory=tuple)  # type: ignore[reportUnknownVariableType]
+    user_preferences: list[UserPreference] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+
+    @property
+    def ears_requirements(self) -> str:
+        return self.requirements_markdown
+
+    @property
+    def manifest_files(self) -> tuple[str, ...]:
+        return self.workspace_manifest
+
+
+ImplementationContext = ImplementationPhaseContext

@@ -3,10 +3,16 @@ export {
 	type MarkdownEditorHandle,
 } from './markdown-editor/ui/markdown-editor';
 
-export { Chatbot, PanelAsistenteRequisito, ChatbotMessage } from './chatbot';
-export type { ChatMessage, ChangeSuggestion } from './chatbot';
+export type { SaveStatus } from './markdown-editor/ui/save-indicator';
+
+export { MarkdownEditorSkeleton } from './markdown-editor/ui/markdown-editor-skeleton';
+
+export {
+	Chatbot,
+	ChatStreamPanel,
+	PanelAsistenteRequisito,
+	ChatbotMessage,
+} from './chatbot';
 
 export { PlantUmlViewer } from './plantuml-viewer';
-export * from './plan';
 
-export { MarkdownDiff } from './markdown-diff';

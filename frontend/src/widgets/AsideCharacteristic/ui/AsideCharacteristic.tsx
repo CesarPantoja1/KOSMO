@@ -1,130 +1,174 @@
 import { useState, type ElementType } from 'react';
 import type { CharacteristicResponse } from '@/entities/characteristic';
-import { CloseMarkdownContent, OpenMarkdownContent } from '@/shared/ui';
+import { CloseMarkdownContent, OpenMarkdownContent, Trash } from '@/shared/ui';
 
 type AsideCharacteristicProps = {
 	title?: string;
 	characteristics: CharacteristicResponse[];
 	selectedId: string | null;
 	onSelectCharacteristic: (id: string) => void;
+	onDeleteCharacteristic?: (id: string) => void;
 	hasIcon: Record<string, boolean>;
 	defaultExpanded?: boolean;
+	isExpanded?: boolean;
+	onToggleExpand?: (expanded: boolean) => void;
 	icon: ElementType<{ size?: number; color: string }>;
 };
 
 const AsideCharacteristic = ({
-	title = 'Lista de Características',
+	title = 'Funcionalidades',
 	characteristics,
 	selectedId,
 	onSelectCharacteristic,
+	onDeleteCharacteristic,
 	hasIcon,
 	defaultExpanded = true,
+	isExpanded: isExpandedProp,
+	onToggleExpand,
 	icon: Icon,
 }: AsideCharacteristicProps) => {
-	const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+	const [isExpandedInternal, setIsExpandedInternal] = useState(defaultExpanded);
+	const isExpanded = isExpandedProp ?? isExpandedInternal;
+
+	const toggleExpand = (value: boolean) => {
+		if (onToggleExpand) {
+			onToggleExpand(value);
+		} else {
+			setIsExpandedInternal(value);
+		}
+	};
 
 	return (
 		<aside
-			className='pt-3 bg-base-100/50 rounded-sm flex flex-col shrink-0 transition-all duration-300'
-			style={{ width: isExpanded ? 352 : 64 }}
+			className='bg-neutral-50 border-r border-neutral-200 flex flex-col shrink-0 transition-all duration-300'
+			style={{ width: isExpanded ? 288 : 52 }}
 		>
 			{isExpanded ? (
 				<>
-					<div className='mb-3 flex items-center justify-between px-4 shrink-0'>
-						<h3 className='text-primary-100 text-lg font-bold'>{title}</h3>
+					<div className='flex items-center justify-between px-4 py-3 border-b border-neutral-200 shrink-0'>
+						<h3 className='text-xs font-semibold uppercase tracking-wider text-neutral-500'>{title}</h3>
 						<button
-							onClick={() => setIsExpanded(false)}
-							className='cursor-pointer p-1 hover:bg-base-200/30 rounded'
+							onClick={() => toggleExpand(false)}
+							className='cursor-pointer p-1 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors'
 						>
-							<CloseMarkdownContent size={20} />
+							<CloseMarkdownContent size={18} />
 						</button>
 					</div>
 
-					<div className='flex-1 flex flex-col gap-1 overflow-y-auto pb-4 px-2'>
+					<div className='flex-1 flex flex-col gap-0.5 overflow-y-auto py-2 px-2'>
 						{characteristics.length === 0 && (
-							<p className='text-base-600 text-sm px-3 py-2'>
-								No hay características disponibles.
+							<p className='text-neutral-400 text-xs px-3 py-2'>
+								No hay funcionalidades disponibles.
 							</p>
 						)}
-						{characteristics.map((c) => {
-							const isSelected = c.id === selectedId;
-							return (
-								<button
-									key={c.id}
-									onClick={() => onSelectCharacteristic(c.id)}
-									className={`w-full p-3 flex justify-start items-start gap-3 text-left cursor-pointer transition-colors rounded ${
-										isSelected
-											? 'bg-primary-100/10 border-l-4 border-primary-100'
-											: 'border-l-4 border-transparent hover:bg-base-200/30'
+					{characteristics.map((c) => {
+						const isSelected = c.id === selectedId;
+						return (
+							<button
+								key={c.id}
+								onClick={() => onSelectCharacteristic(c.id)}
+								className={`group w-full px-3 py-2.5 flex justify-start items-start gap-2.5 text-left cursor-pointer transition-colors rounded-md ${
+									isSelected
+										? 'bg-primary-50 border-l-4 border-primary-500'
+										: 'border-l-4 border-transparent hover:bg-neutral-100'
+								}`}
+							>
+								<span
+									className={`text-xs font-bold mt-0.5 shrink-0 ${
+										isSelected ? 'text-primary-500' : 'text-neutral-400'
 									}`}
 								>
-									<span
-										className={`text-base font-bold mt-0.5 shrink-0 ${
-											isSelected ? 'text-primary-100' : 'text-base-800'
-										}`}
-									>
-										{c.display_id}
+									{c.display_id}
+								</span>
+								<p
+									className={`flex-1 text-xs font-medium leading-snug pt-0.5 ${
+										isSelected ? 'text-primary-600' : 'text-neutral-600'
+									}`}
+								>
+									{c.title}
+								</p>
+							{hasIcon[c.id] && (
+								<div className='relative shrink-0 mt-0.5 w-4 h-4'>
+									<span className='absolute inset-0 opacity-100 group-hover:opacity-0 transition-opacity flex items-center justify-center'>
+										<Icon
+											size={16}
+											color={isSelected ? 'text-primary-500' : 'text-neutral-400'}
+										/>
 									</span>
-									<p
-										className={`flex-1 text-sm font-medium leading-snug pt-0.5 ${
-											isSelected ? 'text-primary-100' : 'text-base-600'
-										}`}
-									>
-										{c.title}
-									</p>
-									{hasIcon[c.id] && (
-										<div className='shrink-0 mt-0.5'>
-											<Icon
-												size={20}
-												color={isSelected ? 'text-primary-100' : 'text-base-600'}
-											/>
-										</div>
+									{onDeleteCharacteristic && (
+										<span
+											onClick={(e) => {
+												e.stopPropagation();
+												onDeleteCharacteristic(c.id);
+											}}
+											className='absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer hover:bg-error-50 rounded'
+											title='Eliminar'
+										>
+											<Trash size={15} color='text-error-500' />
+										</span>
 									)}
-								</button>
-							);
-						})}
+								</div>
+							)}
+							</button>
+						);
+					})}
 					</div>
 				</>
 			) : (
 				<>
-					<div className='flex justify-center pb-3 pt-2 shrink-0'>
+					<div className='flex justify-center py-3 border-b border-neutral-200 shrink-0'>
 						<button
-							onClick={() => setIsExpanded(true)}
-							className='cursor-pointer p-1 hover:bg-base-200/30 rounded'
+							onClick={() => toggleExpand(true)}
+							className='cursor-pointer p-1 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded transition-colors'
 						>
-							<OpenMarkdownContent size={20} />
+							<OpenMarkdownContent size={18} />
 						</button>
 					</div>
 
-					<div className='flex-1 flex flex-col gap-1 overflow-y-auto px-1 pb-4'>
+					<div className='flex-1 flex flex-col gap-0.5 overflow-y-auto py-2 px-1'>
 						{characteristics.map((c) => {
 							const isSelected = c.id === selectedId;
 							return (
-								<div key={c.id} className='relative group'>
-									<button
-										onClick={() => onSelectCharacteristic(c.id)}
-										title={c.title}
-										className={`w-full p-2 flex flex-col items-center gap-1 cursor-pointer transition-colors rounded ${
-											isSelected
-												? 'bg-primary-100/10 border-l-4 border-primary-100'
-												: 'border-l-4 border-transparent hover:bg-base-200/30'
-										}`}
-									>
+						<button
+							key={c.id}
+							onClick={() => onSelectCharacteristic(c.id)}
+							title={c.title}
+							className={`group w-full py-2 flex flex-col items-center gap-1 cursor-pointer transition-colors rounded-md ${
+								isSelected
+									? 'bg-primary-50 border-l-2 border-primary-500'
+									: 'border-l-2 border-transparent hover:bg-neutral-100'
+							}`}
+						>
+							<span
+								className={`text-[10px] font-bold ${
+									isSelected ? 'text-primary-500' : 'text-neutral-400'
+								}`}
+							>
+								{c.display_id}
+							</span>
+							{hasIcon[c.id] && (
+								<div className='relative shrink-0 w-3.5 h-3.5'>
+									<span className='absolute inset-0 opacity-100 group-hover:opacity-0 transition-opacity flex items-center justify-center'>
+										<Icon
+											size={14}
+											color={isSelected ? 'text-primary-500' : 'text-neutral-400'}
+										/>
+									</span>
+									{onDeleteCharacteristic && (
 										<span
-											className={`text-xs font-bold ${
-												isSelected ? 'text-primary-100' : 'text-base-800'
-											}`}
+											onClick={(e) => {
+												e.stopPropagation();
+												onDeleteCharacteristic(c.id);
+											}}
+											className='absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer hover:bg-error-50 rounded'
+											title='Eliminar'
 										>
-											{c.display_id}
+											<Trash size={13} color='text-error-500' />
 										</span>
-										{hasIcon[c.id] && (
-											<Icon
-												size={16}
-												color={isSelected ? 'text-primary-100' : 'text-base-600'}
-											/>
-										)}
-									</button>
+									)}
 								</div>
+							)}
+						</button>
 							);
 						})}
 					</div>

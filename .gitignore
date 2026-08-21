@@ -24,6 +24,7 @@ build/
 coverage/
 .pytest_cache/
 htmlcov/
+backend/.tmp-pytest-codegen/
 
 # Logs
 *.log
@@ -71,6 +72,9 @@ backend/.opencode/skills/tdd/SKILL.md
 docs/
 opencode.json
 .opencode/
+!backend/src/kosmo/infrastructure/codegen/templates/**/.opencode/
+!backend/src/kosmo/infrastructure/codegen/templates/**/.opencode/**
 
 # CodeGraph
 .codegraph/
+.token-savior-cache.json

@@ -1,28 +1,24 @@
 'use client';
 
-import { Ai, toast } from '@/shared/ui';
+import { Ai, CharacterCounter, Send, toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 
 import { createProject } from '@/entities/project';
-import { projectSchema, type ProjectFormData } from '../lib/schema';
-import { CharacterCounter } from './CharacterCounter';
+import { projectSchema, type ProjectFormData } from '../model/types';
 
 const alphaRegex = /[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
-	const setProjectState = useAppStore((s) => s.setProjectState);
+	const setProjectState = useProjectStore((s) => s.setProjectState);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	const {
-		control,
-		handleSubmit,
-		formState: { isValid },
-	} = useForm<ProjectFormData>({
+	const { control, handleSubmit } = useForm<ProjectFormData>({
 		mode: 'onSubmit',
 		resolver: zodResolver(projectSchema),
 		defaultValues: { name: '', description: '' },
@@ -60,11 +56,11 @@ const CreateProjectForm = () => {
 			setIsSubmitting(true);
 			try {
 				const project = await createProject(data);
+				useProjectStore.getState().addProject(project);
 				setProjectState(project);
 				router.replace('/proyecto/descubrimiento');
 			} catch (err) {
-				const message = err instanceof Error ? err.message : 'Error al crear el proyecto';
-				toast.error(message);
+				toast.error(formatApiError(err, 'Error al crear el proyecto'));
 				setIsSubmitting(false);
 			}
 		},
@@ -77,16 +73,16 @@ const CreateProjectForm = () => {
 			className='flex-1 flex flex-col gap-5 px-0.5'
 			noValidate
 		>
-			<button className='btn btn-ai'>
-				<Ai size={20} color='' />
-				{isSubmitting ? 'Creando...' : 'Crear Proyecto'}
-			</button>
-			<div className='flex-1 flex flex-col gap-5 px-8 pt-8 mb-8 rounded-lg shadow-md border border-base-200'>
-				<div className='w-full flex flex-col items-start gap-2'>
-					<label htmlFor='project-name' className='text-base-800 text-2xl font-semibold'>
-						Nombre
+			{/* Form card */}
+			<div className='flex flex-col gap-6 px-8 pt-8 pb-6 rounded-xl shadow-sm border border-neutral-200 bg-neutral-0'>
+				{/* Name field */}
+				<div className='flex flex-col gap-2'>
+					<label
+						htmlFor='project-name'
+						className='text-xs font-semibold text-neutral-500 uppercase tracking-wider'
+					>
+						Nombre del proyecto
 					</label>
-
 					<input
 						ref={nameRef}
 						id='project-name'
@@ -95,24 +91,26 @@ const CreateProjectForm = () => {
 						onBlur={nameOnBlur}
 						onChange={handleNameChange}
 						placeholder='Ej. Ferretería'
-						className='w-full flex items-center px-3.5 py-2 justify-start border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200'
+						className='w-full min-h-11 px-4 py-2.5 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200'
 						autoComplete='off'
 					/>
-
-					<div className='w-full flex justify-end gap-1 items-center'>
-						{nameError && (
-							<p className='text-status-error text-sm' role='alert'>
+					<div className='flex justify-between items-center gap-2'>
+						{nameError ? (
+							<p className='text-error-500 text-xs' role='alert'>
 								{nameError.message}
 							</p>
+						) : (
+							<span />
 						)}
 						<CharacterCounter current={nameValue.length} max={25} />
 					</div>
 				</div>
 
-				<div className='w-full flex-1 pb-5 flex flex-col gap-2'>
+				{/* Description field */}
+				<div className='flex flex-col gap-2'>
 					<label
 						htmlFor='project-description'
-						className='text-base-800 text-2xl font-semibold'
+						className='text-xs font-semibold text-neutral-500 uppercase tracking-wider'
 					>
 						Descripción
 					</label>
@@ -122,17 +120,34 @@ const CreateProjectForm = () => {
 						value={descValue}
 						onBlur={descOnBlur}
 						onChange={handleDescChange}
-						placeholder='Ej. App para la gestión integral de las sucursales'
-						className='w-full flex-1 px-3.5 py-2 border border-base-200 rounded-md focus:border-base-300 focus:ring-1 focus:ring-base-300 transition-colors duration-200 resize-none'
+						placeholder='Describe el problema de negocio que quieres resolver...'
+						className='w-full min-h-40 px-4 py-3 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200 resize-none'
 					/>
-					<div className='w-full flex justify-end gap-1 items-center'>
-						{descError && (
-							<p className='text-status-error text-sm' role='alert'>
+					<div className='flex justify-between items-center gap-2'>
+						{descError ? (
+							<p className='text-error-500 text-xs' role='alert'>
 								{descError.message}
 							</p>
+						) : (
+							<span />
 						)}
 						<CharacterCounter current={descValue.length} max={1000} />
 					</div>
+				</div>
+
+				{/* Actions — al final del formulario */}
+				<div className='flex items-center justify-end gap-3 pt-2 border-t border-neutral-100'>
+					<button
+						type='button'
+						onClick={() => router.push('/proyecto')}
+						className='btn btn-secondary'
+					>
+						Cancelar
+					</button>
+					<button type='submit' disabled={isSubmitting} className='btn btn-primary'>
+						<Send size={18} color='-rotate-45' />
+						{isSubmitting ? 'Creando proyecto...' : 'Crear proyecto'}
+					</button>
 				</div>
 			</div>
 		</form>

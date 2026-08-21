@@ -1,8 +1,9 @@
+import tempfile
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +50,21 @@ class Settings(BaseSettings):
     # Embeddings
     embedding_provider: Literal["auto", "openai", "fastembed", "none"] = "auto"
 
+    # Codegen (OpenCode)
+    opencode_base_url: str = "http://127.0.0.1:4096"
+    opencode_server_username: str = "opencode"
+    opencode_server_password: SecretStr | None = None
+    opencode_model: str | None = None
+    kosmo_workspaces_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "kosmo-workspaces")
+    kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
+    code_runner_base_url: str | None = None
+    code_runner_token: SecretStr | None = None
+    preview_public_host_suffix: str | None = None
+    cloudflare_preview_api_token: SecretStr | None = None
+    cloudflare_preview_account_id: str | None = None
+    cloudflare_preview_zone_id: str | None = None
+    cloudflare_preview_tunnel_id: str | None = None
+
     # API
     api_version: str = "v1"
     cors_allowed_origins: str = "*"
@@ -94,6 +110,17 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:
         """Resuelve el contenido PEM: variable de entorno → lectura de archivo."""
+        cloudflare_preview_values = (
+            self.cloudflare_preview_api_token,
+            self.cloudflare_preview_account_id,
+            self.cloudflare_preview_zone_id,
+            self.cloudflare_preview_tunnel_id,
+        )
+        if any(value is not None for value in cloudflare_preview_values) and not all(
+            value is not None for value in cloudflare_preview_values
+        ):
+            raise ValueError("Debe configurar todas las variables CLOUDFLARE_PREVIEW_* o ninguna")
+
         if self.auth_disabled:
             return self
 

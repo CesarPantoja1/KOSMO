@@ -22,25 +22,18 @@ export interface CharacteristicSave {
 	rationale: string;
 }
 
-export interface CharacteristicChatResponse {
-	id: string;
-	role: 'user' | 'assistant';
-	content: string;
-	created_at: string;
-	change_suggestions?: Array<{
-		id: string;
-		section: string;
-		description: string;
-		diff_before: string;
-		diff_after: string;
-		rationale: string;
-	}> | null;
-}
-
 export interface CreateCharacteristicResponse {
 	is_saved: boolean;
 	feature?: CharacteristicResponse;
 	origin: string;
 	is_consistent: boolean;
 	inconsistency_reason?: string;
+}
+
+export interface CreateCharacteristicParams {
+	title: string;
+	description: string;
+	titleMaxLength: number;
+	descriptionMaxLength: number;
+	origin?: string;
 }

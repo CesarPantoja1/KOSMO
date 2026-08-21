@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from kosmo.contracts.chat import ChatRepository, HistorialChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 from kosmo.contracts.sdd.repositories import ProjectRepository
 
 
@@ -13,6 +13,7 @@ from kosmo.contracts.sdd.repositories import ProjectRepository
 class GetDiscoveryChatHistoryInput:
     project_id: ProjectId
     before: str | None = None
+    session_id: ChatSessionId | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class GetDiscoveryChatHistoryUseCase:
             project_id=input_data.project_id,
             phase=SpecPhase.DESCUBRIMIENTO,
             before=input_data.before,
+            session_id=input_data.session_id,
         )
 
         return GetDiscoveryChatHistoryOutput(

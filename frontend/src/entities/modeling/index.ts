@@ -2,7 +2,7 @@
 export type { ModelingResponse } from './model/types';
 
 // STORE
-export { useModelingStore } from './model/store';
+export { useModelingStore, clearModelingStore } from './model/store';
 
 // API
-export { generatePlantUmlDiagram, getDiagram } from './api/api';
+export { generatePlantUmlDiagram, getDiagram, deleteDiagram } from './api/api';

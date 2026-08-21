@@ -93,6 +93,8 @@ _DISCOVERY_SYSTEM_PROMPT = (
 
 
 class DiscoveryMode:
+    requires_tool_consultation = False
+
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.DESCUBRIMIENTO

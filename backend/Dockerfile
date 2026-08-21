@@ -2,7 +2,7 @@
 # ============================================================================
 # KOSMO backend — Dockerfile multi-stage con uv
 # ----------------------------------------------------------------------------
-# - builder : resuelve y compila dependencias en /opt/venv 
+# - builder : resuelve y compila dependencias en /opt/venv
 # - runtime : python:3.13-slim minimalista, usuario non-root, libs solo runtime
 # ============================================================================
 
@@ -59,14 +59,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
-# Solo libs de RUNTIME
+# Solo libs de RUNTIME + toolchain para ejecución y validación de código generado
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libpq5 \
         ca-certificates \
+        git \
+        curl \
+ && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && apt-get purge -y --auto-remove curl \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 1000 kosmo \
- && useradd --system --uid 1000 --gid kosmo --home /app --shell /usr/sbin/nologin kosmo
+ && useradd --system --uid 1000 --gid kosmo --home /app --shell /usr/sbin/nologin kosmo \
+ && mkdir -p /workspaces /app \
+ && chown -R kosmo:kosmo /workspaces \
+ && chown kosmo:kosmo /app
 
 WORKDIR /app
 
@@ -89,4 +97,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import os,urllib.request,sys; port=os.environ.get('PORT','8000'); r=urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=3); sys.exit(0 if r.status==200 else 1)" || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2} --limit-max-requests 1000"]
+CMD ["sh", "-c", "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-1}"]

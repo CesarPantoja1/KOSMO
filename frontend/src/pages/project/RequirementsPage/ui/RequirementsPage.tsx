@@ -1,32 +1,31 @@
 'use client';
 
-import { FloatingPlan, MarkdownEditor, PanelAsistenteRequisito } from '@/feature';
+import { MarkdownEditor, PanelAsistenteRequisito, type SaveStatus } from '@/feature';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
-import { usePlanActions, usePlanStore } from '@/entities/plan';
-import {
-	generateRequirements,
-	getRequirements,
-	saveRequirements,
-	useRequirementsStore,
-} from '@/entities/requirements';
+import { useRequirementsStore } from '@/entities/requirements';
+import { useModelingStore } from '@/entities/modeling';
+import { formatApiError } from '@/shared/api';
+import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
 import {
 	Ai,
+	ArrowLeft,
 	ArrowRight,
 	CursorClickFill,
 	Loading,
-	ModalConfirmLeave,
+	ModalConfirm,
 	toast,
 } from '@/shared/ui';
 import { useAppStore } from 'app/store/app.store';
+import { useProjectStore } from '@/entities/project';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 
-import { Requirements } from '@/widgets/main-navbar/ui/icons';
 import { AsideCharacteristic } from '@/widgets';
+import { Requirements } from '@/widgets/main-navbar/ui/icons';
 
 const generatingRequirementsMessages = [
 	'Analizando característica...',
@@ -37,23 +36,30 @@ const generatingRequirementsMessages = [
 const RequirementsPage = () => {
 	const router = useRouter();
 
-	// Plan store
-	const fetchAndHydratePlan = usePlanStore((s) => s.fetchAndHydratePlan);
-
 	// Características estado
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
-	const storeGetCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 	const selectedId = useCharacteristicStore((s) => s.selectedId);
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
-	const [isLoading, setIsLoading] = useState(true);
+	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
 	// Requisitos estado
 	const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
 	const hasRequirements = useRequirementsStore((s) => s.hasRequirements);
-	const setHasRequirements = useRequirementsStore((s) => s.setHasRequirements);
+	const currentRequirements = useRequirementsStore((s) => s.currentRequirements);
+	const getRequirements = useRequirementsStore((s) => s.getRequirements);
+	const saveRequirements = useRequirementsStore((s) => s.saveRequirements);
+	const generateRequirements = useRequirementsStore((s) => s.generateRequirements);
+	const deleteRequirementsStore = useRequirementsStore((s) => s.deleteRequirements);
+
+	// Modeling estado (para eliminar diagrama asociado)
+	const hasDiagram = useModelingStore((s) => s.hasDiagram);
+	const deleteDiagramModeling = useModelingStore((s) => s.deleteDiagram);
+
 	const [markdown, setMarkdown] = useState('');
 	const [savedContent, setSavedContent] = useState('');
+	const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
 	// App estado
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
@@ -61,81 +67,66 @@ const RequirementsPage = () => {
 	const setHasUnsavedChanges = useAppStore((s) => s.setHasUnsavedChanges);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 	const setEditorMaximized = useAppStore((s) => s.setEditorMaximized);
-	const currentProject = useAppStore((s) => s.currentProject);
+	const currentProject = useProjectStore((s) => s.currentProject);
+	const currentProjectId = currentProject?.id;
 
 	// Otros estados
 	const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+	const [isAsideExpanded, setIsAsideExpanded] = useState(true);
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = markdown !== savedContent;
 	const [pendingCharSwitch, setPendingCharSwitch] = useState<string | null>(null);
-	const [editorKey, setEditorKey] = useState(0);
 
 	useEffect(() => {
-		if (currentProject) {
-			fetchAndHydratePlan(currentProject.id, 'requirements');
-		}
-	}, [currentProject, fetchAndHydratePlan]);
+		if (!currentProjectId) return;
+		let cancelled = false;
 
-	const handlePlanAction = usePlanActions(
-		currentProject?.id ?? null,
-		'requirements',
-		selectedId,
-	);
+		void getCharacteristics(currentProjectId)
+			.then((features) => {
+				if (cancelled) return;
+				const currentSelection = useCharacteristicStore.getState().selectedId;
+				if (!features.some((feature) => feature.id === currentSelection)) {
+					setSelectedId(features[0]?.id ?? null);
+				}
+			})
+			.catch((error: unknown) => {
+				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+			});
 
-	useEffect(() => {
-		setHasUnsavedChanges(hasUnsavedChanges);
-	}, [hasUnsavedChanges, setHasUnsavedChanges]);
-
-	useEffect(() => {
-		if (!currentProject) {
-			router.push('/proyecto');
-			return;
-		}
-
-		const fetch = async () => {
-			setIsLoading(true);
-			try {
-				await storeGetCharacteristics(currentProject.id);
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : 'Error al cargar las características';
-				toast.error(message);
-			} finally {
-				setIsLoading(false);
-			}
+		return () => {
+			cancelled = true;
 		};
+	}, [currentProjectId, getCharacteristics, setSelectedId]);
 
-		fetch();
-	}, [currentProject, router, storeGetCharacteristics]);
+	useEffect(() => {
+		if (!hasUnsavedChanges && pendingCharSwitch) {
+			const timer = setTimeout(() => setPendingCharSwitch(null), 0);
+			return () => clearTimeout(timer);
+		}
+	}, [hasUnsavedChanges, pendingCharSwitch]);
 
 	useEffect(() => {
 		if (!selectedId || !currentProject) return;
 
 		let cancelled = false;
-		const projectId = currentProject.id;
-		const characteristicId = selectedId;
 
 		const load = async () => {
+			const storedContent = currentRequirements[selectedId];
+			if (storedContent) {
+				setMarkdown(storedContent);
+				setSavedContent(storedContent);
+				return;
+			}
+
 			setIsLoadingRequirements(true);
-			setMarkdown('');
-			setSavedContent('');
 			try {
-				const content = (await getRequirements(projectId, characteristicId))
-					.document_markdown;
+				const content = await getRequirements(currentProject.id, selectedId);
 				if (cancelled) return;
-				if (content) {
-					setHasRequirements(characteristicId, true);
-				}
-				useCharacteristicStore.setState((state) => ({
-					currentCharacteristics: state.currentCharacteristics.map((c) =>
-						c.id === characteristicId ? { ...c, requirements: content } : c,
-					),
-				}));
 				setMarkdown(content);
 				setSavedContent(content);
 			} catch (err) {
 				if (!cancelled && (err as { status?: number }).status !== 404) {
-					toast.error('Error al cargar los requisitos');
+					toast.error(formatApiError(err, 'Error al cargar los requisitos'));
 				}
 			} finally {
 				if (!cancelled) setIsLoadingRequirements(false);
@@ -147,7 +138,7 @@ const RequirementsPage = () => {
 		return () => {
 			cancelled = true;
 		};
-	}, [selectedId, currentProject, setHasRequirements]);
+	}, [selectedId, currentProject, currentRequirements, getRequirements]);
 
 	const handleSelectCharacteristic = (id: string) => {
 		if (id === selectedId) return;
@@ -159,9 +150,12 @@ const RequirementsPage = () => {
 	};
 
 	const applySelected = (id: string) => {
+		// Reset editor state before switching so the new editor always mounts clean
+		setMarkdown('');
+		setSavedContent('');
+		setSaveStatus('idle');
 		setSelectedId(id);
 		setPendingCharSwitch(null);
-		// Cerrar chat si la nueva característica no tiene requisitos
 		if (!hasRequirements[id]) {
 			setIsChatbotOpen(false);
 		}
@@ -183,53 +177,51 @@ const RequirementsPage = () => {
 				currentProject.id,
 				selectedCharacteristic.id,
 			);
-			if (content) {
-				setHasRequirements(selectedCharacteristic.id, true);
-			}
-			useCharacteristicStore.setState((state) => ({
-				currentCharacteristics: state.currentCharacteristics.map((c) =>
-					c.id === selectedCharacteristic.id
-						? { ...c, requirements: content.document_markdown }
-						: c,
-				),
-			}));
-			setMarkdown(content.document_markdown);
-			setSavedContent(content.document_markdown);
-			setEditorKey((prev) => prev + 1);
-		} catch (_err) {
-			toast.error('Error al generar los requisitos');
-			console.log(_err);
+			setMarkdown(content);
+			setSavedContent(content);
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al generar los requisitos'));
 		} finally {
 			setIsGenerating(false);
 		}
 	};
 
-	const handleSave = async (): Promise<boolean> => {
-		if (!selectedCharacteristic || !currentProject) return false;
-
-		const savingToast = toast.info('Guardando...');
-
+	const handleDeleteRequirements = async () => {
+		if (!confirmDeleteId || !currentProject) return;
+		const featureId = confirmDeleteId;
+		setConfirmDeleteId(null);
 		try {
-			await saveRequirements(currentProject.id, selectedCharacteristic.id, markdown);
-			if (markdown) {
-				setHasRequirements(selectedCharacteristic.id, true);
+			await deleteRequirementsStore(currentProject.id, featureId);
+
+			if (hasDiagram[featureId]) {
+				await deleteDiagramModeling(currentProject.id, featureId);
 			}
-			setSavedContent(markdown);
-			useCharacteristicStore.setState((state) => ({
-				currentCharacteristics: state.currentCharacteristics.map((c) =>
-					c.id === selectedCharacteristic.id ? { ...c, requirements: markdown } : c,
-				),
-			}));
-			toast.close(savingToast);
-			toast.success('Guardado');
-			return true;
-		} catch (_err) {
-			toast.close(savingToast);
-			toast.error('No se pudo guardar');
-			console.log(_err);
-			return false;
+
+			setMarkdown('');
+			setSavedContent('');
+			toast.success('Requisitos eliminados');
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al eliminar los requisitos'));
 		}
 	};
+
+	const handleDeleteClick = (id: string) => {
+		setConfirmDeleteId(id);
+	};
+
+	const handleSave = useCallback(async () => {
+		if (!selectedId || !currentProject) return;
+
+		setSaveStatus('saving');
+		try {
+			await saveRequirements(currentProject.id, selectedId, markdown);
+			setSavedContent(markdown);
+			setSaveStatus('saved');
+		} catch (err) {
+			setSaveStatus('error');
+			toast.error(formatApiError(err, 'Error al guardar los requisitos'));
+		}
+	}, [currentProject, selectedId, markdown, saveRequirements]);
 
 	const handleNextLink = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges: unsaved, setPendingNavigationPath: setPath } =
@@ -252,265 +244,227 @@ const RequirementsPage = () => {
 		setPendingNavigationPath(null);
 	}, [setPendingNavigationPath]);
 
-	useEffect(() => {
-		if (hasUnsavedChanges) {
-			const handler = (e: BeforeUnloadEvent) => {
-				e.preventDefault();
-			};
-			window.addEventListener('beforeunload', handler);
-			return () => window.removeEventListener('beforeunload', handler);
-		}
-	}, [hasUnsavedChanges]);
+	useUnsavedChanges({
+		isDirty: hasUnsavedChanges,
+		onAutosave: handleSave,
+	});
 
-	useEffect(() => {
-		const handler = () => {
-			if (hasUnsavedChanges) {
-				setPendingNavigationPath(window.location.href);
-			}
-		};
-		window.addEventListener('popstate', handler);
-		return () => window.removeEventListener('popstate', handler);
-	}, [hasUnsavedChanges, setPendingNavigationPath]);
-
-	useEffect(() => {
-		if (markdown === savedContent) return;
-
-		const timer = setTimeout(() => {
-			handleSave();
-		}, 3000);
-
-		return () => clearTimeout(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [markdown]);
-
-	if (isLoading) {
-		return (
-			<div className='page-container'>
-				<div className='page-header'>
-					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-					<p className='text-base-600 text-lg'>
-						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-						de cada función de la lista.
-					</p>
-					<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-						<button disabled className='btn text-base-50 disabled:opacity-50 bg-ai'>
-							<Ai color='' size={20} />
-							Refinar
-						</button>
-
-						<Link
-							href='modelo'
-							aria-disabled
-							onClick={(e) => e.preventDefault()}
-							className='btn text-base-50 disabled:opacity-50 bg-primary-100 hover:bg-primary-100/90'
-						>
-							Ir a modelo
-							<ArrowRight color='' size={20} />
-						</Link>
-					</div>
-
-					<div className='flex gap-4 flex-1 min-h-0 pb-4'>
-						<div className='w-88 pt-2 bg-base-100/50 rounded-sm flex flex-col gap-3 p-3 animate-pulse'>
-							<div className='h-7 bg-base-200 rounded w-48' />
-							{[1, 2, 3, 4].map((i) => (
-								<div key={i} className='h-14 bg-base-200 rounded' />
-							))}
-						</div>
-						<div className='flex-1 bg-base-100/50 rounded-sm animate-pulse' />
-					</div>
-				</div>
-			</div>
-		);
-	}
+	const hasCharacteristics = characteristics.length > 0;
 
 	return (
 		<>
 			{pendingCharSwitch && (
-				<ModalConfirmLeave
-					onCancel={handleCancelSwitch}
-					onConfirm={handleConfirmSwitch}
-				/>
+				<ModalConfirm onCancel={handleCancelSwitch} onConfirm={handleConfirmSwitch} />
 			)}
 
 			{pendingNavigationPath && (
-				<ModalConfirmLeave onCancel={cancelLeave} onConfirm={confirmLeave} />
+				<ModalConfirm onCancel={cancelLeave} onConfirm={confirmLeave} />
+			)}
+
+			{confirmDeleteId && (
+				<ModalConfirm
+					title='Eliminar requisitos'
+					description='Esta acción no se puede deshacer. Se eliminarán los criterios de aceptación de esta funcionalidad.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setConfirmDeleteId(null)}
+					onConfirm={handleDeleteRequirements}
+				/>
 			)}
 
 			{isGenerating && (
 				<Loading
-					title='Generando requisitos EARS'
-					description='Estructurando la característica seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
+					title='Generando criterios de aceptación'
+					description='Estructurando la funcionalidad seleccionada bajo el estándar EARS. Esto tomará unos segundos.'
 					messages={generatingRequirementsMessages}
 				/>
 			)}
 
 			<div className={`page-container ${isEditorMaximized ? 'px-8' : 'px-0'}`}>
 				<div className='page-header'>
-					<h2 className='text-3xl font-bold text-base-800'>Generar requisitos</h2>
-					<p className='text-base-600 text-lg'>
-						Usa el asistente de IA para desglosar y estructurar los requisitos específicos
-						de cada función de la lista.
-					</p>
-
-					{!isEditorMaximized && (
-						<div className='inline-flex justify-end items-start gap-3 text-base-50'>
-							<button
-								onClick={() => setIsChatbotOpen(true)}
-								disabled={!hasRequirements[selectedId ? selectedId : '']}
-								className='btn bg-ai text-base-50 hover:bg-ai/90 disabled:opacity-50 disabled:cursor-not-allowed'
-							>
-								<Ai size={20} color='text-base-50' />
-								<span className='text-center'>Refinar</span>
-							</button>
-
-							<Link
-								href='modelo'
-								onClick={handleNextLink('modelo')}
-								className='btn text-base-50 bg-primary-100 hover:bg-primary-100/90 rounded-sm'
-							>
-								Ir a modelo
-								<ArrowRight color='' size={20} />
-							</Link>
+					<div className='flex items-start justify-between gap-4'>
+						<div className='flex flex-col gap-1'>
+							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
+								Criterios de aceptación
+							</h1>
+							<p className='text-neutral-500 text-sm md:text-base'>
+								Estructura los requisitos de cada funcionalidad bajo el estándar EARS.
+							</p>
 						</div>
-					)}
 
-					<div className='flex gap-1 flex-1 min-h-0'>
+						{hasCharacteristics && !isEditorMaximized && (
+							<div className='flex items-center gap-3 shrink-0'>
+								{hasRequirements[selectedId ? selectedId : ''] && (
+									<button
+										onClick={() => {
+											setIsChatbotOpen(true);
+											setIsAsideExpanded(false);
+										}}
+										className='btn btn-ai disabled:opacity-50 disabled:cursor-not-allowed'
+									>
+										<Ai size={18} color='' />
+										Mejorar con IA
+									</button>
+								)}
+								<Link
+									href='modelo'
+									onClick={handleNextLink('modelo')}
+									className='btn btn-primary'
+								>
+									Continuar
+									<ArrowRight color='' size={18} />
+								</Link>
+							</div>
+						)}
+					</div>
+
+					{!hasCharacteristics ? (
+						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
+							<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
+								<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
+									<Ai color='text-neutral-400' size={48} />
+								</div>
+								<div className='flex flex-col gap-2'>
+									<h3 className='text-xl font-semibold text-neutral-800'>
+										No hay funcionalidades definidas
+									</h3>
+									<p className='text-neutral-500 text-base'>
+										Primero debes generar las funcionalidades del proyecto para poder
+										definir sus criterios de aceptación.
+									</p>
+								</div>
+								<Link href='/proyecto/caracteristicas' className='btn btn-secondary'>
+									<ArrowLeft color='' size={18} />
+									Ir a Funcionalidades
+								</Link>
+							</div>
+						</div>
+					) : (
+						<div className='flex gap-1 flex-1 min-h-0'>
 						<AsideCharacteristic
 							characteristics={characteristics}
 							selectedId={selectedId}
 							onSelectCharacteristic={handleSelectCharacteristic}
+							onDeleteCharacteristic={handleDeleteClick}
 							hasIcon={hasRequirements}
 							icon={Requirements}
+							isExpanded={isAsideExpanded}
+							onToggleExpand={setIsAsideExpanded}
 						/>
 
-						<div className='relative flex-1 flex flex-col pl-2 pt-2 bg-base-100/50 min-h-0 overflow-hidden'>
-							{!selectedCharacteristic && (
-								<div className='flex flex-col items-center justify-center h-full gap-3'>
-									<CursorClickFill color='text-base-800' size={70} />
-									<div className='self-stretch px-24 flex flex-col justify-start items-start'>
-										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-											<div className='text-center justify-start text-base-800 text-2xl font-semibold'>
-												Selecciona una Característica
-											</div>
+							<div className='relative flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
+								{!selectedCharacteristic && (
+									<div className='flex flex-col items-center justify-center h-full gap-4'>
+										<div className='flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100'>
+											<CursorClickFill color='text-neutral-400' size={40} />
 										</div>
-										<div className='self-stretch p-2.5 inline-flex justify-center items-center gap-2.5'>
-											<div className='flex-1 text-center justify-start text-base-600 text-lg font-medium'>
-												Selecciona una característica del listado lateral para ver su
-												detalle
-												<br />o comenzar a generar sus requisitos EARS.
-											</div>
-										</div>
-									</div>
-								</div>
-							)}
-
-							{selectedCharacteristic && isLoadingRequirements && (
-								<div className='flex flex-1 items-center justify-center'>
-									<span className='text-base-600 text-lg'>Cargando requisitos...</span>
-								</div>
-							)}
-
-							{selectedCharacteristic &&
-								!isLoadingRequirements &&
-								hasRequirements[selectedCharacteristic.id] && (
-									<div className='flex flex-col flex-1 min-h-0 gap-4'>
-										<div className='flex flex-col gap-2 px-2'>
-											<div className='inline-flex justify-between items-center w-full'>
-												<div className='inline-flex justify-start gap-3 items-center'>
-													<span className='text-2xl font-bold text-base-800'>
-														{selectedCharacteristic.display_id}
-													</span>
-													<span className='text-2xl font-bold text-primary-100'>
-														{selectedCharacteristic.title}
-													</span>
-												</div>
-											</div>
-											<p className='text-base-600 text-base'>
-												{selectedCharacteristic.description}
+										<div className='flex flex-col items-center gap-2 text-center max-w-sm'>
+											<h3 className='text-neutral-700 text-lg font-semibold'>
+												Selecciona una funcionalidad
+											</h3>
+											<p className='text-neutral-400 text-sm'>
+												Elige una funcionalidad del listado lateral para ver o generar sus
+												criterios de aceptación.
 											</p>
-										</div>
-										<div className='flex-1 min-h-0 mt-2'>
-											<MarkdownEditor
-												key={editorKey}
-												markdown={markdown}
-												onChange={setMarkdown}
-												isMaximized={isEditorMaximized}
-												onMaximize={() => setEditorMaximized(true)}
-												onMinimize={() => setEditorMaximized(false)}
-											/>
 										</div>
 									</div>
 								)}
 
-							{selectedCharacteristic &&
-								!isLoadingRequirements &&
-								!hasRequirements[selectedCharacteristic.id] && (
-									<div className='flex flex-col flex-1 min-h-0 gap-4'>
-										<div className='flex flex-col gap-2 px-2'>
-											<div className='inline-flex justify-between items-center w-full'>
-												<div className='inline-flex justify-start gap-3 items-center'>
-													<span className='text-2xl font-bold text-base-800'>
-														{selectedCharacteristic.display_id}
-													</span>
-													<span className='text-2xl font-bold text-primary-100'>
-														{selectedCharacteristic.title}
-													</span>
-												</div>
-											</div>
-											<p className='text-base-600 text-base'>
-												{selectedCharacteristic.description}
-											</p>
-										</div>
-
-										<section className='flex flex-col my-auto items-center gap-5 px-20'>
-											<Ai color='text-ai' size={70} />
-
-											<span className='text-center justify-start text-base-800 text-2xl font-medium'>
-												Sin requisitos EARS
-											</span>
-
-											<p className='text-base-800 text-lg text-center'>
-												Esta característica aún no tiene requisitos generados. Haz clic en
-												el botón <span className='text-xl font-bold'>Generar </span>
-												para estructurarlos y completarlos automáticamente bajo el formato
-												EARS.
-											</p>
-
-											<button
-												onClick={handleGenerate}
-												className='btn text-base-50 bg-ai mt-2 hover:bg-ai/90'
-											>
-												<Ai color='' size={20} />
-												Generar
-											</button>
-										</section>
+								{selectedCharacteristic && isLoadingRequirements && (
+									<div className='flex flex-1 items-center justify-center gap-3'>
+										<div className='h-5 w-5 animate-spin rounded-full border-2 border-neutral-200 border-t-primary-500' />
+										<span className='text-neutral-500 text-sm'>
+											Cargando criterios...
+										</span>
 									</div>
 								)}
 
-							<FloatingPlan
-								phase='requirements'
-								navigateTo='/proyecto/requisitos/plan'
-								contextId={selectedId}
-							/>
+								{selectedCharacteristic &&
+									!isLoadingRequirements &&
+									hasRequirements[selectedCharacteristic.id] &&
+									markdown && (
+										<div className='flex flex-col flex-1 min-h-0 gap-3'>
+											<div className='flex flex-col gap-1 px-2'>
+												<div className='flex items-center gap-2'>
+													<span className='text-base font-bold text-neutral-500'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-base font-semibold text-neutral-800'>
+														{selectedCharacteristic.title}
+													</span>
+												</div>
+												<p className='text-neutral-500 text-sm'>
+													{selectedCharacteristic.description}
+												</p>
+											</div>
+											<div className='flex-1 min-h-0'>
+												<MarkdownEditor
+													key={selectedId}
+													markdown={markdown}
+													onChange={setMarkdown}
+													isMaximized={isEditorMaximized}
+													onMaximize={() => setEditorMaximized(true)}
+													onMinimize={() => setEditorMaximized(false)}
+													saveStatus={saveStatus}
+												/>
+											</div>
+										</div>
+									)}
+
+								{selectedCharacteristic &&
+									!isLoadingRequirements &&
+									!hasRequirements[selectedCharacteristic.id] && (
+										<div className='flex flex-col flex-1 min-h-0 gap-3'>
+											<div className='flex flex-col gap-1 px-2'>
+												<div className='flex items-center gap-2'>
+													<span className='text-base font-bold text-neutral-500'>
+														{selectedCharacteristic.display_id}
+													</span>
+													<span className='text-base font-semibold text-neutral-800'>
+														{selectedCharacteristic.title}
+													</span>
+												</div>
+												<p className='text-neutral-500 text-sm'>
+													{selectedCharacteristic.description}
+												</p>
+											</div>
+
+											<div className='flex flex-col my-auto items-center gap-5 px-12'>
+												<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-ai-50'>
+													<Ai color='text-ai-500' size={48} />
+												</div>
+												<div className='flex flex-col items-center gap-2 text-center max-w-md'>
+													<h3 className='text-neutral-800 text-lg font-semibold'>
+														Aún no hay criterios generados
+													</h3>
+													<p className='text-neutral-500 text-sm'>
+														Esta funcionalidad aún no tiene criterios de aceptación. El
+														asistente los estructurará automáticamente bajo el formato
+														EARS.
+													</p>
+												</div>
+												<button onClick={handleGenerate} className='btn btn-ai'>
+													<Ai color='' size={18} />
+													Generar criterios
+												</button>
+											</div>
+										</div>
+									)}
+							</div>
 						</div>
-					</div>
+					)}
 				</div>
 
-				<div
-					className={`chatbot
-						${
-							isChatbotOpen
-								? 'opacity-100 translate-x-0 flex-4/12'
-								: 'opacity-0 translate-x-8 pointer-events-none max-w-0 flex-none'
-						}
-				`}
-				>
+				{isChatbotOpen && (
 					<PanelAsistenteRequisito
 						featureId={selectedId}
-						onClose={() => setIsChatbotOpen(false)}
-						onPlanAction={handlePlanAction}
+						projectId={currentProject?.id ?? null}
+						onClose={() => {
+							setIsChatbotOpen(false);
+							setIsAsideExpanded(true);
+						}}
 					/>
-				</div>
+				)}
 			</div>
 		</>
 	);

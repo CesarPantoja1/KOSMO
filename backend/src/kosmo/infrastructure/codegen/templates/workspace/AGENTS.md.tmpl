@@ -1,0 +1,104 @@
+# {{PROJECT_NAME}} — Implementación generada por KOSMO
+
+## Contexto
+Este proyecto fue generado y es mantenido por KOSMO (Spec-Driven Development).
+Cada Feature corresponde a un conjunto de Requirements EARS y un Activity Diagram.
+El desarrollo es **test-first**: nunca se da una tarea por terminada sin validaciones verdes.
+
+## Stack
+- Next.js 16 (App Router) + React 19 + TypeScript estricto
+- Drizzle ORM + SQLite (better-sqlite3)
+- Vitest para tests
+- Tailwind CSS + shadcn/ui
+- ESLint (flat config)
+
+## Comandos
+```bash
+npm install              # instalar dependencias
+npx tsc --noEmit         # typecheck
+npx eslint .             # lint
+npx vitest run           # tests (suite completa)
+npx next build           # compilación de producción
+```
+
+## Pipeline de validación (NON-NEGOTIABLE)
+Toda tarea termina ÚNICAMENTE cuando este pipeline está completamente en verde.
+1. `npx tsc --noEmit` — cero errores de tipos.
+2. `npx eslint .` — cero errores de lint.
+3. `npx vitest run` — todos los tests pasan.
+4. `npx next build` — la compilación de producción es exitosa.
+
+**Regla de cierre:** ejecuta las 4 validaciones tras cada cambio. Si alguna falla,
+corrige los errores y vuelve a ejecutar **desde el principio** del pipeline. No declares
+la tarea completada con validaciones en rojo, no dejes tests rotos "para después" y no
+entregues código que no compila. Si un test falla por una razón legítima (spec cambió),
+actualiza el test junto con la implementación y vuelve a validar.
+
+## Skills disponibles (Cargar antes de codificar)
+- `.opencode/skills/kosmo-implementation/SKILL.md`: Clean Architecture y TypeScript.
+- `.opencode/skills/kosmo-testing/SKILL.md` (o `tdd`): TDD Vitest, patrón AAA y cobertura obligatoria.
+- `.opencode/skills/kosmo-drizzle/SKILL.md`: Drizzle ORM sobre SQLite, tipado de esquemas y queries.
+- `.opencode/skills/kosmo-nextjs/SKILL.md`: Next.js 16 App Router con Server Components y APIs.
+- `.opencode/skills/kosmo-ui/SKILL.md`: UI funcional, mapa navegacional y diseño consistente.
+
+## UI, Navegación y Diseño (NON-NEGOTIABLE)
+Toda feature termina con una pantalla funcional que el usuario puede abrir y usar.
+
+1. **Ruta y slice**: `src/app/<slug>/page.tsx` + `src/features/<slug>/` con `manifest.ts`,
+   `logic.ts` y `components/`. Registrar el manifest en `src/lib/feature-registry.ts`
+   (la navegación del shell se deriva del registro).
+2. **Desacople**: los slices no se importan entre sí; borrar una feature = eliminar su
+   carpeta y su entrada en el registro. El shell no depende de ninguna feature.
+3. **Modelo mental**: nav persistente con la feature activa, home con la visión del proyecto
+   y tarjetas de acceso, estados vacío/error/loading claros, español neutro.
+4. **Adaptación al tipo de web**: detecta la naturaleza del negocio desde la visión del
+   descubrimiento (storefront, dashboard, contenido o app de negocio) y adapta el shell.
+5. **Diseño consistente**: solo componentes de `src/components/ui/` y tokens del tema;
+   nada de estilos sueltos, degradados genéricos, emojis o lorem ipsum.
+
+## TDD (obligatorio)
+Antes de escribir cualquier test, carga la skill `.opencode/skills/tdd/SKILL.md` (o `kosmo-testing`).
+Sigue estrictamente **Red-Green-Refactor**: test que falla → implementación mínima → refactor.
+Toda funcionalidad nueva debe tener al menos happy path + error path cubiertos.
+
+## Estructura
+```text
+src/
+  app/           ← Next.js App Router (pages, layouts, API routes)
+  components/    ← Componentes React reutilizables
+  db/            ← Schema Drizzle, migraciones, queries
+  lib/           ← Utilidades, tipos compartidos
+  styles/        ← Estilos globales
+tests/           ← Tests Vitest
+```
+
+## Convenciones (NON-NEGOTIABLE)
+1. TypeScript estricto (`strict: true`). Cero `any` sin justificación.
+2. Server Components por defecto; `'use client'` solo cuando necesario.
+3. Drizzle ORM para toda persistencia. No SQL raw.
+4. Cada archivo tiene un propósito único.
+5. Nombres en inglés para código; UI en español.
+6. Errores de API estructurados (status + `detail`), nunca strings sueltos.
+
+## MCP Tools disponibles
+- `get_requirements(feature_id)`: Obtener requirements EARS de una feature.
+- `get_activity_diagram(feature_id)`: Obtener diagrama de actividad.
+- `get_traceability(feature_id)`: Obtener archivos ya trazados a una feature.
+- `get_related_features(feature_id)`: Features relacionadas para evitar duplicación.
+- **token-savior**: para navegar el código generado usa sus tools (`find_symbol`,
+  `get_edit_context`, `search_codebase`, `get_change_impact`) ANTES que grep/lectura de archivos.
+- **context7**: para firmas exactas de Next.js, React, Drizzle, Tailwind o Vitest,
+  consulta context7 en lugar de adivinar APIs de memoria.
+
+## Anti-patrones prohibidos
+- Lógica de negocio dentro de server components de rutas.
+- `any` para silenciar errores de tipos.
+- SQL raw fuera de Drizzle.
+- Instalar dependencias sin justificación.
+- Dejar tests rotos o saltarse validaciones para "avanzar".
+
+## Reglas de modificación
+- No instalar dependencias sin justificación.
+- No modificar archivos de configuración raíz sin aprobación.
+- Cada feature nueva debe tener tests.
+- Respetar archivos existentes de otras features.

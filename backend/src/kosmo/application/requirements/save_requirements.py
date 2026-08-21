@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
+from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     FeatureRepository,
@@ -16,10 +19,12 @@ class SaveRequirementsUseCase:
         project_repo: ProjectRepository,
         feature_repo: FeatureRepository,
         requirement_repo: RequirementRepository,
+        outbox: OutboxPort | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
+        self._outbox = outbox
 
     async def execute(self, project_id: ProjectId, feature_id: FeatureId, markdown: str) -> None:
         from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
@@ -39,3 +44,17 @@ class SaveRequirementsUseCase:
             )
 
         await self._requirement_repo.save(feature_id, markdown)
+
+        await trigger_downstream_evaluation(
+            self._outbox,
+            project_id=project_id,
+            source_phase=SpecPhase.REQUISITOS,
+            changes=[
+                {
+                    "section": "documento",
+                    "description": f"Edición manual de los requisitos de {feature.display_id}",
+                    "before": "",
+                    "after": markdown,
+                }
+            ],
+        )

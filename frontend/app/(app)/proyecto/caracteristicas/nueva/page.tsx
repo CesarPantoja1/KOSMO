@@ -1,14 +1,6 @@
-'use client';
+import { Metadata } from 'next';
+export { CreateCharacteristic as default } from '@/pages/project/CharacteristicsPage';
 
-import { useRouter } from 'next/navigation';
-import CreateCharacteristic from '@/pages/project/CharacteristicsPage/ui/CreateCharacteristic';
-
-export default function NuevaCaracteristicaPage() {
-	const router = useRouter();
-
-	return (
-		<div className='page-container'>
-			<CreateCharacteristic onCreated={() => router.push('/proyecto/caracteristicas')} />
-		</div>
-	);
-}
+export const metadata: Metadata = {
+	title: 'Nueva Característica',
+};

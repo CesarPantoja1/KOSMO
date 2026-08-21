@@ -1,277 +1,280 @@
 'use client';
 
-import { applyConsistencyImpacts, useConsistencyStore } from '@/entities/consistency';
-import type { DownstreamProposal } from '@/entities/consistency';
-import { ModalConfirmLeave, toast } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
-import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
-import { ConsistencyDiffCard } from './ConsistencyDiffCard';
+import { useCharacteristicStore } from '@/entities/characteristic';
+import type { ConsistencyTargetPhase, ReviewCard } from '@/entities/consistency';
+import {
+	CONSISTENCY_REVIEW_ROUTES,
+	useConsistencyGateStore,
+} from '@/entities/consistency';
+import { useModelingStore } from '@/entities/modeling';
+import { useProjectStore } from '@/entities/project';
+import { useRequirementsStore } from '@/entities/requirements';
+import { preloadPlantUmlEngine } from '@/feature/plantuml-viewer/lib/engine-loader';
+import { formatApiError } from '@/shared/api';
+import { ArrowLeft, ModalConfirm, toast } from '@/shared/ui';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { GateReviewCard } from './GateReviewCard';
 
-const PHASE_LABELS: Record<string, string> = {
-	features: 'Características',
-	requirements: 'Requisitos',
-	model: 'Modelo',
-	discovery: 'Descubrimiento',
+const TARGET_LABELS: Record<ConsistencyTargetPhase, string> = {
+	features: 'Funcionalidades',
+	requirements: 'Criterios',
+	model: 'Diagramas',
 };
 
-const RETURN_PATHS: Record<string, string> = {
-	discovery: '/proyecto/descubrimiento',
+const ROUTE_TO_TARGET: Record<string, ConsistencyTargetPhase> = {
+	caracteristicas: 'features',
+	requisitos: 'requirements',
+	modelo: 'model',
+	descubrimiento: 'features',
+};
+
+const TARGET_TO_ROUTE: Record<ConsistencyTargetPhase, string> = {
 	features: '/proyecto/caracteristicas',
 	requirements: '/proyecto/requisitos',
 	model: '/proyecto/modelo',
 };
 
-function groupByPhase(items: DownstreamProposal[]): [string, DownstreamProposal[]][] {
-	const groups = new Map<string, DownstreamProposal[]>();
-	for (const item of items) {
-		const phase = item.phase || 'features';
-		if (!groups.has(phase)) groups.set(phase, []);
-		groups.get(phase)!.push(item);
+const refreshArtifactStores = async (projectId: string, cards: ReviewCard[]) => {
+	const fetches: Promise<unknown>[] = [
+		useCharacteristicStore.getState().getCharacteristics(projectId),
+	];
+	for (const card of cards) {
+		const featureId = card.target_artifact_id.split(':')[0];
+		if (card.artifact_type === 'EARSRequirement') {
+			fetches.push(useRequirementsStore.getState().getRequirements(projectId, featureId));
+		} else if (card.artifact_type === 'ActivityDiagram') {
+			fetches.push(useModelingStore.getState().getDiagram(projectId, featureId));
+		}
 	}
-	return Array.from(groups.entries());
-}
+	await Promise.allSettled(fetches);
+};
 
 const ConsistencyPage = () => {
 	const router = useRouter();
-	const currentProject = useAppStore((s) => s.currentProject);
-	const initializeProject = useAppStore((s) => s.initializeProject);
+	const params = useParams<{ fase?: string }>();
+	const targetPhase: ConsistencyTargetPhase =
+		ROUTE_TO_TARGET[params?.fase ?? ''] ?? 'features';
 
-	const report = useConsistencyStore((s) => s.report);
-	const rejectAll = useConsistencyStore((s) => s.rejectAll);
-	const acceptAll = useConsistencyStore((s) => s.acceptAll);
-	const acceptImpact = useConsistencyStore((s) => s.acceptImpact);
-	const clearReport = useConsistencyStore((s) => s.clearReport);
-	const undoImpact = useConsistencyStore((s) => s.undoImpact);
+	const currentProject = useProjectStore((s) => s.currentProject);
 
-	const returnPath = report
-		? (RETURN_PATHS[report.source_type] ?? '/proyecto/descubrimiento')
-		: '/proyecto/descubrimiento';
+	const status = useConsistencyGateStore((s) => s.status);
+	const reviewLoading = useConsistencyGateStore((s) => s.reviewLoading);
+	const cardsByPhase = useConsistencyGateStore((s) => s.cardsByPhase);
+	const actionByEvaluation = useConsistencyGateStore((s) => s.actionByEvaluation);
+	const activity = useConsistencyGateStore((s) => s.activity);
+	const loadStatus = useConsistencyGateStore((s) => s.loadStatus);
+	const loadReview = useConsistencyGateStore((s) => s.loadReview);
+	const applyEvaluation = useConsistencyGateStore((s) => s.applyEvaluation);
+	const discardEvaluation = useConsistencyGateStore((s) => s.discardEvaluation);
+	const bulkResolve = useConsistencyGateStore((s) => s.bulkResolve);
+	const loadActivity = useConsistencyGateStore((s) => s.loadActivity);
 
-	const [showConfirmLeave, setShowConfirmLeave] = useState(false);
-	const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-	const [applying, setApplying] = useState(false);
-	const [showConfirmApply, setShowConfirmApply] = useState(false);
+	const [confirmBulk, setConfirmBulk] = useState<'apply' | 'discard' | null>(null);
 
-	const phaseGroups = useMemo(
-		() => (report ? groupByPhase(report.downstream_impact) : []),
-		[report],
-	);
+	const cards: ReviewCard[] = cardsByPhase[targetPhase] ?? [];
+	const phaseStatus = status?.phases?.[targetPhase];
+	const evaluating = phaseStatus?.evaluating ?? 0;
+	const pending = phaseStatus?.pending ?? 0;
+
+	useEffect(() => {
+		preloadPlantUmlEngine();
+	}, []);
+
+	useEffect(() => {
+		if (!currentProject) return;
+		const timer = window.setTimeout(() => {
+			void loadStatus(currentProject.id).catch(() => undefined);
+			void loadReview(currentProject.id, targetPhase).catch(() => undefined);
+			void loadActivity(currentProject.id).catch(() => undefined);
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [currentProject, targetPhase, loadStatus, loadReview, loadActivity]);
 
 	if (!currentProject) {
 		router.push('/proyecto');
 		return null;
 	}
 
-	if (!report) {
-		router.push(returnPath);
-		return null;
-	}
+	const reload = async () => {
+		await Promise.all([
+			loadStatus(currentProject.id),
+			loadReview(currentProject.id, targetPhase),
+			loadActivity(currentProject.id),
+		]);
+	};
 
-	const hasPending = report.downstream_impact.some((i) => i.accepted === undefined);
-
-	const refreshProject = async () => {
+	const handleApply = async (card: ReviewCard) => {
 		try {
-			await initializeProject(currentProject.id);
-		} catch {
-			// non-blocking — the page will show what it can
+			await applyEvaluation(currentProject.id, targetPhase, card.evaluation_id);
+			toast.success('Cambio aplicado');
+			await reload();
+			await refreshArtifactStores(currentProject.id, [card]);
+		} catch (err) {
+			toast.error(formatApiError(err, 'No se pudo aplicar el cambio.'));
+			await reload();
 		}
 	};
 
-	const handleBack = () => {
-		if (hasPending) {
-			setPendingNavigation(returnPath);
-			setShowConfirmLeave(true);
-		} else {
-			router.push(returnPath);
-		}
-	};
-
-	const handleConfirmLeave = () => {
-		clearReport();
-		setShowConfirmLeave(false);
-		if (pendingNavigation) {
-			router.push(pendingNavigation);
-			setPendingNavigation(null);
-		}
-	};
-
-	const handleCancelLeave = () => {
-		setShowConfirmLeave(false);
-		setPendingNavigation(null);
-	};
-
-	const handleAcceptAllBatch = async () => {
-		if (!report || !currentProject) return;
-		const selected = report.downstream_impact.filter((i) => i.accepted === true);
-		if (selected.length === 0) return;
-		setApplying(true);
+	const handleDiscard = async (card: ReviewCard) => {
 		try {
-			const result = await applyConsistencyImpacts(currentProject.id, selected);
-			const failedCount = (result.failed || []).filter((f) => f.target_id).length;
-			if (failedCount > 0) {
-				toast.error(
-					`${failedCount} de ${selected.length} cambios no se pudieron aplicar`,
-				);
-			}
-			if (failedCount < selected.length) {
-				toast.success(`${selected.length - failedCount} cambios aplicados correctamente`);
-				await refreshProject();
-				clearReport();
-				router.push(returnPath);
-			}
-		} catch {
-			toast.error('No se pudieron aplicar los cambios');
-		} finally {
-			setApplying(false);
+			await discardEvaluation(currentProject.id, targetPhase, card.evaluation_id);
+			toast.success('Sugerencia descartada');
+			await reload();
+		} catch (err) {
+			toast.error(formatApiError(err, 'No se pudo descartar la sugerencia.'));
+			await reload();
 		}
 	};
 
-	const handleAcceptImpact = (impactId: string) => {
-		acceptImpact(impactId);
+	const handleBulk = async () => {
+		if (!confirmBulk) return;
+		const action = confirmBulk;
+		setConfirmBulk(null);
+		try {
+			const result = await bulkResolve(currentProject.id, action, targetPhase);
+			toast.success(
+				`${result.resolved} sugerencia(s) ${action === 'apply' ? 'aplicada(s)' : 'descartada(s)'}${
+					result.skipped > 0 ? ` · ${result.skipped} obsoleta(s) re-evaluándose` : ''
+				}`,
+			);
+			await reload();
+			await refreshArtifactStores(currentProject.id, cards);
+		} catch (err) {
+			toast.error(formatApiError(err, 'No se pudo completar la operación.'));
+			await reload();
+		}
 	};
 
-	const handleRejectImpact = (impactId: string) => {
-		useConsistencyStore.getState().rejectImpact(impactId);
-	};
-
-	const handleMarkAll = () => {
-		acceptAll();
-	};
-
-	const handleRejectAll = () => {
-		rejectAll();
-		clearReport();
-		router.push(returnPath);
-	};
-
-	const handleApplyClick = () => {
-		setShowConfirmApply(true);
-	};
-
-	const handleConfirmApply = () => {
-		setShowConfirmApply(false);
-		handleAcceptAllBatch();
-	};
-
-	const handleCancelApply = () => {
-		setShowConfirmApply(false);
-	};
-
-	const selectedCount = report.downstream_impact.filter(
-		(i) => i.accepted === true,
-	).length;
+	const phaseLabel = TARGET_LABELS[targetPhase];
 
 	return (
 		<>
-			<div className='page-container gap-2'>
-				<div className='page-header'>
-					<h2 className='text-base-800 text-3xl font-bold'>Consistencia del Proyecto</h2>
-					<p className='text-base-600 text-lg'>
-						Revisa los cambios detectados entre fases de desarrollo, agrupados por nivel
-						de impacto.
-					</p>
+			{confirmBulk && (
+				<ModalConfirm
+					title={
+						confirmBulk === 'apply'
+							? 'Aplicar todas las sugerencias'
+							: 'Descartar todas las sugerencias'
+					}
+					description={
+						confirmBulk === 'apply'
+							? `Se aplicarán todas las sugerencias frescas de ${phaseLabel}. Los cambios se encadenarán hacia las fases siguientes.`
+							: `Se descartarán todas las sugerencias frescas de ${phaseLabel}. Si la fuente vuelve a cambiar, aparecerán sugerencias nuevas.`
+					}
+					cancelText='Cancelar'
+					confirmText={confirmBulk === 'apply' ? 'Aplicar todas' : 'Descartar todas'}
+					onCancel={() => setConfirmBulk(null)}
+					onConfirm={handleBulk}
+				/>
+			)}
 
-					<div className='flex-1 min-h-0 mb-2'>
-						<div className='flex h-full min-h-0 flex-col overflow-hidden bg-base-50 rounded'>
-							<div className='flex shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6 py-3'>
-								<span className='text-sm font-semibold text-base-950'>
-									{report.downstream_impact.length}{' '}
-									{report.downstream_impact.length === 1
-										? 'impacto detectado'
-										: 'impactos detectados'}
-								</span>
-								<button type='button' onClick={handleBack} className='btn btn-primary'>
-									Volver
-								</button>
-							</div>
-
-							<div className='flex-1 overflow-y-auto p-6 space-y-6'>
-								{phaseGroups.map(([phase, items]) => (
-									<div key={phase}>
-										<h3 className='text-sm font-semibold text-base-500 uppercase tracking-wide mb-3'>
-											{PHASE_LABELS[phase] || phase} ({items.length})
-										</h3>
-										{items.map((impact) => (
-											<ConsistencyDiffCard
-												key={impact.id}
-												type='downstream_impact'
-												item={impact}
-												onAccept={
-													impact.action !== 'delete' || impact.artifact_type === 'Feature'
-														? () => handleAcceptImpact(impact.id)
-														: undefined
-												}
-												onReject={
-													impact.accepted !== true
-														? () => handleRejectImpact(impact.id)
-														: undefined
-												}
-												onUndo={
-													impact.accepted !== undefined
-														? () => undoImpact(impact.id)
-														: undefined
-												}
-											/>
-										))}
-									</div>
-								))}
-							</div>
-
-							<div className='flex shrink-0 items-center justify-between border-t border-base-300 bg-base-100 px-6 py-4'>
-								<button
-									type='button'
-									onClick={handleRejectAll}
-									className='btn btn-destructive'
-								>
-									Rechazar todos
-								</button>
-								<div className='flex items-center gap-3'>
-									<button
-										type='button'
-										onClick={handleMarkAll}
-										className='btn btn-warning'
-									>
-										Marcar todos
-									</button>
-									<button
-										type='button'
-										onClick={handleApplyClick}
-										disabled={selectedCount === 0 || applying}
-										className='btn btn-primary'
-									>
-										{applying
-											? 'Aplicando...'
-											: `Aplicar seleccionados (${selectedCount})`}
-									</button>
-								</div>
-							</div>
-						</div>
+			<div className='page-container flex-col gap-4'>
+				<div className='page-header shrink-0'>
+					<div className='flex flex-col gap-2'>
+						<Link
+							href={TARGET_TO_ROUTE[targetPhase]}
+							className='flex w-fit items-center gap-1 text-sm font-medium text-neutral-500 hover:text-neutral-700'
+						>
+							<ArrowLeft size={16} color='' />
+							Volver a {phaseLabel}
+						</Link>
+						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
+							Revisión de consistencia
+						</h1>
+						<p className='text-neutral-500 text-sm md:text-base'>
+							El agente detectó impactos de cambios sobre {phaseLabel}. Revisa cada
+							sugerencia antes de aplicarla.
+						</p>
 					</div>
 				</div>
+
+				{/* Selector de fase destino */}
+				<div className='flex shrink-0 items-center gap-2'>
+					{(Object.keys(TARGET_LABELS) as ConsistencyTargetPhase[]).map((phase) => (
+						<Link
+							key={phase}
+							href={CONSISTENCY_REVIEW_ROUTES[phase]}
+							className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+								phase === targetPhase
+									? 'bg-primary-500 text-neutral-0'
+									: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+							}`}
+						>
+							{TARGET_LABELS[phase]}
+						</Link>
+					))}
+				</div>
+
+				{evaluating > 0 && (
+					<div
+						role='status'
+						className='flex shrink-0 items-center gap-2 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'
+					>
+						<span className='h-2 w-2 animate-pulse rounded-full bg-warning-500' />
+						<p className='text-sm text-warning-700'>
+							El agente está evaluando impactos sobre {phaseLabel}. Los resultados
+							aparecerán aquí al terminar.
+						</p>
+					</div>
+				)}
+
+				{!reviewLoading && cards.length > 0 && (
+					<div className='flex shrink-0 items-center justify-between gap-2'>
+						<p className='text-sm text-neutral-500'>
+							{pending} sugerencia(s) pendiente(s) de decisión
+						</p>
+						<div className='flex items-center gap-2'>
+							<button
+								type='button'
+								onClick={() => setConfirmBulk('discard')}
+								className='btn btn-secondary btn-sm'
+							>
+								Descartar todas
+							</button>
+							<button
+								type='button'
+								onClick={() => setConfirmBulk('apply')}
+								className='btn btn-primary btn-sm'
+							>
+								Aplicar todas
+							</button>
+						</div>
+					</div>
+				)}
+
+				{/* Cards y actividad */}
+				<div className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto'>
+					{reviewLoading && cards.length === 0 && (
+						<div className='flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-0 px-4 py-6'>
+							<p className='text-sm text-neutral-400'>Cargando sugerencias…</p>
+						</div>
+					)}
+
+					{!reviewLoading && cards.length === 0 && evaluating === 0 && (
+						<div className='flex flex-col items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-0 px-8 py-12 text-center'>
+							<h3 className='text-lg font-semibold text-neutral-800'>
+								Todo consistente en {phaseLabel}
+							</h3>
+							<p className='max-w-md text-sm leading-6 text-neutral-500'>
+								No hay sugerencias pendientes para esta fase. Si aún no generaste los
+								artefactos de {phaseLabel}, el análisis se completará cuando existan.
+							</p>
+						</div>
+					)}
+
+					{cards.map((card) => (
+						<GateReviewCard
+							key={card.evaluation_id}
+							card={card}
+							busy={Boolean(actionByEvaluation[card.evaluation_id])}
+							onApply={() => void handleApply(card)}
+							onDiscard={() => void handleDiscard(card)}
+						/>
+					))}
+				</div>
 			</div>
-
-			{showConfirmLeave && (
-				<ModalConfirmLeave
-					onCancel={handleCancelLeave}
-					onConfirm={handleConfirmLeave}
-					title='Cambios de consistencia pendientes'
-					description='Si sale ahora, los cambios sugeridos no se aplicarán y no se volverán a mostrar. ¿Está seguro que desea salir?'
-					cancelText='Cancelar'
-					confirmText='Salir'
-				/>
-			)}
-
-			{showConfirmApply && (
-				<ModalConfirmLeave
-					onCancel={handleCancelApply}
-					onConfirm={handleConfirmApply}
-					title='Aplicar cambios seleccionados'
-					description={`Se aplicarán ${selectedCount} ${selectedCount === 1 ? 'cambio' : 'cambios'} sobre los artefactos downstream. Esta acción no se puede deshacer. ¿Desea continuar?`}
-					cancelText='Cancelar'
-					confirmText='Aplicar'
-				/>
-			)}
 		</>
 	);
 };

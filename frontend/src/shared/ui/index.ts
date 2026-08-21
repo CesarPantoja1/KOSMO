@@ -1,12 +1,14 @@
 // components
 export { default as Loading } from './Loading';
 export { MarkdownText } from './markdown-text';
-export { default as ModalConfirmLeave } from './ModalConfirmLeave';
+export { ModalConfirm } from './ModalConfirm';
+export { CharacterCounter } from './CharacterCounter';
 
 // icons
 export { default as Ai } from './icons/Ai';
 export { default as ArrowRight } from './icons/ArrowRight';
 export { default as ArrowLeft } from './icons/ArrowLeft';
+export { default as ChevronDown } from './icons/ChevronDown';
 export { default as Load } from './icons/Load';
 export { default as Close } from './icons/Close';
 export { default as Plus } from './icons/Plus';

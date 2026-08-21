@@ -20,7 +20,7 @@ def slugify_spanish(text: str) -> str:
     normalized = "".join(c for c in normalized if not unicodedata.combining(c))
     normalized = normalized.replace("ñ", "n")
     normalized = _SLUG_RE.sub("", normalized)
-    return _SPACES_RE.sub("-", normalized)
+    return _SPACES_RE.sub("-", normalized).strip("-")
 
 
 def document_to_markdown(doc: RichTextDocument) -> str:

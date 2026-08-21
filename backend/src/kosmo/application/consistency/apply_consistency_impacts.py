@@ -4,36 +4,18 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import structlog
-from ulid import ULID
 
-from kosmo.application.chat.apply_plan_changes import llm_resolve_markdown
-from kosmo.contracts.chat import DiffCambio, PlanCambio
-from kosmo.contracts.consistency import TraceabilityRepository
-from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
+from kosmo.contracts.persistence import UnitOfWork
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
-from kosmo.contracts.sdd.ids import FeatureId, PlanChangeId, ProjectId
-from kosmo.contracts.sdd.repositories import (
-    ActivityDiagramRepository,
-    DocumentRepository,
-    FeatureRepository,
-    ProjectRepository,
-    RequirementRepository,
-)
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
 from kosmo.domain.sdd.plan_diffs import apply_change_diff
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
+from kosmo.domain.sdd.text_normalizer import strip_origin_line
+from kosmo.domain.sdd.validators.activity_diagram_validator import validate_activity_diagram_syntax
 
 _log = structlog.get_logger(__name__)
-
-
-def _impact_to_plan_change(field: str, before: str, after: str) -> PlanCambio:
-    return PlanCambio(
-        id=PlanChangeId(f"chg_{ULID().hex}"),
-        section=field,
-        description="Aplicación de impacto de consistencia",
-        diff=DiffCambio(before=before, after=after),
-    )
 
 
 @dataclass(frozen=True)
@@ -56,30 +38,16 @@ class ApplyConsistencyImpactsOutput:
 
 
 class ApplyConsistencyImpactsUseCase:
-    def __init__(
-        self,
-        project_repo: ProjectRepository,
-        feature_repo: FeatureRepository,
-        requirement_repo: RequirementRepository,
-        diagram_repo: ActivityDiagramRepository,
-        traceability_repo: TraceabilityRepository | None = None,
-        document_repo: DocumentRepository | None = None,
-        agent: AgentPort | None = None,
-    ) -> None:
-        self._project_repo = project_repo
-        self._feature_repo = feature_repo
-        self._requirement_repo = requirement_repo
-        self._diagram_repo = diagram_repo
-        self._traceability_repo = traceability_repo
-        self._document_repo = document_repo
-        self._agent = agent
+    def __init__(self, uow: UnitOfWork) -> None:
+        self._uow = uow
 
     async def execute(
         self,
         project_id: ProjectId,
         impacts: list[dict[str, object]],
     ) -> ApplyConsistencyImpactsOutput:
-        project = await self._project_repo.by_id(project_id)
+        async with self._uow as uow:
+            project = await uow.projects.by_id(project_id)
         if project is None:
             raise ProjectNotFoundError(
                 project_id=str(project_id),
@@ -109,8 +77,12 @@ class ApplyConsistencyImpactsUseCase:
                 )
                 continue
 
+            # Transaccion por impacto: un fallo no envenena los impactos siguientes
             try:
-                result = await self._apply_impact(project_id, artifact_type, target_id, action, field, before, after)
+                async with self._uow as uow:
+                    result = await self._apply_impact(
+                        uow, project_id, artifact_type, target_id, action, field, before, after
+                    )
             except Exception as exc:
                 _log.warning(
                     "consistency.apply_impact_failed",
@@ -130,6 +102,7 @@ class ApplyConsistencyImpactsUseCase:
 
     async def _apply_impact(
         self,
+        uow: UnitOfWork,
         project_id: ProjectId,
         artifact_type: str,
         target_id: str,
@@ -138,98 +111,80 @@ class ApplyConsistencyImpactsUseCase:
         before: str,
         after: str,
     ) -> str | None:
+        # Row-lock del artefacto destino: el diff se computa contra el contenido
+        # leido bajo lock, por lo que dos applies concurrentes se serializan y
+        # el segundo falla deterministamente si el contenido ya cambio (D2).
         feature_id = FeatureId(target_id)
 
         if artifact_type == "EARSRequirement":
             if action == "delete":
                 return None  # cascada BD: la feature padre ya se eliminó
-            return await self._apply_requirement(project_id, feature_id, before, after)
+            return await self._apply_requirement(uow, project_id, feature_id, before, after)
 
         if artifact_type == "Feature":
             if action == "delete":
-                return await self._delete_feature(feature_id)
-            return await self._update_feature(feature_id, field, before, after)
+                return await self._delete_feature(uow, feature_id)
+            return await self._update_feature(uow, feature_id, field, before, after)
 
         if artifact_type == "ActivityDiagram":
             if action == "delete":
                 return None  # cascada BD: la feature padre ya se eliminó
-            return await self._update_diagram(feature_id, before, after)
+            return await self._update_diagram(uow, feature_id, before, after)
 
         if artifact_type == "DiscoveryDocument":
             if action == "delete":
                 return "El documento de Descubrimiento no puede eliminarse"
-            return await self._update_discovery(project_id, before, after)
+            return await self._update_discovery(uow, project_id, before, after)
 
         return f"Tipo de artefacto desconocido: {artifact_type}"
 
-    async def _update_discovery(self, project_id: ProjectId, before: str, after: str) -> str | None:
-        if self._document_repo is None:
-            return "La aplicación de cambios del documento de Descubrimiento no está configurada"
-
-        document = await self._document_repo.get_discovery(project_id)
+    async def _update_discovery(self, uow: UnitOfWork, project_id: ProjectId, before: str, after: str) -> str | None:
+        document = await uow.documents.get_discovery(project_id, for_update=True)
         if document is None:
             return "El documento de Descubrimiento no existe"
 
         markdown = document_to_markdown(document)
         result = apply_change_diff(markdown, before=before, after=after)
-        if result is None and self._agent is not None and (before.strip() or after.strip()):
-            change = _impact_to_plan_change("descubrimiento", before, after)
-            resolved = await llm_resolve_markdown(
-                self._agent,
-                project_id,
-                "Documento de Descubrimiento",
-                markdown,
-                [change],
-            )
-            if resolved is not None:
-                result = resolved
         if result is None:
             return "El texto original no se encontro en el documento de Descubrimiento"
 
-        await self._document_repo.save_discovery(
+        await uow.documents.save_discovery(
             project_id=project_id,
             document=markdown_to_document(result),
         )
         return None
 
     async def _apply_requirement(
-        self, project_id: ProjectId, feature_id: FeatureId, before: str, after: str
+        self,
+        uow: UnitOfWork,
+        project_id: ProjectId,  # noqa: ARG002
+        feature_id: FeatureId,
+        before: str,
+        after: str,
     ) -> str | None:
-        markdown = await self._requirement_repo.by_feature_id(feature_id)
+        markdown = await uow.requirements.by_feature_id(feature_id, for_update=True)
         if markdown is None:
             return "El documento de requisitos no existe"
 
         result = apply_change_diff(markdown, before=before, after=after)
-        if result is None and self._agent is not None and (before.strip() or after.strip()):
-            change = _impact_to_plan_change("requisitos", before, after)
-            resolved = await llm_resolve_markdown(
-                self._agent,
-                project_id,
-                f"Requisitos de {feature_id}",
-                markdown,
-                [change],
-            )
-            if resolved is not None:
-                result = resolved
         if result is None:
             return "El texto original no se encontro en los requisitos"
 
-        await self._requirement_repo.save(feature_id, result)
+        await uow.requirements.save(feature_id, result)
 
-        feature = await self._feature_repo.by_id(feature_id)
+        feature = await uow.features.by_id(feature_id)
         if feature is not None:
             try:
                 parsed = parse_requirements_markdown(result, feature_id, feature.number)
 
-                if self._traceability_repo is not None:
-                    await self._traceability_repo.delete_by_entity_id(str(feature_id))
-                    for r in parsed:
-                        await self._traceability_repo.add_edge(
-                            source_type="feature",
-                            source_id=str(feature_id),
-                            target_type="requirement",
-                            target_id=str(r.id),
-                        )
+                await uow.traceability.delete_by_entity_id(str(feature_id))
+                for r in parsed:
+                    await uow.traceability.add_edge(
+                        source_type="feature",
+                        source_id=str(feature_id),
+                        target_type="requirement",
+                        target_id=str(r.id),
+                    )
             except Exception:
                 _log.warning(
                     "consistency.reparse_failed",
@@ -239,8 +194,10 @@ class ApplyConsistencyImpactsUseCase:
 
         return None
 
-    async def _update_feature(self, feature_id: FeatureId, field: str, before: str, after: str) -> str | None:
-        feature = await self._feature_repo.by_id(feature_id)
+    async def _update_feature(
+        self, uow: UnitOfWork, feature_id: FeatureId, field: str, before: str, after: str
+    ) -> str | None:
+        feature = await uow.features.by_id(feature_id, for_update=True)
         if feature is None:
             return "La caracteristica no existe"
 
@@ -249,6 +206,12 @@ class ApplyConsistencyImpactsUseCase:
             return f"Campo no modificable: {field}"
 
         current: str = str(getattr(feature, field, ""))
+        # El LLM incluye el origen interno en la descripción sugerida; se elimina
+        # para no contaminar la descripción guardada ni romper el match del diff.
+        if field == "description":
+            current = strip_origin_line(current)
+            before = strip_origin_line(before)
+            after = strip_origin_line(after)
         result = apply_change_diff(current, before=before, after=after)
         if result is None:
             return f"El texto original no se encontro en {field} de la caracteristica"
@@ -257,25 +220,26 @@ class ApplyConsistencyImpactsUseCase:
         if field == "title":
             feature.slug = result.lower().replace(" ", "-")
         feature.updated_at = datetime.now(UTC)
-        await self._feature_repo.save(feature)
+        await uow.features.save(feature)
         return None
 
-    async def _delete_feature(self, feature_id: FeatureId) -> str | None:
-        feature = await self._feature_repo.by_id(feature_id)
+    async def _delete_feature(self, uow: UnitOfWork, feature_id: FeatureId) -> str | None:
+        feature = await uow.features.by_id(feature_id, for_update=True)
         if feature is None:
             return "La caracteristica no existe"
 
-        await self._feature_repo.delete(feature_id)
+        await uow.requirements.delete(feature_id)
+        await uow.diagrams.delete(feature_id)
+        await uow.features.delete(feature_id)
 
-        if self._traceability_repo is not None:
-            try:
-                await self._traceability_repo.delete_by_entity_id(str(feature_id))  # type: ignore[reportAttributeAccessIssue]
-            except Exception:
-                _log.warning(
-                    "consistency.delete_feature.traceability_cleanup_failed",
-                    feature_id=str(feature_id),
-                    exc_info=True,
-                )
+        try:
+            await uow.traceability.delete_by_entity_id(str(feature_id))
+        except Exception:
+            _log.warning(
+                "consistency.delete_feature.traceability_cleanup_failed",
+                feature_id=str(feature_id),
+                exc_info=True,
+            )
 
         _log.info(
             "consistency.delete_feature.success",
@@ -284,14 +248,23 @@ class ApplyConsistencyImpactsUseCase:
         )
         return None
 
-    async def _update_diagram(self, feature_id: FeatureId, before: str, after: str) -> str | None:
-        diagram = await self._diagram_repo.by_feature_id(feature_id)
+    async def _update_diagram(self, uow: UnitOfWork, feature_id: FeatureId, before: str, after: str) -> str | None:
+        diagram = await uow.diagrams.by_feature_id(feature_id, for_update=True)
         if diagram is None:
             return "El diagrama no existe"
 
         result = apply_change_diff(diagram.diagram_syntax, before=before, after=after)
         if result is None:
             return "El texto original no se encontro en el diagrama"
+
+        validation = validate_activity_diagram_syntax(result)
+        if not validation.is_valid:
+            _log.warning(
+                "consistency.diagram_validation_failed",
+                feature_id=str(feature_id),
+                errors=validation.errors,
+            )
+            return f"El cambio dejaría el diagrama con sintaxis inválida: {'; '.join(validation.errors)}"
 
         updated = DiagramaActividad(
             id=diagram.id,
@@ -300,5 +273,5 @@ class ApplyConsistencyImpactsUseCase:
             created_at=diagram.created_at,
             updated_at=datetime.now(UTC),
         )
-        await self._diagram_repo.save(updated)
+        await uow.diagrams.save(updated)
         return None

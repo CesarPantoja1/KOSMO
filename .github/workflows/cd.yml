@@ -29,19 +29,24 @@ jobs:
     timeout-minutes: 15
     permissions:
       checks: read
+      contents: read
     outputs:
       deploy_sha: ${{ steps.target.outputs.sha }}
+      candidate_sha: ${{ steps.target.outputs.candidate_sha }}
 
     steps:
       - name: Resolve merged commit
         id: target
         env:
           DEPLOY_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$DEPLOY_SHA"
+          test -n "$CANDIDATE_SHA"
           echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Require a successful CI summary for the merged commit
         env:
@@ -72,6 +77,21 @@ jobs:
           echo "::error::Timed out while waiting for CI summary on ${COMMIT_SHA}."
           exit 1
 
+      - name: Require the merged source to match the staged candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGED_SHA: ${{ steps.target.outputs.sha }}
+          CANDIDATE_SHA: ${{ steps.target.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          merged_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${MERGED_SHA}" --jq '.tree.sha')"
+          candidate_tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${CANDIDATE_SHA}" --jq '.tree.sha')"
+          if [ "$merged_tree" != "$candidate_tree" ]; then
+            echo "::error::The merged tree differs from the staged candidate. Rebase the release, redeploy Staging, and merge again."
+            exit 1
+          fi
+
   build-backend:
     name: Build API image
     needs: wait-for-ci
@@ -95,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${{ needs.wait-for-ci.outputs.deploy_sha }}" >> "$GITHUB_OUTPUT"
+          echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -110,14 +130,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.images.outputs.api }}
+      - name: Require staged API image
+        shell: bash
+        run: docker buildx imagetools inspect "${{ steps.images.outputs.api }}"
 
   build-frontend:
     name: Build Web image
@@ -142,7 +157,7 @@ jobs:
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${{ needs.wait-for-ci.outputs.deploy_sha }}" >> "$GITHUB_OUTPUT"
+          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -157,20 +172,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish frontend image
-        uses: docker/build-push-action@v6
+      - name: Require staged Web image
+        shell: bash
+        run: docker buildx imagetools inspect "${{ steps.images.outputs.web }}"
+
+  build-opencode:
+    name: Build OpenCode image
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      opencode_image: ${{ steps.images.outputs.opencode }}
+      code_runner_image: ${{ steps.images.outputs.code_runner }}
+      preview_image: ${{ steps.images.outputs.preview }}
+
+    steps:
+      - name: Checkout merged source
+        uses: actions/checkout@v4
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile.prod
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.images.outputs.web }}
-          build-args: |
-            NEXT_PUBLIC_API_URL=https://kosmo.cespan.dev
-            NEXT_PUBLIC_APP_NAME=KOSMO
-            NEXT_PUBLIC_APP_ENV=production
-            NEXT_PUBLIC_AUTH_DISABLED=true
-            NEXT_PUBLIC_USE_MOCKS=false
+          ref: ${{ needs.wait-for-ci.outputs.deploy_sha }}
+
+      - name: Define immutable OpenCode image reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          {
+            echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}"
+            echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}"
+            echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require staged code-generation images
+        shell: bash
+        run: |
+          docker buildx imagetools inspect "${{ steps.images.outputs.opencode }}"
+          docker buildx imagetools inspect "${{ steps.images.outputs.code_runner }}"
+          docker buildx imagetools inspect "${{ steps.images.outputs.preview }}"
 
   deploy-production:
     name: Deploy Production
@@ -178,6 +233,7 @@ jobs:
       - wait-for-ci
       - build-backend
       - build-frontend
+      - build-opencode
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: Production
@@ -213,9 +269,11 @@ jobs:
         shell: bash
         env:
           PRODUCTION_ENV_FILE: ${{ secrets.PRODUCTION_ENV_FILE }}
+          PRODUCTION_CODEGEN_ENV_FILE: ${{ secrets.PRODUCTION_CODEGEN_ENV_FILE }}
         run: |
           set -euo pipefail
           test -n "$PRODUCTION_ENV_FILE"
+          test -n "$PRODUCTION_CODEGEN_ENV_FILE"
 
           work_dir="${RUNNER_TEMP}/kosmo-production-deploy"
           install -d -m 700 "$work_dir"
@@ -223,9 +281,13 @@ jobs:
           # secret value and terminate it so runtime.env always starts on a
           # separate line when both files are assembled on the server.
           printf '%s\n' "$PRODUCTION_ENV_FILE" > "$work_dir/application.env"
+          printf '%s\n' "$PRODUCTION_CODEGEN_ENV_FILE" >> "$work_dir/application.env"
           printf '%s\n' \
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
-            "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" > "$work_dir/runtime.env"
+            "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
+            "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
+            "KOSMO_PREVIEW_IMAGE=${{ needs.build-opencode.outputs.preview_image }}" > "$work_dir/runtime.env"
+          printf '%s\n' "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" >> "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
           ssh -i "$SSH_DIR/id_ed25519" \
@@ -263,14 +325,22 @@ jobs:
              rm -f application.env runtime.env
              grep -q '^DATABASE_URL=.' .env
              grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env
-             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE; do
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
                  exit 1
                fi
              done
+             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN PREVIEW_PUBLIC_HOST_SUFFIX; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required code-generation variable: ${key}" >&2
+                 exit 1
+               fi
+             done
              docker network inspect kosmo-network >/dev/null
              docker login ghcr.io --username "${{ vars.PRODUCTION_GHCR_USERNAME }}" --password-stdin
+             install -d -m 0750 workspaces
+             docker run --rm -v "$PWD/workspaces:/workspaces" alpine:3.22 chown -R 1000:1000 /workspaces
              docker compose -p kosmo -f compose.yaml pull
              docker run --rm --env-file .env --network kosmo-network \
                --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
@@ -295,14 +365,16 @@ jobs:
                exit 1
              fi
              for attempt in $(seq 1 15); do
-               if docker exec kosmo-nginx wget -q -O /dev/null http://127.0.0.1/ && \
-                  docker exec kosmo-nginx wget -q -O /dev/null http://127.0.0.1/api/v1/openapi.json; then
+               if docker exec kosmo-nginx wget -q -O /dev/null \
+                    --header="Host: kosmo.cespan.dev" http://127.0.0.1/ && \
+                  docker exec kosmo-nginx wget -q -O /dev/null \
+                    --header="Host: kosmo.cespan.dev" http://127.0.0.1/api/v1/openapi.json; then
                  docker compose -p kosmo -f compose.yaml ps
                  exit 0
                fi
                sleep 2
              done
-             docker compose -p kosmo -f compose.yaml logs --tail=100 nginx backend
+             docker compose -p kosmo -f compose.yaml logs --tail=100 nginx backend opencode
              exit 1'
 
   smoke-test-production:

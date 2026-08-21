@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from kosmo.application.modelo import (
+    DeleteActivityDiagramUseCase,
+    DeleteDiagramInput,
     GenerateActivityDiagramUseCase,
     GenerateDiagramInput,
     GetActivityDiagramUseCase,
@@ -20,6 +22,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 
 router = APIRouter(
     prefix="/api/v1/features/{feature_id}/diagram",
@@ -32,7 +35,7 @@ class GenerateDiagramRequest(BaseModel):
 
 
 async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    fid = await resolve_feature_id(request.app.state.feature_repo, ProjectId(project_id), id_or_slug)
+    fid = await resolve_feature_id(get_container(request).features.feature_repo, ProjectId(project_id), id_or_slug)
     if fid is None:
         raise FeatureNotFoundError(
             feature_id=id_or_slug,
@@ -64,7 +67,7 @@ async def generate_diagram(
     request: Request,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
-    uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
+    uc: GenerateActivityDiagramUseCase = get_container(request).modelo.generate_diagram
 
     output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
     return _diagram_response(output)
@@ -87,7 +90,7 @@ async def propagate_to_model(
     request: Request,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id)
-    uc = cast("GenerateActivityDiagramUseCase", request.app.state.generate_diagram)
+    uc: GenerateActivityDiagramUseCase = get_container(request).modelo.generate_diagram
 
     output = await uc.execute(GenerateDiagramInput(project_id=ProjectId(body.project_id), feature_id=fid))
     return _diagram_response(output)
@@ -105,7 +108,7 @@ async def get_diagram(
     project_id: str = Query(...),
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, project_id, feature_id)
-    uc = cast("GetActivityDiagramUseCase", request.app.state.get_diagram)
+    uc: GetActivityDiagramUseCase = get_container(request).modelo.get_diagram
 
     try:
         output = await uc.execute(
@@ -127,3 +130,28 @@ async def get_diagram(
         "created_at": output.diagram.created_at.isoformat().replace("+00:00", "Z"),
         "updated_at": output.diagram.updated_at.isoformat().replace("+00:00", "Z"),
     }
+
+
+@router.delete(
+    "",
+    summary="Eliminar diagrama de actividad",
+    description=("Elimina el diagrama de actividad PlantUML existente de la característica."),
+    status_code=status.HTTP_200_OK,
+)
+async def delete_diagram(
+    feature_id: str,
+    _principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+    project_id: str = Query(...),
+) -> dict[str, str]:
+    fid = await _get_feature_id(request, project_id, feature_id)
+    uc: DeleteActivityDiagramUseCase = get_container(request).modelo.delete_diagram
+
+    await uc.execute(
+        DeleteDiagramInput(
+            project_id=ProjectId(project_id),
+            feature_id=fid,
+        )
+    )
+
+    return {"status": "deleted", "feature_id": feature_id}

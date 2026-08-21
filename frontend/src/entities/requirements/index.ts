@@ -1,14 +1,14 @@
 // MODELS
-export type { RequirementsResponse, RequirementChatResponse } from './model/types';
+export type { RequirementsResponse } from './model/types';
 // STORE
-export { useRequirementsStore } from './model/store';
+export { useRequirementsStore, clearRequirementsStore } from './model/store';
 
 // API
 export {
 	getRequirements,
 	saveRequirements,
 	generateRequirements,
+	deleteRequirements,
 	getRequirementChatHistory,
 	sendRequirementChatMessage,
 } from './api/api';
-

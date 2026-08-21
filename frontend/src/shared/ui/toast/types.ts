@@ -12,6 +12,10 @@ export type ToastContent = {
 	variant: ToastVariant;
 	message: string;
 	title?: string;
+	action?: {
+		label: string;
+		onAction: () => void;
+	};
 };
 
 export type ToastOptions = {

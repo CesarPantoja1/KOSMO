@@ -4,6 +4,7 @@ from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryChatContext,
     DiscoveryRefinePhaseContext,
     FeatureChatContext,
+    ImplementationPhaseContext,
     RequirementChatContext,
 )
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
@@ -133,4 +134,29 @@ class ContextBuilder:
             feature=feature,
             discovery_document=discovery_doc,
             requirements_markdown=full_markdown,
+        )
+
+    async def build_implementation_context(
+        self,
+        feature_id: FeatureId,
+        workspace_manifest: tuple[str, ...] | list[str] = (),
+    ) -> ImplementationPhaseContext:
+        if self._feature_repo is None:
+            raise ValueError("ContextBuilder no tiene FeatureRepository configurado.")
+        if self._requirement_repo is None:
+            raise ValueError("ContextBuilder no tiene RequirementRepository configurado.")
+
+        feature = await self._feature_repo.by_id(feature_id)
+        if feature is None:
+            raise FeatureNotFoundError(
+                feature_id=str(feature_id),
+                instance=f"/pipeline/implementation/{feature_id}",
+            )
+
+        requirements_markdown = await self._requirement_repo.by_feature_id(feature_id) or ""
+
+        return ImplementationPhaseContext(
+            feature=feature,
+            requirements_markdown=requirements_markdown,
+            workspace_manifest=tuple(workspace_manifest),
         )

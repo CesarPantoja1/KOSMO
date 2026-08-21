@@ -6,6 +6,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import Sql
 from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.feature_implementation_repo import (
+    SqlAlchemyFeatureImplementationRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
 )
@@ -16,14 +19,19 @@ from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo imp
     SqlAlchemyRequirementRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.users import SqlAlchemyUserRepository
+from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
+    SqlAlchemyWorkspaceRepository,
+)
 
 __all__ = [
     "SqlAlchemyActivityDiagramRepository",
     "SqlAlchemyAuditEventSink",
     "SqlAlchemyChatRepository",
     "SqlAlchemyDocumentRepository",
+    "SqlAlchemyFeatureImplementationRepository",
     "SqlAlchemyFeatureRepository",
     "SqlAlchemyProjectRepository",
     "SqlAlchemyRequirementRepository",
     "SqlAlchemyUserRepository",
+    "SqlAlchemyWorkspaceRepository",
 ]

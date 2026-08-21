@@ -3,60 +3,135 @@
 
 @theme {
 	/* =========================
-   * COLORS
-   * ========================= */
+- COLORS
+========================= */
 
-	/* base */
-	--color-base-50: #fcfcfc;
-	--color-base-100: #f1f2f4;
-	--color-base-200: #f2f2f2;
-	--color-base-300: #e8e8e8;
-	--color-base-600: #96989b;
-	--color-base-800: #8d8b8b;
+	/* --- Neutral (Superficies, texto, bordes) --- */
+	--color-neutral-0: #ffffff;
+	--color-neutral-50: #f8fafc;
+	--color-neutral-100: #f1f5f9;
+	--color-neutral-200: #e2e8f0;
+	--color-neutral-300: #cbd5e1;
+	--color-neutral-400: #94a3b8;
+	--color-neutral-500: #64748b;
+	--color-neutral-600: #475569;
+	--color-neutral-700: #334155;
+	--color-neutral-800: #1e293b;
+	--color-neutral-900: #0f172a;
+
+	/* --- Base (aliases de compatibilidad — no eliminar) --- */
+	--color-base-50: #f8fafc;
+	--color-base-100: #f1f5f9;
+	--color-base-200: #e2e8f0;
+	--color-base-300: #cbd5e1;
+	--color-base-600: #64748b;
+	--color-base-800: #475569;
 	--color-base-950: #0f172a;
 
-	/* primary */
-	--color-primary-50: #ebf9f3;
-	--color-primary-100: #53a83e;
-	--color-primary-800: #2d6a1e;
+	/* --- Primary (Verde — Acción de negocio, progreso, confirmación) --- */
+	--color-primary-50: #ecfdf5;
+	--color-primary-100: #d1fae5;
+	--color-primary-200: #a7f3d0;
+	--color-primary-500: #10b981;
+	--color-primary-600: #059669;
+	--color-primary-900: #064e3b;
 
-	/* AI */
-	--color-ai: #6366f1;
+	/* --- AI (Violeta — Exclusivo para acciones de IA) --- */
+	--color-ai: #8b5cf6;
+	--color-ai-50: #f5f3ff;
+	--color-ai-100: #ede9fe;
+	--color-ai-500: #8b5cf6;
+	--color-ai-600: #7c3aed;
+	--color-ai-900: #4c1d95;
 
-	/* Status */
-	--color-status-success: #10b981;
-	--color-status-warning: #f59e0b;
-	--color-status-error: #e11d48;
+	/* --- Success --- */
+	--color-success-50: #f0fdf4;
+	--color-success-500: #22c55e;
+	--color-success-700: #15803d;
+
+	/* --- Warning (Oro Suave - Ideal para wizards y estados pendientes) --- */
+	--color-warning-50: #fefce8;
+	--color-warning-100: #fef9c3;
+	--color-warning-200: #fef08a;
+	--color-warning-300: #fde047;
+	--color-warning-400: #facc15;
+	--color-warning-500: #ca8a04;
+	--color-warning-600: #a16207;
+	--color-warning-700: #854d0e;
+	--color-warning-800: #713f12;
+
+	/* --- Wizard (Paleta dedicada para el stepper/navegación de fases) --- */
+	--color-wizard-active: #f59e0b;
+	--color-wizard-active-light: #f59e0b33;
+	--color-wizard-active-ring: #f59e0b55;
+	--color-wizard-active-glow: rgba(245, 158, 11, 0.3);
+	--color-wizard-completed: #10b981;
+	--color-wizard-completed-light: #d1fae5;
+	--color-wizard-pending: #cbd5e1;
+	--color-wizard-pending-light: #f1f5f9;
+	--color-wizard-connector-done: #10b981;
+	--color-wizard-connector-pending: #e2e8f0;
+	--color-wizard-label-active: #d97706;
+	--color-wizard-label-completed: #059669;
+	--color-wizard-label-pending: #cbd5e1;
+
+	/* --- Error --- */
+	--color-error-50: #fef2f2;
+	--color-error-500: #ef4444;
+	--color-error-700: #b91c1c;
+
+	/* --- Info --- */
+	--color-info-50: #eff6ff;
+	--color-info-500: #3b82f6;
+	--color-info-700: #1d4ed8;
+
+	/* --- Status (aliases de compatibilidad — no eliminar) --- */
+	--color-status-success: #22c55e;
+	--color-status-warning: #ca8a04;
+	--color-status-error: #ef4444;
 	--color-status-info: #3b82f6;
 
-	/* Misc */
-	--color-light-yellow: #ffe1ad;
+	/* --- Misc --- */
+	--color-light-yellow: #fffbeb;
 
 	/* =========================
-   * SPACING
-   * ========================= */
+- SPACING
+========================= */
 
-	--espaciado-xs: 3px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--space-8: 32px;
+	--space-10: 40px;
+	--space-12: 48px;
+	--space-16: 64px;
+
+	/* Aliases de compatibilidad */
+	--espaciado-xs: 4px;
 	--espaciado-sm: 8px;
 	--espaciado-md: 16px;
 	--espaciado-lg: 24px;
 	--espaciado-xl: 32px;
 
 	/* =========================
-   * BORDER RADIUS
-   * ========================= */
+- BORDER RADIUS
+========================= */
 
 	--border-radius-rounded-none: 0;
 	--border-radius-rounded-sm: 2px;
 	--border-radius-rounded: 4px;
 	--border-radius-rounded-md: 6px;
-	--border-radius-rounded-lg: 8px;
-	--border-radius-rounded-xl: 12px;
+	--border-radius-rounded-lg: 10px;
+	--border-radius-rounded-xl: 14px;
+	--border-radius-rounded-2xl: 16px;
 	--border-radius-rounded-full: 9999px;
 
 	/* =========================
-   * BORDER WIDTH
-   * ========================= */
+- BORDER WIDTH
+========================= */
 
 	--borders-thickness-border: 1px;
 	--borders-thickness-border-2: 2px;
@@ -64,12 +139,18 @@
 	--borders-thickness-border-8: 8px;
 
 	/* =========================
-   * SHADOWS
-   * ========================= */
+- SHADOWS
+========================= */
 
+	--shadow-1: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+	--shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+	--shadow-3: 0 8px 24px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+	--shadow-4: 0 20px 40px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
+
+	/* Aliases de compatibilidad */
 	--shadows-shadow-offset-x: 0px;
 	--shadows-shadow-offset-y: 4px;
-	--shadows-shadow-blur: 8px;
+	--shadows-shadow-blur: 12px;
 
 	--shadows-color-10: rgba(0, 0, 0, 0.1);
 	--shadows-color-20: rgba(0, 0, 0, 0.2);
@@ -78,11 +159,20 @@
 	--shadows-color-50: rgba(0, 0, 0, 0.5);
 	--shadows-color-60: rgba(0, 0, 0, 0.6);
 
+	/* =========================
+- TYPOGRAPHY
+========================= */
+
 	--font-sans: 'Geist', sans-serif;
 	--font-mono: 'Geist Mono', monospace;
 
-	/* Animations */
+	/* =========================
+- ANIMATIONS
+========================= */
+
 	--animate-spin-custom: spin-custom 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+	--animate-wizard-glow: wizard-glow 2s ease-in-out infinite;
+	--animate-fade-in: fade-in 1s ease-out forwards;
 }
 
 @keyframes spin-custom {
@@ -91,52 +181,170 @@
 	}
 }
 
-body {
-	font-family: var(--font-geist), sans-serif;
-	background-color: #ffffff;
-	color: var(--color-base-950);
+@keyframes wizard-glow {
+	100% {
+		box-shadow: 0 0 0 0px var(--color-wizard-active-ring);
+	}
+	50% {
+		box-shadow: 0 0 0 3px var(--color-wizard-active-ring);
+	}
+	0% {
+		box-shadow: 0 0 0 0px var(--color-wizard-active-ring);
+	}
 }
 
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+::-webkit-scrollbar {
+	width: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: rgb(120 120 120 / 0.35);
+	border-radius: 999px;
+	border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: rgb(160 160 160 / 0.6);
+}
+
+html {
+	scrollbar-width: thin;
+}
+
+/* =========================
+- BASE
+========================= */
+
+body {
+	font-family: var(--font-geist), sans-serif;
+	background-color: var(--color-neutral-0);
+	color: var(--color-neutral-800);
+}
+
+/* =========================
+- BUTTONS
+========================= */
+
 .btn {
-	@apply text-base-50 inline-flex justify-center items-center px-3.5 py-1.5 gap-1.5 rounded-sm cursor-pointer transition-colors duration-200 disabled:cursor-not-allowed active:scale-95 hover:shadow-md disabled:opacity-50 lg:px-4 lg:py-2 lg:text-lg;
+	@apply text-neutral-0 inline-flex justify-center items-center px-4 py-2 gap-1.5 rounded-md font-medium cursor-pointer transition-colors duration-200 disabled:cursor-not-allowed active:scale-95 hover:shadow-md disabled:opacity-50 md:px-4 md:py-2 lg:px-5 lg:py-2.5 xl:px-5 xl:py-2.5;
+}
+
+.btn-sm {
+	@apply px-3 py-1.5 text-sm md:px-3 md:py-1.5 lg:px-4 lg:py-2;
+}
+
+.btn-lg {
+	@apply px-5 py-2.5 text-base font-semibold md:px-5 md:py-2.5 lg:px-6 lg:py-3;
 }
 
 .btn-destructive {
-	@apply bg-status-error hover:bg-status-error/90;
+	@apply bg-error-500 hover:bg-error-700;
 }
 
 .btn-primary {
-	@apply bg-primary-100 hover:bg-primary-100/90;
+	@apply bg-primary-500 hover:bg-primary-600;
 }
 
 .btn-secondary {
-	@apply bg-base-950 hover:bg-base-950/90;
+	@apply bg-neutral-800 hover:bg-neutral-900;
 }
 
 .btn-ai {
-	@apply bg-ai hover:bg-ai/90;
+	@apply bg-ai-500 hover:bg-ai-600;
 }
 
 .btn-warning {
-	@apply bg-status-warning hover:bg-status-warning/90;
+	@apply bg-warning-500 hover:bg-warning-700;
 }
 
+.page-header .btn {
+	@apply text-xs px-2.5 py-1 gap-1 md:text-xs md:px-3 md:py-1.5 lg:text-sm lg:px-4 lg:py-2;
+}
+
+.page-header .btn-sm {
+	@apply text-xs px-2 py-1 gap-1 md:text-xs md:px-2.5 md:py-1 lg:text-xs lg:px-3 lg:py-1.5;
+}
+
+/* =========================
+- WIZARD NAVIGATION
+========================= */
+
+.wizard-step-active {
+	@apply bg-wizard-active-light border-wizard-active shadow-lg animate-wizard-glow;
+}
+
+.wizard-step-completed {
+	@apply bg-wizard-completed border-wizard-completed;
+	box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.wizard-step-pending {
+	@apply bg-wizard-pending-light border-wizard-pending;
+}
+
+.wizard-connector-done {
+	background: linear-gradient(
+		90deg,
+		var(--color-wizard-completed),
+		var(--color-wizard-completed)
+	);
+}
+
+.wizard-connector-pending {
+	background: linear-gradient(
+		90deg,
+		var(--color-wizard-connector-pending),
+		var(--color-wizard-connector-pending)
+	);
+}
+
+/* =========================
+- LAYOUT
+========================= */
+
 .page-container {
-	@apply flex h-full min-h-0 overflow-hidden pt-2;
+	@apply flex h-full min-h-0 overflow-hidden pt-2 gap-2 max-w-screen-2xl mx-auto;
 }
 
 .page-header {
-	@apply flex w-full flex-col gap-3;
+	@apply flex w-full flex-col gap-6 max-w-7xl mx-auto;
 }
 
 .chatbot {
 	@apply overflow-hidden transition-all duration-300 ease-in-out;
+	animation: enter-left-to-right 0.4s ease-in-out;
 }
 
 .warning-popup {
-	@apply fixed inset-0 z-50 flex items-center justify-center bg-black/50 transition-colors;
+	@apply fixed inset-0 z-50 flex items-center justify-center bg-black/40 transition-colors;
 }
 
 .btn-chat {
-	@apply text-primary-50 px-2.5 py-1.5 inline-flex items-center gap-1 text-xs min-w-16 cursor-pointer disabled:cursor-not-allowed;
+	@apply text-primary-50 px-2.5 py-1.5 inline-flex items-center gap-1 text-xs min-w-16 cursor-pointer disabled:cursor-not-allowed md:px-2.5 md:py-1.5 lg:px-3 lg:py-2;
+}
+
+@keyframes enter-left-to-right {
+	0% {
+		opacity: 0;
+		transform: translateX(-24px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateX(0);
+	}
 }

@@ -9,9 +9,15 @@ from kosmo.contracts.agent_memory import (
     KnowledgePattern,
     ProjectMemoryContext,
 )
-from kosmo.contracts.chat import ChatRepository, EstadoPlanCambio, HistorialChat, MensajeChat, PlanCambio
+from kosmo.contracts.chat import (
+    ChatRepository,
+    ChatSession,
+    ChatSessionSummary,
+    HistorialChat,
+    MensajeChat,
+)
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, PlanChangeId, ProjectId
+from kosmo.contracts.sdd.ids import AgentMemoryId, ChatHistoryId, ChatSessionId, ProjectId
 
 
 class InMemoryAgentSessionStore(AgentMemoryPort):
@@ -179,6 +185,11 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
             counts[key] = counts.get(key, 0) + 1
         return counts
 
+    async def delete_by_project(self, project_id: ProjectId) -> None:
+        for session_id in list(self._store):
+            if self._store[session_id].project_id == project_id:
+                del self._store[session_id]
+
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b, strict=False))
@@ -234,16 +245,28 @@ class InMemoryKnowledgePatternStore:
 class InMemoryChatRepository(ChatRepository):
     def __init__(self) -> None:
         self._messages: dict[str, list[MensajeChat]] = {}
-        self._plan_changes: dict[str, list[PlanCambio]] = {}
+        self._sessions: list[ChatSession] = []
 
     @staticmethod
-    def _composite_key(project_id: ProjectId, phase: SpecPhase, context_id: str | None) -> str:
+    def _composite_key(
+        project_id: ProjectId,
+        phase: SpecPhase,
+        context_id: str | None,
+        session_id: ChatSessionId | None = None,
+    ) -> str:
+        if session_id is not None:
+            return f"{project_id}_{phase.value}_s_{session_id}"
         return f"{project_id}_{phase.value}_{context_id or ''}"
 
     async def save_message(
-        self, project_id: ProjectId, phase: SpecPhase, message: MensajeChat, context_id: str | None = None
+        self,
+        project_id: ProjectId,
+        phase: SpecPhase,
+        message: MensajeChat,
+        context_id: str | None = None,
+        session_id: ChatSessionId | None = None,
     ) -> MensajeChat:
-        key = self._composite_key(project_id, phase, context_id)
+        key = self._composite_key(project_id, phase, context_id, session_id)
         if key not in self._messages:
             self._messages[key] = []
         self._messages[key].append(message)
@@ -256,8 +279,9 @@ class InMemoryChatRepository(ChatRepository):
         context_id: str | None = None,
         limit: int = 200,
         before: str | None = None,  # noqa: ARG002  # ponytail: implementar cuando se necesite cursor in-memory
+        session_id: ChatSessionId | None = None,
     ) -> HistorialChat | None:
-        key = self._composite_key(project_id, phase, context_id)
+        key = self._composite_key(project_id, phase, context_id, session_id)
         messages = self._messages.get(key)
         if not messages:
             return None
@@ -268,63 +292,36 @@ class InMemoryChatRepository(ChatRepository):
             project_id=project_id,
             phase=phase,
             context_id=context_id,
+            session_id=session_id,
             messages=tuple(recent),
         )
 
     async def save_history(self, history: HistorialChat) -> HistorialChat:
         return history
 
-    async def add_plan_change(self, project_id: ProjectId, phase: SpecPhase, change: PlanCambio) -> PlanCambio:
-        key = f"{project_id}_{phase.value}"
-        changes = self._plan_changes.get(key, [])
-        changes.append(change)
-        self._plan_changes[key] = changes
-        return change
+    async def create_session(self, session: ChatSession) -> ChatSession:
+        self._sessions.append(session)
+        return session
 
-    async def list_plan_changes(self, project_id: ProjectId, phase: SpecPhase | None = None) -> list[PlanCambio]:
-        results: list[PlanCambio] = []
-        for k, v in self._plan_changes.items():
-            if k.startswith(f"{project_id}_") and (phase is None or k == f"{project_id}_{phase.value}"):
-                results.extend(v)
-        return results
+    async def delete_session(self, session_id: ChatSessionId) -> None:
+        self._sessions = [s for s in self._sessions if s.id != session_id]
+        session_key = f"_{session_id}"
+        self._messages = {key: messages for key, messages in self._messages.items() if not key.endswith(session_key)}
 
-    async def update_plan_change_status(
+    async def list_sessions(
         self,
         project_id: ProjectId,  # noqa: ARG002
-        change_id: PlanChangeId,
-        status: EstadoPlanCambio,
-        user_version: str | None = None,
-    ) -> PlanCambio | None:
-        for changes in self._plan_changes.values():
-            for i, c in enumerate(changes):
-                if c.id == change_id:
-                    updated = PlanCambio(
-                        id=c.id,
-                        section=c.section,
-                        description=c.description,
-                        diff=c.diff,
-                        status=status,
-                        origin=c.origin,
-                        rationale=c.rationale,
-                        user_version=user_version or c.user_version,
-                        context_id=c.context_id,
-                    )
-                    changes[i] = updated
-                    return updated
-        return None
-
-    async def remove_plan_change(self, project_id: ProjectId, change_id: PlanChangeId) -> bool:  # noqa: ARG002
-        for changes in self._plan_changes.values():
-            for i, c in enumerate(changes):
-                if c.id == change_id:
-                    changes.pop(i)
-                    return True
-        return False
-
-    async def clear_plan(self, project_id: ProjectId, phase: SpecPhase | None = None) -> None:
-        keys_to_clear: list[str] = []
-        for k in self._plan_changes:
-            if k.startswith(f"{project_id}_") and (phase is None or k == f"{project_id}_{phase.value}"):
-                keys_to_clear.append(k)
-        for k in keys_to_clear:
-            self._plan_changes[k] = []
+        phase: SpecPhase,
+        *,
+        context_id: str | None = None,  # noqa: ARG002
+    ) -> list[ChatSessionSummary]:
+        return [
+            ChatSessionSummary(
+                id=s.id,
+                phase=s.phase,
+                context_id=s.context_id,
+                created_at=s.created_at,
+            )
+            for s in self._sessions
+            if s.phase == phase
+        ]

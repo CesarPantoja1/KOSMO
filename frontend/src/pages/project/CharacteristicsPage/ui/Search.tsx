@@ -7,8 +7,8 @@ type Props = {
 
 const Search = ({ value, onChange }: Props) => {
 	return (
-		<div className='outline outline-offset-1 outline-base-800 flex justify-start items-center rounded-sm gap-2.5 mx-0.5 pl-1'>
-			<SearchIcon color='text-base-600 ' size={20} />
+		<div className='flex items-center gap-2 rounded-md border border-neutral-300 bg-neutral-50 px-3 py-2 transition-colors focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/20'>
+			<SearchIcon color='text-neutral-400' size={16} />
 			<input
 				type='text'
 				value={value}
@@ -16,8 +16,8 @@ const Search = ({ value, onChange }: Props) => {
 					const val = e.target.value.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g, '');
 					onChange(val);
 				}}
-				className='w-xl pr-2 py-1.5 focus:outline-none font-medium'
-				placeholder='Buscar Característica'
+				className='w-full bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none font-normal'
+				placeholder='Buscar funcionalidad...'
 			/>
 		</div>
 	);

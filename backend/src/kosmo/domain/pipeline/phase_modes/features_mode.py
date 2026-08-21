@@ -95,6 +95,8 @@ _FEATURES_SYSTEM_PROMPT = (
 
 
 class FeaturesMode:
+    requires_tool_consultation = False
+
     @property
     def phase_name(self) -> SpecPhase:
         return SpecPhase.CARACTERISTICAS

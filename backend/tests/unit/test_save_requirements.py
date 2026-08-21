@@ -7,7 +7,12 @@ from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundErro
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId, UserId
 from kosmo.contracts.sdd.project import Project
-from tests.unit.fakes import InMemoryFeatureRepository, InMemoryProjectRepository, InMemoryRequirementRepository
+from tests.unit.fakes import (
+    InMemoryFeatureRepository,
+    InMemoryOutbox,
+    InMemoryProjectRepository,
+    InMemoryRequirementRepository,
+)
 
 
 @pytest.mark.asyncio
@@ -155,3 +160,50 @@ async def test_save_requirements_raises_feature_wrong_project() -> None:
     # Act & Assert
     with pytest.raises(FeatureNotFoundError):
         await use_case.execute(project_id, feature_id, markdown)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_save_requirements_enqueues_downstream_evaluation() -> None:
+    # Arrange
+    project_repo: Any = InMemoryProjectRepository()
+    feature_repo: Any = InMemoryFeatureRepository()
+    requirement_repo: Any = InMemoryRequirementRepository()
+    outbox = InMemoryOutbox()
+    use_case = SaveRequirementsUseCase(
+        project_repo=project_repo,
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        outbox=outbox,
+    )
+
+    project = Project(
+        id=ProjectId("prj_chain"),
+        name="Test Project",
+        slug="test-project",
+        description="Test",
+        owner_id=UserId("usr_01"),
+    )
+    await project_repo.save(project)
+
+    feature = Feature(
+        id=FeatureId("feat_chain"),
+        number=1,
+        title="Test Feature",
+        slug="test-feature",
+        description="Test feature description",
+        project_id=project.id,
+    )
+    await feature_repo.save(feature)
+
+    markdown = "## Requisitos EARS\n\n| ID | Categoría | Requisito |"
+
+    # Act
+    await use_case.execute(project.id, feature.id, markdown)
+
+    # Assert — editar Requisitos dispara la verificación del Modelo
+    assert len(outbox.jobs) == 1
+    job_type, payload = outbox.jobs[0]
+    assert job_type == "consistency_evaluate"
+    assert payload["project_id"] == "prj_chain"
+    assert payload["source_phase"] == "requisitos"

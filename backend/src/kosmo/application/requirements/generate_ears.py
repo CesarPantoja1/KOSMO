@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.persistence import UnitOfWork
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (
@@ -13,7 +13,6 @@ from kosmo.contracts.sdd.ears import EARSRequirement
 from kosmo.contracts.sdd.errors import LLMInvocationError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (
-    DocumentRepository,
     FeatureRepository,
     ProjectRepository,
     RequirementRepository,
@@ -50,21 +49,9 @@ class GetRequirementsOutput:
 
 
 class GenerateEARSUseCase:
-    def __init__(
-        self,
-        project_repo: ProjectRepository,
-        document_repo: DocumentRepository,
-        feature_repo: FeatureRepository,
-        requirement_repo: RequirementRepository,
-        agent: AgentPort,
-        traceability_repo: TraceabilityRepository | None = None,
-    ) -> None:
-        self._project_repo = project_repo
-        self._document_repo = document_repo
-        self._feature_repo = feature_repo
-        self._requirement_repo = requirement_repo
+    def __init__(self, uow: UnitOfWork, agent: AgentPort) -> None:
+        self._uow = uow
         self._agent = agent
-        self._traceability_repo = traceability_repo
 
     async def execute(self, input_data: GenerateEARSInput) -> GenerateEARSOutput:
         from kosmo.contracts.sdd.errors import (
@@ -73,33 +60,35 @@ class GenerateEARSUseCase:
             ProjectNotFoundError,
         )
 
-        project = await self._project_repo.by_id(input_data.project_id)
-        if project is None:
-            raise ProjectNotFoundError(
-                project_id=str(input_data.project_id),
-                instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
+        async with self._uow as uow:
+            project = await uow.projects.by_id(input_data.project_id)
+            if project is None:
+                raise ProjectNotFoundError(
+                    project_id=str(input_data.project_id),
+                    instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
+                )
+
+            feature = await uow.features.by_id(input_data.feature_id)
+            if feature is None or feature.project_id != input_data.project_id:
+                raise FeatureNotFoundError(
+                    feature_id=str(input_data.feature_id),
+                    instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
+                )
+
+            discovery_doc = await uow.documents.get_discovery(input_data.project_id)
+            if discovery_doc is None:
+                raise DocumentNotFoundError(
+                    document_type="discovery",
+                    instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
+                )
+
+            context = EARSPhaseContext(
+                discovery_document=discovery_doc,
+                feature=feature,
+                feature_number=feature.number,
             )
 
-        feature = await self._feature_repo.by_id(input_data.feature_id)
-        if feature is None or feature.project_id != input_data.project_id:
-            raise FeatureNotFoundError(
-                feature_id=str(input_data.feature_id),
-                instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
-            )
-
-        discovery_doc = await self._document_repo.get_discovery(input_data.project_id)
-        if discovery_doc is None:
-            raise DocumentNotFoundError(
-                document_type="discovery",
-                instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
-            )
-
-        context = EARSPhaseContext(
-            discovery_document=discovery_doc,
-            feature=feature,
-            feature_number=feature.number,
-        )
-
+        # La llamada LLM ocurre fuera de transaccion para no retener una conexion del pool
         try:
             phase_output = await self._agent.execute_with_skill(
                 skill_name="ears_generate",
@@ -118,18 +107,19 @@ class GenerateEARSUseCase:
                 instance=f"/api/v1/projects/{input_data.project_id}/features/{input_data.feature_id}/requirements",
             )
 
-        await self._requirement_repo.save(input_data.feature_id, phase_output.requirements_markdown)
+        # Escritura atomica: requisitos + edges de trazabilidad + avance de fase
+        async with self._uow as uow:
+            await uow.requirements.save(input_data.feature_id, phase_output.requirements_markdown)
 
-        if self._traceability_repo is not None:
             for r in phase_output.requirements:
-                await self._traceability_repo.add_edge(
+                await uow.traceability.add_edge(
                     source_type="feature",
                     source_id=str(input_data.feature_id),
                     target_type="requirement",
                     target_id=str(r.id),
                 )
 
-        await _advance_phase(self._project_repo, input_data.project_id, SpecPhase.REQUISITOS)
+            await _advance_phase(uow.projects, input_data.project_id, SpecPhase.REQUISITOS)
 
         return GenerateEARSOutput(
             project_id=input_data.project_id,

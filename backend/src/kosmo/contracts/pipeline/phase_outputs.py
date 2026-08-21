@@ -139,5 +139,34 @@ class ConsistencyReport(BaseModel):
     overall_rationale: str = ""
 
 
+class ConsistencyDetectionAction(BaseModel):
+    artifact_id: str
+    action: str = "update"
+    rationale: str = ""
+    suggested_field: str = ""
+
+
+class ConsistencyDetectionReport(BaseModel):
+    actions: list[ConsistencyDetectionAction] = Field(default_factory=list[ConsistencyDetectionAction])
+    overall_rationale: str = ""
+
+
+class ConsistencyCorrection(BaseModel):
+    suggested_field: str = ""
+    suggested_before: str = ""
+    suggested_after: str = ""
+
+
 class ResolvedSection(BaseModel):
     section_markdown: str = Field(description="Sección completa reescrita con todos los cambios aplicados")
+
+
+class DirectModificationResult(BaseModel):
+    applied: bool = Field(description="True si la modificación fue aplicada al documento")
+    modified_document: str = Field(default="", description="Documento completo actualizado en markdown")
+    modified_section: str = Field(default="", description="Nombre de la sección modificada")
+    change_description: str = Field(default="", description="Descripción breve del cambio aplicado")
+    clarification_message: str = Field(
+        default="",
+        description="Mensaje solicitando detalle cuando la instrucción es ambigua (solo si applied=false)",
+    )

@@ -3,6 +3,13 @@ from __future__ import annotations
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryChatContext
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.pipeline.phase_modes.base_chat_mode import BaseChatMode
+from kosmo.domain.pipeline.prompts.shared_rules import (
+    CONVERSATIONAL_NULL_RULE,
+    DIFF_SEMANTICS_RULE,
+    NO_EM_DASH_RULE,
+    SERVER_APPLIES_RULE,
+    formatting_rules,
+)
 
 _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "Eres un asistente conversacional especializado en descubrimiento de producto. "
@@ -15,29 +22,27 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "- Reglas de negocio\n"
     "- Alcance\n\n"
     "REGLAS:\n"
-    "- Responde siempre en espanol con tildes correctas.\n"
-    "- Separa las ideas en parrafos cortos. Usa saltos de linea entre parrafos.\n"
-    "- Usa listas con guiones (-) o numeradas (1.) para enumerar elementos.\n"
-    "- Usa **negritas** para nombres de secciones y conceptos clave.\n"
-    "- NO escribas toda la respuesta en un solo bloque de texto.\n"
-    "- Manten el analisis a NIVEL DE NEGOCIO. PROHIBIDO: API, base de datos, "
+    + formatting_rules("secciones y conceptos")
+    + "- Manten el analisis a NIVEL DE NEGOCIO. PROHIBIDO: API, base de datos, "
     "microservicios, endpoints, servidores, lenguajes de programacion, frameworks, "
     "protocolos, arquitectura, deployment, Docker, cloud, SQL, HTTP, REST, GraphQL, "
     "backend, frontend, cache, Redis, MongoDB, PostgreSQL, Kubernetes, AWS, GCP, "
     "Azure, plataforma, sistema informatico, aplicacion web.\n"
-    "- No uses formato de historia de usuario (Como... quiero... para...).\n"
-    "- Si el usuario te pide un cambio que YA existe como pendiente en el plan o "
-    "que ya fue aplicado al documento, indicale que ese cambio ya esta registrado y "
-    "NO generes una nueva sugerencia. Responde con change_suggestion en null.\n"
+    + NO_EM_DASH_RULE
+    + "- No uses formato de historia de usuario (Como... quiero... para...).\n"
+    "- Si el usuario te pide un cambio que ya fue aplicado al documento, indicale que ese "
+    "cambio ya esta registrado y NO generes una nueva sugerencia. Responde con "
+    "change_suggestions en null.\n"
     "- ADAPTA, NO RECHAZAS: si el usuario hace una solicitud fuera del nivel de "
     "negocio (ej. quiere un endpoint, un requisito, una caracteristica), reformulala "
     "en lenguaje de Descubrimiento. Por ejemplo: 'agrega un endpoint de pagos' -> "
     "'incluir la capacidad de procesar pagos en el Alcance'. 'crea la caracteristica "
     "de login' -> 'identificar la necesidad de autenticacion de usuarios en los "
     "Actores y el Alcance'. Solo si la solicitud es puramente tecnica e irreconciliable "
-    "(ej. 'configura la base de datos'), indica amablemente que ese cambio corresponde "
-    "al chat de Caracteristicas o Requisitos.\n"
-    "- NUNCA categorices una nueva funcionalidad o regla de negocio automaticamente "
+    "(ej. 'configura la base de datos'), indica amablemente que ese cambio debe realizarse "
+    "directamente en el documento de Caracteristicas o de Requisitos.\n"
+    + SERVER_APPLIES_RULE
+    + "- NUNCA categorices una nueva funcionalidad o regla de negocio automaticamente "
     "como 'Futuro potencial' a menos que el usuario indique explicitamente que es "
     "para una version futura o que esta fuera del alcance actual. Si el usuario "
     "pide agregarlo, asume que es para el alcance actual.\n\n"
@@ -56,12 +61,9 @@ _DISCOVERY_CHAT_SYSTEM_PROMPT = (
     "se reemplaza. Para ELIMINAR, diff_after debe ser cadena vacía ('').\n"
     "  * diff_after: contenido sugerido para reemplazar el fragmento.\n"
     "  * rationale: justificacion del cambio propuesto (puede ser null).\n"
-    "- NUNCA copies el documento completo en diff_before. Solo el fragmento mínimo que "
-    "realmente se modifica. Si el cambio es puramente agregar contenido sin modificar nada "
-    "existente, diff_before debe ser cadena vacía ('').\n"
-    "- Si el usuario solo conversa, pregunta o pide aclaraciones, pon "
-    "change_suggestion en null y responde de forma conversacional.\n\n"
-    "FORMATO DE SALIDA (JSON):\n"
+    + DIFF_SEMANTICS_RULE
+    + CONVERSATIONAL_NULL_RULE
+    + "FORMATO DE SALIDA (JSON):\n"
     "{\n"
     '  "content": "<tu respuesta conversacional>",\n'
     '  "change_suggestions": null | [\n'

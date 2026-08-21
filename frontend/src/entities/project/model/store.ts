@@ -1,12 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Project } from './types';
-import { getProjects, getProject } from '../api/api';
+import { getProjects, getProject, deleteProject } from '../api/api';
 
 interface ProjectStore {
+	projects: Project[];
+	setProjects: (projects: Project[]) => void;
+	addProject: (project: Project) => void;
+	deleteProject: (id: string) => Promise<void>;
 	currentProject: Project | null;
 	setCurrentProject: (project: Project) => void;
-	clearCurrentProject: () => void;
+	setProjectState: (project: Project) => void;
+	isProyectosOpen: boolean;
+	setIsProyectosOpen: (v: boolean) => void;
 	getProjects: () => Promise<Project[]>;
 	getProject: (id: string) => Promise<Project>;
 }
@@ -14,12 +20,27 @@ interface ProjectStore {
 export const useProjectStore = create<ProjectStore>()(
 	persist(
 		(set) => ({
+			projects: [],
+			setProjects: (projects) => set({ projects }),
+			addProject: (project) =>
+				set((state) => ({ projects: [...state.projects, project] })),
+			deleteProject: async (id) => {
+				await deleteProject(id);
+				set((state) => ({
+					projects: state.projects.filter((p) => p.id !== id),
+				}));
+			},
 			currentProject: null,
 			setCurrentProject: (project) => set({ currentProject: project }),
-			clearCurrentProject: () => set({ currentProject: null }),
+			setProjectState: (project) =>
+				set({ currentProject: project, isProyectosOpen: true }),
+			isProyectosOpen: false,
+			setIsProyectosOpen: (v) => set({ isProyectosOpen: v }),
 
 			getProjects: async () => {
-				return getProjects();
+				const data = await getProjects();
+				set({ projects: data });
+				return data;
 			},
 
 			getProject: async (id) => {
@@ -30,7 +51,23 @@ export const useProjectStore = create<ProjectStore>()(
 		}),
 		{
 			name: 'kosmo-project-store',
-			partialize: (state) => ({ currentProject: state.currentProject }),
+			partialize: (state) => ({
+				currentProject: state.currentProject,
+				isProyectosOpen: state.isProyectosOpen,
+			}),
 		},
 	),
 );
+
+export const clearProjectStore = () => {
+	useProjectStore.persist.clearStorage();
+	useProjectStore.setState({
+		projects: [],
+		currentProject: null,
+		isProyectosOpen: false,
+	});
+};
+
+export const clearProjectStoreExceptProjects = () => {
+	useProjectStore.setState({ currentProject: null, isProyectosOpen: false });
+};

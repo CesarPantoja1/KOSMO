@@ -8,9 +8,19 @@ export interface PlantUmlModule {
 	) => void;
 }
 
+export interface PanZoomState {
+	zoom: number;
+	tx: number;
+	ty: number;
+}
+
 export interface PlantUmlViewerProps {
 	source: string;
 	isMaximized?: boolean;
 	onMaximize?: () => void;
 	onMinimize?: () => void;
+	showControls?: boolean;
+	fallbackContent?: string;
+	controlledPanZoom?: PanZoomState;
+	onPanZoomChange?: (state: PanZoomState) => void;
 }

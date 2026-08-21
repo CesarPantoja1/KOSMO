@@ -8,6 +8,8 @@ from kosmo.contracts.pipeline.phase_contexts import (
     DiscoveryRefinePhaseContext,
     EARSPhaseContext,
     FeaturesPhaseContext,
+    ImplementationContext,
+    ImplementationPhaseContext,
     ModeloPhaseContext,
     SuggestFeaturesContext,
 )
@@ -36,6 +38,8 @@ __all__ = [
     "FeaturesPhaseContext",
     "FeaturesPhaseOutput",
     "GenerationMetadata",
+    "ImplementationContext",
+    "ImplementationPhaseContext",
     "ModeloPhaseContext",
     "ModeloPhaseOutput",
     "PhaseMode",

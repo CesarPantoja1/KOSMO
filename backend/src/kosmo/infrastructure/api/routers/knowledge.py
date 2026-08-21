@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, status
 
 from kosmo.application.knowledge import ConsolidateInput, ConsolidateKnowledgePatterns
 from kosmo.contracts.auth import Principal
 from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.container import get_container
 
 router = APIRouter(
     prefix="/api/v1/knowledge",
@@ -26,6 +27,6 @@ async def consolidate_patterns(
     # ponytail: endpoint sin restricción de rol más allá de autenticación básica.
     # Riesgo aceptado mientras no exista sistema de scopes en el modelo de auth.
     # Cuando se implementen scopes, requerir "admin" o "knowledge:write".
-    uc = cast("ConsolidateKnowledgePatterns", request.app.state.consolidate_patterns)
+    uc: ConsolidateKnowledgePatterns = get_container(request).pipeline.consolidate_patterns
     result = await uc.execute(ConsolidateInput(sessions_limit=50))
     return {"phases": result}

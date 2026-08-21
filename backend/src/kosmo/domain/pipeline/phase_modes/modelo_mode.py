@@ -28,7 +28,8 @@ basado en un conjunto de requisitos EARS para una característica específica.
   `|NombreDelCarril|` o `|#color|NombreDelCarril|`.
 - Identifica los actores y componentes clave que participan en la característica
   (ej. `|#pink|Usuario|`, `|#lightgray|Sistema|`, `|#lightblue|Base_de_Datos|`).
-- El diagrama debe mostrar el flujo principal (Happy Path), caminos alternativos y manejo de errores.
+- El diagrama debe mostrar el flujo principal (Happy Path) y únicamente
+  los caminos alternativos o errores esenciales.
 - Utilizas la notación PlantUML para diagramas de actividad (`@startuml` ... `@enduml`).
 - Debes incluir nodos de inicio (`start`) y fin (`stop` o `end`).
 - Debes utilizar condicionales (`if`, `else`, `elseif`, `endif`) de PlantUML cuando el flujo lo requiera.
@@ -68,6 +69,15 @@ basado en un conjunto de requisitos EARS para una característica específica.
   "diagram_syntax": "@startuml\\n|#pink|Usuario|\\nstart\\n:Pedir;\\n|#lightgray|Sistema|\\n:Validar;\\nstop\\n@enduml"
 }
 ```
+
+## Restricciones de complejidad (Obligatorio)
+- El diagrama debe contener un MÁXIMO de 20 nodos de acción (líneas `:Acción;`).
+- Debes utilizar un MÁXIMO de 4 carriles/swimlanes.
+- Prioriza el flujo principal (Happy Path); incluye caminos alternativos y manejo de errores
+  SOLO cuando sean esenciales para entender el flujo.
+- Si la característica tiene más de 8 requisitos EARS, agrupa los requisitos relacionados
+  en flujos de alto nivel en lugar de representar cada requisito por separado.
+- NO incluyas los criterios de aceptación como nodos del diagrama.
 
 ## Guardrails (Obligatorio)
 - OBLIGATORIO: La respuesta DEBE ser un JSON válido con la propiedad `diagram_syntax`.

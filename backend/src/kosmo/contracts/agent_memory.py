@@ -119,6 +119,8 @@ class AgentMemoryPort(Protocol):
         project_id: ProjectId | None = None,
     ) -> dict[str, int]: ...
 
+    async def delete_by_project(self, project_id: ProjectId) -> None: ...
+
 
 class KnowledgePatternStore(Protocol):
     async def replace_patterns(
