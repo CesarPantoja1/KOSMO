@@ -16,16 +16,16 @@ services:
     container_name: kosmo-frontend
     init: true
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - '${FRONTEND_PORT:-3000}:3000'
     environment:
       NODE_ENV: development
-      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-KOSMO}
       NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-development}
       NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: 'true'
+      WATCHPACK_POLLING: 'true'
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
@@ -44,14 +44,14 @@ services:
     container_name: kosmo-backend
     init: true
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - '${BACKEND_PORT:-8000}:8000'
     environment:
       ENV: ${ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
-      PORT: "8000"
+      PORT: '8000'
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
       DEV_GENERATE_SECRETS: ${DEV_GENERATE_SECRETS:-1}
-      AUTH_DISABLED: "true"
+      AUTH_DISABLED: 'true'
 
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}}
       REDIS_URL: redis://redis:6379/0
@@ -85,7 +85,7 @@ services:
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-kosmo-backend}
       OTEL_ENVIRONMENT: ${OTEL_ENVIRONMENT:-development}
-      PYTHONUNBUFFERED: "1"
+      PYTHONUNBUFFERED: '1'
     volumes:
       - ./backend/src:/app/src
       - ./backend/alembic:/app/alembic
@@ -113,9 +113,9 @@ services:
     init: true
     # Mismo UID que el backend (kosmo=1000) para que los archivos que genere el
     # agente en /workspaces sean escribibles por la validación del backend.
-    user: "1000:1000"
+    user: '1000:1000'
     ports:
-      - "${OPENCODE_PORT:-4096}:4096"
+      - '${OPENCODE_PORT:-4096}:4096'
     environment:
       HOME: /home/node
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
@@ -130,11 +130,11 @@ services:
     # arranca headless. opencode se instala en el home del usuario 1000 porque
     # /usr/local (prefijo global por defecto) no es escribible por uid 1000.
     command: >
-      sh -c "npm install -g --prefix /home/node/opencode opencode-ai@latest &&
-             mkdir -p /home/node/.config/opencode &&
-             printf '%s' '{\"server\":{\"password\":\"'\"$${OPENCODE_SERVER_PASSWORD}\"'\",\"model\":\"deepseek/deepseek-v4-flash\"}}' > /home/node/.config/opencode/opencode.json &&
-             export PATH=/home/node/opencode/bin:$$PATH &&
-             opencode serve --hostname 0.0.0.0 --port 4096"
+      sh -c 'npm install -g --prefix /home/node/opencode opencode-ai@latest &&
+            mkdir -p /home/node/.config/opencode &&
+            printf "{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"}}\n" "$${OPENCODE_SERVER_PASSWORD}" > /home/node/.config/opencode/opencode.json &&
+            export PATH=/home/node/opencode/bin:$$PATH &&
+            opencode serve --hostname 0.0.0.0 --port 4096'
     restart: unless-stopped
 
   # Preview: un servidor por proyecto activo (sigue los markers de
@@ -147,20 +147,21 @@ services:
     image: kosmo-preview:local
     container_name: kosmo-preview
     init: true
-    user: "1000:1000"
+    user: '1000:1000'
     ports:
-      - "${PREVIEW_PORTS:-3001-3016}:3000-3015"
+      - '${PREVIEW_PORTS:-3001-3016}:3000-3015'
     environment:
-      HOME: /tmp
-      CONTAINER_BASE: "3000"
-      HOST_BASE: "3001"
+      HOME: /home/node
+      CONTAINER_BASE: '3000'
+      HOST_BASE: '3001'
       # Polling de archivos: sin esto, next dev no detecta borrados/creaciones
       # en volúmenes Docker Desktop y sirve páginas obsoletas.
-      WATCHPACK_USE_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_USE_POLLING: 'true'
+      CHOKIDAR_USEPOLLING: 'true'
     volumes:
       - kosmo_workspaces:/workspaces
-    command: ["sh", "/app/run.sh"]
+      - ./docker/preview/run.sh:/run-preview.sh:ro
+    command: ['sh', '/run-preview.sh']
     restart: unless-stopped
 
   postgres:
@@ -171,12 +172,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kosmo}
       POSTGRES_DB: ${POSTGRES_DB:-kosmo_dev}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - kosmo_postgres_data:/var/lib/postgresql/data
       - ./backend/docker/postgres/init-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 10s
       timeout: 5s
       retries: 10
