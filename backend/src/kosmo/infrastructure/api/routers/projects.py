@@ -192,6 +192,10 @@ async def get_project_preview(
     raw_entry = manifest.get(project_id)
     entry: dict[str, object] = cast(dict[str, object], raw_entry) if isinstance(raw_entry, dict) else {}
     url_val = entry.get("url")
+    public_host_suffix = getattr(container.settings, "preview_public_host_suffix", None)
+    if public_host_suffix:
+        project_host = str(project.id).replace("_", "-").lower()
+        url_val = f"https://{project_host}-{public_host_suffix.rstrip('.').lower()}"
     if not url_val:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,12 +1,3 @@
-const PLANTUML_VERSION = '1.2026.6';
-const CDN_BASE = `https://unpkg.com/@plantuml/core@${PLANTUML_VERSION}`;
-const VIZ_GLOBAL_URL = `${CDN_BASE}/viz-global.js`;
-const PLANTUML_MODULE_URL = `${CDN_BASE}/plantuml.js`;
-
-const dynamicImport = new Function('url', 'return import(url)') as (
-	url: string,
-) => Promise<Record<string, unknown>>;
-
 let vizLoaded = false;
 let vizLoading: Promise<void> | null = null;
 
@@ -14,21 +5,15 @@ function loadViz(): Promise<void> {
 	if (vizLoaded) return Promise.resolve();
 	if (vizLoading) return vizLoading;
 
-	vizLoading = new Promise((resolve, reject) => {
-		const script = document.createElement('script');
-		script.src = VIZ_GLOBAL_URL;
-		script.async = false;
-		script.onload = () => {
+	vizLoading = import('@plantuml/core/viz-global.js')
+		.then(() => {
 			vizLoaded = true;
 			vizLoading = null;
-			resolve();
-		};
-		script.onerror = () => {
+		})
+		.catch((error: unknown) => {
 			vizLoading = null;
-			reject(new Error('Error al cargar el motor de renderizado PlantUML'));
-		};
-		document.head.appendChild(script);
-	});
+			throw new Error('Error al cargar el motor de renderizado PlantUML', { cause: error });
+		});
 
 	return vizLoading;
 }
@@ -37,7 +22,7 @@ let modulePromise: Promise<Record<string, unknown>> | null = null;
 
 function loadPlantUmlModule(): Promise<Record<string, unknown>> {
 	if (modulePromise) return modulePromise;
-	modulePromise = dynamicImport(PLANTUML_MODULE_URL);
+	modulePromise = import('@plantuml/core/plantuml.js') as unknown as Promise<Record<string, unknown>>;
 	modulePromise.catch(() => {
 		modulePromise = null;
 	});
@@ -49,4 +34,4 @@ function preloadPlantUmlEngine(): void {
 	loadPlantUmlModule().catch(() => undefined);
 }
 
-export { PLANTUML_MODULE_URL, loadPlantUmlModule, loadViz, preloadPlantUmlEngine };
+export { loadPlantUmlModule, loadViz, preloadPlantUmlEngine };

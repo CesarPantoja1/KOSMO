@@ -34,6 +34,7 @@ const generatingPlantUmlMessages = [
 
 const ModelingPage = () => {
 	const currentProject = useProjectStore((s) => s.currentProject);
+	const currentProjectId = currentProject?.id;
 	const router = useRouter();
 
 	const [isGenerating, setIsGenerating] = useState(false);
@@ -51,6 +52,7 @@ const ModelingPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const selectedId = useCharacteristicStore((s) => s.selectedId);
 	const setSelectedId = useCharacteristicStore((s) => s.setSelectedId);
+	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 
 	const pendingNavigationPath = useAppStore((s) => s.pendingNavigationPath);
 	const setPendingNavigationPath = useAppStore((s) => s.setPendingNavigationPath);
@@ -65,6 +67,27 @@ const ModelingPage = () => {
 
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasUnsavedChanges = uml !== savedContent;
+
+	useEffect(() => {
+		if (!currentProjectId) return;
+		let cancelled = false;
+
+		void getCharacteristics(currentProjectId)
+			.then((features) => {
+				if (cancelled) return;
+				const currentSelection = useCharacteristicStore.getState().selectedId;
+				if (!features.some((feature) => feature.id === currentSelection)) {
+					setSelectedId(features[0]?.id ?? null);
+				}
+			})
+			.catch((error: unknown) => {
+				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [currentProjectId, getCharacteristics, setSelectedId]);
 
 	useUnsavedChanges({ isDirty: hasUnsavedChanges });
 

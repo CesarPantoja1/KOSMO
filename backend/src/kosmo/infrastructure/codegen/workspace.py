@@ -17,6 +17,7 @@ import structlog
 from kosmo.contracts.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
+    PreviewPublisherPort,
     WorkspaceManagerPort,
     WorkspaceRepository,
     WorkspaceStatus,
@@ -156,6 +157,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         mcp_url: str = "http://127.0.0.1:8000/mcp",
         project_repo: ProjectRepository | None = None,
         code_runner: CodeRunnerPort | None = None,
+        preview_publisher: PreviewPublisherPort | None = None,
     ) -> None:
         self._workspaces_root = Path(workspaces_root)
         self._workspace_repo = workspace_repo
@@ -164,6 +166,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._mcp_url = mcp_url
         self._project_repo = project_repo
         self._code_runner = code_runner
+        self._preview_publisher = preview_publisher
         self._in_memory_locks: set[str] = set()
         # ponytail: guard global del proceso; la carrera multi-worker se cierra con el
         # CAS (UPDATE condicional) de update_lock en el repositorio SQL.
@@ -386,6 +389,16 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         if not target_dir.is_relative_to(root_dir):
             raise ValueError(f"Workspace path escapes configured root for project '{project_id}'.")
 
+        if self._preview_publisher is not None:
+            try:
+                await self._preview_publisher.unpublish(project_id)
+            except Exception:
+                _log.warning(
+                    "workspace.preview_unpublish_failed",
+                    project_id=str(project_id),
+                    exc_info=True,
+                )
+
         markers_dir = root_dir / ".preview-active"
         (markers_dir / str(project_id)).unlink(missing_ok=True)
 
@@ -494,6 +507,16 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         y levanta `next dev` por proyecto.
         """
         target_dir = (self._workspaces_root / str(project_id)).resolve()
+        if self._preview_publisher is not None:
+            try:
+                await self._preview_publisher.publish(project_id)
+            except Exception:
+                _log.warning(
+                    "workspace.preview_publish_failed",
+                    project_id=str(project_id),
+                    exc_info=True,
+                )
+                return
         markers_dir = self._workspaces_root / ".preview-active"
         markers_dir.mkdir(parents=True, exist_ok=True)
         (markers_dir / str(project_id)).write_text(str(target_dir), encoding="utf-8")

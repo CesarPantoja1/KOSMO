@@ -9,6 +9,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCase
 from kosmo.config import Settings
 from kosmo.contracts.codegen import CodeRunnerPort
+from kosmo.infrastructure.cloudflare.preview import CloudflareTunnelPreviewPublisher
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
@@ -46,12 +47,28 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         )
     else:
         code_runner = SubprocessCodeRunner()
+    preview_publisher = None
+    if (
+        settings.cloudflare_preview_api_token is not None
+        and settings.cloudflare_preview_account_id is not None
+        and settings.cloudflare_preview_zone_id is not None
+        and settings.cloudflare_preview_tunnel_id is not None
+        and settings.preview_public_host_suffix is not None
+    ):
+        preview_publisher = CloudflareTunnelPreviewPublisher(
+            api_token=settings.cloudflare_preview_api_token.get_secret_value(),
+            account_id=settings.cloudflare_preview_account_id,
+            zone_id=settings.cloudflare_preview_zone_id,
+            tunnel_id=settings.cloudflare_preview_tunnel_id,
+            host_suffix=settings.preview_public_host_suffix,
+        )
     workspace_manager = LocalWorkspaceManager(
         workspaces_root=settings.kosmo_workspaces_dir,
         workspace_repo=repos.workspaces,
         mcp_url=settings.kosmo_mcp_base_url,
         project_repo=repos.projects,
         code_runner=code_runner,
+        preview_publisher=preview_publisher,
     )
     use_case = GenerateFeatureImplementationUseCase(
         feature_repo=repos.features,
