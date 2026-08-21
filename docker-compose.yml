@@ -130,11 +130,11 @@ services:
     # arranca headless. opencode se instala en el home del usuario 1000 porque
     # /usr/local (prefijo global por defecto) no es escribible por uid 1000.
     command: >
-      sh -c "npm install -g --prefix /home/node/opencode opencode-ai@latest &&
-             mkdir -p /home/node/.config/opencode &&
-             printf '{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"}}\n' \"$${OPENCODE_SERVER_PASSWORD}\" > /home/node/.config/opencode/opencode.json &&
-             export PATH=/home/node/opencode/bin:$$PATH &&
-             opencode serve --hostname 0.0.0.0 --port 4096"
+      sh -c 'npm install -g --prefix /home/node/opencode opencode-ai@latest &&
+            mkdir -p /home/node/.config/opencode &&
+            printf "{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"}}\n" "$${OPENCODE_SERVER_PASSWORD}" > /home/node/.config/opencode/opencode.json &&
+            export PATH=/home/node/opencode/bin:$$PATH &&
+            opencode serve --hostname 0.0.0.0 --port 4096'
     restart: unless-stopped
 
   # Preview: un servidor por proyecto activo (sigue los markers de
