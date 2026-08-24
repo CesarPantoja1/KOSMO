@@ -163,6 +163,7 @@ class TestAIConnectionInput:
     provider: AIProvider
     model: str
     api_key: str | None = None
+    user_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.model or not self.model.strip():

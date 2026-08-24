@@ -6,8 +6,8 @@ from typing import Any
 
 import structlog
 
-from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
+from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.pipeline.phase_outputs import ValidationResult
 from kosmo.contracts.sdd.document import SpecPhase

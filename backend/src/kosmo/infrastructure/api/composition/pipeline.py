@@ -16,10 +16,10 @@ from kosmo.application.consistency.evaluate_consistency import EvaluateConsisten
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.config import Settings
-from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.ai.chat import ChatRepository
 from kosmo.contracts.ai.consistency import ConsistencyEvaluator, TraceabilityRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
+from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry

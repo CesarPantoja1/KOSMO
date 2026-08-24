@@ -11,6 +11,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
     MissingRequirementsError,
     OpenCodeUnavailableError,
 )
+from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
@@ -31,7 +32,6 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceManagerPort,
     WorkspaceStatus,
 )
-from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import (

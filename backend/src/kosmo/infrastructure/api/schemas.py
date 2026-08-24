@@ -10,8 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from kosmo.contracts.auth import TokenPair
 from kosmo.contracts.ai.chat import HistorialChat, MensajeChat
+from kosmo.contracts.auth import TokenPair
 
 # Enumeraciones de negocio
 

@@ -13,8 +13,8 @@ from kosmo.application.chat.process_chat_message import (
 from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextUseCase,
 )
-from kosmo.contracts.auth import Principal
 from kosmo.contracts.ai.chat import ChatRole, MensajeChat, ModificacionChat
+from kosmo.contracts.auth import Principal
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryChatContext, FeatureChatContext
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import SpecPhase

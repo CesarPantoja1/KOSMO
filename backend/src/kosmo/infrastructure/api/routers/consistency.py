@@ -23,8 +23,8 @@ from kosmo.application.consistency.manage_consistency import (
     GetConsistencyStatusUseCase,
 )
 from kosmo.contracts import DiffCambio
-from kosmo.contracts.auth import Principal
 from kosmo.contracts.ai.chat import AppliedChange
+from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import (
     ConsistencyEvaluationNotFoundError,

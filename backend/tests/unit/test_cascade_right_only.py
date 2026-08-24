@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from kosmo.contracts.auth import Principal
 from kosmo.contracts.ai.consistency import DOWNSTREAM_TARGETS
+from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.infrastructure.api.routers.consistency import (
     evaluate_consistency,

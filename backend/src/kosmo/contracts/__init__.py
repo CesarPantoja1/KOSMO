@@ -28,6 +28,17 @@ from kosmo.contracts.ai.chat import (
     SugerenciaCambio,
     SugerenciaCambioLLM,
 )
+from kosmo.contracts.ai.consistency import (
+    ArtefactoAfectado,
+    ArtifactAction,
+    ConsistencyEvaluationOutput,
+    ConsistencyEvaluator,
+    ConsistencyStatus,
+    ImpactItem,
+    PhasePropagationInfo,
+    ReporteConsistencia,
+    TraceabilityRepository,
+)
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
@@ -49,17 +60,6 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceManagerPort,
     WorkspaceRepository,
     WorkspaceStatus,
-)
-from kosmo.contracts.ai.consistency import (
-    ArtefactoAfectado,
-    ArtifactAction,
-    ConsistencyEvaluationOutput,
-    ConsistencyEvaluator,
-    ConsistencyStatus,
-    ImpactItem,
-    PhasePropagationInfo,
-    ReporteConsistencia,
-    TraceabilityRepository,
 )
 from kosmo.contracts.sdd.ids import (
     ChatHistoryId,
