@@ -3,7 +3,7 @@ type props = {
 	color?: string;
 };
 
-const Trash = ({ size, color = 'text-current' }: props) => {
+const TrashFill = ({ size, color = 'text-current' }: props) => {
 	return (
 		<svg
 			xmlns='http://www.w3.org/2000/svg'
@@ -21,4 +21,4 @@ const Trash = ({ size, color = 'text-current' }: props) => {
 	);
 };
 
-export default Trash;
+export default TrashFill;

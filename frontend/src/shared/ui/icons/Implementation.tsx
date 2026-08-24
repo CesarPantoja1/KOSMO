@@ -1,6 +1,9 @@
-import { IconWizardProps } from '../../models/types';
+type props = {
+	size?: number;
+	color: string;
+};
 
-const Implementation = ({ size = 32, color }: IconWizardProps) => {
+const Implementation = ({ size = 32, color }: props) => {
 	return (
 		<svg
 			xmlns='http://www.w3.org/2000/svg'

@@ -25,7 +25,7 @@ import { useProjectStore } from '@/entities/project';
 import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { AsideCharacteristic } from '@/widgets';
-import { Requirements } from '@/widgets/main-navbar/ui/icons';
+import { Requirements } from '@/shared/ui';
 
 const generatingRequirementsMessages = [
 	'Analizando característica...',

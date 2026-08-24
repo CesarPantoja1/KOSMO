@@ -3,6 +3,7 @@
 import { useAuthStore, authApi } from '@/entities/user';
 import { formatApiError } from '@/shared/api';
 import { Close } from '@/shared/ui';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 interface LoginModalProps {
@@ -12,11 +13,13 @@ interface LoginModalProps {
 
 const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
 	const { accessToken } = useAuthStore();
+	const router = useRouter();
 
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [error, setError] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
+	const [retryAfter, setRetryAfter] = useState(0);
 
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 
@@ -25,6 +28,21 @@ const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
 			onClose();
 		}
 	}, [accessToken, isAuthDisabled, onClose]);
+
+	useEffect(() => {
+		if (retryAfter <= 0) return;
+		const timer = setInterval(() => {
+			setRetryAfter((prev) => {
+				if (prev <= 1) {
+					clearInterval(timer);
+					setError('');
+					return 0;
+				}
+				return prev - 1;
+			});
+		}, 1000);
+		return () => clearInterval(timer);
+	}, [retryAfter]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -38,11 +56,16 @@ const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
 
 		try {
 			await authApi.login(email, password);
+			router.push('/proyecto');
 			onClose();
 		} catch (err) {
 			const status = (err as { status?: number }).status;
 			if (status === 401) {
 				setError('Credenciales inválidas');
+			} else if (status === 429) {
+				const retryAfterValue = (err as { retryAfter?: number }).retryAfter || 300;
+				setRetryAfter(retryAfterValue);
+				setError(`Cuenta bloqueada. Intente de nuevo en ${retryAfterValue} segundos.`);
 			} else {
 				setError(formatApiError(err, 'Error al iniciar sesión'));
 			}
@@ -109,10 +132,10 @@ const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
 				</div>
 				<button
 					type='submit'
-					disabled={isLoading}
+					disabled={isLoading || retryAfter > 0}
 					className='btn btn-ai btn-lg w-full mt-2'
 				>
-					{isLoading ? 'Iniciando...' : 'Entrar'}
+					{isLoading ? 'Iniciando...' : retryAfter > 0 ? `Espera ${retryAfter}s` : 'Entrar'}
 				</button>
 
 				<div className='text-center mt-2'>

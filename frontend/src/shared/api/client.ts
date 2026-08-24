@@ -89,6 +89,9 @@ export const apiClient = async <T>(
 		} catch (err) {
 			processQueue(err as Error, null);
 			clearAuth();
+			if (typeof window !== 'undefined') {
+				window.location.href = '/login';
+			}
 			throw err;
 		} finally {
 			isRefreshing = false;

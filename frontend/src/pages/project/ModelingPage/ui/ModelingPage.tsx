@@ -24,7 +24,7 @@ import { formatApiError } from '@/shared/api';
 import { useCharacteristicStore } from '@/entities/characteristic';
 
 import { AsideCharacteristic } from '@/widgets';
-import { Modeling } from '@/widgets/main-navbar/ui/icons';
+import { Modeling } from '@/shared/ui';
 
 const generatingPlantUmlMessages = [
 	'Analizando requisitos...',

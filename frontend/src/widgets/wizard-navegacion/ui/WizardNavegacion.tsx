@@ -22,13 +22,13 @@ import WizardItem from './WizardItem';
 import { PhaseStatusBadge } from './PhaseStatusBadge';
 import { ConsistencyGateButton } from './ConsistencyGateButton';
 
-import Discovery from '@/widgets/main-navbar/ui/icons/Discovery';
 import {
 	Characteristics,
+	Discovery,
 	Requirements,
 	Modeling,
 	Implementation,
-} from '@/widgets/main-navbar/ui/icons';
+} from '@/shared/ui';
 
 const phaseItems: {
 	href: string;

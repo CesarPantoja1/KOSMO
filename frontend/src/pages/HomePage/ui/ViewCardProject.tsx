@@ -1,8 +1,7 @@
 import { Project } from '@/entities/project';
-import { Plus, Trash, ModalConfirm } from '@/shared/ui';
+import { Plus, Trash, ModalConfirm, Clock } from '@/shared/ui';
 import { Link } from 'react-aria-components';
 import { useState } from 'react';
-import { Clock } from './icons';
 import { toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { useProjectStore } from '@/entities/project';
@@ -43,7 +42,9 @@ const ViewCardProject = ({ projects, handleProjectClick }: props) => {
 						<p className='text-neutral-700 font-semibold group-hover:text-primary-600 transition-colors'>
 							Crear nuevo proyecto
 						</p>
-						<p className='text-neutral-400 text-sm mt-0.5'>Comienza una nueva iniciativa</p>
+						<p className='text-neutral-400 text-sm mt-0.5'>
+							Comienza una nueva iniciativa
+						</p>
 					</div>
 				</Link>
 

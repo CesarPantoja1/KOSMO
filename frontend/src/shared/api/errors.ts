@@ -32,6 +32,7 @@ export class ApiError extends Error {
 	readonly traceId: string | null;
 	readonly violations: ApiViolation[];
 	readonly errorCode: string | null;
+	readonly retryAfter: number | null;
 
 	constructor({
 		status,
@@ -41,6 +42,7 @@ export class ApiError extends Error {
 		traceId = null,
 		violations = [],
 		errorCode = null,
+		retryAfter = null,
 	}: {
 		status: number;
 		type?: string | null;
@@ -49,6 +51,7 @@ export class ApiError extends Error {
 		traceId?: string | null;
 		violations?: ApiViolation[];
 		errorCode?: string | null;
+		retryAfter?: number | null;
 	}) {
 		super(title ?? detail ?? `Error del servidor (HTTP ${status})`);
 		this.name = 'ApiError';
@@ -59,12 +62,16 @@ export class ApiError extends Error {
 		this.traceId = traceId;
 		this.violations = violations;
 		this.errorCode = errorCode;
+		this.retryAfter = retryAfter;
 	}
 }
 
 export function parseApiError(res: Response, body: unknown): ApiError {
 	const status = res.status;
-	if (!isRecord(body)) return new ApiError({ status });
+	const retryAfterHeader = res.headers.get('Retry-After');
+	const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+
+	if (!isRecord(body)) return new ApiError({ status, retryAfter });
 
 	// FastAPI 422: detail es una lista de violaciones
 	if (Array.isArray(body.detail)) {
@@ -74,6 +81,7 @@ export function parseApiError(res: Response, body: unknown): ApiError {
 			title: 'Datos inválidos',
 			detail: violations.map((v) => v.msg).join('; ') || null,
 			violations,
+			retryAfter,
 		});
 	}
 
@@ -83,6 +91,7 @@ export function parseApiError(res: Response, body: unknown): ApiError {
 			status,
 			errorCode: body.error,
 			detail: typeof body.error_description === 'string' ? body.error_description : null,
+			retryAfter,
 		});
 	}
 
@@ -94,6 +103,7 @@ export function parseApiError(res: Response, body: unknown): ApiError {
 		detail: typeof body.detail === 'string' ? body.detail : null,
 		traceId: typeof body.trace_id === 'string' ? body.trace_id : null,
 		violations: toViolations(body.violations),
+		retryAfter,
 	});
 }
 

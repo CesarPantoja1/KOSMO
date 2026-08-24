@@ -1,13 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 import { useAppStore } from 'app/store/app.store';
 
 import { Project, useProjectStore } from '@/entities/project';
+import { useAuthStore, authApi } from '@/entities/user';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
-import { ComputerDesktop, Home, Sidebar, UserCircle } from './icons';
+import { ComputerDesktop, Home, Sidebar, UserCircle } from '@/shared/ui';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -16,8 +17,12 @@ interface MainNavbarProps {
 export function MainNavbar({ children }: MainNavbarProps) {
 	const projects = useProjectStore((s) => s.projects);
 	const getProjectsStore = useProjectStore((s) => s.getProjects);
+	const user = useAuthStore((s) => s.user);
 
 	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+	const [showUserMenu, setShowUserMenu] = useState(false);
+	const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+	const userMenuRef = useRef<HTMLDivElement>(null);
 	const router = useRouter();
 
 	useEffect(() => {
@@ -30,6 +35,18 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		};
 		fetchProjects();
 	}, [getProjectsStore]);
+
+	useEffect(() => {
+		const handleClickOutside = (e: MouseEvent) => {
+			if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+				setShowUserMenu(false);
+			}
+		};
+		if (showUserMenu) {
+			document.addEventListener('mousedown', handleClickOutside);
+		}
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, [showUserMenu]);
 
 	const currentProject = useProjectStore((s) => s.currentProject);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
@@ -51,6 +68,11 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		initializeProject(project.id);
 
 		router.push('/proyecto/descubrimiento');
+	};
+
+	const handleLogout = async () => {
+		await authApi.logout();
+		router.push('/');
 	};
 
 	return (
@@ -97,7 +119,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 							<div className='flex flex-col gap-1'>
 								<button
 									className='flex items-center px-3 py-2.5 gap-2.5 cursor-pointer rounded-md transition-colors text-neutral-300 hover:bg-neutral-800 hover:text-neutral-0 border-l-2 border-transparent'
-									onClick={() => router.push('/')}
+									onClick={() => router.push(user ? '/proyecto' : '/')}
 									title='Inicio'
 								>
 									<Home size={20} color='text-neutral-500' />
@@ -135,7 +157,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 							<div className='flex flex-col gap-1 items-center'>
 								<button
 									className='flex items-center justify-center w-10 h-10 cursor-pointer rounded-md transition-colors text-neutral-400 hover:bg-neutral-800 hover:text-neutral-0'
-									onClick={() => router.push('/')}
+									onClick={() => router.push(user ? '/proyecto' : '/')}
 									title='Inicio'
 								>
 									<Home size={20} color='text-current' />
@@ -170,15 +192,64 @@ export function MainNavbar({ children }: MainNavbarProps) {
 							isSidebarExpanded ? 'px-3 py-4 justify-start' : 'p-2 py-4 justify-center'
 						}`}
 					>
-						<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
-						{isSidebarExpanded && (
-							<div className='flex-1 min-w-0 flex flex-col justify-center'>
-								<h4 className='text-neutral-0 text-sm font-semibold truncate'>
-									Carlos Yupa
-								</h4>
-								<button className='text-left text-neutral-500 text-xs font-normal hover:text-neutral-300 transition-colors'>
-									Cerrar sesión
+						{isSidebarExpanded ? (
+							<>
+								<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
+								<div className='flex-1 min-w-0 flex flex-col justify-center'>
+									<h4 className='text-neutral-0 text-sm font-semibold truncate'>
+										{user?.subject || 'Usuario'}
+									</h4>
+									<button
+										onClick={() => router.push('/perfil')}
+										className='text-left text-neutral-500 text-xs font-normal hover:text-neutral-300 transition-colors'
+									>
+										Perfil
+									</button>
+									<button
+										onClick={handleLogout}
+										className='text-left text-neutral-500 text-xs font-normal hover:text-neutral-300 transition-colors'
+									>
+										Cerrar sesión
+									</button>
+								</div>
+							</>
+						) : (
+							<div className='relative' ref={userMenuRef}>
+								<button
+									onClick={(e) => {
+										const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+										setMenuPos({ x: rect.right + 8, y: rect.bottom - 80 });
+										setShowUserMenu(!showUserMenu);
+									}}
+									className='flex items-center justify-center'
+								>
+									<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
 								</button>
+								{showUserMenu && (
+									<div
+										className='fixed w-40 bg-neutral-800 border border-neutral-700 rounded-lg shadow-lg z-50'
+										style={{ left: menuPos.x, bottom: window.innerHeight - menuPos.y }}
+									>
+										<button
+											onClick={() => {
+												router.push('/perfil');
+												setShowUserMenu(false);
+											}}
+											className='w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-neutral-0 rounded-t-lg transition-colors'
+										>
+											Perfil
+										</button>
+										<button
+											onClick={() => {
+												handleLogout();
+												setShowUserMenu(false);
+											}}
+											className='w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-neutral-0 rounded-b-lg transition-colors'
+										>
+											Cerrar sesión
+										</button>
+									</div>
+								)}
 							</div>
 						)}
 					</div>

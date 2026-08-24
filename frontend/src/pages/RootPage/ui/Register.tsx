@@ -3,6 +3,7 @@
 import { useAuthStore, authApi } from '@/entities/user';
 import { formatApiError } from '@/shared/api';
 import { Close } from '@/shared/ui';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 interface RegisterModalProps {
@@ -12,13 +13,13 @@ interface RegisterModalProps {
 
 const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 	const { accessToken } = useAuthStore();
+	const router = useRouter();
 
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
 
 	const [error, setError] = useState('');
-	const [success, setSuccess] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
@@ -48,18 +49,23 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 
 		setIsLoading(true);
 		setError('');
-		setSuccess('');
 
 		try {
 			await authApi.register(email, password);
-			setSuccess('¡Registro exitoso! Redirigiendo al login...');
-			setTimeout(() => {
-				onSwitchToLogin();
-			}, 2000);
+			await authApi.login(email, password);
+			router.push('/proyecto');
+			onClose();
 		} catch (err) {
 			const status = (err as { status?: number }).status;
 			if (status === 409) {
 				setError('Este correo ya está registrado');
+			} else if (status === 429) {
+				const retryAfter = (err as { retryAfter?: number }).retryAfter;
+				setError(
+					retryAfter
+						? `Demasiadas solicitudes. Intente de nuevo en ${retryAfter} segundos.`
+						: 'Demasiadas solicitudes. Intente de nuevo más tarde.',
+				);
 			} else {
 				setError(formatApiError(err, 'Error al registrar usuario'));
 			}
@@ -92,12 +98,6 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 			{error && (
 				<div className='bg-error-50 border border-error-500/50 text-error-700 p-3 rounded-lg mb-4 text-sm'>
 					{error}
-				</div>
-			)}
-
-			{success && (
-				<div className='bg-success-50 border border-success-500/50 text-success-700 p-3 rounded-lg mb-4 text-sm'>
-					{success}
 				</div>
 			)}
 

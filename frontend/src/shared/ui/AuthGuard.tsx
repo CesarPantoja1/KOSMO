@@ -30,15 +30,15 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 			!pathname.startsWith('/login') &&
 			!pathname.startsWith('/register')
 		) {
-			// router.push('/login');
+			router.push('/login');
 		}
 	}, [accessToken, pathname, router, isAuthDisabled, mounted]);
 
 	if (!mounted) return null;
 
-	// if (!isAuthDisabled && !accessToken && !pathname.startsWith('/login') && !pathname.startsWith('/register')) {
-	// 	return null; // Return nothing while redirecting
-	// }
+	if (!isAuthDisabled && !accessToken && pathname && !pathname.startsWith('/login') && !pathname.startsWith('/register')) {
+		return null;
+	}
 
 	return <>{children}</>;
 };

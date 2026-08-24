@@ -8,9 +8,9 @@ import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
 import { AsideCharacteristic } from '@/widgets';
-import { Implementation } from '@/widgets/main-navbar/ui/icons';
+import { Implementation, toast } from '@/shared/ui';
+import { Ai, ArrowLeft, CursorClickFill } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
-import { Ai, ArrowLeft, CursorClickFill, toast } from '@/shared/ui';
 import { ImplementationLiveProgress } from './ImplementationLiveProgress';
 
 const ImplementationPage = () => {
@@ -41,15 +41,17 @@ const ImplementationPage = () => {
 		if (!currentProjectId) return;
 		let cancelled = false;
 
-		void getCharacteristics(currentProjectId).then((features) => {
-			if (cancelled) return;
-			const currentSelection = useCharacteristicStore.getState().selectedId;
-			if (!features.some((feature) => feature.id === currentSelection)) {
-				setSelectedId(features[0]?.id ?? null);
-			}
-		})
+		void getCharacteristics(currentProjectId)
+			.then((features) => {
+				if (cancelled) return;
+				const currentSelection = useCharacteristicStore.getState().selectedId;
+				if (!features.some((feature) => feature.id === currentSelection)) {
+					setSelectedId(features[0]?.id ?? null);
+				}
+			})
 			.catch((error: unknown) => {
-				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+				if (!cancelled)
+					toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
 			});
 
 		return () => {
