@@ -1,5 +1,6 @@
 import { apiClient } from '@/shared/api/client';
 import { generateCodeVerifier, generateCodeChallenge } from '@/shared/lib/pkce';
+import { clearAllStores } from '@/shared/lib/clearAllStores';
 import { useAuthStore } from '../model/store';
 import type {
 	UserPublic,
@@ -81,5 +82,6 @@ export const authApi = {
 		}
 		
 		clearAuth();
+		clearAllStores();
 	},
 };

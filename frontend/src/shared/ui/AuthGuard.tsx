@@ -30,7 +30,7 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 			!pathname.startsWith('/login') &&
 			!pathname.startsWith('/register')
 		) {
-			router.push('/login');
+			router.push('/');
 		}
 	}, [accessToken, pathname, router, isAuthDisabled, mounted]);
 

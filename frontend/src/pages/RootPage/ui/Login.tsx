@@ -9,9 +9,10 @@ import { useEffect, useState } from 'react';
 interface LoginModalProps {
 	onClose: () => void;
 	onSwitchToRegister: () => void;
+	sessionExpired?: boolean;
 }
 
-const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
+const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps) => {
 	const { accessToken } = useAuthStore();
 	const router = useRouter();
 
@@ -63,7 +64,7 @@ const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
 			if (status === 401) {
 				setError('Credenciales inválidas');
 			} else if (status === 429) {
-				const retryAfterValue = (err as { retryAfter?: number }).retryAfter || 300;
+				const retryAfterValue = (err as { retryAfter?: number }).retryAfter ?? 300;
 				setRetryAfter(retryAfterValue);
 				setError(`Cuenta bloqueada. Intente de nuevo en ${retryAfterValue} segundos.`);
 			} else {
@@ -94,6 +95,12 @@ const Login = ({ onClose, onSwitchToRegister }: LoginModalProps) => {
 					<Close size={20} color='text-current' />
 				</button>
 			</div>
+
+			{sessionExpired && (
+				<div className='bg-warning-50 border border-warning-500/50 text-warning-700 p-3 rounded-lg mb-4 text-sm'>
+					Tu sesión ha expirado. Por favor, inicia sesión nuevamente.
+				</div>
+			)}
 
 			{error && (
 				<div className='bg-error-50 border border-error-500/50 text-error-700 p-3 rounded-lg mb-4 text-sm'>

@@ -69,7 +69,9 @@ export class ApiError extends Error {
 export function parseApiError(res: Response, body: unknown): ApiError {
 	const status = res.status;
 	const retryAfterHeader = res.headers.get('Retry-After');
-	const retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+	const retryAfterFromHeader = retryAfterHeader ? parseInt(retryAfterHeader, 10) : null;
+	const retryAfter = retryAfterFromHeader
+		?? (isRecord(body) && typeof body.seconds_remaining === 'number' ? body.seconds_remaining : null);
 
 	if (!isRecord(body)) return new ApiError({ status, retryAfter });
 

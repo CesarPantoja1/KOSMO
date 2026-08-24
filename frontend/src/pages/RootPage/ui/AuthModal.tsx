@@ -7,9 +7,10 @@ import { Register } from './Register';
 interface AuthModalProps {
 	isOpen: boolean;
 	onClose: () => void;
+	sessionExpired?: boolean;
 }
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, sessionExpired }: AuthModalProps) {
 	const [authView, setAuthView] = useState<'login' | 'register'>('login');
 
 	if (!isOpen) return null;
@@ -27,6 +28,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 					<Login
 						onClose={onClose}
 						onSwitchToRegister={() => setAuthView('register')}
+						sessionExpired={sessionExpired}
 					/>
 				) : (
 					<Register

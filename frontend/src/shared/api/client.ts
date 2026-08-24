@@ -2,6 +2,7 @@ import { API_BASE_URL } from './config';
 import { useAuthStore, authHeaders } from '@/entities/user';
 import type { TokenPairResponse } from '@/entities/user';
 import { parseApiError } from './errors';
+import { clearAllStores } from '@/shared/lib/clearAllStores';
 
 let isRefreshing = false;
 let failedQueue: {
@@ -24,7 +25,7 @@ export const apiClient = async <T>(
 	url: string,
 	options: RequestInit = {},
 ): Promise<T> => {
-	const { refreshToken, setTokens, clearAuth } = useAuthStore.getState();
+	const { refreshToken, setTokens } = useAuthStore.getState();
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 
 	const headers = authHeaders(options.headers);
@@ -88,9 +89,9 @@ export const apiClient = async <T>(
 			res = await fetch(`${API_BASE_URL}${url}`, { ...config, headers });
 		} catch (err) {
 			processQueue(err as Error, null);
-			clearAuth();
+			clearAllStores();
 			if (typeof window !== 'undefined') {
-				window.location.href = '/login';
+				window.location.href = '/?session_expired=true';
 			}
 			throw err;
 		} finally {

@@ -9,6 +9,8 @@ import { Project, useProjectStore } from '@/entities/project';
 import { useAuthStore, authApi } from '@/entities/user';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
 import { ComputerDesktop, Home, Sidebar, UserCircle } from '@/shared/ui';
+import { ModalConfirm } from '@/shared/ui/ModalConfirm';
+import { clearAllStores } from '@/shared/lib/clearAllStores';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -22,6 +24,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 	const [showUserMenu, setShowUserMenu] = useState(false);
 	const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+	const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 	const userMenuRef = useRef<HTMLDivElement>(null);
 	const router = useRouter();
 
@@ -71,11 +74,22 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	};
 
 	const handleLogout = async () => {
+		const { hasUnsavedChanges } = useAppStore.getState();
+		if (hasUnsavedChanges) {
+			setShowLogoutConfirm(true);
+			return;
+		}
+		await executeLogout();
+	};
+
+	const executeLogout = async () => {
 		await authApi.logout();
+		clearAllStores();
 		router.push('/');
 	};
 
 	return (
+	<>
 		<header className='flex h-screen max-h-screen overflow-hidden transition-all duration-300'>
 			{!isEditorMaximized && (
 				<div
@@ -264,8 +278,22 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						<WizardNavegacion />
 					</div>
 				)}
-				<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
+			<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
 			</main>
 		</header>
-	);
+		{showLogoutConfirm && (
+			<ModalConfirm
+				title='Cerrar sesión'
+				description='Tiene cambios sin guardar. ¿Desea cerrar sesión de todos modos? Se perderán los cambios no guardados.'
+				cancelText='Cancelar'
+				confirmText='Cerrar sesión'
+				onCancel={() => setShowLogoutConfirm(false)}
+				onConfirm={() => {
+					setShowLogoutConfirm(false);
+					executeLogout();
+				}}
+			/>
+		)}
+	</>
+);
 }

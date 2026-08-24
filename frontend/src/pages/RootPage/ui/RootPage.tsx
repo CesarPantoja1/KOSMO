@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/entities/user';
 import { Navbar } from './Navbar';
 import { Hero } from './Hero';
@@ -15,7 +15,19 @@ import { AuthModal } from './AuthModal';
 export function RootPage() {
 	const [showAuthModal, setShowAuthModal] = useState(false);
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const accessToken = useAuthStore((s) => s.accessToken);
+	const hasCheckedExpired = useRef(false);
+
+	const sessionExpired = searchParams?.get('session_expired') === 'true';
+
+	useEffect(() => {
+		if (sessionExpired && !hasCheckedExpired.current) {
+			hasCheckedExpired.current = true;
+			setShowAuthModal(true);
+			router.replace('/');
+		}
+	}, [sessionExpired, router]);
 
 	const handleComenzar = () => {
 		if (accessToken) {
@@ -34,7 +46,11 @@ export function RootPage() {
 			<SddSection />
 			<ApiKeySection />
 			<CtaSection onComenzar={handleComenzar} />
-			<AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+			<AuthModal
+				isOpen={showAuthModal}
+				onClose={() => setShowAuthModal(false)}
+				sessionExpired={sessionExpired && showAuthModal}
+			/>
 		</div>
 	);
 }
