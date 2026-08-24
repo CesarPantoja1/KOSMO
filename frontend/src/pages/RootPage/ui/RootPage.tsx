@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/entities/user';
 import { Navbar } from './Navbar';
 import { Hero } from './Hero';
@@ -11,23 +11,18 @@ import { SddSection } from './SddSection';
 import { ApiKeySection } from './ApiKeySection';
 import { CtaSection } from './CtaSection';
 import { AuthModal } from './AuthModal';
+import { SessionExpiredWatcher } from './SessionExpiredWatcher';
 
 export function RootPage() {
 	const [showAuthModal, setShowAuthModal] = useState(false);
+	const [sessionExpired, setSessionExpired] = useState(false);
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const accessToken = useAuthStore((s) => s.accessToken);
-	const hasCheckedExpired = useRef(false);
 
-	const sessionExpired = searchParams?.get('session_expired') === 'true';
-
-	useEffect(() => {
-		if (sessionExpired && !hasCheckedExpired.current) {
-			hasCheckedExpired.current = true;
-			setShowAuthModal(true);
-			router.replace('/');
-		}
-	}, [sessionExpired, router]);
+	const handleSessionExpired = () => {
+		setSessionExpired(true);
+		setShowAuthModal(true);
+	};
 
 	const handleComenzar = () => {
 		if (accessToken) {
@@ -51,6 +46,9 @@ export function RootPage() {
 				onClose={() => setShowAuthModal(false)}
 				sessionExpired={sessionExpired && showAuthModal}
 			/>
+			<Suspense fallback={null}>
+				<SessionExpiredWatcher onDetected={handleSessionExpired} />
+			</Suspense>
 		</div>
 	);
 }
