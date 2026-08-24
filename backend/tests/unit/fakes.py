@@ -5,8 +5,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
-from kosmo.contracts.audit.events import AuditEvent
-from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
+from kosmo.contracts.ai.ai_config import UserAiConfig, UserAiConfigRepository
 from kosmo.contracts.ai.chat import (
     ChatHistoryId,
     ChatSession,
@@ -18,6 +17,8 @@ from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationStatus,
 )
+from kosmo.contracts.audit.events import AuditEvent
+from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.feature import Feature
@@ -589,3 +590,20 @@ class FakeConsistencyEvaluator:
 
         status = ConsistencyStatus.ANALIZADO_CON_IMPACTO if affected else ConsistencyStatus.ANALIZADO_SIN_IMPACTO
         return ConsistencyEvaluationOutput(report_id="rpt_fake", status=status, affected_artifact_ids=affected)
+
+
+class InMemoryUserAiConfigRepository(UserAiConfigRepository):
+    """Implementa UserAiConfigRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        self.configs: dict[str, UserAiConfig] = {}
+
+    async def by_user_id(self, user_id: str) -> UserAiConfig | None:
+        return self.configs.get(user_id)
+
+    async def save(self, config: UserAiConfig) -> UserAiConfig:
+        self.configs[config.user_id] = config
+        return config
+
+    async def delete(self, user_id: str) -> None:
+        self.configs.pop(user_id, None)

@@ -3,6 +3,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from kosmo.contracts.ai.ai_config import (
+    DEFAULT_AI_MODEL,
+    DEFAULT_AI_PROVIDER,
+    AIProvider,
+    UserAiConfig,
+)
+from kosmo.contracts.auth.secrets import EncryptedSecret
 from kosmo.contracts.memory.agent_memory import AgentSession, AgentSessionSummary
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import SpecPhase
@@ -130,4 +137,26 @@ def a_diagrama_actividad(
         diagram_syntax=diagram_syntax or "@startuml\nstart\n:Do something;\nstop\n@enduml",
         created_at=created_at or datetime.now(UTC),
         updated_at=updated_at or datetime.now(UTC),
+    )
+
+
+def a_user_ai_config(
+    *,
+    user_id: str = "usr_01TEST",
+    provider: AIProvider = DEFAULT_AI_PROVIDER,
+    model: str = DEFAULT_AI_MODEL,
+    encrypted_api_key: EncryptedSecret | bytes | None = None,
+    is_custom: bool = False,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+) -> UserAiConfig:
+    now = datetime.now(UTC)
+    return UserAiConfig(
+        user_id=user_id,
+        provider=provider,
+        model=model,
+        encrypted_api_key=encrypted_api_key,
+        is_custom=is_custom,
+        created_at=created_at or now,
+        updated_at=updated_at or now,
     )
