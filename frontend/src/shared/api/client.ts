@@ -1,11 +1,14 @@
 import { API_BASE_URL } from './config';
-import { useAuthStore } from '../store/auth.store';
-import { TokenPairResponse } from './auth';
+import { useAuthStore, authHeaders } from '@/entities/user';
+import type { TokenPairResponse } from '@/entities/user';
 import { parseApiError } from './errors';
-import { authHeaders } from './headers';
+import { clearAllStores } from '@/shared/lib/clearAllStores';
 
 let isRefreshing = false;
-let failedQueue: { resolve: (value?: unknown) => void; reject: (reason?: unknown) => void }[] = [];
+let failedQueue: {
+	resolve: (value?: unknown) => void;
+	reject: (reason?: unknown) => void;
+}[] = [];
 
 const processQueue = (error: Error | null, token: string | null = null) => {
 	failedQueue.forEach((prom) => {
@@ -18,8 +21,11 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 	failedQueue = [];
 };
 
-export const apiClient = async <T>(url: string, options: RequestInit = {}): Promise<T> => {
-	const { refreshToken, setTokens, clearAuth } = useAuthStore.getState();
+export const apiClient = async <T>(
+	url: string,
+	options: RequestInit = {},
+): Promise<T> => {
+	const { refreshToken, setTokens } = useAuthStore.getState();
 	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
 
 	const headers = authHeaders(options.headers);
@@ -36,7 +42,12 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 
 	let res = await fetch(`${API_BASE_URL}${url}`, config);
 
-	if (!isAuthDisabled && res.status === 401 && refreshToken && !url.includes('/auth/token')) {
+	if (
+		!isAuthDisabled &&
+		res.status === 401 &&
+		refreshToken &&
+		!url.includes('/auth/token')
+	) {
 		if (isRefreshing) {
 			return new Promise((resolve, reject) => {
 				failedQueue.push({ resolve, reject });
@@ -59,7 +70,10 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 			const refreshRes = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+				body: JSON.stringify({
+					grant_type: 'refresh_token',
+					refresh_token: refreshToken,
+				}),
 			});
 
 			if (!refreshRes.ok) {
@@ -75,11 +89,10 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 			res = await fetch(`${API_BASE_URL}${url}`, { ...config, headers });
 		} catch (err) {
 			processQueue(err as Error, null);
-			clearAuth();
-			// Redirigir a login si expira
-			// if (typeof window !== 'undefined') {
-			// 	window.location.href = '/login';
-			// }
+			clearAllStores();
+			if (typeof window !== 'undefined') {
+				window.location.href = '/?session_expired=true';
+			}
 			throw err;
 		} finally {
 			isRefreshing = false;
@@ -89,8 +102,7 @@ export const apiClient = async <T>(url: string, options: RequestInit = {}): Prom
 	if (!res.ok) {
 		throw parseApiError(res, await res.json().catch(() => null));
 	}
-	
-	// handle 204 No Content
+
 	if (res.status === 204) return null as T;
 
 	return res.json();

@@ -1,19 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchImplementation, generateImplementation } from '../api/api';
+import { buildSummary, fetchImplementation, generateImplementation } from '../api/api';
 import { clearImplementationStore, useImplementationStore } from './store';
 import type { ImplementationSummary } from './types';
 
-vi.mock('../api/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('../api/api')>();
-	return {
-		...actual,
-		fetchImplementation: vi.fn(),
-		generateImplementation: vi.fn(),
-	};
-});
+vi.mock('../api/api', () => ({
+	fetchImplementation: vi.fn(),
+	generateImplementation: vi.fn(),
+	buildSummary: vi.fn(),
+}));
 
 const mockedGenerate = vi.mocked(generateImplementation);
 const mockedFetchImplementation = vi.mocked(fetchImplementation);
+const mockedBuildSummary = vi.mocked(buildSummary);
 
 const aSummary: ImplementationSummary = {
 	featureId: 'feat_01',
@@ -31,6 +29,7 @@ describe('useImplementationStore', () => {
 		clearImplementationStore();
 		mockedGenerate.mockReset();
 		mockedFetchImplementation.mockReset();
+		mockedBuildSummary.mockReset();
 	});
 
 	it('marca completed y registra la implementación al terminar', async () => {
@@ -90,6 +89,10 @@ describe('useImplementationStore', () => {
 			status: 'implemented',
 			generatedFiles: ['src/app/page.tsx'],
 			updatedAt: '2026-08-19T10:00:00Z',
+		});
+		mockedBuildSummary.mockReturnValue({
+			...aSummary,
+			generatedFiles: ['src/app/page.tsx'],
 		});
 
 		// Act

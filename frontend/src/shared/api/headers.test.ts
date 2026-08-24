@@ -1,10 +1,14 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { useAuthStore } from '../store/auth.store';
-import { authHeaders } from './headers';
+import { useAuthStore, authHeaders } from '@/entities/user';
 
 describe('authHeaders', () => {
 	beforeEach(() => {
-		useAuthStore.setState({ accessToken: null, refreshToken: null, user: null, mockUserId: null });
+		useAuthStore.setState({
+			accessToken: null,
+			refreshToken: null,
+			user: null,
+			mockUserId: null,
+		});
 		delete process.env.NEXT_PUBLIC_AUTH_DISABLED;
 	});
 
@@ -41,7 +45,10 @@ describe('authHeaders', () => {
 		process.env.NEXT_PUBLIC_AUTH_DISABLED = 'false';
 		useAuthStore.setState({ accessToken: 'token-123' });
 
-		const headers = authHeaders({ 'Content-Type': 'application/json', Authorization: 'Bearer custom' });
+		const headers = authHeaders({
+			'Content-Type': 'application/json',
+			Authorization: 'Bearer custom',
+		});
 
 		expect(headers.get('Authorization')).toBe('Bearer custom');
 		expect(headers.get('Content-Type')).toBe('application/json');

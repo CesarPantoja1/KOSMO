@@ -363,6 +363,14 @@ class OAuthErrorResponse(BaseModel):
         description="Descripción legible por humanos del error, útil para logging y debugging.",
         examples=["Credenciales inválidas"],
     )
+    seconds_remaining: int | None = Field(
+        default=None,
+        description=(
+            "Segundos restantes de bloqueo en caso de error account_locked o rate limit. "
+            "Permite al cliente sincronizar cuentas regresivas con la fuente de verdad del servidor."
+        ),
+        examples=[300],
+    )
 
 
 class CreateProjectRequest(BaseModel):

@@ -4,14 +4,14 @@ info:
   version: "0.1.0"
   description: >-
     API de KOSMO - plataforma low-code de spec-driven development (SDD) asistida por IA.
-    Ciclo completo: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo -> Codigo.
+    Ciclo completo: Descubrimiento -> Características -> Requisitos -> Modelo -> Código.
 
     Convenciones:
-    - Autenticacion PKCE (RFC 7636) con JWT RS256 (bearerAuth).
+    - Autenticación PKCE (RFC 7636) con JWT RS256 (bearerAuth).
     - Errores RFC 7807 (application/problem+json) con type URN, trace_id y violations, o OAuthErrorResponse (RFC 6749) / HttpErrorResponse.
     - Fechas ISO-8601 UTC con sufijo Z.
-    - Las fases siguen el orden Descubrimiento -> Caracteristicas -> Requisitos -> Modelo -> Codigo.
-      La consistencia se evalua exclusivamente hacia la derecha (downstream).
+    - Las fases siguen el orden Descubrimiento -> Características -> Requisitos -> Modelo -> Código.
+      La consistencia se evalúa exclusivamente hacia la derecha (downstream).
   contact:
     name: Equipo KOSMO
     email: dev@kosmo.app
@@ -22,43 +22,51 @@ info:
 
 servers:
   - url: http://localhost:8000
-    description: Local — desarrollo en maquina del programador
+    description: Local — desarrollo en máquina del programador
   - url: https://api-dev.kosmo.app
-    description: Desarrollo — entorno de integracion continua
+    description: Desarrollo — entorno de integración continua
   - url: https://api.kosmo.app
-    description: Produccion — trafico real de usuarios
+    description: Producción — tráfico real de usuarios
 
 tags:
   - name: health
-    description: Verificacion de disponibilidad del servidor
+    description: Verificación de disponibilidad del servidor
   - name: auth
-    description: Flujo de autenticacion PKCE + OAuth 2.0 (RFC 6749/7636) con JWT RS256
+    description: Flujo de autenticación PKCE + OAuth 2.0 (RFC 6749/7636) con JWT RS256
   - name: projects
-    description: Gestion del ciclo de vida de proyectos
+    description: Gestión del ciclo de vida de proyectos
   - name: discovery
-    description: Fase de Descubrimiento — documento de vision de producto
+    description: Fase de Descubrimiento — documento de visión de producto
   - name: features
-    description: Fase de Caracteristicas funcionales del producto software
+    description: Fase de Características funcionales del producto software
   - name: requirements
-    description: Fase de Requisitos (EARS) por caracteristica
+    description: Fase de Requisitos (EARS) por característica
   - name: modelo
     description: Fase de Modelo — diagramas de actividad PlantUML
   - name: consistency
-    description: Evaluacion y resolucion de consistencia downstream entre fases (gate)
+    description: Evaluación y resolución de consistencia downstream entre fases (gate)
   - name: chat-sessions
-    description: Gestion de sesiones e hilos de chat interactivo por fase
+    description: Gestión de sesiones e hilos de chat interactivo por fase
   - name: documents
-    description: Modificacion directa y versionado/reversion de documentos
+    description: Modificación directa y versionado/reversión de documentos
   - name: schemas
-    description: Introspeccion de esquemas JSON para formularios dinamicos
+    description: Introspección de esquemas JSON para formularios dinámicos
   - name: knowledge
-    description: Consolidacion y gestion de patrones de conocimiento cross-project
+    description: Consolidación y gestión de patrones de conocimiento cross-project
   - name: Traceability
-    description: Navegacion y guardas de trazabilidad entre entidades y fases
+    description: Navegación y guardas de trazabilidad entre entidades y fases
   - name: MCP Tools
-    description: Herramientas de contexto para agentes de codigo bajo protocolo MCP
+    description: Herramientas de contexto para agentes de código bajo protocolo MCP
   - name: Implementations
-    description: Generacion y consulta de codigo fuente / implementaciones via OpenCode
+    description: Generación y consulta de código fuente / implementaciones vía OpenCode
+  - name: ai-config
+    description: Configuración y verificación del proveedor de Inteligencia Artificial (BYOK)
+  - name: integrations
+    description: Gestión de vinculación OAuth con plataformas externas (GitHub, Railway)
+  - name: github
+    description: Sincronización y subida de código fuente a repositorios de GitHub
+  - name: deploy
+    description: Orquestación y monitoreo del despliegue en la nube (Railway)
 
 security:
   - bearerAuth: []
@@ -165,6 +173,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: account_locked
+                error_description: "Cuenta bloqueada. Intente de nuevo en 300 segundos."
+                seconds_remaining: 300
 
   /api/v1/auth/token:
     post:
@@ -381,10 +393,12 @@ paths:
   /api/v1/projects/{project_id}/preview:
     get:
       tags: [projects]
-      summary: URL de la vista previa del proyecto
+      summary: URL de la vista previa del proyecto (obsoleto)
+      deprecated: true
       description: >-
-        Devuelve la URL de la vista previa del proyecto si tiene una implementacion exitosa
-        con puerto asignado en el workspace; 404 si no hay vista previa activa.
+        [DEPRECATED] Devuelve la URL de la vista previa del proyecto si tiene una implementacion exitosa
+        con puerto asignado en el workspace. A partir del Sprint 6, este endpoint queda en desuso y se
+        reemplaza por el flujo de publicacion en la nube (/api/v1/projects/{project_id}/deploy/railway).
       operationId: project_preview_get
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -1957,6 +1971,373 @@ paths:
               schema:
                 $ref: "#/components/schemas/HttpErrorResponse"
 
+  /api/v1/implementations/{implementation_id}/validate:
+    post:
+      tags: [Implementations]
+      summary: Validar workspace de implementación en contenedor efímero
+      description: >-
+        Ejecuta el pipeline de validación determinística (typecheck, linter, tests y build)
+        sobre el workspace de la implementación dentro de un contenedor Docker efímero (kosmo-validator)
+        que se destruye inmediatamente al finalizar, garantizando que el espacio de trabajo local
+        permanezca limpio antes de la sincronización remota.
+      operationId: implementations_validate_workspace
+      parameters:
+        - name: implementation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la implementación
+      responses:
+        "200":
+          description: Resultado estructurado de todos los pasos de validación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateWorkspaceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Implementación o workspace no encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ══════════════════════════════ AI CONFIG (HU-25 BYOK) ══════════════════════════════
+
+  /api/v1/user/ai-config:
+    get:
+      tags: [ai-config]
+      summary: Obtener configuración del proveedor de IA del usuario
+      description: >-
+        Devuelve las preferencias de Inteligencia Artificial del usuario autenticado (proveedor,
+        modelo y clave de API enmascarada). Si el usuario no tiene una clave personalizada configurada,
+        indica que opera bajo el proveedor y modelo predeterminados de la plataforma KOSMO.
+      operationId: ai_config_get
+      responses:
+        "200":
+          description: Configuración de IA activa del usuario
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIConfigResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [ai-config]
+      summary: Guardar o actualizar configuración del proveedor de IA
+      description: >-
+        Persiste la selección de proveedor y modelo de IA del usuario. Si se envía una nueva clave de API,
+        el servidor la cifra simétricamente mediante Fernet antes de almacenarla en la base de datos.
+        La respuesta devuelve la clave enmascarada mostrando únicamente los últimos 4 caracteres.
+      operationId: ai_config_save
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveAIConfigRequest"
+      responses:
+        "200":
+          description: Configuración de IA actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIConfigResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags: [ai-config]
+      summary: Eliminar credenciales personalizadas de IA
+      description: >-
+        Elimina la clave de API personalizada del usuario de la base de datos y restablece la generación
+        de código al proveedor y modelo predeterminados de KOSMO.
+      operationId: ai_config_delete
+      responses:
+        "200":
+          description: Credenciales eliminadas y configuración restablecida a los valores predeterminados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIConfigResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/user/ai-config/test:
+    post:
+      tags: [ai-config]
+      summary: Probar conexión con proveedor de IA
+      description: >-
+        Ejecuta una llamada ligera de comprobación contra la API del proveedor de Inteligencia Artificial
+        seleccionado utilizando la clave proporcionada (o la clave persistida del usuario si se omite).
+        Valida la disponibilidad del servicio y confirma el identificador del modelo detectado sin persistir
+        cambios en el perfil.
+      operationId: ai_config_test_connection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestAIConnectionRequest"
+      responses:
+        "200":
+          description: Resultado de la prueba de conexión
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestAIConnectionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          description: Error al comunicarse con la API del proveedor externo de IA (credencial inválida, permisos insuficientes o servicio no disponible)
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ══════════════════════════════ INTEGRATIONS (OAUTH) ══════════════════════════════
+
+  /api/v1/integrations/{provider}/connect:
+    post:
+      tags: [integrations]
+      summary: Vincular cuenta de plataforma externa mediante OAuth
+      description: >-
+        Procesa el código de autorización temporal emitido tras el flujo OAuth con la plataforma externa
+        (github o railway), intercambia el código por el token de acceso correspondiente, lo cifra
+        simétricamente con Fernet y lo asocia a la cuenta del usuario autenticado.
+      operationId: integrations_connect
+      parameters:
+        - $ref: "#/components/parameters/IntegrationProvider"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectOAuthRequest"
+      responses:
+        "200":
+          description: Cuenta vinculada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationStatusResponse"
+        "400":
+          description: Código de autorización OAuth inválido o expirado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          description: Error al comunicarse con el servidor OAuth de la plataforma externa
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/integrations/{provider}/status:
+    get:
+      tags: [integrations]
+      summary: Consultar estado de vinculación de plataforma externa
+      description: >-
+        Verifica si el usuario autenticado tiene una cuenta vinculada activa para la plataforma especificada
+        (github o railway), devolviendo los metadatos públicos de la conexión sin exponer credenciales sensibles.
+      operationId: integrations_get_status
+      parameters:
+        - $ref: "#/components/parameters/IntegrationProvider"
+      responses:
+        "200":
+          description: Estado de la vinculación con la plataforma externa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/integrations/{provider}:
+    delete:
+      tags: [integrations]
+      summary: Desvincular plataforma externa
+      description: >-
+        Revoca y elimina las credenciales OAuth almacenadas de la plataforma externa especificada
+        para la cuenta del usuario autenticado.
+      operationId: integrations_disconnect
+      parameters:
+        - $ref: "#/components/parameters/IntegrationProvider"
+      responses:
+        "204":
+          description: Plataforma externa desvinculada exitosamente. Sin cuerpo de respuesta.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: La integración no se encuentra vinculada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ══════════════════════════════ GITHUB SYNC (HU-23) ══════════════════════════════
+
+  /api/v1/projects/{project_id}/github:
+    get:
+      tags: [github]
+      summary: Obtener estado de integración con GitHub del proyecto
+      description: >-
+        Devuelve los metadatos del repositorio remoto en GitHub asociado al proyecto, incluyendo la URL remota,
+        visibilidad (privado/público), fecha de la última sincronización y hash del último commit enviado.
+      operationId: project_github_get_status
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Estado de sincronización con GitHub del proyecto
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectGitHubResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/github/push:
+    post:
+      tags: [github]
+      summary: Crear repositorio o sincronizar código en GitHub
+      description: >-
+        Orquesta la subida del código fuente del proyecto hacia GitHub.
+        1. Ejecuta la validación previa del workspace en un contenedor efímero.
+        2. Si el proyecto aún no tiene un repositorio asociado, lo crea vía API de GitHub con el nombre y visibilidad
+           indicados (privado por defecto o público previa confirmación) y configura el remote origin.
+        3. Si el repositorio ya existe, realiza un push incremental con los nuevos commits.
+        4. Actualiza y persiste los metadatos de sincronización en la base de datos.
+      operationId: project_github_push
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushGitHubRequest"
+      responses:
+        "200":
+          description: Código sincronizado exitosamente con el repositorio en GitHub
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectGitHubResponse"
+        "400":
+          description: Parámetros de repositorio inválidos o nombre no disponible
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Conflicto: el usuario no ha vinculado su cuenta de GitHub o el proyecto no tiene funcionalidades implementadas"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "422":
+          description: Fallo de validación en contenedor efímero antes de subir el código
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "502":
+          description: Error al comunicarse con la API de GitHub o al ejecutar la operación Git remota
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ══════════════════════════════ DEPLOY RAILWAY (HU-24) ══════════════════════════════
+
+  /api/v1/projects/{project_id}/deploy:
+    get:
+      tags: [deploy]
+      summary: Obtener estado de despliegue en la nube
+      description: >-
+        Consulta el estado de publicación del proyecto en Railway (idle, pending, building, ready, failed),
+        la URL pública accesible en internet, marca de tiempo del último despliegue y enlace a logs en caso de fallo.
+      operationId: project_deploy_get_status
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Estado actual del despliegue del proyecto
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDeployStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{project_id}/deploy/railway:
+    post:
+      tags: [deploy]
+      summary: Iniciar despliegue del proyecto en Railway
+      description: >-
+        Orquesta la publicación de la aplicación en la nube mediante Railway:
+        1. Valida que el proyecto cuente con un repositorio GitHub sincronizado y que la cuenta de Railway esté vinculada.
+        2. Crea o actualiza el servicio en Railway conectado al repositorio remoto.
+        3. Configura el volumen persistente para SQLite (/data/db.sqlite) y variables de entorno requeridas.
+        4. Dispara la construcción del contenedor a partir del Dockerfile de producción y actualiza el estado a 'building'.
+      operationId: project_deploy_railway_start
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeployRailwayRequest"
+      responses:
+        "202":
+          description: Despliegue iniciado asíncronamente en la plataforma de Railway
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDeployStatusResponse"
+        "400":
+          description: Configuración de despliegue inválida
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Precondición no cumplida: el proyecto no tiene repositorio en GitHub o la cuenta de Railway no está vinculada"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "502":
+          description: Error al interactuar con la API de Railway
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1979,7 +2360,7 @@ components:
       required: true
       schema:
         type: string
-      description: Identificador o slug de la caracteristica
+      description: Identificador o slug de la característica
     ProjectIdQuery:
       name: project_id
       in: query
@@ -1993,14 +2374,21 @@ components:
       required: false
       schema:
         type: string
-      description: Cursor ISO-8601 para paginacion hacia atras
+      description: Cursor ISO-8601 para paginación hacia atrás
     SessionIdQuery:
       name: session_id
       in: query
       required: false
       schema:
         type: string
-      description: Hilo de conversacion (cht_ + ULID). Si se omite, contexto de la fase.
+      description: Hilo de conversación (cht_ + ULID). Si se omite, contexto de la fase.
+    IntegrationProvider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/IntegrationProviderEnum"
+      description: Identificador del proveedor de integración externa (github | railway)
 
   responses:
     Unauthorized:
@@ -2199,7 +2587,7 @@ components:
         id:
           type: string
           description: Identificador unico (usr_ + ULID)
-          example: usr-01HXYAZABCDEFGHIJKLMNOP
+          example: usr_01HXYAZABCDEFGHIJKLMNOP
         email:
           type: string
           format: email
@@ -2261,7 +2649,7 @@ components:
         subject:
           type: string
           description: Identificador del usuario propietario del token
-          example: usr-01HXYAZABCDEFGHIJKLMNOP
+          example: usr_01HXYAZABCDEFGHIJKLMNOP
         scopes:
           type: array
           items:
@@ -2282,6 +2670,11 @@ components:
           type: string
           description: Descripcion legible del error
           example: Credenciales invalidas
+        seconds_remaining:
+          type: integer
+          nullable: true
+          description: Segundos restantes de bloqueo en caso de error account_locked o rate limit
+          example: 300
       required: [error, error_description]
 
     # ── Projects ──
@@ -3411,3 +3804,359 @@ components:
           format: date-time
           description: Ultima actualizacion del registro
       required: [implementation_id, feature_id, project_id, status, generated_files, updated_at]
+
+    # ── Validación Efímera (HU-23 CA-05 / Codegen) ──
+
+    ValidationStepResultResponse:
+      type: object
+      description: Resultado de la ejecución de un paso del pipeline de validación determinística
+      properties:
+        step:
+          type: string
+          description: Identificador del paso ejecutado (typecheck, lint, tests, build)
+          example: typecheck
+        success:
+          type: boolean
+          description: Indica si el paso concluyó satisfactoriamente sin errores
+          example: true
+        duration_ms:
+          type: integer
+          description: Duración de ejecución del paso en milisegundos
+          example: 1420
+        exit_code:
+          type: integer
+          description: Código de salida retornado por el proceso en el contenedor efímero
+          example: 0
+        error_messages:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Mensajes de error estructurados extraídos de la salida estándar o error
+          example: []
+      required: [step, success, duration_ms, exit_code, error_messages]
+
+    ValidateWorkspaceResponse:
+      type: object
+      description: Resultado integral del pipeline de validación en contenedor efímero
+      properties:
+        all_passed:
+          type: boolean
+          description: Indica si la totalidad de pasos de compilación y pruebas fueron exitosos
+          example: true
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationStepResultResponse"
+          description: Detalle de ejecución de cada uno de los pasos de validación
+        failed_step:
+          type: string
+          nullable: true
+          description: Nombre del primer paso que falló en caso de validación no exitosa
+          example: null
+        error_summary:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Resumen de errores consolidados para diagnóstico o retroalimentación a la IA
+          example: []
+        total_duration_ms:
+          type: integer
+          description: Duración total acumulada de la validación en milisegundos
+          example: 4530
+      required: [all_passed, steps, total_duration_ms]
+
+    # ── AI Configuration (HU-25 BYOK) ──
+
+    AIProviderEnum:
+      type: string
+      enum: [openai, anthropic, google, openrouter, custom, kosmo_default]
+      description: Identificador del proveedor de Inteligencia Artificial
+      example: anthropic
+
+    AIConfigResponse:
+      type: object
+      description: Estado y configuración del proveedor de IA del usuario
+      properties:
+        provider:
+          $ref: "#/components/schemas/AIProviderEnum"
+        model:
+          type: string
+          description: Nombre del modelo de IA configurado
+          example: claude-3-5-sonnet-20241022
+        is_custom:
+          type: boolean
+          description: True si el usuario utiliza su propia clave de acceso; False si opera con el modelo predeterminado de KOSMO
+          example: true
+        has_api_key:
+          type: boolean
+          description: Indica si existe una clave de API guardada y cifrada en el sistema
+          example: true
+        masked_key:
+          type: string
+          nullable: true
+          description: Clave enmascarada preservando únicamente los últimos cuatro caracteres para identificación visual
+          example: "••••••••1234"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Marca temporal ISO-8601 UTC de la última modificación de la configuración
+          example: "2026-08-20T15:30:00Z"
+      required: [provider, model, is_custom, has_api_key]
+
+    SaveAIConfigRequest:
+      type: object
+      additionalProperties: false
+      description: Payload para guardar o actualizar la configuración del proveedor de IA
+      properties:
+        provider:
+          $ref: "#/components/schemas/AIProviderEnum"
+        model:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Identificador del modelo soportado por el proveedor
+          example: claude-3-5-sonnet-20241022
+        api_key:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Clave secreta de API del proveedor (se cifra simétricamente con Fernet)
+          example: "sk-ant-api03-abcdef1234567890"
+      required: [provider, model, api_key]
+
+    TestAIConnectionRequest:
+      type: object
+      additionalProperties: false
+      description: Payload para probar la conectividad y validez de credenciales con el proveedor de IA
+      properties:
+        provider:
+          $ref: "#/components/schemas/AIProviderEnum"
+        model:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Modelo a verificar con el proveedor
+          example: claude-3-5-sonnet-20241022
+        api_key:
+          type: string
+          minLength: 1
+          maxLength: 500
+          nullable: true
+          description: Clave de API a verificar. Si se omite, se prueba con la clave actualmente persistida del usuario.
+          example: "sk-ant-api03-abcdef1234567890"
+      required: [provider, model]
+
+    TestAIConnectionResponse:
+      type: object
+      description: Respuesta cualitativa de la verificación de conexión con el proveedor de IA
+      properties:
+        is_connected:
+          type: boolean
+          description: True si la conexión y autenticación con la API del proveedor fueron exitosas
+          example: true
+        detected_model:
+          type: string
+          description: Identificador del modelo confirmado por el proveedor externo
+          example: claude-3-5-sonnet-20241022
+        message:
+          type: string
+          description: Mensaje descriptivo del resultado de la prueba
+          example: "Conexión exitosa con Anthropic. Modelo claude-3-5-sonnet-20241022 verificado y listo."
+      required: [is_connected, detected_model, message]
+
+    # ── Integrations (OAuth) ──
+
+    IntegrationProviderEnum:
+      type: string
+      enum: [github, railway]
+      description: Identificador de la plataforma externa para integración
+      example: github
+
+    ConnectOAuthRequest:
+      type: object
+      additionalProperties: false
+      description: Payload para intercambiar el código temporal de OAuth por credenciales de acceso
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Código de autorización temporal devuelto por el proveedor OAuth
+          example: "gho_16C7e42F292c6912E7710c838347Ae178B4a"
+        redirect_uri:
+          type: string
+          nullable: true
+          description: URI de redirección utilizada durante el flujo de autorización
+          example: "http://localhost:3000/settings"
+      required: [code]
+
+    IntegrationStatusResponse:
+      type: object
+      description: Estado de vinculación de una plataforma externa con la cuenta de usuario
+      properties:
+        provider:
+          $ref: "#/components/schemas/IntegrationProviderEnum"
+        is_connected:
+          type: boolean
+          description: True si la cuenta de usuario se encuentra vinculada activamente con la plataforma
+          example: true
+        username:
+          type: string
+          nullable: true
+          description: Nombre de usuario o identificador público en la plataforma externa
+          example: "octocat"
+        connected_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Marca de tiempo ISO-8601 UTC de la vinculación
+          example: "2026-08-19T10:00:00Z"
+      required: [provider, is_connected]
+
+    # ── GitHub Sync (HU-23) ──
+
+    GitHubSyncStatusEnum:
+      type: string
+      enum: [not_created, created, syncing, synced, failed]
+      description: Estado del ciclo de vida y sincronización del repositorio remoto
+      example: synced
+
+    ProjectGitHubResponse:
+      type: object
+      description: Metadatos de vinculación y sincronización con GitHub para un proyecto
+      properties:
+        has_repository:
+          type: boolean
+          description: True si el proyecto ya cuenta con un repositorio remoto creado en GitHub
+          example: true
+        repo_name:
+          type: string
+          nullable: true
+          description: Nombre del repositorio remoto en GitHub
+          example: "kosmo-gestion-inventarios"
+        repo_url:
+          type: string
+          nullable: true
+          description: URL pública o accesible del repositorio en GitHub
+          example: "https://github.com/octocat/kosmo-gestion-inventarios"
+        is_public:
+          type: boolean
+          nullable: true
+          description: Visibilidad del repositorio (True = público, False = privado)
+          example: false
+        last_push_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Marca de tiempo ISO-8601 UTC del último envío exitoso de código
+          example: "2026-08-22T18:45:00Z"
+        last_commit_hash:
+          type: string
+          nullable: true
+          description: Hash SHA-1 del último commit sincronizado con el repositorio remoto
+          example: "7f4b82d3e91a0c5b6e8f4a1c3d5e7b9a2f1e4c6a"
+        sync_status:
+          $ref: "#/components/schemas/GitHubSyncStatusEnum"
+        error_message:
+          type: string
+          nullable: true
+          description: Detalle del error en caso de fallo en la sincronización
+          example: null
+      required: [has_repository, sync_status]
+
+    PushGitHubRequest:
+      type: object
+      additionalProperties: false
+      description: Payload para solicitar la creación de repositorio o push incremental de código
+      properties:
+        repo_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          nullable: true
+          description: Nombre deseado para el repositorio. Obligatorio si el repositorio aún no existe.
+          example: "kosmo-gestion-inventarios"
+        is_public:
+          type: boolean
+          default: false
+          description: Visibilidad del repositorio (privado por defecto; público requiere confirmación previa)
+          example: false
+        commit_message:
+          type: string
+          maxLength: 300
+          nullable: true
+          description: Mensaje descriptivo para el commit de sincronización
+          example: "feat: implementar autenticación y modelo de datos"
+      required: []
+
+    # ── Deploy Railway (HU-24) ──
+
+    DeployStatusEnum:
+      type: string
+      enum: [idle, pending, building, ready, failed]
+      description: Estado del ciclo de vida del despliegue en la plataforma en la nube
+      example: ready
+
+    ProjectDeployStatusResponse:
+      type: object
+      description: Metadatos y estado actual de la publicación del proyecto en la nube
+      properties:
+        service_id:
+          type: string
+          nullable: true
+          description: Identificador único del servicio en Railway
+          example: "srv_01HTXYZ9876543210ABC"
+        service_name:
+          type: string
+          nullable: true
+          description: Nombre del servicio desplegado en la plataforma
+          example: "kosmo-gestion-inventarios"
+        deploy_url:
+          type: string
+          nullable: true
+          description: URL pública accesible en internet generada por Railway
+          example: "https://kosmo-gestion-inventarios.up.railway.app"
+        status:
+          $ref: "#/components/schemas/DeployStatusEnum"
+        last_deploy_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Marca de tiempo ISO-8601 UTC del último despliegue disparado
+          example: "2026-08-22T19:00:00Z"
+        error_message:
+          type: string
+          nullable: true
+          description: Mensaje de error si la construcción o arranque del servicio fallaron
+          example: null
+        error_log_url:
+          type: string
+          nullable: true
+          description: Enlace directo hacia la consola de registros de compilación en Railway
+          example: "https://railway.com/project/prj-123/service/srv-456/logs"
+      required: [status]
+
+    DeployRailwayRequest:
+      type: object
+      additionalProperties: false
+      description: Parámetros opcionales para configurar o personalizar el despliegue en Railway
+      properties:
+        service_name:
+          type: string
+          maxLength: 100
+          nullable: true
+          description: Nombre personalizado para el servicio en Railway
+          example: "kosmo-gestion-inventarios"
+        environment_variables:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: Variables de entorno adicionales a configurar en el servicio
+          example:
+            NODE_ENV: "production"
+            LOG_LEVEL: "info"
+      required: []

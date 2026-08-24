@@ -1,1 +1,1 @@
-export { ProfilePage, metadata } from './ui/ProfilePage';
+export { ProfilePage } from './ui/ProfilePage';

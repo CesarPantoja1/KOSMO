@@ -18,7 +18,7 @@ import {
 } from '@mdxeditor/editor';
 
 import '@mdxeditor/editor/style.css';
-import { MaxEditor, MinEditor } from './icons';
+import { MaxEditor, MinEditor } from '@/shared/ui';
 import { SaveIndicator, type SaveStatus } from './save-indicator';
 
 interface Props {
