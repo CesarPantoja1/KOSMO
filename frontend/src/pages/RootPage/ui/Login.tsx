@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuthStore, authApi } from 'docs/user';
+import { useAuthStore, authApi } from '@/entities/user';
 import { formatApiError } from '@/shared/api';
 import { Close } from '@/shared/ui';
 import { useRouter } from 'next/navigation';

@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from 'app/store/app.store';
 
 import { Project, useProjectStore } from '@/entities/project';
-import { useAuthStore, authApi } from 'docs/user';
+import { useAuthStore, authApi } from '@/entities/user';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
 import { ComputerDesktop, Home, Sidebar, UserCircle } from '@/shared/ui';
 import { ModalConfirm } from '@/shared/ui/ModalConfirm';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from 'docs/user';
+import { useAuthStore } from '@/entities/user';
 import { Logo } from '@/shared/ui';
 
 interface NavbarProps {

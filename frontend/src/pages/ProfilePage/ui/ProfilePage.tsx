@@ -10,7 +10,7 @@ import {
 	Tooltip,
 	CartesianGrid,
 } from 'recharts';
-import { useAuthStore } from 'docs/user';
+import { useAuthStore } from '@/entities/user';
 
 interface ProviderKeyCardProps {
 	name: string;

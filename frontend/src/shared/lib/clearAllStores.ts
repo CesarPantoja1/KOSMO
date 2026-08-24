@@ -1,4 +1,4 @@
-import { clearAuthStore } from 'docs/user/model/store';
+import { clearAuthStore } from '@/entities/user/model/store';
 import { clearProjectStore } from '@/entities/project';
 import { clearDiscoveryStore } from '@/entities/discovery';
 import { clearCharacteristicStore } from '@/entities/characteristic';

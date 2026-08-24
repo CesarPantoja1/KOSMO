@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore } from 'docs/user';
+import { useAuthStore } from '@/entities/user';
 
 export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 	const router = useRouter();
