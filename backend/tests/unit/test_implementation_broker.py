@@ -7,7 +7,7 @@ import pytest
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
 )
-from kosmo.contracts.codegen import OpenCodeEvent, OpenCodeEventType
+from kosmo.contracts.sdd.codegen import OpenCodeEvent, OpenCodeEventType
 from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.infrastructure.api.implementation_broker import ImplementationEventBroker
 

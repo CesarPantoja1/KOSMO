@@ -51,8 +51,8 @@ from kosmo.application.requirements import (
     SaveRequirementsUseCase,
 )
 from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
-from kosmo.contracts.codegen import WorkspaceManagerPort
-from kosmo.contracts.consistency import ConsistencyEvaluator
+from kosmo.contracts.sdd.codegen import WorkspaceManagerPort
+from kosmo.contracts.ai.consistency import ConsistencyEvaluator
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,

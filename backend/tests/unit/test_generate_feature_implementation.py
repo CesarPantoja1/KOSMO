@@ -11,7 +11,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
     MissingRequirementsError,
     OpenCodeUnavailableError,
 )
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     FeatureImplementation,

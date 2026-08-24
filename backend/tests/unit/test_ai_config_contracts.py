@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from kosmo.contracts.ai_config import (
+from kosmo.contracts.ai.ai_config import (
     DEFAULT_AI_MODEL,
     DEFAULT_AI_PROVIDER,
     SUPPORTED_MODELS_PER_PROVIDER,

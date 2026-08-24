@@ -5,7 +5,7 @@ from typing import Any
 
 import structlog
 
-from kosmo.contracts.agent_memory import (
+from kosmo.contracts.memory.agent_memory import (
     AgentMemoryPort,
     KnowledgePattern,
     KnowledgePatternStore,

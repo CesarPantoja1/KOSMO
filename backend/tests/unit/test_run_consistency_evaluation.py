@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from kosmo.application.consistency.run_consistency_evaluation import run_consistency_evaluation
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
     ConsistencyEvaluationStatus,

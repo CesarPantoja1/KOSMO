@@ -14,7 +14,7 @@ from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextOutput,
     ValidatePhaseContextUseCase,
 )
-from kosmo.contracts.chat import ModificacionChat
+from kosmo.contracts.ai.chat import ModificacionChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 

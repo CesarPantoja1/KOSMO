@@ -376,7 +376,7 @@ async def get_chat_history(
         ) from exc
 
     if output.history is None:
-        from kosmo.contracts.chat import HistorialChat
+        from kosmo.contracts.ai.chat import HistorialChat
         from kosmo.contracts.sdd.document import SpecPhase
         from kosmo.contracts.sdd.ids import ChatHistoryId
         from kosmo.domain.sdd.id_generator import IdGenerator

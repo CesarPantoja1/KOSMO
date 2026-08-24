@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts.codegen import FileAction, FileOperation, ImplementationPlan
+from kosmo.contracts.sdd.codegen import FileAction, FileOperation, ImplementationPlan
 from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.domain.codegen.plan_rules import (
     InvalidPlanError,

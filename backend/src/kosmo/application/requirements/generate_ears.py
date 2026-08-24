@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from kosmo.contracts.persistence import UnitOfWork
+from kosmo.contracts.persistence.persistence import UnitOfWork
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import EARSPhaseContext
 from kosmo.contracts.pipeline.phase_outputs import (

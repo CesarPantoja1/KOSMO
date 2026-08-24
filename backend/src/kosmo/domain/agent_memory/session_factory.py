@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from kosmo.contracts.agent_memory import AgentSession
+from kosmo.contracts.memory.agent_memory import AgentSession
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 from kosmo.domain.sdd.id_generator import IdGenerator

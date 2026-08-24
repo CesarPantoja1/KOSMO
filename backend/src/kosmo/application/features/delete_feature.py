@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import structlog
 
-from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.ai.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.errors import FeatureNotFoundError, ProjectNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId

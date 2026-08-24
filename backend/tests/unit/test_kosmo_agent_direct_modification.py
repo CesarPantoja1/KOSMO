@@ -141,7 +141,7 @@ async def test_agent_direct_modification_returns_clarification() -> None:
 @pytest.mark.unit
 async def test_agent_direct_modification_includes_session_history() -> None:
     # Arrange
-    from kosmo.contracts.chat import ChatRole, MensajeChat
+    from kosmo.contracts.ai.chat import ChatRole, MensajeChat
     from kosmo.contracts.sdd.ids import ChatMessageId
 
     expected = DirectModificationResult(

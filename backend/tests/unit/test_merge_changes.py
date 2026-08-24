@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts.chat import AppliedChange, DiffCambio
+from kosmo.contracts.ai.chat import AppliedChange, DiffCambio
 from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange
 from kosmo.domain.sdd.plan_diffs import merge_changes_with_diffs
 

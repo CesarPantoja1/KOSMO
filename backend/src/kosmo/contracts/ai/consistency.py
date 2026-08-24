@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
 
-from kosmo.contracts.chat import AppliedChange, DiffCambio
+from kosmo.contracts.ai.chat import AppliedChange, DiffCambio
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, ProjectId, RequirementId
 

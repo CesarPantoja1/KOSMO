@@ -8,7 +8,7 @@ from kosmo.application.chat.chat_sessions import (
     ListChatSessionsInput,
     ListChatSessionsUseCase,
 )
-from kosmo.contracts.chat import ChatMessageId, ChatRole, MensajeChat
+from kosmo.contracts.ai.chat import ChatMessageId, ChatRole, MensajeChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
 from tests.unit.fakes import InMemoryChatRepository

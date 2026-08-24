@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     ValidationErrorDetail,
     ValidationSeverity,
     ValidationStep,

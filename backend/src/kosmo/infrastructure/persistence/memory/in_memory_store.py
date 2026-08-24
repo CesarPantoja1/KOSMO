@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from kosmo.contracts.agent_memory import (
+from kosmo.contracts.memory.agent_memory import (
     AgentMemoryPort,
     AgentSession,
     AgentSessionSummary,
     KnowledgePattern,
     ProjectMemoryContext,
 )
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.chat import (
     ChatRepository,
     ChatSession,
     ChatSessionSummary,

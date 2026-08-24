@@ -5,7 +5,7 @@ import re
 import structlog
 from ulid import ULID
 
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
     ImpactItem,

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.codegen import CodeWorkspace, WorkspaceStatus
+from kosmo.contracts.sdd.codegen import CodeWorkspace, WorkspaceStatus
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.infrastructure.persistence.postgres.models import WorkspaceModel
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (

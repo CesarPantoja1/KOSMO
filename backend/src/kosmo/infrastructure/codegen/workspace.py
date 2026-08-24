@@ -14,7 +14,7 @@ from typing import cast
 
 import structlog
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     PreviewPublisherPort,

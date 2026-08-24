@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from kosmo.contracts.auth import TokenPair
-from kosmo.contracts.chat import HistorialChat, MensajeChat
+from kosmo.contracts.ai.chat import HistorialChat, MensajeChat
 
 # Enumeraciones de negocio
 
@@ -705,7 +705,7 @@ class ChatResponse(BaseModel):
 
     @classmethod
     def from_redirect(cls, target_phase: str, redirect_message: str) -> "ChatResponse":
-        from kosmo.contracts.chat import ChatRole
+        from kosmo.contracts.ai.chat import ChatRole
         from kosmo.contracts.sdd.ids import ChatMessageId
         from kosmo.domain.sdd.id_generator import IdGenerator
 

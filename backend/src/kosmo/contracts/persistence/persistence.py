@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol, Self
 
-from kosmo.contracts.chat import ChatRepository
-from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.ai.chat import ChatRepository
+from kosmo.contracts.ai.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,

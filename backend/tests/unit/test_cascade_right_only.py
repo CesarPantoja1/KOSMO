@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.consistency import DOWNSTREAM_TARGETS
+from kosmo.contracts.ai.consistency import DOWNSTREAM_TARGETS
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.infrastructure.api.routers.consistency import (
     evaluate_consistency,

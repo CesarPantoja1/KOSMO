@@ -24,7 +24,7 @@ from kosmo.application.consistency.manage_consistency import (
 )
 from kosmo.contracts import DiffCambio
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.chat import AppliedChange
+from kosmo.contracts.ai.chat import AppliedChange
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import (
     ConsistencyEvaluationNotFoundError,
@@ -302,7 +302,7 @@ def _to_spec_phase(api_phase: str) -> SpecPhase:
 
 
 def _resolve_targets(phase_origin: str, phase_destination: str | None) -> list[str]:
-    from kosmo.contracts.consistency import DOWNSTREAM_TARGETS, PHASE_ORDER
+    from kosmo.contracts.ai.consistency import DOWNSTREAM_TARGETS, PHASE_ORDER
 
     origin = _resolve_origin_phase(phase_origin)
 

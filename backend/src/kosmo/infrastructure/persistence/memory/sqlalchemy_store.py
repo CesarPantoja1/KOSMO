@@ -8,7 +8,7 @@ from sqlalchemy import Row, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.agent_memory import (
+from kosmo.contracts.memory.agent_memory import (
     AgentMemoryPort,
     AgentSession,
     AgentSessionSummary,

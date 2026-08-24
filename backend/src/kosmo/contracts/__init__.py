@@ -1,4 +1,4 @@
-from kosmo.contracts.ai_config import (
+from kosmo.contracts.ai.ai_config import (
     DEFAULT_AI_MODEL,
     DEFAULT_AI_PROVIDER,
     SUPPORTED_MODELS_PER_PROVIDER,
@@ -17,7 +17,7 @@ from kosmo.contracts.ai_config import (
     UserAiConfigRepository,
     mask_api_key,
 )
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.chat import (
     AppliedChange,
     ChatRepository,
     ChatRole,
@@ -28,7 +28,7 @@ from kosmo.contracts.chat import (
     SugerenciaCambio,
     SugerenciaCambioLLM,
 )
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     FeatureImplementation,
@@ -50,7 +50,7 @@ from kosmo.contracts.codegen import (
     WorkspaceRepository,
     WorkspaceStatus,
 )
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ArtefactoAfectado,
     ArtifactAction,
     ConsistencyEvaluationOutput,

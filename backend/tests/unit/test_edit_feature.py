@@ -4,7 +4,7 @@ import pytest
 from ulid import ULID
 
 from kosmo.application.features.edit_feature import EditFeatureInput, EditFeatureUseCase
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
     ConsistencyStatus,

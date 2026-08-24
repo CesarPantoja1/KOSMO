@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from kosmo.contracts.chat import AppliedChange
+from kosmo.contracts.ai.chat import AppliedChange
 from kosmo.contracts.memory.user_preference import UserPreference
 from kosmo.contracts.sdd.document import SpecPhase
 

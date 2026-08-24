@@ -13,7 +13,7 @@ from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
     RegisterCodeTraceabilityUseCase,
 )
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     FeatureImplementation,
@@ -28,7 +28,7 @@ from kosmo.contracts.codegen import (
     ValidationRunResult,
     WorkspaceManagerPort,
 )
-from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.ai.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.contracts.sdd.repositories import (

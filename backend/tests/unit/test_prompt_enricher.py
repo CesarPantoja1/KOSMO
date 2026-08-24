@@ -49,7 +49,7 @@ async def test_enrich_injects_project_context() -> None:
 async def test_enrich_injects_learned_patterns() -> None:
     # Arrange
     patterns = InMemoryKnowledgePatternStore()
-    from kosmo.contracts.agent_memory import KnowledgePattern
+    from kosmo.contracts.memory.agent_memory import KnowledgePattern
     from kosmo.contracts.sdd.document import SpecPhase
 
     await patterns.replace_patterns(

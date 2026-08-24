@@ -201,7 +201,7 @@ def _make_outbox_handler(container: AppContainer) -> OutboxHandler:
         _log = structlog.get_logger("kosmo.outbox")
         agent = container.pipeline.agent
         if job_type == "reflect_and_consolidate":
-            from kosmo.contracts.agent_memory import AgentMemoryId
+            from kosmo.contracts.memory.agent_memory import AgentMemoryId
             from kosmo.contracts.pipeline.phase_outputs import ValidationResult
             from kosmo.contracts.sdd.document import SpecPhase
 

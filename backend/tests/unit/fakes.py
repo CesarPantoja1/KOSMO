@@ -7,14 +7,14 @@ from typing import Any
 
 from kosmo.contracts.audit.events import AuditEvent
 from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.chat import (
     ChatHistoryId,
     ChatSession,
     ChatSessionSummary,
     HistorialChat,
     MensajeChat,
 )
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationStatus,
 )
@@ -577,7 +577,7 @@ class FakeConsistencyEvaluator:
         project_id: ProjectId,  # noqa: ARG002
         applied_changes: list[object],  # noqa: ARG002
     ) -> Any:
-        from kosmo.contracts.consistency import ConsistencyEvaluationOutput
+        from kosmo.contracts.ai.consistency import ConsistencyEvaluationOutput
 
         if self._should_fail:
             raise RuntimeError("Fake evaluator failure")
@@ -585,7 +585,7 @@ class FakeConsistencyEvaluator:
         phase_key = target_phase.value if hasattr(target_phase, "value") else str(target_phase)
         result = self._results.get(phase_key, {"artifact_ids": []})
         affected = result.get("artifact_ids", [])
-        from kosmo.contracts.consistency import ConsistencyStatus
+        from kosmo.contracts.ai.consistency import ConsistencyStatus
 
         status = ConsistencyStatus.ANALIZADO_CON_IMPACTO if affected else ConsistencyStatus.ANALIZADO_SIN_IMPACTO
         return ConsistencyEvaluationOutput(report_id="rpt_fake", status=status, affected_artifact_ids=affected)

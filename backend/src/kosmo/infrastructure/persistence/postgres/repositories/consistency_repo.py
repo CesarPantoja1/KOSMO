@@ -8,7 +8,7 @@ from typing import cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationRepository,
     ConsistencyEvaluationStatus,

@@ -4,7 +4,7 @@ import re
 
 from ulid import ULID
 
-from kosmo.contracts.chat import AppliedChange, DiffCambio
+from kosmo.contracts.ai.chat import AppliedChange, DiffCambio
 from kosmo.domain.sdd.discovery_diff import ChangeClass, ChangeType, SectionChange
 
 _section_header_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)

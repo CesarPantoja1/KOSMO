@@ -9,10 +9,10 @@ from kosmo.application.pipeline.generation_loop import GenerationLoop
 from kosmo.application.pipeline.prompt_enricher import PromptEnricher
 from kosmo.application.pipeline.session_recorder import SessionRecorder
 from kosmo.application.pipeline.tool_resolver import ToolResolver
-from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
-from kosmo.contracts.chat import ChatRole, DiffCambio, MensajeChat, RespuestaChatLLM, SugerenciaCambio
+from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
+from kosmo.contracts.ai.chat import ChatRole, DiffCambio, MensajeChat, RespuestaChatLLM, SugerenciaCambio
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import PhaseMode
 from kosmo.contracts.pipeline.phase_outputs import (
     DirectModificationResult,
