@@ -416,6 +416,19 @@ def test_schemas_returns_json_schema(client: TestClient) -> None:
     assert "password" in body["properties"]
 
 
+def test_schemas_returns_oauth_error_schema_with_seconds_remaining(client: TestClient) -> None:
+    # Arrange / Act
+    response = client.get("/api/v1/schemas/OAuthErrorResponse")
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "OAuthErrorResponse"
+    assert "error" in body["properties"]
+    assert "error_description" in body["properties"]
+    assert "seconds_remaining" in body["properties"]
+
+
 def test_schemas_unknown_returns_404(client: TestClient) -> None:
     response = client.get("/api/v1/schemas/Unknown")
     assert response.status_code == 404
@@ -442,6 +455,7 @@ def test_authorize_locks_account_after_max_failures(client: TestClient) -> None:
     assert locked.status_code == 429
     body = locked.json()
     assert body["error"] == "account_locked"
+    assert body["seconds_remaining"] == _LOCKOUT_SECONDS
     assert "Retry-After" in locked.headers
     assert int(locked.headers["Retry-After"]) == _LOCKOUT_SECONDS
 
@@ -464,6 +478,7 @@ def test_authorize_lockout_message_is_in_spanish(client: TestClient) -> None:
 
     locked = client.post("/api/v1/auth/authorize", json=bad_payload)
     assert locked.status_code == 429
+    assert locked.json()["seconds_remaining"] == _LOCKOUT_SECONDS
     assert "Cuenta bloqueada" in locked.json()["error_description"]
     assert "segundos" in locked.json()["error_description"]
 

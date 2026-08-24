@@ -173,6 +173,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthErrorResponse"
+              example:
+                error: account_locked
+                error_description: "Cuenta bloqueada. Intente de nuevo en 300 segundos."
+                seconds_remaining: 300
 
   /api/v1/auth/token:
     post:
@@ -2666,6 +2670,11 @@ components:
           type: string
           description: Descripcion legible del error
           example: Credenciales invalidas
+        seconds_remaining:
+          type: integer
+          nullable: true
+          description: Segundos restantes de bloqueo en caso de error account_locked o rate limit
+          example: 300
       required: [error, error_description]
 
     # ── Projects ──

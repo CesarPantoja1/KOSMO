@@ -190,7 +190,7 @@ async def register(
         status.HTTP_429_TOO_MANY_REQUESTS: {
             "description": (
                 "Cuenta bloqueada por intentos fallidos excesivos. "
-                "El header `Retry-After` indica los segundos restantes de bloqueo."
+                "El header `Retry-After` y el campo `seconds_remaining` indican los segundos restantes de bloqueo."
             ),
             "model": OAuthErrorResponse,
             "content": {
@@ -198,6 +198,7 @@ async def register(
                     "example": {
                         "error": "account_locked",
                         "error_description": "Cuenta bloqueada. Intente de nuevo en 300 segundos.",
+                        "seconds_remaining": 300,
                     }
                 }
             },
@@ -221,8 +222,9 @@ async def authorize(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content=OAuthErrorResponse(
                 error="account_locked",
-                error_description=(f"Cuenta bloqueada. Intente de nuevo en {exc.seconds_remaining} segundos."),
-            ).model_dump(),
+                error_description=f"Cuenta bloqueada. Intente de nuevo en {exc.seconds_remaining} segundos.",
+                seconds_remaining=exc.seconds_remaining,
+            ).model_dump(exclude_none=True),
             headers={"Retry-After": str(exc.seconds_remaining)},
         )
     except InvalidCredentialsError:
