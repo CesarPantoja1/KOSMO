@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './config';
-import { useAuthStore, authHeaders } from '@/entities/user';
-import type { TokenPairResponse } from '@/entities/user';
+import { useAuthStore, authHeaders } from 'docs/user';
+import type { TokenPairResponse } from 'docs/user';
 import { parseApiError } from './errors';
 import { clearAllStores } from '@/shared/lib/clearAllStores';
 

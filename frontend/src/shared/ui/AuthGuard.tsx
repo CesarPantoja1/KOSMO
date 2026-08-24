@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore } from '@/entities/user';
+import { useAuthStore } from 'docs/user';
 
 export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 	const router = useRouter();
@@ -36,7 +36,13 @@ export const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 
 	if (!mounted) return null;
 
-	if (!isAuthDisabled && !accessToken && pathname && !pathname.startsWith('/login') && !pathname.startsWith('/register')) {
+	if (
+		!isAuthDisabled &&
+		!accessToken &&
+		pathname &&
+		!pathname.startsWith('/login') &&
+		!pathname.startsWith('/register')
+	) {
 		return null;
 	}
 

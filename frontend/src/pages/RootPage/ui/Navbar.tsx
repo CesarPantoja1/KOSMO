@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/entities/user';
+import { useAuthStore } from 'docs/user';
 import { Logo } from '@/shared/ui';
 
 interface NavbarProps {
@@ -21,7 +21,9 @@ export function Navbar({ onComenzar }: NavbarProps) {
 						className='flex items-center gap-3'
 					>
 						<Logo size={36} />
-						<span className='text-xl font-bold tracking-tight text-neutral-800'>KOSMO</span>
+						<span className='text-xl font-bold tracking-tight text-neutral-800'>
+							KOSMO
+						</span>
 					</button>
 				</div>
 

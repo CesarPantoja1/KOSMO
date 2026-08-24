@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuthStore, authApi } from '@/entities/user';
+import { useAuthStore, authApi } from 'docs/user';
 import { formatApiError } from '@/shared/api';
 import { Close } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
@@ -142,7 +142,11 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 					disabled={isLoading || retryAfter > 0}
 					className='btn btn-ai btn-lg w-full mt-2'
 				>
-					{isLoading ? 'Iniciando...' : retryAfter > 0 ? `Espera ${retryAfter}s` : 'Entrar'}
+					{isLoading
+						? 'Iniciando...'
+						: retryAfter > 0
+							? `Espera ${retryAfter}s`
+							: 'Entrar'}
 				</button>
 
 				<div className='text-center mt-2'>

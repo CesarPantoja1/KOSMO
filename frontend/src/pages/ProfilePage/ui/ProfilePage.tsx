@@ -10,7 +10,7 @@ import {
 	Tooltip,
 	CartesianGrid,
 } from 'recharts';
-import { useAuthStore } from '@/entities/user';
+import { useAuthStore } from 'docs/user';
 
 interface ProviderKeyCardProps {
 	name: string;
@@ -162,9 +162,9 @@ function ConsumptionChart() {
 							tick={{ fill: '#a3a3a3', fontSize: 12 }}
 							axisLine={{ stroke: '#404040' }}
 							tickLine={false}
-						tickFormatter={(value: number) =>
-							value >= 1000 ? `${(value / 1000).toFixed(0)}k` : String(value)
-						}
+							tickFormatter={(value: number) =>
+								value >= 1000 ? `${(value / 1000).toFixed(0)}k` : String(value)
+							}
 						/>
 						<Tooltip
 							contentStyle={{

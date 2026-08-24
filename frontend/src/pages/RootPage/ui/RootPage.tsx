@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/entities/user';
+import { useAuthStore } from 'docs/user';
 import { Navbar } from './Navbar';
 import { Hero } from './Hero';
 import { FlowSteps } from './FlowSteps';
