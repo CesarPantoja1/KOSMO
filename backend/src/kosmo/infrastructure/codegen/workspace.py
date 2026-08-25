@@ -23,7 +23,7 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceStatus,
 )
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
-from kosmo.contracts.sdd.repositories import ProjectRepository
+from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
 from kosmo.infrastructure.git import (
     git_add,
     git_commit,
@@ -158,6 +158,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         project_repo: ProjectRepository | None = None,
         code_runner: CodeRunnerPort | None = None,
         preview_publisher: PreviewPublisherPort | None = None,
+        document_repo: DocumentRepository | None = None,
     ) -> None:
         self._workspaces_root = Path(workspaces_root)
         self._workspace_repo = workspace_repo
@@ -167,6 +168,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._project_repo = project_repo
         self._code_runner = code_runner
         self._preview_publisher = preview_publisher
+        self._document_repo = document_repo
         self._in_memory_locks: set[str] = set()
         # ponytail: guard global del proceso; la carrera multi-worker se cierra con el
         # CAS (UPDATE condicional) de update_lock en el repositorio SQL.
@@ -225,6 +227,28 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 _generate_opencode_json(project_id, str(target_dir), self._mcp_url),
                 encoding="utf-8",
             )
+
+        # Actualizar site.ts con el nombre y descripción del proyecto
+        site_file = target_dir / "src" / "lib" / "site.ts"
+        if site_file.exists() and self._project_repo:
+            with contextlib.suppress(Exception):
+                proj = await self._project_repo.by_id(project_id)
+                if proj and proj.name:
+                    desc = proj.description or "Aplicación generada con KOSMO."
+                    content = (
+                        "export const siteConfig = {\n"
+                        f'  name: "{proj.name}",\n'
+                        f'  description: "{desc}",\n'
+                        '  archetype: "saas_tool" as\n'
+                        '    | "storefront"\n'
+                        '    | "dashboard"\n'
+                        '    | "workflow"\n'
+                        '    | "saas_tool"\n'
+                        '    | "content",\n'
+                        '  primaryColor: "#0f766e",\n'
+                        "} as const;\n"
+                    )
+                    site_file.write_text(content, encoding="utf-8")
 
         # Generar las skills en .opencode/skills si no existen
         skills_dir = target_dir / ".opencode" / "skills"

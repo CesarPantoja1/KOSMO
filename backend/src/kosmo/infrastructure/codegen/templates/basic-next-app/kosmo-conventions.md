@@ -6,7 +6,7 @@ Este documento define las reglas de diseño, arquitectura y calidad para todo c�
 - **Framework:** Next.js 16 (App Router) + React 19 + TypeScript en modo estricto (`strict: true`).
 - **Base de Datos / ORM:** SQLite (`better-sqlite3`) con Drizzle ORM.
 - **Testing:** Vitest con asertos explícitos y metodología AAA.
-- **Estilos:** Tailwind CSS v4.
+- **Estilos & UI:** Bootstrap 5 + Design System propio (`src/components/ui/`).
 - **Linter:** ESLint 9 (flat config).
 
 ## 2. Convenciones de Arquitectura

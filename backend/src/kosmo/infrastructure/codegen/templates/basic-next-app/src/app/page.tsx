@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
+  CardBody,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -14,40 +14,49 @@ import { siteConfig } from "@/lib/site";
 
 export default function HomePage() {
   return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900">{siteConfig.name}</h1>
-        <p className="max-w-2xl text-sm leading-6 text-neutral-600">{siteConfig.description}</p>
+    <div className="d-flex flex-column gap-4">
+      <section className="mb-2">
+        <h1 className="h2 fw-bold text-dark mb-2">{siteConfig.name}</h1>
+        <p className="text-secondary lead fs-6 mb-0" style={{ maxWidth: "42rem" }}>
+          {siteConfig.description}
+        </p>
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-neutral-900">Funciones disponibles</h2>
+      <section>
+        <h2 className="h5 fw-semibold text-dark mb-3">Funciones disponibles</h2>
         {features.length === 0 ? (
           <EmptyState
             title="Aún no hay funciones implementadas"
             description="Las características del negocio aparecerán aquí a medida que se implementen."
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="row g-3 row-cols-1 row-cols-md-2 row-cols-lg-3">
             {features.map((feature) => (
-              <Card key={feature.slug}>
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-indigo-50">
-                      <feature.icon className="h-5 w-5 text-indigo-600" />
+              <div key={feature.slug} className="col">
+                <Card className="h-100 d-flex flex-column">
+                  <CardHeader>
+                    <div className="d-flex align-items-center gap-3">
+                      <div
+                        className="d-flex align-items-center justify-content-center rounded bg-primary-subtle text-primary shrink-0"
+                        style={{ width: "2.5rem", height: "2.5rem" }}
+                      >
+                        <feature.icon size={20} />
+                      </div>
+                      <div>
+                        <CardTitle>{feature.title}</CardTitle>
+                      </div>
                     </div>
-                    <CardTitle>{feature.title}</CardTitle>
-                  </div>
-                  <CardDescription>{feature.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href={feature.route}>
-                    <Button variant="secondary" size="sm" className="w-full">
-                      Abrir
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+                    <CardDescription className="mt-2">{feature.description}</CardDescription>
+                  </CardHeader>
+                  <CardBody className="mt-auto pt-3">
+                    <Link href={feature.route} className="text-decoration-none">
+                      <Button variant="outline" size="sm" className="w-100">
+                        Abrir
+                      </Button>
+                    </Link>
+                  </CardBody>
+                </Card>
+              </div>
             ))}
           </div>
         )}
@@ -55,3 +64,4 @@ export default function HomePage() {
     </div>
   );
 }
+
