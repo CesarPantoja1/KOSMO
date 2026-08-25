@@ -19,7 +19,7 @@ export function Hero({ onComenzar }: HeroProps) {
 	return (
 		<section className='relative overflow-hidden'>
 			<div className='absolute inset-0 bg-linear-to-br from-ai-50 via-neutral-0 to-primary-50' />
-			<div className='absolute inset-0 bg-[linear-linear(rgba(0,0,0,0.02)_1px,transparent_1px),linear-linear(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] bg-[size:60px_60px]' />
+			<div className='absolute inset-0 bg-[linear-linear(rgba(0,0,0,0.02)_1px,transparent_1px),linear-linear(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] bg-size[:60px_60px]' />
 
 			<div className='relative mx-auto grid max-w-7xl items-center gap-14 px-6 py-24 lg:grid-cols-2 lg:py-28'>
 				<div>
@@ -40,9 +40,8 @@ export function Hero({ onComenzar }: HeroProps) {
 					</h1>
 
 					<p className='mt-7 max-w-xl text-lg leading-8 text-neutral-500'>
-						KOSMO toma tu idea de negocio y la transforma paso a paso en
-						especificaciones claras, diagramas y código listo para construir una
-						aplicación real.
+						KOSMO toma tu idea de negocio y la transforma paso a paso en especificaciones
+						claras, diagramas y código listo para construir una aplicación real.
 					</p>
 
 					<div className='mt-8 flex flex-wrap gap-4'>
@@ -62,7 +61,9 @@ export function Hero({ onComenzar }: HeroProps) {
 							<div className='mb-2'>
 								<Lightbulb size={24} className='text-neutral-800' />
 							</div>
-							<p className='text-sm font-medium text-neutral-800'>Solo necesitas tu idea</p>
+							<p className='text-sm font-medium text-neutral-800'>
+								Solo necesitas tu idea
+							</p>
 							<p className='mt-1 text-xs text-neutral-500'>La IA potencia lo demás</p>
 						</div>
 
@@ -78,7 +79,9 @@ export function Hero({ onComenzar }: HeroProps) {
 							<div className='mb-2'>
 								<AiOrb size={24} className='text-neutral-800' />
 							</div>
-							<p className='text-sm font-medium text-neutral-800'>Enfócate en tu negocio</p>
+							<p className='text-sm font-medium text-neutral-800'>
+								Enfócate en tu negocio
+							</p>
 							<p className='mt-1 text-xs text-neutral-500'>KOSMO hace el resto</p>
 						</div>
 					</div>
@@ -110,27 +113,46 @@ export function Hero({ onComenzar }: HeroProps) {
 									Proyecto
 								</div>
 
-							{[
-								{ label: 'Proyecto', icon: <Folder size={12} color='text-neutral-500' /> },
-								{ label: 'Descubrimiento', icon: <Discovery size={12} color='text-ai-600' /> },
-								{ label: 'Funcionalidades', icon: <Characteristics size={12} color='text-neutral-500' /> },
-								{ label: 'Criterios (EARS)', icon: <Requirements size={12} color='text-neutral-500' /> },
-								{ label: 'Diagramas', icon: <Modeling size={12} color='text-neutral-500' /> },
-								{ label: 'Código', icon: <Implementation size={12} color='text-neutral-500' /> },
-								{ label: 'Aplicación', icon: <ArrowRight size={12} color='text-neutral-500' /> },
-							].map((item, index) => (
-								<div
-									key={item.label}
-									className={`mb-1 rounded-lg px-3 py-2 text-xs ${
-										index === 1 ? 'bg-ai-50 text-ai-600' : 'text-neutral-500'
-									}`}
-								>
-									<span className='mr-2 inline-flex items-center'>
-										{item.icon}
-									</span>
-									{item.label}
-								</div>
-							))}
+								{[
+									{
+										label: 'Proyecto',
+										icon: <Folder size={12} color='text-neutral-500' />,
+									},
+									{
+										label: 'Descubrimiento',
+										icon: <Discovery size={12} color='text-ai-600' />,
+									},
+									{
+										label: 'Funcionalidades',
+										icon: <Characteristics size={12} color='text-neutral-500' />,
+									},
+									{
+										label: 'Criterios (EARS)',
+										icon: <Requirements size={12} color='text-neutral-500' />,
+									},
+									{
+										label: 'Diagramas',
+										icon: <Modeling size={12} color='text-neutral-500' />,
+									},
+									{
+										label: 'Código',
+										icon: <Implementation size={12} color='text-neutral-500' />,
+									},
+									{
+										label: 'Aplicación',
+										icon: <ArrowRight size={12} color='text-neutral-500' />,
+									},
+								].map((item, index) => (
+									<div
+										key={item.label}
+										className={`mb-1 rounded-lg px-3 py-2 text-xs ${
+											index === 1 ? 'bg-ai-50 text-ai-600' : 'text-neutral-500'
+										}`}
+									>
+										<span className='mr-2 inline-flex items-center'>{item.icon}</span>
+										{item.label}
+									</div>
+								))}
 							</div>
 
 							{/* CONTENT */}
@@ -168,10 +190,7 @@ export function Hero({ onComenzar }: HeroProps) {
 											'Optimizar el proceso y mejorar la experiencia del usuario.',
 										],
 										['Actores', 'Usuario, Administrador y Recepcionista.'],
-										[
-											'Objetivos',
-											'Gestionar reservas y disponibilidad en tiempo real.',
-										],
+										['Objetivos', 'Gestionar reservas y disponibilidad en tiempo real.'],
 									].map(([title, text]) => (
 										<div
 											key={title}

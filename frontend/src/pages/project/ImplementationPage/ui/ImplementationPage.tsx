@@ -12,6 +12,7 @@ import { Implementation, toast } from '@/shared/ui';
 import { Ai, ArrowLeft, CursorClickFill } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { ImplementationLiveProgress } from './ImplementationLiveProgress';
+import { AiProviderToast } from './AiProviderToast';
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -102,6 +103,8 @@ const ImplementationPage = () => {
 					<p className='text-sm text-warning-700'>{errorMessage}</p>
 				</div>
 			)}
+
+			<AiProviderToast />
 
 			<section className='page-container px-0'>
 				<div className='page-header'>
