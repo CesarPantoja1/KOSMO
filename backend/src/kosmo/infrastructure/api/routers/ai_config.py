@@ -83,12 +83,18 @@ async def save_preferences(
             detail=f"Proveedor no soportado: {request.provider}",
         ) from None
 
-    input_data = SaveAIConfigInput(
-        provider=provider,
-        model=request.model,
-        api_key=request.api_key,
-    )
-    view = await use_case.save_preferences(principal.subject, input_data)
+    try:
+        input_data = SaveAIConfigInput(
+            provider=provider,
+            model=request.model,
+            api_key=request.api_key,
+        )
+        view = await use_case.save_preferences(principal.subject, input_data)
+    except AIConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from None
 
     return AIConfigResponse(
         provider=view.provider.value,

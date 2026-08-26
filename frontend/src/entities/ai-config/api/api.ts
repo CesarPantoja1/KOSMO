@@ -23,8 +23,8 @@ export const aiConfigApi = {
 		});
 	},
 
-	async deleteConfig(): Promise<AIConfigView> {
-		return apiClient<AIConfigView>('/api/v1/ai-config', { method: 'DELETE' });
+	async deleteConfig(): Promise<void> {
+		return apiClient<void>('/api/v1/ai-config', { method: 'DELETE' });
 	},
 
 	async testConnection(data: TestAIConnectionRequest): Promise<TestAIConnectionResult> {

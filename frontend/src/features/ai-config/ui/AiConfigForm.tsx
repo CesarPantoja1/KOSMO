@@ -25,13 +25,16 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		testLoading,
 		testError,
 		saveConfig,
+		deleteConfig,
 		testConnection,
 		clearTestResult,
 		fetchProviders,
 	} = useAiConfigStore();
 
 	const [provider, setProvider] = useState<AIProvider>(
-		config?.provider ?? DEFAULT_AI_PROVIDER,
+		config?.provider && config.provider !== 'kosmo_default'
+			? config.provider
+			: DEFAULT_AI_PROVIDER,
 	);
 	const [model, setModel] = useState(config?.model ?? DEFAULT_AI_MODEL);
 	const [apiKey, setApiKey] = useState('');
@@ -74,14 +77,37 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		onSaved?.();
 	};
 
+	const handleDelete = async () => {
+		await deleteConfig();
+		setIsEditing(false);
+		setApiKey('');
+		setShowApiKey(false);
+		clearTestResult();
+		onSaved?.();
+	};
+
+	const handleStartEditing = () => {
+		setIsEditing(true);
+		setApiKey('');
+		setShowApiKey(false);
+		clearTestResult();
+		if (config && config.provider !== 'kosmo_default') {
+			setProvider(config.provider);
+			setModel(config.model);
+		}
+	};
+
 	const handleCancel = () => {
 		setIsEditing(false);
 		setApiKey('');
 		setShowApiKey(false);
 		clearTestResult();
-		if (config) {
+		if (config && config.provider !== 'kosmo_default') {
 			setProvider(config.provider);
 			setModel(config.model);
+		} else {
+			setProvider(DEFAULT_AI_PROVIDER);
+			setModel(DEFAULT_AI_MODEL);
 		}
 	};
 
@@ -134,31 +160,24 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 						<>
 							<button
 								type='button'
-								onClick={() => setIsEditing(true)}
+								onClick={handleStartEditing}
 								className='btn btn-secondary btn-sm'
 							>
 								Reemplazar
 							</button>
 							<button
 								type='button'
-								onClick={async () => {
-									const data: SaveAIConfigRequest = {
-										provider: DEFAULT_AI_PROVIDER,
-										model: DEFAULT_AI_MODEL,
-										api_key: '',
-									};
-									await saveConfig(data);
-									onSaved?.();
-								}}
-								className='btn btn-destructive btn-sm'
+								onClick={handleDelete}
+								disabled={loading}
+								className='btn btn-destructive btn-sm disabled:opacity-50'
 							>
-								Eliminar
+								{loading ? 'Eliminando...' : 'Eliminar'}
 							</button>
 						</>
 					) : (
 						<button
 							type='button'
-							onClick={() => setIsEditing(true)}
+							onClick={handleStartEditing}
 							className='btn btn-primary btn-sm'
 						>
 							Agregar API Key

@@ -135,6 +135,28 @@ def test_save_preferences_returns_200(auth_client: TestClient, mock_save_prefere
     assert data["masked_key"] == "••••••••abcd"
 
 
+def test_save_preferences_invalid_provider_returns_400(auth_client: TestClient):
+    payload = {
+        "provider": "invalid_provider_xyz",
+        "model": "gpt-4o",
+        "api_key": "sk-1234abcd",
+    }
+    response = auth_client.post("/api/v1/ai-config", json=payload)
+    assert response.status_code == 400
+    assert "Proveedor no soportado" in response.json()["detail"]
+
+
+def test_save_preferences_empty_api_key_returns_422(auth_client: TestClient):
+    payload = {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "api_key": "",
+    }
+    response = auth_client.post("/api/v1/ai-config", json=payload)
+    assert response.status_code == 422
+    assert "La clave de API no puede estar vacía" in response.json()["detail"]
+
+
 def test_delete_preferences_returns_204(auth_client: TestClient, mock_delete_preferences):
     response = auth_client.delete("/api/v1/ai-config")
 

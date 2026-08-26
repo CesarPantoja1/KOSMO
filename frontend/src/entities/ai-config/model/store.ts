@@ -72,8 +72,18 @@ export const useAiConfigStore = create<AiConfigState>()((set) => ({
 	deleteConfig: async () => {
 		set({ loading: true, error: null });
 		try {
-			const config = await aiConfigApi.deleteConfig();
-			set({ config, loading: false });
+			await aiConfigApi.deleteConfig();
+			set({
+				config: {
+					provider: DEFAULT_AI_PROVIDER,
+					model: DEFAULT_AI_MODEL,
+					is_custom: false,
+					has_api_key: false,
+					masked_key: null,
+					updated_at: null,
+				},
+				loading: false,
+			});
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : 'Error al eliminar configuración de IA';
