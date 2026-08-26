@@ -1,6 +1,6 @@
 'use client';
 
-import { MarkdownEditor, PanelAsistenteRequisito, type SaveStatus } from '@/feature';
+import { MarkdownEditor, PanelAsistenteRequisito, type SaveStatus } from '@/features';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRequirementsStore } from '@/entities/requirements';
 import { useModelingStore } from '@/entities/modeling';
 import { formatApiError } from '@/shared/api';
-import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
+import { useUnsavedChanges } from '@/features/app-state';
 import {
 	Ai,
 	ArrowLeft,
@@ -19,7 +19,7 @@ import {
 	ModalConfirm,
 	toast,
 } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore } from '@/features/app-state';
 import { useProjectStore } from '@/entities/project';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
@@ -90,7 +90,8 @@ const RequirementsPage = () => {
 				}
 			})
 			.catch((error: unknown) => {
-				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+				if (!cancelled)
+					toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
 			});
 
 		return () => {
@@ -341,16 +342,16 @@ const RequirementsPage = () => {
 						</div>
 					) : (
 						<div className='flex gap-1 flex-1 min-h-0'>
-						<AsideCharacteristic
-							characteristics={characteristics}
-							selectedId={selectedId}
-							onSelectCharacteristic={handleSelectCharacteristic}
-							onDeleteCharacteristic={handleDeleteClick}
-							hasIcon={hasRequirements}
-							icon={Requirements}
-							isExpanded={isAsideExpanded}
-							onToggleExpand={setIsAsideExpanded}
-						/>
+							<AsideCharacteristic
+								characteristics={characteristics}
+								selectedId={selectedId}
+								onSelectCharacteristic={handleSelectCharacteristic}
+								onDeleteCharacteristic={handleDeleteClick}
+								hasIcon={hasRequirements}
+								icon={Requirements}
+								isExpanded={isAsideExpanded}
+								onToggleExpand={setIsAsideExpanded}
+							/>
 
 							<div className='relative flex-1 flex flex-col pl-3 pt-2 bg-neutral-50 border-l border-neutral-200 min-h-0 overflow-hidden'>
 								{!selectedCharacteristic && (

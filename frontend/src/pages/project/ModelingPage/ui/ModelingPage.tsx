@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useModelingStore } from '@/entities/modeling';
 import { useRequirementsStore } from '@/entities/requirements';
-import { PlantUmlViewer } from '@/feature';
+import { PlantUmlViewer } from '@/features';
 import {
 	Ai,
 	ArrowLeft,
@@ -16,9 +16,8 @@ import {
 	ModalConfirm,
 	toast,
 } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore, useUnsavedChanges } from '@/features/app-state';
 import { useProjectStore } from '@/entities/project';
-import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
 import { formatApiError } from '@/shared/api';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
@@ -81,7 +80,8 @@ const ModelingPage = () => {
 				}
 			})
 			.catch((error: unknown) => {
-				if (!cancelled) toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
+				if (!cancelled)
+					toast.error(formatApiError(error, 'Error al cargar las funcionalidades'));
 			});
 
 		return () => {
@@ -262,27 +262,27 @@ const ModelingPage = () => {
 					{/* Header row */}
 					<div className='flex items-start justify-between gap-4'>
 						<div className='flex flex-col gap-1'>
-							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>Diagrama de flujo</h1>
+							<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
+								Diagrama de flujo
+							</h1>
 							<p className='text-neutral-500 text-sm md:text-base'>
 								Genera el diagrama de actividad UML a partir de los criterios de
 								aceptación.
 							</p>
 						</div>
 
-						{hasCharacteristics &&
-							!isEditorMaximized &&
-							!isPlantumlMaximized && (
-								<div className='flex items-center gap-3 shrink-0'>
-									<Link
-										href='codigo'
-										onClick={handleNextLink('codigo')}
-										className='btn btn-primary'
-									>
-										Continuar
-										<ArrowRight color='' size={18} />
-									</Link>
-								</div>
-							)}
+						{hasCharacteristics && !isEditorMaximized && !isPlantumlMaximized && (
+							<div className='flex items-center gap-3 shrink-0'>
+								<Link
+									href='codigo'
+									onClick={handleNextLink('codigo')}
+									className='btn btn-primary'
+								>
+									Continuar
+									<ArrowRight color='' size={18} />
+								</Link>
+							</div>
+						)}
 					</div>
 
 					{!hasCharacteristics ? (

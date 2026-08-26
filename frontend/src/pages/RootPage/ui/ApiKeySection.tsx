@@ -4,9 +4,9 @@ export function ApiKeySection() {
 	return (
 		<section className='py-20'>
 			<div className='mx-auto max-w-5xl px-6'>
-				<div className='rounded-3xl border border-ai-100 bg-ai-50 p-8 md:p-10'>
+				<div className='rounded-3xl border border-neutral-200 bg-neutral-50 p-8 md:p-10'>
 					<div className='flex flex-col items-start gap-6 md:flex-row md:items-center'>
-						<div className='flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-ai-100 text-ai-500'>
+						<div className='flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-500'>
 							<KeyIcon size={24} />
 						</div>
 

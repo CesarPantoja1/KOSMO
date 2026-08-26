@@ -1,7 +1,7 @@
 'use client';
 
 import { Cards, List, Plus } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore } from '@/features/app-state';
 import { Project, useProjectStore } from '@/entities/project';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

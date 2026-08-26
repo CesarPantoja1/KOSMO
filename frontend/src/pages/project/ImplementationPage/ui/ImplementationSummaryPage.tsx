@@ -1,166 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCharacteristicStore } from '@/entities/characteristic';
+import type { ImplementationMetric } from '@/entities/implementation';
+import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
+import { useProjectStore } from '@/entities/project';
+import {
+	AiOrbCenterIcon,
+	CheckCircleWhiteIcon,
+	EntitiesIcon,
+	FlowIcon,
+	InfoCircleIcon,
+	PlusSmallIcon,
+	RulesIcon,
+	ScreensIcon,
+	ShieldCheckIcon,
+	SmallCheckIcon,
+	SparkleIcon,
+	StarIcon,
+} from '@/shared/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-	buildFileTree,
-	fetchImplementationFile,
-	fetchPreviewUrl,
-	useImplementationStore,
-} from '@/entities/implementation';
-import { useCharacteristicStore } from '@/entities/characteristic';
-import { useProjectStore } from '@/entities/project';
-import type { FileTreeNode, ImplementationMetric } from '@/entities/implementation';
+import { useEffect, useState } from 'react';
 
 const iconMap: Record<ImplementationMetric['icon'], React.ReactNode> = {
-	screens: (
-		<svg
-			className='h-5 w-5 text-ai-600'
-			viewBox='0 0 24 24'
-			fill='none'
-			stroke='currentColor'
-			strokeWidth='2'
-		>
-			<rect x='3' y='4' width='18' height='16' rx='2' />
-			<path d='M3 9h18M8 14h3M8 17h6' />
-		</svg>
-	),
-	entities: (
-		<svg
-			className='h-5 w-5 text-primary-600'
-			viewBox='0 0 24 24'
-			fill='none'
-			stroke='currentColor'
-			strokeWidth='2'
-		>
-			<ellipse cx='12' cy='5' rx='7' ry='3' />
-			<path d='M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5' />
-			<path d='M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7' />
-		</svg>
-	),
-	rules: (
-		<svg
-			className='h-5 w-5 text-warning-600'
-			viewBox='0 0 24 24'
-			fill='none'
-			stroke='currentColor'
-			strokeWidth='2'
-		>
-			<path d='M13 2L3 14h9l-1 8 10-12h-9l1-8z' />
-		</svg>
-	),
-	integrations: (
-		<svg
-			className='h-5 w-5 text-primary-600'
-			viewBox='0 0 24 24'
-			fill='none'
-			stroke='currentColor'
-			strokeWidth='2'
-		>
-			<path d='M12 2l3 6 6 .9-4.5 4.4 1 6.2-5.5-3-5.5 3 1-6.2L3 8.9 9 8l3-6z' />
-		</svg>
-	),
-	validations: (
-		<svg
-			className='h-5 w-5 text-info-700'
-			viewBox='0 0 24 24'
-			fill='none'
-			stroke='currentColor'
-			strokeWidth='2'
-		>
-			<path d='M12 3l8 4v5c0 4.5-3.4 7.8-8 9-4.6-1.2-8-4.5-8-9V7l8-4z' />
-			<path d='M9 12l2 2 4-4' />
-		</svg>
-	),
-	actions: (
-		<svg
-			className='h-5 w-5 text-ai-600'
-			viewBox='0 0 24 24'
-			fill='none'
-			stroke='currentColor'
-			strokeWidth='2'
-		>
-			<path d='M5 4v16M5 8h8M13 8v4M13 12h6M19 12v4M13 16h6' />
-		</svg>
-	),
+	screens: <ScreensIcon color='text-ai-600' />,
+	entities: <EntitiesIcon color='text-primary-600' />,
+	rules: <RulesIcon color='text-warning-600' />,
+	integrations: <StarIcon color='text-primary-600' />,
+	validations: <ShieldCheckIcon color='text-info-700' />,
+	actions: <FlowIcon color='text-ai-600' />,
 };
-
-const folderIcon = (
-	<svg
-		className='h-4 w-4 shrink-0 text-warning-500'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-	>
-		<path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z' />
-	</svg>
-);
-
-const fileIcon = (
-	<svg
-		className='h-4 w-4 shrink-0 text-neutral-400'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-	>
-		<path d='M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z' />
-		<path d='M14 3v5h5' />
-	</svg>
-);
-
-function FileTree({
-	nodes,
-	depth = 0,
-	onSelect,
-}: {
-	nodes: FileTreeNode[];
-	depth?: number;
-	onSelect?: (path: string) => void;
-}) {
-	return (
-		<ul className='space-y-1'>
-			{nodes.map((node) => (
-				<li key={node.path}>
-					{node.children.length === 0 ? (
-						<button
-							type='button'
-							onClick={() => onSelect?.(node.path)}
-							className='flex items-center gap-2 rounded px-1 py-0.5 text-left transition-colors hover:bg-neutral-100'
-							style={{ paddingLeft: depth * 16 }}
-						>
-							{fileIcon}
-							<span className='font-mono text-xs text-neutral-700'>{node.name}</span>
-						</button>
-					) : (
-						<>
-							<div
-								className='flex items-center gap-2 px-1 py-0.5'
-								style={{ paddingLeft: depth * 16 }}
-							>
-								{folderIcon}
-								<span className='font-mono text-xs font-medium text-neutral-700'>
-									{node.name}
-								</span>
-							</div>
-							<FileTree nodes={node.children} depth={depth + 1} onSelect={onSelect} />
-						</>
-					)}
-				</li>
-			))}
-		</ul>
-	);
-}
 
 const ImplementationSummaryPage = () => {
 	const router = useRouter();
 	const summary = useImplementationStore((s) => s.summary);
-	const [selectedFile, setSelectedFile] = useState<string | null>(null);
-	const [fileContent, setFileContent] = useState<string | null>(null);
-	const [fileLoading, setFileLoading] = useState(false);
-	const [fileError, setFileError] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -198,24 +71,6 @@ const ImplementationSummaryPage = () => {
 			cancelled = true;
 		};
 	}, []);
-
-	const handleSelectFile = async (path: string) => {
-		if (!summary) return;
-		setSelectedFile(path);
-		setFileContent(null);
-		setFileError(null);
-		setFileLoading(true);
-		try {
-			const content = await fetchImplementationFile(`impl_${summary.featureId}`, path);
-			setFileContent(content);
-		} catch (error) {
-			setFileError(
-				error instanceof Error ? error.message : 'No se pudo leer el archivo.',
-			);
-		} finally {
-			setFileLoading(false);
-		}
-	};
 
 	if (!summary) {
 		return (
@@ -288,15 +143,7 @@ const ImplementationSummaryPage = () => {
 								{summary.nextSteps.map((step) => (
 									<div key={step} className='flex items-start gap-3'>
 										<div className='mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-50'>
-											<svg
-												className='h-3.5 w-3.5 text-success-700'
-												viewBox='0 0 24 24'
-												fill='none'
-												stroke='currentColor'
-												strokeWidth='3'
-											>
-												<path d='M5 12l4 4L19 6' />
-											</svg>
+											<SmallCheckIcon color='text-success-700' />
 										</div>
 										<p className='text-sm text-neutral-600'>{step}</p>
 									</div>
@@ -309,36 +156,16 @@ const ImplementationSummaryPage = () => {
 						<div className='relative mx-auto flex h-36 w-36 items-center justify-center'>
 							<div className='absolute inset-4 rounded-2xl bg-ai-100' />
 							<div className='relative flex h-20 w-20 items-center justify-center rounded-xl border-2 border-ai-500 bg-neutral-0 shadow-2'>
-								<svg
-									className='h-10 w-10 text-ai-600'
-									viewBox='0 0 24 24'
-									fill='none'
-									stroke='currentColor'
-									strokeWidth='1.7'
-								>
-									<path d='M8 9l-4 3 4 3M16 9l4 3-4 3M14 6l-4 12' />
-								</svg>
+								<AiOrbCenterIcon size={40} color='text-ai-600' />
 							</div>
 							<div className='absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-full bg-success-500 shadow-2'>
-								<svg
-									className='h-5 w-5 text-neutral-0'
-									viewBox='0 0 24 24'
-									fill='none'
-									stroke='currentColor'
-									strokeWidth='3'
-								>
-									<path d='M5 12l4 4L19 6' />
-								</svg>
+								<CheckCircleWhiteIcon size={20} color='text-neutral-0' />
 							</div>
 							<div className='absolute left-0 top-4 text-ai-500'>
-								<svg className='h-5 w-5' viewBox='0 0 24 24' fill='currentColor'>
-									<path d='M12 1l1.5 6.5L20 9l-6.5 1.5L12 17l-1.5-6.5L4 9l6.5-1.5L12 1z' />
-								</svg>
+								<SparkleIcon size={20} />
 							</div>
 							<div className='absolute bottom-3 right-0 text-ai-500'>
-								<svg className='h-4 w-4' viewBox='0 0 24 24' fill='currentColor'>
-									<path d='M12 2l1.2 8.8L22 12l-8.8 1.2L12 22l-1.2-8.8L2 12l8.8-1.2L12 2z' />
-								</svg>
+								<SparkleIcon size={16} />
 							</div>
 						</div>
 
@@ -373,16 +200,7 @@ const ImplementationSummaryPage = () => {
 						<div className='w-full rounded-lg border border-ai-100 bg-neutral-0 p-4 text-left'>
 							<div className='flex gap-3'>
 								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ai-50'>
-									<svg
-										className='h-4 w-4 text-ai-600'
-										viewBox='0 0 24 24'
-										fill='none'
-										stroke='currentColor'
-										strokeWidth='2'
-									>
-										<circle cx='12' cy='12' r='9' />
-										<path d='M12 11v5M12 8h.01' />
-									</svg>
+									<InfoCircleIcon size={16} color='text-ai-600' />
 								</div>
 								<div>
 									<p className='text-sm font-semibold text-neutral-800'>
@@ -399,15 +217,7 @@ const ImplementationSummaryPage = () => {
 						<div className='w-full rounded-lg border border-primary-100 bg-primary-50 p-4 text-left'>
 							<div className='flex gap-3'>
 								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-100'>
-									<svg
-										className='h-4 w-4 text-primary-600'
-										viewBox='0 0 24 24'
-										fill='none'
-										stroke='currentColor'
-										strokeWidth='2'
-									>
-										<path d='M12 3v18M3 12h18' />
-									</svg>
+									<PlusSmallIcon size={16} color='text-primary-600' />
 								</div>
 								<div>
 									<p className='text-sm font-semibold text-primary-900'>

@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/entities/user';
-import { Navbar } from './Navbar';
+import { RootNavbar } from '@/widgets';
 import { Hero } from './Hero';
 import { FlowSteps } from './FlowSteps';
 import { Features } from './Features';
@@ -34,9 +34,9 @@ export function RootPage() {
 
 	return (
 		<div className='min-h-screen bg-neutral-0 text-neutral-800'>
-			<Navbar onComenzar={handleComenzar} />
+			<RootNavbar />
 			<Hero onComenzar={handleComenzar} />
-			<Features />
+			<Features />x
 			<FlowSteps />
 			<SddSection />
 			<ApiKeySection />

@@ -3,14 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore, clearAllStores } from '@/features/app-state';
 
 import { Project, useProjectStore } from '@/entities/project';
 import { useAuthStore, authApi } from '@/entities/user';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
 import { ComputerDesktop, Home, Sidebar, UserCircle } from '@/shared/ui';
 import { ModalConfirm } from '@/shared/ui/ModalConfirm';
-import { clearAllStores } from '@/shared/lib/clearAllStores';
+
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -54,15 +54,15 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const currentProject = useProjectStore((s) => s.currentProject);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
 
-	const handleBackToHub = () => {
+	const handleHomeClick = () => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
 		if (hasUnsavedChanges) {
 			setPendingNavigationPath('/proyecto');
 			return;
 		}
-
 		router.push('/proyecto');
 	};
+
 	const initializeProject = useAppStore((s) => s.initializeProject);
 
 	const handleProjectClick = (project: Project) => {
@@ -101,7 +101,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 								<>
 									<button
 										className='text-xl font-bold text-neutral-0 cursor-pointer whitespace-nowrap tracking-widest'
-										onClick={handleBackToHub}
+										onClick={() => router.push('/')}
 									>
 										KOSMO
 									</button>
@@ -133,7 +133,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 								<div className='flex flex-col gap-1'>
 									<button
 										className='flex items-center px-3 py-2.5 gap-2.5 cursor-pointer rounded-md transition-colors text-neutral-300 hover:bg-neutral-800 hover:text-neutral-0 border-l-2 border-transparent'
-										onClick={() => router.push(user ? '/proyecto' : '/')}
+										onClick={handleHomeClick}
 										title='Inicio'
 									>
 										<Home size={20} color='text-neutral-500' />
@@ -171,7 +171,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 								<div className='flex flex-col gap-1 items-center'>
 									<button
 										className='flex items-center justify-center w-10 h-10 cursor-pointer rounded-md transition-colors text-neutral-400 hover:bg-neutral-800 hover:text-neutral-0'
-										onClick={() => router.push(user ? '/proyecto' : '/')}
+										onClick={handleHomeClick}
 										title='Inicio'
 									>
 										<Home size={20} color='text-current' />

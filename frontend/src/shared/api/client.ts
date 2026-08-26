@@ -1,8 +1,9 @@
 import { API_BASE_URL } from './config';
-import { useAuthStore, authHeaders } from '@/entities/user';
-import type { TokenPairResponse } from '@/entities/user';
+import { useAuthStore } from '@/shared/model/auth.store';
+import { authHeaders } from './headers';
+import type { TokenPairResponse } from './auth.types';
 import { parseApiError } from './errors';
-import { clearAllStores } from '@/shared/lib/clearAllStores';
+import { clearAllStores } from '@/features/app-state';
 
 let isRefreshing = false;
 let failedQueue: {
