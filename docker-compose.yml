@@ -51,7 +51,7 @@ services:
       PORT: '8000'
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
       DEV_GENERATE_SECRETS: ${DEV_GENERATE_SECRETS:-1}
-      AUTH_DISABLED: 'true'
+      AUTH_DISABLED: 'false'
 
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}}
       REDIS_URL: redis://redis:6379/0
@@ -94,6 +94,8 @@ services:
     command: sh -c "uvicorn kosmo.infrastructure.api.main:app --host 0.0.0.0 --port $${PORT:-8000} --reload"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test:
@@ -141,10 +143,7 @@ services:
   # /workspaces/.preview-active que escribe el backend tras cada implementación
   # exitosa). Cada proyecto obtiene un puerto propio del rango.
   preview:
-    build:
-      context: ./docker/preview
-      dockerfile: Dockerfile
-    image: kosmo-preview:local
+    image: node:22
     container_name: kosmo-preview
     init: true
     user: '1000:1000'
@@ -162,6 +161,19 @@ services:
       - kosmo_workspaces:/workspaces
       - ./docker/preview/run.sh:/run-preview.sh:ro
     command: ['sh', '/run-preview.sh']
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: kosmo-redis
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped
 
   postgres:
@@ -182,19 +194,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    container_name: kosmo-redis
-    ports:
-      - '${REDIS_PORT:-6379}:6379'
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
     restart: unless-stopped
 
 volumes:
