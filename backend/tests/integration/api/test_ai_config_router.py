@@ -7,7 +7,6 @@ from kosmo.contracts.ai.ai_config import (
     AIProvider,
     TestAIConnectionResult,
 )
-from kosmo.contracts.auth.secrets import EncryptedSecret
 
 
 @pytest.fixture
@@ -44,8 +43,8 @@ def client(app):
 
 @pytest.fixture
 def auth_client(client, app):
-    from kosmo.infrastructure.api.dependencies.auth import get_principal
     from kosmo.contracts.auth import Principal
+    from kosmo.infrastructure.api.dependencies.auth import get_principal
 
     mock_principal = Principal(subject="user-1", scopes=frozenset({"*"}))
     app.dependency_overrides[get_principal] = lambda: mock_principal
@@ -61,12 +60,12 @@ def override_ai_config_use_cases(
     mock_delete_preferences,
     mock_test_connection,
 ):
+    from kosmo.application.ai.manage_ai_preferences import ManageAIPreferencesUseCase
+    from kosmo.application.ai.validate_ai_connection import ValidateAIConnectionUseCase
     from kosmo.infrastructure.api.dependencies.ai_config import (
         get_manage_ai_preferences_use_case,
         get_validate_ai_connection_use_case,
     )
-    from kosmo.application.ai.manage_ai_preferences import ManageAIPreferencesUseCase
-    from kosmo.application.ai.validate_ai_connection import ValidateAIConnectionUseCase
 
     mock_manage_use_case = MagicMock(spec=ManageAIPreferencesUseCase)
     mock_manage_use_case.get_preferences = mock_get_preferences

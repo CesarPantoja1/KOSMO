@@ -12,8 +12,8 @@ from kosmo.contracts.ai.ai_config import (
 from kosmo.contracts.auth import Principal
 from kosmo.infrastructure.api.dependencies import (
     get_manage_ai_preferences_use_case,
-    get_validate_ai_connection_use_case,
     get_principal,
+    get_validate_ai_connection_use_case,
 )
 from kosmo.infrastructure.api.schemas import (
     AIConfigResponse,
