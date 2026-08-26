@@ -1,4 +1,4 @@
-﻿from typing import Annotated
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -69,7 +69,7 @@ async def save_preferences(
         api_key=request.api_key,
     )
     view = await use_case.save_preferences(principal.subject, input_data)
-    
+
     return AIConfigResponse(
         provider=view.provider.value,
         model=view.model,
@@ -117,10 +117,9 @@ async def test_connection(
         user_id=principal.subject,
     )
     result = await use_case.execute(input_data)
-    
+
     return TestAIConnectionResponse(
         is_connected=result.is_connected,
         detected_model=result.detected_model,
         message=result.message,
     )
-

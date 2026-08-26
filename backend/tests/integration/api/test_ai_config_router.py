@@ -1,4 +1,4 @@
-﻿from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -33,6 +33,7 @@ def mock_test_connection():
 @pytest.fixture
 def app():
     from kosmo.infrastructure.api.main import app as main_app
+
     return main_app
 
 
@@ -86,6 +87,7 @@ def override_ai_config_use_cases(
 
 def test_get_preferences_returns_200(auth_client: TestClient, mock_get_preferences):
     from kosmo.contracts.ai.ai_config import AIConfigView
+
     mock_get_preferences.return_value = AIConfigView(
         provider=AIProvider.ANTHROPIC,
         model="claude-3-opus-20240229",
@@ -111,6 +113,7 @@ def test_get_preferences_unauthorized(client: TestClient):
 
 def test_save_preferences_returns_200(auth_client: TestClient, mock_save_preferences):
     from kosmo.contracts.ai.ai_config import AIConfigView
+
     mock_save_preferences.return_value = AIConfigView(
         provider=AIProvider.OPENAI,
         model="gpt-4o",
@@ -158,4 +161,3 @@ def test_test_connection_returns_200(auth_client: TestClient, mock_test_connecti
     assert data["is_connected"] is True
     assert data["detected_model"] == "gemini-1.5-pro"
     assert data["message"] == "Connection OK"
-
