@@ -32,5 +32,3 @@ def get_validate_ai_connection_use_case(request: Request) -> ValidateAIConnectio
         config_repo=container.repos.user_ai_configs,
         cipher=_resolve_cipher(request),
     )
-
-

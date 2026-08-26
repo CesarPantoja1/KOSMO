@@ -11,7 +11,7 @@ export function AiProviderToast() {
 		fetchConfig();
 	}, [fetchConfig]);
 
-	if (config?.is_custom) {
+	if (config?.is_custom || config?.has_api_key) {
 		return null;
 	}
 

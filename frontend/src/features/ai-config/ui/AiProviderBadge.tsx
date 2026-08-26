@@ -13,9 +13,8 @@ export function AiProviderBadge({
 }: AiProviderBadgeProps) {
 	const { config, providers } = useAiConfigStore();
 
-	const isCustom = config?.is_custom ?? false;
+	const isCustom = Boolean(config?.is_custom || config?.has_api_key);
 	const providerValue = config?.provider ?? DEFAULT_AI_PROVIDER;
-	// Obtiene el label del catálogo dinámico; fallback al valor del proveedor
 	const providerLabel =
 		providers.find((p) => p.value === providerValue)?.label ?? providerValue;
 

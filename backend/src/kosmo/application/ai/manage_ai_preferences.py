@@ -49,7 +49,7 @@ class ManageAIPreferencesUseCase:
         """Guarda o actualiza las preferencias del usuario."""
         encrypted_key = self._cipher.encrypt(data.api_key.encode("utf-8"))
 
-        is_custom = data.provider == AIProvider.CUSTOM
+        is_custom = data.provider != AIProvider.KOSMO_DEFAULT
 
         config = UserAiConfig(
             user_id=user_id,
