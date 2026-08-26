@@ -919,3 +919,30 @@ class ProjectPreviewResponse(BaseModel):
     """URL de la vista previa del proyecto activo."""
 
     url: str = Field(description="URL pública de la vista previa del proyecto")
+
+
+class AIConfigResponse(BaseModel):
+    provider: str
+    model: str
+    is_custom: bool
+    has_api_key: bool
+    masked_key: str | None = None
+    updated_at: datetime | None = None
+
+
+class SaveAIConfigRequest(BaseModel):
+    provider: str
+    model: str
+    api_key: str
+
+
+class TestAIConnectionRequest(BaseModel):
+    provider: str
+    model: str
+    api_key: str | None = None
+
+
+class TestAIConnectionResponse(BaseModel):
+    is_connected: bool
+    detected_model: str
+    message: str

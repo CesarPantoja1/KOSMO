@@ -14,6 +14,7 @@ from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
 from kosmo.infrastructure.api.middlewares import RequestLoggingMiddleware
+from kosmo.infrastructure.api.routers.ai_config import router as ai_config_router
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.chat_sessions import router as chat_sessions_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
@@ -40,9 +41,9 @@ _OPENAPI_TAGS = [
     {
         "name": "auth",
         "description": (
-            "Flujo de autenticación PKCE + OAuth 2.0. "
-            "Los endpoints siguen el estándar RFC 6749/7636: el cliente genera un "
-            "``code_verifier`` efímero, solicita un ``authorization_code`` en ``/authorize``, "
+            "Flujo de autenticaciÃ³n PKCE + OAuth 2.0. "
+            "Los endpoints siguen el estÃ¡ndar RFC 6749/7636: el cliente genera un "
+            "``code_verifier`` efÃ­mero, solicita un ``authorization_code`` en ``/authorize``, "
             "lo intercambia por tokens JWT en ``/token`` y los renueva con ``/refresh``. "
             "Todos los endpoints protegidos requieren ``Authorization: Bearer <access_token>``."
         ),
@@ -50,18 +51,18 @@ _OPENAPI_TAGS = [
     {
         "name": "projects",
         "description": (
-            "Gestión de proyectos. Permite crear, listar y consultar proyectos "
+            "GestiÃ³n de proyectos. Permite crear, listar y consultar proyectos "
             "asociados al usuario autenticado. Cada proyecto agrupa el ciclo "
-            "completo de especificación, modelado y generación de artefactos."
+            "completo de especificaciÃ³n, modelado y generaciÃ³n de artefactos."
         ),
     },
     {
         "name": "discovery",
         "description": (
-            "Generación de documentos de descubrimiento mediante IA. "
-            "Permite generar, consultar y actualizar el documento de visión "
+            "GeneraciÃ³n de documentos de descubrimiento mediante IA. "
+            "Permite generar, consultar y actualizar el documento de visiÃ³n "
             "de producto de un proyecto. El documento se estructura en 8 "
-            "secciones obligatorias que cubren visión, problema, actores, "
+            "secciones obligatorias que cubren visiÃ³n, problema, actores, "
             "propuesta de valor, casos de uso, capacidades, reglas de negocio "
             "y atributos de calidad."
         ),
@@ -69,38 +70,38 @@ _OPENAPI_TAGS = [
     {
         "name": "features",
         "description": (
-            "Generación y gestión de características del producto software mediante IA. "
-            "Permite generar características a partir del documento de descubrimiento, "
-            "sugerir nuevas características no duplicadas, listar las existentes y "
+            "GeneraciÃ³n y gestiÃ³n de caracterÃ­sticas del producto software mediante IA. "
+            "Permite generar caracterÃ­sticas a partir del documento de descubrimiento, "
+            "sugerir nuevas caracterÃ­sticas no duplicadas, listar las existentes y "
             "guardar las seleccionadas por el usuario."
         ),
     },
     {
         "name": "requirements",
         "description": (
-            "Generación y gestión de requisitos EARS por característica mediante IA. "
+            "GeneraciÃ³n y gestiÃ³n de requisitos EARS por caracterÃ­stica mediante IA. "
             "Permite generar requisitos a partir del documento de descubrimiento y la "
-            "característica seleccionada, consultarlos y actualizar su contenido en Markdown."
+            "caracterÃ­stica seleccionada, consultarlos y actualizar su contenido en Markdown."
         ),
     },
     {
         "name": "modelo",
         "description": (
-            "Generación y consulta de diagramas de actividad PlantUML por característica mediante IA. "
+            "GeneraciÃ³n y consulta de diagramas de actividad PlantUML por caracterÃ­stica mediante IA. "
             "Permite generar diagramas UML a partir de los requisitos EARS y consultar los diagramas generados."
         ),
     },
     {
         "name": "schemas",
         "description": (
-            "Introspección de contratos. Permite al Frontend consultar el JSON Schema "
-            "de cualquier DTO expuesto por la API para generación dinámica de formularios, "
+            "IntrospecciÃ³n de contratos. Permite al Frontend consultar el JSON Schema "
+            "de cualquier DTO expuesto por la API para generaciÃ³n dinÃ¡mica de formularios, "
             "validaciones y tipos TypeScript."
         ),
     },
     {
         "name": "documents",
-        "description": "Modificación directa de documentos sin fase de plan intermedio.",
+        "description": "ModificaciÃ³n directa de documentos sin fase de plan intermedio.",
     },
 ]
 
@@ -119,46 +120,46 @@ _DESCRIPTION = """
 KOSMO Backend API
 
 KOSMO es una plataforma de agentes de IA con identidad centralizada.
-Esta API gestiona el ciclo completo de autenticación de usuarios y la
-introspección de contratos de datos para el Frontend.
+Esta API gestiona el ciclo completo de autenticaciÃ³n de usuarios y la
+introspecciÃ³n de contratos de datos para el Frontend.
 
-### Flujo de autenticación recomendado
+### Flujo de autenticaciÃ³n recomendado
 
 ```
-1. POST /api/v1/auth/register      → Crear cuenta
-2. POST /api/v1/auth/authorize     → Obtener authorization_code (PKCE)
-3. POST /api/v1/auth/token         → Intercambiar código por JWT pair
-4. GET  /api/v1/auth/me            → Verificar identidad (Bearer token)
-5. POST /api/v1/auth/refresh       → Renovar tokens antes de expirar
-6. POST /api/v1/auth/logout        → Revocar sesión activa
+1. POST /api/v1/auth/register      â†’ Crear cuenta
+2. POST /api/v1/auth/authorize     â†’ Obtener authorization_code (PKCE)
+3. POST /api/v1/auth/token         â†’ Intercambiar cÃ³digo por JWT pair
+4. GET  /api/v1/auth/me            â†’ Verificar identidad (Bearer token)
+5. POST /api/v1/auth/refresh       â†’ Renovar tokens antes de expirar
+6. POST /api/v1/auth/logout        â†’ Revocar sesiÃ³n activa
 ```
 
 ### Seguridad
 
 - Tokens firmados con **RS256** (par de claves RSA 2048-bit)
-- Contraseñas hasheadas con **Argon2id** (OWASP 2025)
+- ContraseÃ±as hasheadas con **Argon2id** (OWASP 2025)
 - Refresh tokens con **Token Rotation**: cada uso emite un par nuevo
 - Rate limiting por IP en todos los endpoints sensibles
 - Secrets cifrados con **Fernet** (AES-128-CBC + HMAC-SHA256)
 
 ### Respuestas de error
 
-Todos los errores de autenticación siguen el esquema `OAuthErrorResponse`
-(RFC 6749 §5.2). Los errores de infraestructura usan `HttpErrorResponse`.
+Todos los errores de autenticaciÃ³n siguen el esquema `OAuthErrorResponse`
+(RFC 6749 Â§5.2). Los errores de infraestructura usan `HttpErrorResponse`.
 """
 
 _SERVERS = [
     {
         "url": "http://localhost:8000",
-        "description": "Local — desarrollo en máquina del programador",
+        "description": "Local â€” desarrollo en mÃ¡quina del programador",
     },
     {
         "url": "https://api-dev.kosmo.app",
-        "description": "Desarrollo — entorno de integración continua",
+        "description": "Desarrollo â€” entorno de integraciÃ³n continua",
     },
     {
         "url": "https://api.kosmo.app",
-        "description": "Producción — tráfico real de usuarios",
+        "description": "ProducciÃ³n â€” trÃ¡fico real de usuarios",
     },
 ]
 
@@ -167,19 +168,19 @@ _SERVERS = [
 _GLOBAL_RESPONSES = {
     403: {
         "description": (
-            "Forbidden — El token es válido pero no tiene los scopes necesarios para acceder al recurso solicitado."
+            "Forbidden â€” El token es vÃ¡lido pero no tiene los scopes necesarios para acceder al recurso solicitado."
         ),
         "content": {
             "application/json": {
                 "schema": {"$ref": "#/components/schemas/HttpErrorResponse"},
-                "example": {"detail": "No tienes permisos suficientes para realizar esta acción."},
+                "example": {"detail": "No tienes permisos suficientes para realizar esta acciÃ³n."},
             }
         },
     },
     500: {
         "description": (
-            "Internal Server Error — Error inesperado en el servidor. "
-            "Se registra automáticamente en el sistema de observabilidad (Logfire/OTEL). "
+            "Internal Server Error â€” Error inesperado en el servidor. "
+            "Se registra automÃ¡ticamente en el sistema de observabilidad (Logfire/OTEL). "
             "El cliente debe implementar retry con back-off exponencial."
         ),
         "content": {
@@ -191,7 +192,7 @@ _GLOBAL_RESPONSES = {
     },
 }
 
-# Ciclo de vida y aplicación
+# Ciclo de vida y aplicaciÃ³n
 
 
 def _make_outbox_handler(container: AppContainer) -> OutboxHandler:
@@ -249,7 +250,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     outbox_task = asyncio.create_task(run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components)))
 
-    # Recuperación best-effort de generaciones huérfanas tras un reinicio del backend:
+    # RecuperaciÃ³n best-effort de generaciones huÃ©rfanas tras un reinicio del backend:
     # marcar IN_PROGRESS como FAILED, cerrar sesiones OpenCode y liberar locks de workspace.
     with contextlib.suppress(Exception):
         await recover_zombie_implementations(
@@ -314,6 +315,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 if not settings.auth_disabled:
     app.include_router(auth_router)
+    app.include_router(ai_config_router)
 app.include_router(projects_router)
 app.include_router(discovery_router)
 app.include_router(features_router)
@@ -333,21 +335,21 @@ app.include_router(implementations_router)
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
 async def health() -> dict[str, str]:
-    """Verificación de disponibilidad del servidor.
+    """VerificaciÃ³n de disponibilidad del servidor.
 
-    Devuelve ``{"status": "ok"}`` si el proceso está activo.
+    Devuelve ``{"status": "ok"}`` si el proceso estÃ¡ activo.
     No verifica conectividad con base de datos ni Redis.
     """
     return {"status": "ok"}
 
 
-# Especificación OpenAPI customizada
+# EspecificaciÃ³n OpenAPI customizada
 
 
 def _custom_openapi() -> dict[str, Any]:
-    """Genera la especificación OpenAPI enriquecida con respuestas globales.
+    """Genera la especificaciÃ³n OpenAPI enriquecida con respuestas globales.
 
-    Se inyectan las respuestas 403 y 500 en cada operación para que el
+    Se inyectan las respuestas 403 y 500 en cada operaciÃ³n para que el
     Frontend pueda manejar todos los errores de forma consistente.
     """
     if app.openapi_schema:
