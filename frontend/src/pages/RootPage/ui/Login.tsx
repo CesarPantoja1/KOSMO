@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuthStore, authApi } from '@/entities/user';
+import { authApi } from '@/entities/user';
 import { formatApiError } from '@/shared/api';
 import { Close } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
@@ -13,7 +13,6 @@ interface LoginModalProps {
 }
 
 const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps) => {
-	const { accessToken } = useAuthStore();
 	const router = useRouter();
 
 	const [email, setEmail] = useState('');
@@ -21,14 +20,6 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 	const [error, setError] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 	const [retryAfter, setRetryAfter] = useState(0);
-
-	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
-
-	useEffect(() => {
-		if (isAuthDisabled || accessToken) {
-			onClose();
-		}
-	}, [accessToken, isAuthDisabled, onClose]);
 
 	useEffect(() => {
 		if (retryAfter <= 0) return;
@@ -74,8 +65,6 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 			setIsLoading(false);
 		}
 	};
-
-	if (isAuthDisabled) return null;
 
 	return (
 		<form

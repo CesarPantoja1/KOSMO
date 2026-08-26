@@ -49,7 +49,11 @@ export function RootNavbar({ onComenzar }: RootNavbarProps) {
 					</nav>
 				)}
 
-				<button onClick={handleComenzar} className='btn btn-primary btn-sm'>
+				<button
+					type='button'
+					onClick={handleComenzar}
+					className='btn btn-primary btn-sm'
+				>
 					Comenzar
 				</button>
 			</div>

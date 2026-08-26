@@ -47,7 +47,8 @@ export const apiClient = async <T>(
 		!isAuthDisabled &&
 		res.status === 401 &&
 		refreshToken &&
-		!url.includes('/auth/token')
+		!url.includes('/auth/token') &&
+		!url.includes('/auth/refresh')
 	) {
 		if (isRefreshing) {
 			return new Promise((resolve, reject) => {

@@ -192,7 +192,7 @@ export function Hero({ onComenzar }: HeroProps) {
 
 	return (
 		<section className='relative overflow-hidden min-h-11/12'>
-			<div className='absolute inset-0 bg-linear-to-br from-neutral-0 via-primary-50/30 to-neutral-0' />
+			<div className='absolute inset-0 bg-linear-to-br from-neutral-0 via-primary-50/30 to-neutral-0 pointer-events-none' />
 
 			<div className='relative mx-auto grid max-w-7xl items-center gap-14 px-6 py-24 lg:grid-cols-2 lg:py-28'>
 				<div>
@@ -215,7 +215,11 @@ export function Hero({ onComenzar }: HeroProps) {
 					</p>
 
 					<div className='mt-8 flex flex-wrap gap-4'>
-						<button onClick={onComenzar} className='btn btn-primary btn-lg'>
+						<button
+							type='button'
+							onClick={onComenzar}
+							className='btn btn-primary btn-lg'
+						>
 							Comenzar ahora
 							<ArrowRight size={16} color='text-neutral-0' />
 						</button>

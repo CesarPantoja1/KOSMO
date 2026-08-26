@@ -1,8 +1,6 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/entities/user';
 import { RootNavbar } from '@/widgets';
 import { Hero } from './Hero';
 import { FlowSteps } from './FlowSteps';
@@ -16,8 +14,6 @@ import { SessionExpiredWatcher } from './SessionExpiredWatcher';
 export function RootPage() {
 	const [showAuthModal, setShowAuthModal] = useState(false);
 	const [sessionExpired, setSessionExpired] = useState(false);
-	const router = useRouter();
-	const accessToken = useAuthStore((s) => s.accessToken);
 
 	const handleSessionExpired = () => {
 		setSessionExpired(true);
@@ -25,18 +21,14 @@ export function RootPage() {
 	};
 
 	const handleComenzar = () => {
-		if (accessToken) {
-			router.push('/proyecto');
-		} else {
-			setShowAuthModal(true);
-		}
+		setShowAuthModal(true);
 	};
 
 	return (
 		<div className='min-h-screen bg-neutral-0 text-neutral-800'>
 			<RootNavbar onComenzar={handleComenzar} />
 			<Hero onComenzar={handleComenzar} />
-			<Features />x
+			<Features />
 			<FlowSteps />
 			<SddSection />
 			<ApiKeySection />
