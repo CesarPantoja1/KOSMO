@@ -9,6 +9,9 @@ export const metadata: Metadata = {
 		template: '%s | KOSMO',
 	},
 	description: 'Plataforma de gestión de proyectos KOSMO',
+	icons: {
+		icon: './kosmo.png',
+	},
 };
 
 const geistSans = localFont({

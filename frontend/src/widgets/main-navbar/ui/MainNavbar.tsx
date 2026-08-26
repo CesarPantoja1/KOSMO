@@ -1,16 +1,15 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { useAppStore, clearAllStores } from '@/features/app-state';
+import { clearAllStores, useAppStore } from '@/features/app-state';
 
 import { Project, useProjectStore } from '@/entities/project';
-import { useAuthStore, authApi } from '@/entities/user';
-import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
-import { ComputerDesktop, Home, Sidebar, UserCircle } from '@/shared/ui';
+import { authApi, useAuthStore } from '@/entities/user';
+import { ComputerDesktop, Home, Logo, Sidebar, UserCircle } from '@/shared/ui';
 import { ModalConfirm } from '@/shared/ui/ModalConfirm';
-
+import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -114,8 +113,8 @@ export function MainNavbar({ children }: MainNavbarProps) {
 								</>
 							) : (
 								<>
-									<span className='text-xl font-bold text-neutral-0 select-none group-hover:invisible'>
-										K
+									<span className='select-none group-hover:invisible'>
+										<Logo size={28} />
 									</span>
 									<button
 										className='absolute top-0 bottom-0 flex items-center justify-center cursor-pointer text-neutral-400 hover:text-neutral-0 transition-colors opacity-0 group-hover:opacity-100'
