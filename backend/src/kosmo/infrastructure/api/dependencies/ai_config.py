@@ -1,4 +1,4 @@
-﻿from fastapi import Request
+from fastapi import Request
 
 from kosmo.application.ai.manage_ai_preferences import ManageAIPreferencesUseCase
 from kosmo.application.ai.validate_ai_connection import ValidateAIConnectionUseCase
