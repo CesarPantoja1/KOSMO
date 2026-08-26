@@ -1,20 +1,22 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore } from '@/entities/user';
 import { Logo } from '@/shared/ui';
 
-export function RootNavbar() {
+interface RootNavbarProps {
+	onComenzar?: () => void;
+}
+
+export function RootNavbar({ onComenzar }: RootNavbarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
-	const accessToken = useAuthStore((s) => s.accessToken);
 	const isLanding = pathname === '/';
 
 	const handleComenzar = () => {
-		if (accessToken) {
-			router.push('/proyecto');
+		if (onComenzar) {
+			onComenzar();
 		} else {
-			router.push('/#auth');
+			router.push('/proyecto');
 		}
 	};
 

@@ -34,7 +34,7 @@ export function RootPage() {
 
 	return (
 		<div className='min-h-screen bg-neutral-0 text-neutral-800'>
-			<RootNavbar />
+			<RootNavbar onComenzar={handleComenzar} />
 			<Hero onComenzar={handleComenzar} />
 			<Features />x
 			<FlowSteps />
