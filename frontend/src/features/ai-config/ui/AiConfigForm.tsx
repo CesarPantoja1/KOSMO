@@ -9,6 +9,8 @@ import {
 	type AIProvider,
 	type SaveAIConfigRequest,
 } from '@/entities/ai-config';
+import { formatApiError } from '@/shared/api/errors';
+import { toast } from '@/shared/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface AiConfigFormProps {
@@ -21,13 +23,8 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		providers,
 		loading,
 		error,
-		testResult,
-		testLoading,
-		testError,
 		saveConfig,
 		deleteConfig,
-		testConnection,
-		clearTestResult,
 		fetchProviders,
 	} = useAiConfigStore();
 
@@ -62,35 +59,38 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		[providers],
 	);
 
-	const handleTestConnection = async () => {
-		if (!apiKey && !config?.has_api_key) return;
-		await testConnection({ provider, model, api_key: apiKey });
-	};
-
 	const handleSave = async () => {
-		const data: SaveAIConfigRequest = { provider, model, api_key: apiKey };
-		await saveConfig(data);
-		setIsEditing(false);
-		setApiKey('');
-		setShowApiKey(false);
-		clearTestResult();
-		onSaved?.();
+		if (!apiKey.trim()) return;
+		try {
+			const data: SaveAIConfigRequest = { provider, model, api_key: apiKey.trim() };
+			await saveConfig(data);
+			toast.success('Configuración de IA guardada correctamente');
+			setIsEditing(false);
+			setApiKey('');
+			setShowApiKey(false);
+			onSaved?.();
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al guardar la configuración de IA'));
+		}
 	};
 
 	const handleDelete = async () => {
-		await deleteConfig();
-		setIsEditing(false);
-		setApiKey('');
-		setShowApiKey(false);
-		clearTestResult();
-		onSaved?.();
+		try {
+			await deleteConfig();
+			toast.success('Clave de API eliminada. Se restauró el proveedor predeterminado.');
+			setIsEditing(false);
+			setApiKey('');
+			setShowApiKey(false);
+			onSaved?.();
+		} catch (err) {
+			toast.error(formatApiError(err, 'Error al eliminar la configuración de IA'));
+		}
 	};
 
 	const handleStartEditing = () => {
 		setIsEditing(true);
 		setApiKey('');
 		setShowApiKey(false);
-		clearTestResult();
 		if (config && config.provider !== 'kosmo_default') {
 			setProvider(config.provider);
 			setModel(config.model);
@@ -101,7 +101,6 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		setIsEditing(false);
 		setApiKey('');
 		setShowApiKey(false);
-		clearTestResult();
 		if (config && config.provider !== 'kosmo_default') {
 			setProvider(config.provider);
 			setModel(config.model);
@@ -113,8 +112,7 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 
 	const maskedKey = config?.masked_key ?? maskApiKey(apiKey);
 	const hasExistingKey = config?.has_api_key ?? false;
-	const canTest = (apiKey || hasExistingKey) && !testLoading;
-	const canSave = apiKey && !loading;
+	const canSave = apiKey.trim().length > 0 && !loading;
 
 	const tierOrder: Array<'flagship' | 'balanced' | 'fast'> = ['flagship', 'balanced', 'fast'];
 	const modelsByTier = tierOrder
@@ -246,50 +244,20 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 						</div>
 					</div>
 
-					{testResult && (
-						<div
-							className={`rounded-lg px-4 py-3 text-sm ${
-								testResult.is_connected
-									? 'bg-success-50 text-success-700 border border-success-500/20'
-									: 'bg-error-50 text-error-700 border border-error-500/20'
-							}`}
-						>
-							<p className='font-medium'>{testResult.message}</p>
-							{testResult.is_connected && (
-								<p className='text-xs mt-1'>
-									Modelo detectado: {testResult.detected_model}
-								</p>
-							)}
-						</div>
-					)}
-
-					{testError && (
-						<div className='bg-error-50 text-error-700 border border-error-500/20 rounded-lg px-4 py-3 text-sm'>
-							{testError}
-						</div>
-					)}
-
 					<div className='flex gap-2'>
-						<button
-							type='button'
-							onClick={handleTestConnection}
-							disabled={!canTest}
-							className='btn btn-secondary btn-sm disabled:opacity-50'
-						>
-							{testLoading ? 'Probando...' : 'Probar conexión'}
-						</button>
 						<button
 							type='button'
 							onClick={handleSave}
 							disabled={!canSave}
 							className='btn btn-primary btn-sm disabled:opacity-50'
 						>
-							{loading ? 'Guardando...' : 'Guardar'}
+							{loading ? 'Verificando y guardando...' : 'Guardar'}
 						</button>
 						<button
 							type='button'
 							onClick={handleCancel}
-							className='btn btn-secondary btn-sm'
+							disabled={loading}
+							className='btn btn-secondary btn-sm disabled:opacity-50'
 						>
 							Cancelar
 						</button>
@@ -299,3 +267,4 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		</div>
 	);
 }
+

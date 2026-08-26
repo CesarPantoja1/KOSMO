@@ -157,6 +157,20 @@ def test_save_preferences_empty_api_key_returns_422(auth_client: TestClient):
     assert "La clave de API no puede estar vacía" in response.json()["detail"]
 
 
+def test_save_preferences_connection_failure_returns_422(auth_client: TestClient, mock_save_preferences):
+    from kosmo.contracts.ai.ai_config import AIConnectionTestError
+
+    mock_save_preferences.side_effect = AIConnectionTestError("Clave de API inválida o no autorizada para OpenAI.")
+    payload = {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "api_key": "sk-invalidkey",
+    }
+    response = auth_client.post("/api/v1/ai-config", json=payload)
+    assert response.status_code == 422
+    assert "Clave de API inválida o no autorizada para OpenAI" in response.json()["detail"]
+
+
 def test_delete_preferences_returns_204(auth_client: TestClient, mock_delete_preferences):
     response = auth_client.delete("/api/v1/ai-config")
 

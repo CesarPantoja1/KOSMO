@@ -10,12 +10,37 @@ from kosmo.contracts.ai.ai_config import UserAiConfigRepository
 from kosmo.contracts.auth import SecretCipher
 from kosmo.contracts.auth.secrets import EncryptedSecret
 from kosmo.contracts.llm.ports import LLMClient, LLMResponse, PromptTemplate, ToolCallRecord
+from kosmo.contracts.sdd.errors import AIProviderAuthError
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient, StreamedTypedResult
 
 current_user_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_user_id", default=None)
 
 _log = structlog.get_logger(__name__)
+
+_AUTH_ERROR_KEYWORDS = (
+    "unauthorized",
+    "authentication",
+    "invalid_api_key",
+    "api_key_invalid",
+    "invalid api key",
+    "incorrect api key",
+    "permission_denied",
+    "permissiondenied",
+    "quota",
+    "insufficient_quota",
+    "credit",
+    "401",
+    "403",
+)
+
+
+def is_ai_auth_error(exc: Exception) -> bool:
+    if isinstance(exc, AIProviderAuthError):
+        return True
+    err_str = str(exc).lower()
+    type_str = type(exc).__name__.lower()
+    return any(keyword in err_str or keyword in type_str for keyword in _AUTH_ERROR_KEYWORDS)
 
 
 def build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -119,7 +144,12 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 4096,
     ) -> LLMResponse:
         client = await self._resolve_client()
-        return await client.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+        try:
+            return await client.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+        except Exception as exc:
+            if is_ai_auth_error(exc):
+                raise AIProviderAuthError() from exc
+            raise
 
     async def complete_json(
         self,
@@ -128,7 +158,12 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 4096,
     ) -> LLMResponse:
         client = await self._resolve_client()
-        return await client.complete_json(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+        try:
+            return await client.complete_json(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+        except Exception as exc:
+            if is_ai_auth_error(exc):
+                raise AIProviderAuthError() from exc
+            raise
 
     async def complete_typed[T](
         self,
@@ -138,12 +173,17 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 4096,
     ) -> T:
         client = await self._resolve_client()
-        return await client.complete_typed(
-            prompt=prompt,
-            output_type=output_type,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        try:
+            return await client.complete_typed(
+                prompt=prompt,
+                output_type=output_type,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            if is_ai_auth_error(exc):
+                raise AIProviderAuthError() from exc
+            raise
 
     @property
     def supports_native_tools(self) -> bool:
@@ -159,13 +199,18 @@ class DynamicUserLLMClient(LLMClient):
     ) -> tuple[str, list[ToolCallRecord]]:
         client = await self._resolve_client()
         if isinstance(client, PydanticAILLMClient):
-            return await client.complete_with_tools(
-                prompt=prompt,
-                tools=tools,
-                tool_handler=tool_handler,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            try:
+                return await client.complete_with_tools(
+                    prompt=prompt,
+                    tools=tools,
+                    tool_handler=tool_handler,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
         return ("", [])
 
     def stream_typed[T](

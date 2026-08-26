@@ -4,6 +4,7 @@ from kosmo.contracts.ai.ai_config import (
     DEFAULT_AI_MODEL,
     DEFAULT_AI_PROVIDER,
     AIConfigView,
+    AIConnectionTester,
     AIProvider,
     SaveAIConfigInput,
     UserAiConfig,
@@ -17,9 +18,15 @@ from kosmo.contracts.telemetry import traced
 class ManageAIPreferencesUseCase:
     """Caso de uso para la gestión de preferencias de IA de los usuarios."""
 
-    def __init__(self, config_repo: UserAiConfigRepository, cipher: SecretCipher) -> None:
+    def __init__(
+        self,
+        config_repo: UserAiConfigRepository,
+        cipher: SecretCipher,
+        connection_tester: AIConnectionTester | None = None,
+    ) -> None:
         self._repo = config_repo
         self._cipher = cipher
+        self._tester = connection_tester
 
     @traced("ai_config.get_preferences")
     async def get_preferences(self, user_id: str) -> AIConfigView:
@@ -46,7 +53,14 @@ class ManageAIPreferencesUseCase:
 
     @traced("ai_config.save_preferences")
     async def save_preferences(self, user_id: str, data: SaveAIConfigInput) -> AIConfigView:
-        """Guarda o actualiza las preferencias del usuario."""
+        """Guarda o actualiza las preferencias del usuario tras verificar la validez de las credenciales."""
+        if self._tester is not None:
+            await self._tester.test_connection(
+                provider=data.provider,
+                model=data.model.strip(),
+                api_key=data.api_key.strip(),
+            )
+
         encrypted_key = self._cipher.encrypt(data.api_key.encode("utf-8"))
 
         is_custom = data.provider != AIProvider.KOSMO_DEFAULT

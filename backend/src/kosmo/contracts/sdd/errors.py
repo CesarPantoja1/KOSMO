@@ -151,6 +151,26 @@ class LLMInvocationError(SpecError):
         super().__init__(problem)
 
 
+class AIProviderAuthError(SpecError):
+    def __init__(
+        self,
+        *,
+        detail: str = (
+            "Tu clave de API de IA no es válida o ha expirado. "
+            "Por favor, revísala y actualízala en la pestaña de IA de tu perfil."
+        ),
+        instance: str = "/api/v1/ai",
+    ) -> None:
+        problem = ProblemDetail(
+            type="urn:kosmo:ai:auth-error",
+            title="Clave de API inválida o expirada",
+            status=422,
+            detail=detail,
+            instance=instance,
+        )
+        super().__init__(problem)
+
+
 class DiagramNotFoundError(SpecError):
     def __init__(
         self,

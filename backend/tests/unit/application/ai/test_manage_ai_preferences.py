@@ -80,6 +80,67 @@ async def test_save_preferences_encrypts_and_saves(use_case, mock_repo):
 
 
 @pytest.mark.asyncio
+async def test_save_preferences_verifies_connection_when_tester_provided(mock_repo, mock_cipher):
+    from kosmo.contracts.ai.ai_config import TestAIConnectionResult
+
+    mock_tester = AsyncMock()
+    mock_tester.test_connection.return_value = TestAIConnectionResult(
+        is_connected=True,
+        detected_model="claude-3-opus-20240229",
+        message="OK",
+    )
+    use_case = ManageAIPreferencesUseCase(
+        config_repo=mock_repo,
+        cipher=mock_cipher,
+        connection_tester=mock_tester,
+    )
+    input_data = SaveAIConfigInput(
+        provider=AIProvider.ANTHROPIC,
+        model="claude-3-opus-20240229",
+        api_key="sk-ant-123456789",
+    )
+    mock_repo.save.return_value = UserAiConfig(
+        user_id="user-1",
+        provider=input_data.provider,
+        model=input_data.model,
+        encrypted_api_key=EncryptedSecret(ciphertext=b"encrypted_sk-ant-123456789"),
+    )
+
+    result = await use_case.save_preferences("user-1", input_data)
+
+    mock_tester.test_connection.assert_called_once_with(
+        provider=AIProvider.ANTHROPIC,
+        model="claude-3-opus-20240229",
+        api_key="sk-ant-123456789",
+    )
+    mock_repo.save.assert_called_once()
+    assert result.masked_key == "••••••••6789"
+
+
+@pytest.mark.asyncio
+async def test_save_preferences_fails_and_does_not_save_when_test_fails(mock_repo, mock_cipher):
+    from kosmo.contracts.ai.ai_config import AIConnectionTestError
+
+    mock_tester = AsyncMock()
+    mock_tester.test_connection.side_effect = AIConnectionTestError("Clave de API inválida o expirada")
+    use_case = ManageAIPreferencesUseCase(
+        config_repo=mock_repo,
+        cipher=mock_cipher,
+        connection_tester=mock_tester,
+    )
+    input_data = SaveAIConfigInput(
+        provider=AIProvider.OPENAI,
+        model="gpt-4o",
+        api_key="sk-invalid",
+    )
+
+    with pytest.raises(AIConnectionTestError, match="Clave de API inválida o expirada"):
+        await use_case.save_preferences("user-1", input_data)
+
+    mock_repo.save.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_delete_preferences(use_case, mock_repo):
     await use_case.delete_preferences("user-1")
     mock_repo.delete.assert_called_once_with("user-1")

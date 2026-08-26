@@ -22,6 +22,7 @@ def get_manage_ai_preferences_use_case(request: Request) -> ManageAIPreferencesU
     return ManageAIPreferencesUseCase(
         config_repo=container.repos.user_ai_configs,
         cipher=_resolve_cipher(request),
+        connection_tester=HttpAIConnectionTester(),
     )
 
 

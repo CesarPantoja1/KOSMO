@@ -69,4 +69,19 @@ describe('formatApiError', () => {
 		expect(formatApiError(new Error('boom'), 'fallback')).toBe('boom');
 		expect(formatApiError(null, 'fallback')).toBe('fallback');
 	});
+
+	it('formatea amigablemente errores de autenticación de IA (urn:kosmo:ai:auth-error)', () => {
+		const error = new ApiError({
+			status: 422,
+			type: 'urn:kosmo:ai:auth-error',
+			detail: 'Tu clave de API para OpenAI es inválida o ha expirado. Por favor, revísala en Perfil > Configuración de IA.',
+		});
+
+		expect(formatApiError(error, 'fallback')).toContain('Tu clave de API para OpenAI es inválida');
+	});
+
+	it('detecta menciones de api key en Error estándar y formatea mensaje amigable', () => {
+		const error = new Error('Incorrect API key provided: sk-***');
+		expect(formatApiError(error, 'fallback')).toContain('Tu clave de API de IA no es válida o ha expirado');
+	});
 });
