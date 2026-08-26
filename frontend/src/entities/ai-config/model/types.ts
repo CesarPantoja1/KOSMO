@@ -1,40 +1,27 @@
-export type AIProvider = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'deepseek';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'custom' | 'kosmo_default';
 
-export const AI_PROVIDERS: { value: AIProvider; label: string; models: string[] }[] = [
-	{
-		value: 'openai',
-		label: 'OpenAI',
-		models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o3-mini'],
-	},
-	{
-		value: 'anthropic',
-		label: 'Anthropic',
-		models: [
-			'claude-3-5-sonnet-20241022',
-			'claude-3-5-haiku-20241022',
-			'claude-3-opus-20240229',
-		],
-	},
-	{
-		value: 'google',
-		label: 'Google Gemini',
-		models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-	},
-	{
-		value: 'openrouter',
-		label: 'OpenRouter',
-		models: [
-			'deepseek/deepseek-chat',
-			'deepseek/deepseek-r1',
-			'meta-llama/llama-3.3-70b-instruct',
-			'anthropic/claude-3.5-sonnet',
-			'openai/gpt-4o',
-		],
-	},
-];
+export type AIModelTier = 'flagship' | 'balanced' | 'fast';
+
+export interface AIModelInfo {
+	id: string;
+	display_name: string;
+	tier: AIModelTier;
+}
+
+export interface AIProviderInfo {
+	value: string;
+	label: string;
+	models: AIModelInfo[];
+}
 
 export const DEFAULT_AI_PROVIDER: AIProvider = 'google';
 export const DEFAULT_AI_MODEL = 'gemini-2.5-flash';
+
+export const TIER_LABELS: Record<AIModelTier, string> = {
+	flagship: 'Máxima capacidad',
+	balanced: 'Equilibrado',
+	fast: 'Más veloz',
+};
 
 export interface AIConfigView {
 	provider: AIProvider;
@@ -61,14 +48,6 @@ export interface TestAIConnectionResult {
 	is_connected: boolean;
 	detected_model: string;
 	message: string;
-}
-
-export function getProviderLabel(provider: AIProvider): string {
-	return AI_PROVIDERS.find((p) => p.value === provider)?.label ?? provider;
-}
-
-export function getProviderModels(provider: AIProvider): string[] {
-	return AI_PROVIDERS.find((p) => p.value === provider)?.models ?? [];
 }
 
 export function maskApiKey(key: string | null): string | null {

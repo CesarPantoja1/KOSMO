@@ -1,16 +1,15 @@
 'use client';
 
 import {
-	AI_PROVIDERS,
 	DEFAULT_AI_MODEL,
 	DEFAULT_AI_PROVIDER,
-	getProviderModels,
+	TIER_LABELS,
 	maskApiKey,
 	useAiConfigStore,
 	type AIProvider,
 	type SaveAIConfigRequest,
 } from '@/entities/ai-config';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface AiConfigFormProps {
 	onSaved?: () => void;
@@ -19,6 +18,7 @@ interface AiConfigFormProps {
 export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 	const {
 		config,
+		providers,
 		loading,
 		error,
 		testResult,
@@ -27,6 +27,7 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		saveConfig,
 		testConnection,
 		clearTestResult,
+		fetchProviders,
 	} = useAiConfigStore();
 
 	const [provider, setProvider] = useState<AIProvider>(
@@ -37,34 +38,34 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 	const [showApiKey, setShowApiKey] = useState(false);
 	const [isEditing, setIsEditing] = useState(false);
 
-	const availableModels = useMemo(() => getProviderModels(provider), [provider]);
+	useEffect(() => {
+		if (providers.length === 0) fetchProviders();
+	}, [fetchProviders, providers.length]);
+
+	const selectedProviderInfo = useMemo(
+		() => providers.find((p) => p.value === provider),
+		[providers, provider],
+	);
 
 	const handleProviderChange = useCallback(
 		(newProvider: AIProvider) => {
 			setProvider(newProvider);
-			const models = getProviderModels(newProvider);
-			if (models.length > 0 && !models.includes(model)) {
-				setModel(models[0]);
+			const info = providers.find((p) => p.value === newProvider);
+			if (info && info.models.length > 0) {
+				const modelIds = info.models.map((m) => m.id);
+				setModel((prev) => (modelIds.includes(prev) ? prev : modelIds[0]));
 			}
 		},
-		[model],
+		[providers],
 	);
 
 	const handleTestConnection = async () => {
 		if (!apiKey && !config?.has_api_key) return;
-		await testConnection({
-			provider,
-			model,
-			api_key: apiKey,
-		});
+		await testConnection({ provider, model, api_key: apiKey });
 	};
 
 	const handleSave = async () => {
-		const data: SaveAIConfigRequest = {
-			provider,
-			model,
-			api_key: apiKey,
-		};
+		const data: SaveAIConfigRequest = { provider, model, api_key: apiKey };
 		await saveConfig(data);
 		setIsEditing(false);
 		setApiKey('');
@@ -88,6 +89,14 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 	const hasExistingKey = config?.has_api_key ?? false;
 	const canTest = (apiKey || hasExistingKey) && !testLoading;
 	const canSave = apiKey && !loading;
+
+	const tierOrder: Array<'flagship' | 'balanced' | 'fast'> = ['flagship', 'balanced', 'fast'];
+	const modelsByTier = tierOrder
+		.map((tier) => ({
+			tier,
+			models: selectedProviderInfo?.models.filter((m) => m.tier === tier) ?? [],
+		}))
+		.filter((group) => group.models.length > 0);
 
 	return (
 		<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
@@ -167,7 +176,7 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 							onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
 							className='bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all w-full'
 						>
-							{AI_PROVIDERS.map((p) => (
+							{providers.map((p) => (
 								<option key={p.value} value={p.value}>
 									{p.label}
 								</option>
@@ -184,10 +193,14 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 							onChange={(e) => setModel(e.target.value)}
 							className='bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all w-full'
 						>
-							{availableModels.map((m) => (
-								<option key={m} value={m}>
-									{m}
-								</option>
+							{modelsByTier.map(({ tier, models }) => (
+								<optgroup key={tier} label={`— ${TIER_LABELS[tier]}`}>
+									{models.map((m) => (
+										<option key={m.id} value={m.id}>
+											{m.display_name}
+										</option>
+									))}
+								</optgroup>
 							))}
 						</select>
 					</div>

@@ -102,15 +102,18 @@ class HttpAIConnectionTester(AIConnectionTester):
                 message=f"Conexión exitosa con Google Gemini. Modelo {model} verificado y listo.",
             )
 
-        if provider == AIProvider.OPENROUTER:
-            url = "https://openrouter.ai/api/v1/auth/key"
+        if provider == AIProvider.DEEPSEEK:
+            url = "https://api.deepseek.com/models"
             headers = {"Authorization": f"Bearer {api_key}"}
             resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
+                url = "https://api.deepseek.com/v1/models"
+                resp = await client.get(url, headers=headers)
             self._handle_http_response(resp, provider, model)
             return TestAIConnectionResult(
                 is_connected=True,
                 detected_model=model,
-                message=f"Conexión exitosa con OpenRouter. Modelo {model} verificado y listo.",
+                message=f"Conexión exitosa con DeepSeek. Modelo {model} verificado y listo.",
             )
 
         return TestAIConnectionResult(

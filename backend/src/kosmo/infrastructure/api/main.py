@@ -315,7 +315,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 if not settings.auth_disabled:
     app.include_router(auth_router)
-    app.include_router(ai_config_router)
+app.include_router(ai_config_router)
 app.include_router(projects_router)
 app.include_router(discovery_router)
 app.include_router(features_router)

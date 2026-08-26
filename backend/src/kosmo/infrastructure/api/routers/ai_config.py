@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from kosmo.application.ai.manage_ai_preferences import ManageAIPreferencesUseCase
 from kosmo.application.ai.validate_ai_connection import ValidateAIConnectionUseCase
 from kosmo.contracts.ai.ai_config import (
+    SUPPORTED_PROVIDERS,
+    AIConfigError,
     AIProvider,
     SaveAIConfigInput,
     TestAIConnectionInput,
@@ -17,12 +19,30 @@ from kosmo.infrastructure.api.dependencies import (
 )
 from kosmo.infrastructure.api.schemas import (
     AIConfigResponse,
+    AIModelInfoResponse,
+    AIProviderInfoResponse,
     SaveAIConfigRequest,
     TestAIConnectionRequest,
     TestAIConnectionResponse,
 )
 
 router = APIRouter(prefix="/api/v1/ai-config", tags=["ai_config"])
+
+
+@router.get(
+    "/providers",
+    response_model=list[AIProviderInfoResponse],
+    summary="Devuelve el catálogo de proveedores y modelos de IA disponibles",
+)
+def get_providers() -> list[AIProviderInfoResponse]:
+    return [
+        AIProviderInfoResponse(
+            value=p.value,
+            label=p.label,
+            models=[AIModelInfoResponse(id=m.id, display_name=m.display_name, tier=m.tier) for m in p.models],
+        )
+        for p in SUPPORTED_PROVIDERS
+    ]
 
 
 @router.get(
@@ -116,10 +136,16 @@ async def test_connection(
         api_key=request.api_key,
         user_id=principal.subject,
     )
-    result = await use_case.execute(input_data)
-
-    return TestAIConnectionResponse(
-        is_connected=result.is_connected,
-        detected_model=result.detected_model,
-        message=result.message,
-    )
+    try:
+        result = await use_case.execute(input_data)
+        return TestAIConnectionResponse(
+            is_connected=result.is_connected,
+            detected_model=result.detected_model,
+            message=result.message,
+        )
+    except AIConfigError as exc:
+        return TestAIConnectionResponse(
+            is_connected=False,
+            detected_model=request.model,
+            message=str(exc),
+        )

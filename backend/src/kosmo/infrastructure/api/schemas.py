@@ -921,6 +921,18 @@ class ProjectPreviewResponse(BaseModel):
     url: str = Field(description="URL pública de la vista previa del proyecto")
 
 
+class AIModelInfoResponse(BaseModel):
+    id: str
+    display_name: str
+    tier: str
+
+
+class AIProviderInfoResponse(BaseModel):
+    value: str
+    label: str
+    models: list[AIModelInfoResponse]
+
+
 class AIConfigResponse(BaseModel):
     provider: str
     model: str

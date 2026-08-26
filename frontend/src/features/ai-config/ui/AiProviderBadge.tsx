@@ -1,10 +1,6 @@
 'use client';
 
-import {
-	DEFAULT_AI_PROVIDER,
-	getProviderLabel,
-	useAiConfigStore,
-} from '@/entities/ai-config';
+import { DEFAULT_AI_PROVIDER, useAiConfigStore } from '@/entities/ai-config';
 
 interface AiProviderBadgeProps {
 	showLink?: boolean;
@@ -15,11 +11,13 @@ export function AiProviderBadge({
 	showLink = false,
 	onConfigureClick,
 }: AiProviderBadgeProps) {
-	const { config } = useAiConfigStore();
+	const { config, providers } = useAiConfigStore();
 
 	const isCustom = config?.is_custom ?? false;
-	const provider = config?.provider ?? DEFAULT_AI_PROVIDER;
-	const providerLabel = getProviderLabel(provider);
+	const providerValue = config?.provider ?? DEFAULT_AI_PROVIDER;
+	// Obtiene el label del catálogo dinámico; fallback al valor del proveedor
+	const providerLabel =
+		providers.find((p) => p.value === providerValue)?.label ?? providerValue;
 
 	if (isCustom) {
 		return (

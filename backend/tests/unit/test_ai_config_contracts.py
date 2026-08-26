@@ -9,11 +9,14 @@ from kosmo.contracts.ai.ai_config import (
     DEFAULT_AI_MODEL,
     DEFAULT_AI_PROVIDER,
     SUPPORTED_MODELS_PER_PROVIDER,
+    SUPPORTED_PROVIDERS,
     AIConfigError,
     AIConfigView,
     AIConnectionTester,
     AIConnectionTestError,
+    AIModelInfo,
     AIProvider,
+    AIProviderInfo,
     InvalidAIModelError,
     InvalidAIProviderError,
     InvalidApiKeyError,
@@ -32,7 +35,7 @@ def test_ai_provider_enum_values() -> None:
     assert AIProvider.OPENAI == "openai"
     assert AIProvider.ANTHROPIC == "anthropic"
     assert AIProvider.GOOGLE == "google"
-    assert AIProvider.OPENROUTER == "openrouter"
+    assert AIProvider.DEEPSEEK == "deepseek"
     assert AIProvider.CUSTOM == "custom"
     assert AIProvider.KOSMO_DEFAULT == "kosmo_default"
 
@@ -44,6 +47,34 @@ def test_supported_models_per_provider() -> None:
         models = SUPPORTED_MODELS_PER_PROVIDER[provider]
         assert isinstance(models, tuple)
         assert len(models) > 0
+
+
+@pytest.mark.unit
+def test_supported_providers_catalog_structure() -> None:
+    # Arrange & Act
+    provider_values = {p.value for p in SUPPORTED_PROVIDERS}
+
+    # Assert
+    assert provider_values == {"openai", "anthropic", "google", "deepseek"}
+    for provider in SUPPORTED_PROVIDERS:
+        assert isinstance(provider, AIProviderInfo)
+        assert provider.label
+        assert len(provider.models) > 0
+        for model in provider.models:
+            assert isinstance(model, AIModelInfo)
+            assert model.id
+            assert model.display_name
+            assert model.tier in ("flagship", "balanced", "fast")
+
+
+@pytest.mark.unit
+def test_supported_providers_no_internal_providers() -> None:
+    # Arrange & Act
+    exposed_values = {p.value for p in SUPPORTED_PROVIDERS}
+
+    # Assert
+    assert "kosmo_default" not in exposed_values
+    assert "custom" not in exposed_values
 
 
 @pytest.mark.unit

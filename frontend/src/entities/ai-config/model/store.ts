@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { aiConfigApi } from '../api/api';
 import type {
 	AIConfigView,
+	AIProviderInfo,
 	SaveAIConfigRequest,
 	TestAIConnectionRequest,
 	TestAIConnectionResult,
@@ -10,12 +11,14 @@ import { DEFAULT_AI_PROVIDER, DEFAULT_AI_MODEL } from './types';
 
 export interface AiConfigState {
 	config: AIConfigView | null;
+	providers: AIProviderInfo[];
 	loading: boolean;
 	error: string | null;
 	testResult: TestAIConnectionResult | null;
 	testLoading: boolean;
 	testError: string | null;
 	fetchConfig: () => Promise<void>;
+	fetchProviders: () => Promise<void>;
 	saveConfig: (data: SaveAIConfigRequest) => Promise<void>;
 	deleteConfig: () => Promise<void>;
 	testConnection: (data: TestAIConnectionRequest) => Promise<void>;
@@ -25,6 +28,7 @@ export interface AiConfigState {
 
 export const useAiConfigStore = create<AiConfigState>()((set) => ({
 	config: null,
+	providers: [],
 	loading: false,
 	error: null,
 	testResult: null,
@@ -40,6 +44,15 @@ export const useAiConfigStore = create<AiConfigState>()((set) => ({
 			const message =
 				err instanceof Error ? err.message : 'Error al cargar configuración de IA';
 			set({ error: message, loading: false });
+		}
+	},
+
+	fetchProviders: async () => {
+		try {
+			const providers = await aiConfigApi.getProviders();
+			set({ providers });
+		} catch {
+			// El catálogo es best-effort; el form queda vacío si falla
 		}
 	},
 

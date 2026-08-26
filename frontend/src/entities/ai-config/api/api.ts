@@ -1,16 +1,19 @@
 import { apiClient } from '@/shared/api/client';
 import type {
 	AIConfigView,
+	AIProviderInfo,
 	SaveAIConfigRequest,
 	TestAIConnectionRequest,
 	TestAIConnectionResult,
 } from '../model/types';
 
 export const aiConfigApi = {
+	async getProviders(): Promise<AIProviderInfo[]> {
+		return apiClient<AIProviderInfo[]>('/api/v1/ai-config/providers', { method: 'GET' });
+	},
+
 	async getConfig(): Promise<AIConfigView> {
-		return apiClient<AIConfigView>('/api/v1/ai-config', {
-			method: 'GET',
-		});
+		return apiClient<AIConfigView>('/api/v1/ai-config', { method: 'GET' });
 	},
 
 	async saveConfig(data: SaveAIConfigRequest): Promise<AIConfigView> {
@@ -21,9 +24,7 @@ export const aiConfigApi = {
 	},
 
 	async deleteConfig(): Promise<AIConfigView> {
-		return apiClient<AIConfigView>('/api/v1/ai-config', {
-			method: 'DELETE',
-		});
+		return apiClient<AIConfigView>('/api/v1/ai-config', { method: 'DELETE' });
 	},
 
 	async testConnection(data: TestAIConnectionRequest): Promise<TestAIConnectionResult> {

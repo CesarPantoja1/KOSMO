@@ -354,7 +354,7 @@ async def test_http_tester_anthropic_success_and_error() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_http_tester_google_gemini_and_openrouter() -> None:
+async def test_http_tester_google_gemini_and_deepseek() -> None:
     # Arrange - Google 200 OK
     def handler_google(request: httpx.Request) -> httpx.Response:
         assert "key=AIzaSyValid" in str(request.url)
@@ -374,24 +374,24 @@ async def test_http_tester_google_gemini_and_openrouter() -> None:
     assert res_google.is_connected is True
     assert res_google.detected_model == "gemini-2.5-flash"
 
-    # Arrange - OpenRouter 200 OK
-    def handler_openrouter(request: httpx.Request) -> httpx.Response:
-        assert request.headers["Authorization"] == "Bearer sk-or-valid"
-        return httpx.Response(200, json={"data": {"label": "my-key"}})
+    # Arrange - DeepSeek 200 OK
+    def handler_deepseek(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer sk-ds-valid"
+        return httpx.Response(200, json={"object": "list", "data": []})
 
-    client_openrouter = httpx.AsyncClient(transport=httpx.MockTransport(handler_openrouter))
-    tester_openrouter = HttpAIConnectionTester(client=client_openrouter)
+    client_deepseek = httpx.AsyncClient(transport=httpx.MockTransport(handler_deepseek))
+    tester_deepseek = HttpAIConnectionTester(client=client_deepseek)
 
-    # Act - OpenRouter
-    res_openrouter = await tester_openrouter.test_connection(
-        provider=AIProvider.OPENROUTER,
-        model="deepseek/deepseek-chat",
-        api_key="sk-or-valid",
+    # Act - DeepSeek
+    res_deepseek = await tester_deepseek.test_connection(
+        provider=AIProvider.DEEPSEEK,
+        model="deepseek-chat",
+        api_key="sk-ds-valid",
     )
 
-    # Assert - OpenRouter
-    assert res_openrouter.is_connected is True
-    assert res_openrouter.detected_model == "deepseek/deepseek-chat"
+    # Assert - DeepSeek
+    assert res_deepseek.is_connected is True
+    assert res_deepseek.detected_model == "deepseek-chat"
 
 
 @pytest.mark.unit

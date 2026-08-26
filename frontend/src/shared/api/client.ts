@@ -102,6 +102,17 @@ export const apiClient = async <T>(
 	}
 
 	if (!res.ok) {
+		if (
+			!isAuthDisabled &&
+			res.status === 401 &&
+			!url.includes('/auth/token') &&
+			!url.includes('/auth/authorize')
+		) {
+			clearAllStores();
+			if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+				window.location.href = '/?session_expired=true';
+			}
+		}
 		throw parseApiError(res, await res.json().catch(() => null));
 	}
 
@@ -109,3 +120,4 @@ export const apiClient = async <T>(
 
 	return res.json();
 };
+

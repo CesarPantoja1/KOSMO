@@ -160,3 +160,24 @@ def test_test_connection_returns_200(auth_client: TestClient, mock_test_connecti
     assert data["is_connected"] is True
     assert data["detected_model"] == "gemini-1.5-pro"
     assert data["message"] == "Connection OK"
+
+
+def test_get_providers_returns_200(client: TestClient):
+    # Arrange & Act (endpoint público sin autenticación requerida)
+    response = client.get("/api/v1/ai-config/providers")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 4
+    provider_values = [p["value"] for p in data]
+    assert provider_values == ["openai", "anthropic", "google", "deepseek"]
+    for provider in data:
+        assert "label" in provider
+        assert "models" in provider
+        assert len(provider["models"]) > 0
+        for model in provider["models"]:
+            assert "id" in model
+            assert "display_name" in model
+            assert "tier" in model
