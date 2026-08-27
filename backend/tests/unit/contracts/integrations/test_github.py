@@ -1,18 +1,33 @@
 from datetime import datetime
 
+import pytest
+
 from kosmo.contracts.integrations.github import (
     CodeSyncLog,
     CodeSyncStatus,
+    GitHubApiError,
+    GitHubAuthenticationError,
+    GitHubOAuthToken,
+    GitHubPermissionError,
+    GitHubRateLimitError,
+    GitHubRepository,
+    GitHubRepositoryAlreadyExistsError,
+    GitHubResourceNotFoundError,
+    GitHubUser,
     ProjectGitHubIntegration,
     UserGitHubIntegration,
 )
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 
 
-def test_user_github_integration_defaults():
+@pytest.mark.unit
+def test_user_github_integration_defaults() -> None:
+    # Arrange & Act
     integration = UserGitHubIntegration(
         user_id=UserId("user-1"), github_username="testuser", encrypted_token="encrypted-pat"
     )
+
+    # Assert
     assert integration.user_id == "user-1"
     assert integration.github_username == "testuser"
     assert integration.encrypted_token == "encrypted-pat"
@@ -20,21 +35,98 @@ def test_user_github_integration_defaults():
     assert integration.updated_at.tzinfo is not None
 
 
-def test_project_github_integration_defaults():
+@pytest.mark.unit
+def test_project_github_integration_defaults() -> None:
+    # Arrange & Act
     integration = ProjectGitHubIntegration(
         project_id=ProjectId("proj-1"), repo_url="https://github.com/testuser/testrepo"
     )
+
+    # Assert
     assert integration.project_id == "proj-1"
     assert integration.repo_url == "https://github.com/testuser/testrepo"
     assert integration.default_branch == "main"
     assert integration.last_synced_at is None
 
 
-def test_code_sync_log_defaults():
+@pytest.mark.unit
+def test_code_sync_log_defaults() -> None:
+    # Arrange & Act
     log = CodeSyncLog()
+
+    # Assert
     assert log.id is not None
     assert log.project_id == ""
     assert log.commit_sha is None
     assert log.status == CodeSyncStatus.FAILED
     assert log.message is None
     assert isinstance(log.synced_at, datetime)
+
+
+@pytest.mark.unit
+def test_github_user_model() -> None:
+    # Arrange & Act
+    user = GitHubUser(
+        login="octocat",
+        id=1,
+        name="The Octocat",
+        email="octocat@github.com",
+        avatar_url="https://github.com/images/error/octocat_happy.gif",
+        html_url="https://github.com/octocat",
+    )
+
+    # Assert
+    assert user.login == "octocat"
+    assert user.id == 1
+    assert user.name == "The Octocat"
+    assert user.email == "octocat@github.com"
+    assert user.avatar_url == "https://github.com/images/error/octocat_happy.gif"
+    assert user.html_url == "https://github.com/octocat"
+
+
+@pytest.mark.unit
+def test_github_repository_model_defaults() -> None:
+    # Arrange & Act
+    repo = GitHubRepository(
+        id=1296269,
+        name="Hello-World",
+        full_name="octocat/Hello-World",
+        owner="octocat",
+        html_url="https://github.com/octocat/Hello-World",
+        clone_url="https://github.com/octocat/Hello-World.git",
+        is_private=True,
+    )
+
+    # Assert
+    assert repo.id == 1296269
+    assert repo.name == "Hello-World"
+    assert repo.full_name == "octocat/Hello-World"
+    assert repo.owner == "octocat"
+    assert repo.is_private is True
+    assert repo.default_branch == "main"
+    assert repo.description is None
+
+
+@pytest.mark.unit
+def test_github_oauth_token_model() -> None:
+    # Arrange & Act
+    token = GitHubOAuthToken(
+        access_token="gho_16C7e42F292c6912E7710c838347Ae178B4a",
+        token_type="bearer",
+        scope="repo,user",
+    )
+
+    # Assert
+    assert token.access_token == "gho_16C7e42F292c6912E7710c838347Ae178B4a"
+    assert token.token_type == "bearer"
+    assert token.scope == "repo,user"
+
+
+@pytest.mark.unit
+def test_github_exceptions_hierarchy() -> None:
+    # Arrange & Act & Assert
+    assert issubclass(GitHubAuthenticationError, GitHubApiError)
+    assert issubclass(GitHubPermissionError, GitHubApiError)
+    assert issubclass(GitHubResourceNotFoundError, GitHubApiError)
+    assert issubclass(GitHubRepositoryAlreadyExistsError, GitHubApiError)
+    assert issubclass(GitHubRateLimitError, GitHubApiError)
