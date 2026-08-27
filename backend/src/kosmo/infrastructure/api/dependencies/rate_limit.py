@@ -24,7 +24,10 @@ class IpRateLimiter:
         redis = cast(Any, get_container(request).redis)
         if redis is None:
             return
-        client_ip = request.client.host if request.client else "unknown"
+        # Public deployments pass the original Cloudflare client address through
+        # Nginx in this header. The backend itself is only reachable on the
+        # private Compose network; direct/local calls retain their socket IP.
+        client_ip = request.headers.get("x-kosmo-client-ip") or (request.client.host if request.client else "unknown")
         key = f"auth:ip_rate:{request.url.path}:{client_ip}"
         count = int(await redis.eval(self._LUA_SCRIPT, 1, key, str(self._limit), "60"))
         if count > self._limit:

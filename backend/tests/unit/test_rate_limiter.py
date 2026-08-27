@@ -84,6 +84,15 @@ def test_429_error_message_is_in_spanish() -> None:
 
 
 @pytest.mark.unit
+def test_rate_limiter_uses_the_proxy_supplied_client_ip() -> None:
+    app, _ = _build_app(1)
+    with TestClient(app) as client:
+        assert client.get("/probe", headers={"X-Kosmo-Client-IP": "198.51.100.10"}).status_code == 200
+        assert client.get("/probe", headers={"X-Kosmo-Client-IP": "198.51.100.11"}).status_code == 200
+        assert client.get("/probe", headers={"X-Kosmo-Client-IP": "198.51.100.10"}).status_code == 429
+
+
+@pytest.mark.unit
 def test_rate_limiter_skips_when_redis_unavailable() -> None:
     limiter = IpRateLimiter(1)
     app = FastAPI()

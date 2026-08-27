@@ -4,10 +4,11 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
 from kosmo.config import settings
@@ -341,6 +342,24 @@ async def health() -> dict[str, str]:
     No verifica conectividad con base de datos ni Redis.
     """
     return {"status": "ok"}
+
+
+@app.get("/ready", tags=["health"], summary="Readiness check", include_in_schema=False)
+async def readiness(request: Request) -> dict[str, str]:
+    """Verifica las dependencias requeridas antes de aceptar tráfico público."""
+    try:
+        container = cast(AppContainer, request.app.state.container)
+        async with container.db_engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+        if container.redis is not None:
+            await cast(Any, container.redis).ping()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Dependencias no disponibles",
+        ) from exc
+
+    return {"status": "ready"}
 
 
 # EspecificaciÃ³n OpenAPI customizada
