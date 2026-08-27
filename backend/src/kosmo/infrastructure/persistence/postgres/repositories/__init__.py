@@ -21,6 +21,10 @@ from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo imp
 from kosmo.infrastructure.persistence.postgres.repositories.user_ai_config_repo import (
     SqlAlchemyUserAiConfigRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.user_integration_repo import (
+    SqlAlchemyUserGitHubIntegrationRepository,
+    SqlAlchemyUserIntegrationRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.users import SqlAlchemyUserRepository
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
     SqlAlchemyWorkspaceRepository,
@@ -36,6 +40,8 @@ __all__ = [
     "SqlAlchemyProjectRepository",
     "SqlAlchemyRequirementRepository",
     "SqlAlchemyUserAiConfigRepository",
+    "SqlAlchemyUserGitHubIntegrationRepository",
+    "SqlAlchemyUserIntegrationRepository",
     "SqlAlchemyUserRepository",
     "SqlAlchemyWorkspaceRepository",
 ]

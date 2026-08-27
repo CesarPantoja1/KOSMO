@@ -333,3 +333,35 @@ class UserAiConfigModel(Base):
     is_custom: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserIntegrationModel(Base):
+    __tablename__ = "user_integrations"
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_integrations_user_provider"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    account_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    access_token_enc: Mapped[str] = mapped_column(Text(), nullable=False)
+    refresh_token_enc: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    scopes: Mapped[list[str]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

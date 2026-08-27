@@ -607,3 +607,65 @@ class InMemoryUserAiConfigRepository(UserAiConfigRepository):
 
     async def delete(self, user_id: str) -> None:
         self.configs.pop(user_id, None)
+
+
+class InMemoryUserIntegrationRepository:
+    """Implementa UserIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.user_integration import UserIntegration
+
+        self.integrations: dict[tuple[str, str], UserIntegration] = {}
+
+    async def get_by_user_and_provider(
+        self,
+        user_id: Any,
+        provider: Any,
+    ) -> Any:
+        from kosmo.contracts.integrations.user_integration import IntegrationProvider
+
+        provider_str = provider.value if isinstance(provider, IntegrationProvider) else str(provider)
+        return self.integrations.get((str(user_id), provider_str))
+
+    async def save(self, integration: Any) -> Any:
+        from kosmo.contracts.integrations.user_integration import IntegrationProvider
+
+        provider_str = (
+            integration.provider.value
+            if isinstance(integration.provider, IntegrationProvider)
+            else str(integration.provider)
+        )
+        self.integrations[(str(integration.user_id), provider_str)] = integration
+        return integration
+
+    async def delete(self, user_id: Any, provider: Any) -> bool:
+        from kosmo.contracts.integrations.user_integration import IntegrationProvider
+
+        provider_str = provider.value if isinstance(provider, IntegrationProvider) else str(provider)
+        existed = (str(user_id), provider_str) in self.integrations
+        self.integrations.pop((str(user_id), provider_str), None)
+        return existed
+
+    async def list_by_user(self, user_id: Any) -> list[Any]:
+        user_str = str(user_id)
+        return [i for (u, _), i in self.integrations.items() if u == user_str]
+
+
+class InMemoryUserGitHubIntegrationRepository:
+    """Implementa UserGitHubIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.github import UserGitHubIntegration
+
+        self.integrations: dict[str, UserGitHubIntegration] = {}
+
+    async def get_by_user_id(self, user_id: Any) -> Any:
+        return self.integrations.get(str(user_id))
+
+    async def save(self, integration: Any) -> None:
+        self.integrations[str(integration.user_id)] = integration
+
+    async def delete_by_user_id(self, user_id: Any) -> bool:
+        existed = str(user_id) in self.integrations
+        self.integrations.pop(str(user_id), None)
+        return existed

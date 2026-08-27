@@ -31,6 +31,8 @@ _PREFIX_MAP: dict[str, str] = {
     "feature_implementation": "impl_",
     "ai_config": "uai_",
     "user_ai_config": "uai_",
+    "user_integration": "uint_",
+    "integration": "uint_",
 }
 
 
