@@ -4,9 +4,9 @@ from collections.abc import Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kosmo.contracts.chat import ChatRepository
-from kosmo.contracts.consistency import TraceabilityRepository
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.ai.chat import ChatRepository
+from kosmo.contracts.ai.consistency import TraceabilityRepository
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,

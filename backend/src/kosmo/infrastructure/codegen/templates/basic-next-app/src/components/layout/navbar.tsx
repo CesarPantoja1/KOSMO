@@ -11,14 +11,22 @@ export function Navbar() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-neutral-900">
-            {siteConfig.name}
-          </span>
+    <header className="navbar navbar-expand-lg bg-white border-bottom sticky-top py-2 px-3 shadow-sm">
+      <div className="container-fluid">
+        <Link href="/" className="navbar-brand fw-bold text-dark text-truncate me-4">
+          {siteConfig.name}
         </Link>
-        <nav className="flex items-center gap-1 overflow-x-auto" aria-label="Navegación principal">
+        <nav className="navbar-nav me-auto d-flex flex-row gap-2 overflow-auto" aria-label="Navegación principal">
+          <Link
+            href="/"
+            aria-current={pathname === "/" ? "page" : undefined}
+            className={cn(
+              "nav-link px-3 py-1.5 rounded text-nowrap",
+              pathname === "/" ? "active fw-semibold bg-light text-primary" : "text-secondary",
+            )}
+          >
+            Inicio
+          </Link>
           {features.map((feature) => {
             const active = pathname === feature.route;
             return (
@@ -27,10 +35,8 @@ export function Navbar() {
                 href={feature.route}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                  active
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900",
+                  "nav-link px-3 py-1.5 rounded text-nowrap",
+                  active ? "active fw-semibold bg-light text-primary" : "text-secondary",
                 )}
               >
                 {feature.title}
@@ -42,3 +48,4 @@ export function Navbar() {
     </header>
   );
 }
+

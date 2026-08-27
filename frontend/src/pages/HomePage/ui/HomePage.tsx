@@ -1,12 +1,11 @@
 'use client';
 
-import { Plus } from '@/shared/ui';
-import { useAppStore } from 'app/store/app.store';
+import { Cards, List, Plus } from '@/shared/ui';
+import { useAppStore } from '@/features/app-state';
 import { Project, useProjectStore } from '@/entities/project';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Cards, List } from './icons';
 import SkeletonCardProject from './SkeletonCardProject';
 import ViewCardProject from './ViewCardProject';
 import ViewTableProject from './ViewTableProject';

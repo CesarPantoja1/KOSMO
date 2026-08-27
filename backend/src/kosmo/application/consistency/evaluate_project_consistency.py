@@ -6,7 +6,7 @@ import structlog
 
 from kosmo.application.consistency.enrich_impact import enrich_impact_items
 from kosmo.contracts import ConsistencyEvaluator, ImpactItem
-from kosmo.contracts.chat import AppliedChange
+from kosmo.contracts.ai.chat import AppliedChange
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId

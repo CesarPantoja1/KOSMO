@@ -25,6 +25,10 @@ services:
     environment:
       ENV: production
       PORT: "8000"
+      AUTH_DISABLED: "false"
+      DEV_GENERATE_SECRETS: "0"
+      JWT_PRIVATE_KEY_PATH: /run/kosmo-secrets/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /run/kosmo-secrets/jwt_public.pem
       # Migrations are executed explicitly by GitHub Actions before this
       # service is recreated, avoiding an implicit migration during startup.
       RUN_MIGRATIONS: "0"
@@ -38,7 +42,11 @@ services:
     volumes:
       # Persistent, host-visible source code. Include it in the VM backup plan.
       - ./workspaces:/workspaces
+      - ./secrets/jwt_private.pem:/run/kosmo-secrets/jwt_private.pem:ro
+      - ./secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro
     depends_on:
+      redis:
+        condition: service_healthy
       opencode:
         condition: service_healthy
       code-runner:
@@ -48,11 +56,33 @@ services:
         - CMD
         - python
         - -c
-        - "import sys, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3); sys.exit(0 if response.status == 200 else 1)"
+        - "import sys, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3); sys.exit(0 if response.status == 200 else 1)"
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 40s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: kosmo-redis
+    init: true
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped
 
   opencode:
@@ -177,3 +207,6 @@ networks:
   default:
     name: kosmo-network
     external: true
+
+volumes:
+  redis_data:

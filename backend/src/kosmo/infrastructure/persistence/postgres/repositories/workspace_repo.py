@@ -8,7 +8,7 @@ from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.codegen import CodeWorkspace, WorkspaceRepository, WorkspaceStatus
+from kosmo.contracts.sdd.codegen import CodeWorkspace, WorkspaceRepository, WorkspaceStatus
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.infrastructure.persistence.postgres.models import WorkspaceModel
 

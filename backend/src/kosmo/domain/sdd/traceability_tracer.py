@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from kosmo.contracts.consistency import DOWNSTREAM_TARGETS
+from kosmo.contracts.ai.consistency import DOWNSTREAM_TARGETS
 from kosmo.contracts.sdd.document import SpecPhase
 
 

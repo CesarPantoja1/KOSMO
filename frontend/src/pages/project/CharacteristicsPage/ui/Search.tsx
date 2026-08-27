@@ -1,4 +1,4 @@
-import { Search as SearchIcon } from './icons';
+import { Search as SearchIcon } from '@/shared/ui';
 
 type Props = {
 	value: string;

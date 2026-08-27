@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.domain.sdd.id_generator import IdGenerator

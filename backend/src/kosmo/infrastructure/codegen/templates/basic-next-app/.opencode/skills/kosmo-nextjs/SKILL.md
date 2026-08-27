@@ -101,10 +101,10 @@ export async function GET(request: Request) {
 
 ---
 
-## 4. Estilos y Utilidades Tailwind CSS
+## 4. Estilos y Utilidades Bootstrap 5
 
-1. Usa clases utilitarias de Tailwind CSS v4.
-2. Para composición condicional de clases, usa `cn()` desde `@/lib/utils`:
+1. Usa clases utilitarias y componentes de Bootstrap 5.
+2. Para composición condicional de clases, usa `cn()` desde `@/lib/utils` (respaldado por `clsx`):
    ```tsx
    import { cn } from "@/lib/utils";
 
@@ -112,9 +112,9 @@ export async function GET(request: Request) {
      return (
        <span
          className={cn(
-           "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-           variant === "success" && "bg-green-100 text-green-800",
-           variant === "error" && "bg-red-100 text-red-800",
+           "badge rounded-pill",
+           variant === "success" && "bg-success-subtle text-success-emphasis border border-success-subtle",
+           variant === "error" && "bg-danger-subtle text-danger-emphasis border border-danger-subtle",
            className
          )}
        >

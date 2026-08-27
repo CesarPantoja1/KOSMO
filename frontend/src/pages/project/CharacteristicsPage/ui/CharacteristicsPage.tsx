@@ -2,7 +2,7 @@
 
 import { useCharacteristicStore, deleteFeature } from '@/entities/characteristic';
 import { useDiscoveryStore } from '@/entities/discovery';
-import { ChatStreamPanel } from '@/feature';
+import { ChatStreamPanel } from '@/features';
 import { createAssistantError } from '@/entities/chat';
 import { subscribeImplementationEvents } from '@/entities/implementation';
 import { Ai, ArrowLeft, Loading, ModalConfirm, Plus, toast } from '@/shared/ui';

@@ -13,7 +13,7 @@ from kosmo.contracts import (
     MensajeChat,
     SugerenciaCambio,
 )
-from kosmo.contracts.chat import ChatSession, ChatSessionSummary
+from kosmo.contracts.ai.chat import ChatSession, ChatSessionSummary
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 

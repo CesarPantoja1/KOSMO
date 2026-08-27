@@ -1,35 +1,13 @@
 import { apiClient } from './client';
-import { generateCodeVerifier, generateCodeChallenge } from '../lib/pkce';
-import { useAuthStore } from '../store/auth.store';
-
-// Tipos basados en el backend de KOSMO
-export interface UserPublic {
-	id: string;
-	email: string;
-	created_at: string;
-}
-
-export interface AuthorizationCodeResponse {
-	authorization_code: string;
-	expires_in: number;
-}
-
-export interface TokenView {
-	token: string;
-	jti: string;
-	expires_at: string;
-}
-
-export interface TokenPairResponse {
-	access: TokenView;
-	refresh: TokenView;
-	token_type: string;
-}
-
-export interface PrincipalView {
-	subject: string;
-	scopes: string[];
-}
+import { generateCodeVerifier, generateCodeChallenge } from '@/shared/lib/pkce';
+import { clearAllStores } from '@/features/app-state';
+import { useAuthStore } from '@/shared/model/auth.store';
+import type {
+	UserPublic,
+	AuthorizationCodeResponse,
+	TokenPairResponse,
+	PrincipalView,
+} from './auth.types';
 
 export const authApi = {
 	async register(email: string, password: string): Promise<UserPublic> {
@@ -104,5 +82,6 @@ export const authApi = {
 		}
 		
 		clearAuth();
+		clearAllStores();
 	},
 };

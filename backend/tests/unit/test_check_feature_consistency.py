@@ -7,7 +7,7 @@ from kosmo.application.features.check_feature_consistency import (
     CheckFeatureConsistencyInput,
     CheckFeatureConsistencyUseCase,
 )
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
     ConsistencyStatus,

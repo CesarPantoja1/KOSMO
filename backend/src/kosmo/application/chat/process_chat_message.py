@@ -15,7 +15,7 @@ from tenacity import (
 )
 
 from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.chat import (
     AppliedChange,
     ChatRepository,
     ChatRole,
@@ -23,8 +23,8 @@ from kosmo.contracts.chat import (
     ModificacionChat,
     SugerenciaCambio,
 )
-from kosmo.contracts.consistency import ConsistencyEvaluator, ConsistencyStatus
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.ai.consistency import ConsistencyEvaluator, ConsistencyStatus
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import LLMInvocationError, ProjectNotFoundError

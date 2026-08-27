@@ -8,7 +8,7 @@ function mockFetchOk(body: unknown) {
 }
 
 function mockFetchError(status: number, body: unknown) {
-	fetchMock.mockResolvedValue({ ok: false, status, json: async () => body });
+	fetchMock.mockResolvedValue({ ok: false, status, headers: new Headers(), json: async () => body });
 }
 
 afterEach(() => {

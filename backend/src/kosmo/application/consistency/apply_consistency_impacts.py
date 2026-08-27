@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import structlog
 
-from kosmo.contracts.persistence import UnitOfWork
+from kosmo.contracts.persistence.persistence import UnitOfWork
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId

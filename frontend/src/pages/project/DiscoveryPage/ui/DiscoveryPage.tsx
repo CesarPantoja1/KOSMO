@@ -8,11 +8,10 @@ import {
 	MarkdownEditor,
 	type MarkdownEditorHandle,
 	type SaveStatus,
-} from '@/feature';
+} from '@/features';
 import { Ai, ArrowRight, Loading, ModalConfirm, toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
-import { useUnsavedChanges } from '@/shared/hooks/useUnsavedChanges';
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore, useUnsavedChanges } from '@/features/app-state';
 import { useProjectStore } from '@/entities/project';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';

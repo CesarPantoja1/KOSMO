@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from kosmo.contracts.agent_memory import (
+from kosmo.contracts.memory.agent_memory import (
     AgentMemoryPort,
     AgentSessionSummary,
     KnowledgePatternStore,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from kosmo.contracts.agent_memory import AgentMemoryPort
+from kosmo.contracts.memory.agent_memory import AgentMemoryPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import (

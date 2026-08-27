@@ -2,8 +2,7 @@ import { Project } from '@/entities/project';
 import { Plus, Trash, ModalConfirm } from '@/shared/ui';
 import { Link } from 'react-aria-components';
 import { useState } from 'react';
-import { Clock } from './icons';
-import { toast } from '@/shared/ui';
+import { Clock, toast } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { useProjectStore } from '@/entities/project';
 

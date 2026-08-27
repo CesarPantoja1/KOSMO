@@ -4,7 +4,7 @@ from typing import Protocol, cast
 
 import structlog
 
-from kosmo.contracts.codegen import OpenCodeEvent, OpenCodeEventType
+from kosmo.contracts.sdd.codegen import OpenCodeEvent, OpenCodeEventType
 
 _log = structlog.get_logger(__name__)
 

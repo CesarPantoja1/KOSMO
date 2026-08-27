@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 from ulid import ULID
 
 from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
-from kosmo.contracts.chat import AppliedChange, DiffCambio
-from kosmo.contracts.consistency import ConsistencyEvaluator, ConsistencyStatus
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.ai.chat import AppliedChange, DiffCambio
+from kosmo.contracts.ai.consistency import ConsistencyEvaluator, ConsistencyStatus
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.feature import Feature

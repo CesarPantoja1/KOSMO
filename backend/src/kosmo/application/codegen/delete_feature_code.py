@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import structlog
 from ulid import ULID
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     FeatureImplementationRepository,
     OpenCodeClientPort,

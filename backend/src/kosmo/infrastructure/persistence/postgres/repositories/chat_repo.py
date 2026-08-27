@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.chat import (
     ChatRepository,
     ChatRole,
     ChatSession,

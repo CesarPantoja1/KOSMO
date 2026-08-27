@@ -1,5 +1,4 @@
-import { Ai } from '@/shared/ui';
-import { Trash } from './icons';
+import { Ai, Trash } from '@/shared/ui';
 
 type Props = {
 	id: string;
@@ -48,15 +47,19 @@ const CardCharacterist = ({
 			}`}
 		>
 			{/* ID */}
-			<div className={`w-12 inline-flex flex-col text-base font-bold justify-center items-center shrink-0 ${
-				isActive ? 'text-primary-500' : 'text-neutral-400'
-			}`}>
+			<div
+				className={`w-12 inline-flex flex-col text-base font-bold justify-center items-center shrink-0 ${
+					isActive ? 'text-primary-500' : 'text-neutral-400'
+				}`}
+			>
 				{displayId}
 			</div>
 
 			{/* Content */}
 			<div className='flex-1 inline-flex flex-col justify-center gap-1.5'>
-				<h3 className={`text-base font-semibold ${isActive ? 'text-primary-600' : 'text-neutral-800'}`}>
+				<h3
+					className={`text-base font-semibold ${isActive ? 'text-primary-600' : 'text-neutral-800'}`}
+				>
 					{highlightTitle(title, searchQuery)}
 				</h3>
 				<p className='text-neutral-500 text-sm'>{description}</p>

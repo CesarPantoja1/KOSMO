@@ -9,7 +9,7 @@ import structlog
 
 from kosmo.application.consistency.apply_consistency_impacts import ApplyConsistencyImpactsUseCase
 from kosmo.application.consistency.consistency_snapshot import fetch_snapshot_parts
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationRepository,
     ConsistencyEvaluationStatus,

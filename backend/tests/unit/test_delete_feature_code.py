@@ -8,7 +8,7 @@ from kosmo.application.codegen.delete_feature_code import (
     DeleteFeatureCodeInput,
     DeleteFeatureCodeUseCase,
 )
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
     FeatureImplementation,
     FeatureImplementationRepository,

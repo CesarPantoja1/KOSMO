@@ -1,5 +1,9 @@
 # Operación de generación y custodia de código
 
+> Para variables de autenticación, Redis y claves JWT de Staging/Producción,
+> consulta [AUTH_REDIS_CONFIGURATION.md](AUTH_REDIS_CONFIGURATION.md). Este
+> documento solo cubre las variables adicionales de generación de código.
+
 Cada proyecto generado tiene un directorio identificado por su `project_id`.
 PostgreSQL conserva metadata, propiedad y trazabilidad; el código, su template y su
 historial Git se conservan en filesystem.

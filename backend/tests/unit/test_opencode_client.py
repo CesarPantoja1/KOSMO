@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     OpenCodeClientPort,
     OpenCodeEvent,
     OpenCodeEventType,

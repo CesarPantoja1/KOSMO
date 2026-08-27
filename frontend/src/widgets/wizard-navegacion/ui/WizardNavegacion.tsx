@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore } from '@/features/app-state';
 import { useProjectStore } from '@/entities/project';
 import {
 	CONSISTENCY_REVIEW_ROUTES,
@@ -13,7 +13,7 @@ import type {
 	ConsistencyStatusResponse,
 	ConsistencyTargetPhase,
 } from '@/entities/consistency';
-import { useConsistencyPolling } from '@/shared/hooks/useConsistencyPolling';
+import { useConsistencyPolling } from '@/widgets/wizard-navegacion/hooks/useConsistencyPolling';
 import { toast } from '@/shared/ui';
 
 import { getStyleIconStatus } from '../lib/get-status-color';
@@ -21,14 +21,15 @@ import { ProjectStatus } from '../types/status';
 import WizardItem from './WizardItem';
 import { PhaseStatusBadge } from './PhaseStatusBadge';
 import { ConsistencyGateButton } from './ConsistencyGateButton';
+import { AiProviderToast } from './AiProviderToast';
 
-import Discovery from '@/widgets/main-navbar/ui/icons/Discovery';
 import {
 	Characteristics,
+	Discovery,
 	Requirements,
 	Modeling,
 	Implementation,
-} from '@/widgets/main-navbar/ui/icons';
+} from '@/shared/ui';
 
 const phaseItems: {
 	href: string;
@@ -79,7 +80,9 @@ export function WizardNavegacion() {
 	const router = useRouter();
 	const isProyectosOpen = useProjectStore((s) => s.isProyectosOpen);
 	const currentProject = useProjectStore((s) => s.currentProject);
-	const { status: consistencyStatus, isLoading } = useConsistencyPolling(currentProject?.id ?? null);
+	const { status: consistencyStatus, isLoading } = useConsistencyPolling(
+		currentProject?.id ?? null,
+	);
 
 	const handleWizardClick = (href: string) => (e: React.MouseEvent) => {
 		const { hasUnsavedChanges, setPendingNavigationPath } = useAppStore.getState();
@@ -187,6 +190,7 @@ export function WizardNavegacion() {
 				})}
 			</nav>
 			<ConsistencyGateButton status={consistencyStatus} />
+			<AiProviderToast />
 		</div>
 	);
 }

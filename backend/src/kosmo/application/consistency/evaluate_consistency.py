@@ -3,8 +3,8 @@ from __future__ import annotations
 import structlog
 from ulid import ULID
 
-from kosmo.contracts.chat import AppliedChange
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.chat import AppliedChange
+from kosmo.contracts.ai.consistency import (
     ArtifactAction,
     ConsistencyEvaluationOutput,
     ConsistencyStatus,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.pipeline.phase_contexts import RequirementsRefinePhaseContext
 from kosmo.contracts.pipeline.phase_outputs import EARSPhaseOutput

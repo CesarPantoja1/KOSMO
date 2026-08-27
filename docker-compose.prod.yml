@@ -1,3 +1,6 @@
+# Historical manual production stack. The CD workflow uses
+# deploy/production/compose.yaml; do not use this file to enable authentication
+# or Redis. See deploy/AUTH_REDIS_CONFIGURATION.md.
 # KOSMO Production Stack (Oracle Cloud / Supabase / Cloudflare Tunnel)
 #
 # Services:
@@ -16,7 +19,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://kosmo.cespan.dev}
         NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-KOSMO}
         NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-production}
-        NEXT_PUBLIC_AUTH_DISABLED: ${NEXT_PUBLIC_AUTH_DISABLED:-true}
+        NEXT_PUBLIC_AUTH_DISABLED: ${NEXT_PUBLIC_AUTH_DISABLED:-false}
         NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
     image: kosmo-frontend:prod
     container_name: kosmo-frontend
@@ -40,7 +43,7 @@ services:
       # We override some defaults to ensure they are production-ready if not specified in .env
       ENV: production
       PORT: "8000"
-      AUTH_DISABLED: "true"
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
       # The user must provide DATABASE_URL in .env pointing to Supabase
     healthcheck:
       test:

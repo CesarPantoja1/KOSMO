@@ -9,6 +9,9 @@ from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistr
 from kosmo.infrastructure.persistence.postgres.repositories.feature_implementation_repo import (
     SqlAlchemyFeatureImplementationRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.user_ai_config_repo import (
+    SqlAlchemyUserAiConfigRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
     SqlAlchemyWorkspaceRepository,
 )
@@ -25,3 +28,4 @@ def test_registry_build_incluye_repos_de_codegen() -> None:
     # Assert
     assert isinstance(repos.workspaces, SqlAlchemyWorkspaceRepository)
     assert isinstance(repos.implementations, SqlAlchemyFeatureImplementationRepository)
+    assert isinstance(repos.user_ai_configs, SqlAlchemyUserAiConfigRepository)

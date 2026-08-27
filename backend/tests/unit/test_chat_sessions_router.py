@@ -40,7 +40,7 @@ async def test_create_session_returns_session_id() -> None:
     # Arrange
     from datetime import UTC, datetime
 
-    from kosmo.contracts.chat import ChatSession
+    from kosmo.contracts.ai.chat import ChatSession
     from kosmo.contracts.sdd.document import SpecPhase
     from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 

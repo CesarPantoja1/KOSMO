@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     FeatureImplementation,
     FeatureImplementationRepository,
     FeatureImplementationStatus,

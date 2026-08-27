@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from kosmo.contracts.chat import AppliedChange
+from kosmo.contracts.ai.chat import AppliedChange
 from kosmo.contracts.pipeline.consistency_phase_context import DownstreamArtifact
 
 _STOPWORDS = frozenset(

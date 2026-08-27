@@ -9,11 +9,16 @@ from datetime import UTC, datetime
 
 from ulid import ULID
 
+from kosmo.application.codegen.analyze_ux_context import (
+    UXAnalysisInput,
+    UXAnalyzerUseCase,
+)
 from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
     RegisterCodeTraceabilityUseCase,
 )
-from kosmo.contracts.codegen import (
+from kosmo.contracts.ai.consistency import TraceabilityRepository
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     FeatureImplementation,
@@ -28,7 +33,6 @@ from kosmo.contracts.codegen import (
     ValidationRunResult,
     WorkspaceManagerPort,
 )
-from kosmo.contracts.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.contracts.sdd.repositories import (
@@ -109,6 +113,7 @@ class GenerateFeatureImplementationUseCase:
         traceability_repo: TraceabilityRepository,
         project_repo: ProjectRepository | None = None,
         document_repo: DocumentRepository | None = None,
+        ux_analyzer: UXAnalyzerUseCase | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -119,6 +124,10 @@ class GenerateFeatureImplementationUseCase:
         self._implementation_repo = implementation_repo
         self._project_repo = project_repo
         self._document_repo = document_repo
+        self._ux_analyzer = ux_analyzer or UXAnalyzerUseCase(
+            document_repo=document_repo,
+            feature_repo=feature_repo,
+        )
         self._register_traceability = RegisterCodeTraceabilityUseCase(
             traceability_repo=traceability_repo,
             requirement_repo=requirement_repo,
@@ -293,28 +302,32 @@ class GenerateFeatureImplementationUseCase:
                 )
             )
 
-            # 7. Fase Plan: enviar prompt al Plan Agent
+            # 7. Fase Plan: análisis UX y prompt al Plan Agent
             project_context = await self._build_project_context(feature.project_id)
+            ux_analysis = await self._ux_analyzer.execute(
+                UXAnalysisInput(feature_id=feature.id, project_id=feature.project_id)
+            )
 
             await _emit(
                 OpenCodeEvent(
                     event_type=OpenCodeEventType.PLAN_PROGRESS,
                     session_id=session_id,
                     data={
-                        "delta": f"El asistente está analizando los requisitos y el diagrama de '{feature.title}'...",
+                        "delta": f"Analizando requisitos, UX y diagrama de '{feature.title}'...",
                         "stage": "planning",
                     },
                 )
             )
 
             plan_prompt = (
+                f"{ux_analysis.prompt_block}\n\n"
                 f"{project_context}\n\n"
                 f"Eres el agente de planificación para la feature '{feature.title}'.\n\n"
                 f"## Descripción\n{feature.description}\n\n"
                 f"## Requisitos EARS\n{req_markdown}\n\n"
                 f"## Diagrama de Actividad\n{diagram.diagram_syntax}\n\n"
                 "Propón un plan de implementación detallando los archivos a crear y modificar.\n"
-                "OBLIGATORIO: la feature debe entregar una UI funcional. El plan debe incluir:\n"
+                "OBLIGATORIO: la feature debe entregar una UI funcional con Bootstrap 5. El plan debe incluir:\n"
                 "1. El slice autocontenido en `src/features/<slug>/` (manifest.ts, logic.ts, components/).\n"
                 "2. La ruta de la feature en `src/app/<slug>/page.tsx`.\n"
                 "3. El registro del manifest en `src/lib/feature-registry.ts` "
@@ -371,20 +384,22 @@ class GenerateFeatureImplementationUseCase:
                 for op in impl_plan.operations
             )
             build_prompt = (
+                f"{ux_analysis.prompt_block}\n\n"
                 f"{project_context}\n\n"
                 f"Eres el agente de construcción para la feature '{feature.title}'.\n\n"
                 f"## Plan aprobado\n{plan_lines}\n\n"
                 "Implementa el código y las pruebas respetando el plan aprobado.\n"
-                "OBLIGATORIO: entrega la UI funcional completa de la feature:\n"
-                "1. Lógica de negocio pura en `src/features/<slug>/logic.ts` (con tests).\n"
+                "OBLIGATORIO: entrega la UI funcional completa de la feature usando 100% Bootstrap 5:\n"
+                "1. Lógica de negocio pura en `src/features/<slug>/logic.ts` (con tests en Vitest).\n"
                 "2. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
                 "`src/components/ui/` (Button, Card, Input, Label, Badge, Textarea, EmptyState, "
-                "PageHeader) y tokens del tema.\n"
+                "PageHeader, Table, Stat, Select, Tabs, Modal, Alert, Steps, BadgeStatus) y clases de Bootstrap 5. "
+                "PROHIBIDO el uso de Tailwind CSS.\n"
                 "3. Ruta en `src/app/<slug>/page.tsx` que renderiza el componente principal de la feature.\n"
                 "4. Registro del manifest en `src/lib/feature-registry.ts` (importa el manifest del slice).\n"
-                "5. Actualiza `src/lib/site.ts` con el nombre y la descripción reales del proyecto.\n"
-                "La UI debe adaptarse a la naturaleza del negocio (ver la visión del producto), mantener el "
-                "modelo mental del usuario (navegación derivada del registro, estados vacío/error/loading claros) "
+                "5. Actualiza `src/lib/site.ts` con el nombre, descripción y arquetipo reales del proyecto.\n"
+                "La UI debe adaptarse a la naturaleza del negocio (ver visión y directivas UX), "
+                "mantener el modelo mental del usuario (navegación del registro, estados vacío/error/loading) "
                 "y usar textos en español neutro con los mensajes de validación reales de la lógica. "
                 "No dejes la feature sin pantalla."
             )

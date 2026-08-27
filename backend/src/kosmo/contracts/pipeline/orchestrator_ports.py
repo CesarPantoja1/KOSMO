@@ -27,7 +27,7 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId
 
 if TYPE_CHECKING:
-    from kosmo.contracts.chat import MensajeChat
+    from kosmo.contracts.ai.chat import MensajeChat
 
 
 PhaseContext = (

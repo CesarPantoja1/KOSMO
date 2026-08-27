@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
     ValidationStep,
     ValidationStepResult,

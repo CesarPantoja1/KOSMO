@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import RootPage from '@/pages/RootPage';
 
-export default function RootPage() {
-	redirect('/proyecto');
+export default function Root() {
+	return <RootPage />;
 }

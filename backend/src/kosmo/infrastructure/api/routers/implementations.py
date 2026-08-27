@@ -11,7 +11,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
 )
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceInput, WorkspaceNotFoundError
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.codegen import FeatureImplementation
+from kosmo.contracts.sdd.codegen import FeatureImplementation
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
 from kosmo.infrastructure.api.composition import AppContainer

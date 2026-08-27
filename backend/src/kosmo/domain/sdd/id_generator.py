@@ -29,6 +29,8 @@ _PREFIX_MAP: dict[str, str] = {
     "code_workspace": "ws_",
     "implementation": "impl_",
     "feature_implementation": "impl_",
+    "ai_config": "uai_",
+    "user_ai_config": "uai_",
 }
 
 

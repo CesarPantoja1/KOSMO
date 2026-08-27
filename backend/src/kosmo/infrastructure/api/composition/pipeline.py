@@ -16,15 +16,19 @@ from kosmo.application.consistency.evaluate_consistency import EvaluateConsisten
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.config import Settings
-from kosmo.contracts.agent_memory import AgentMemoryPort, KnowledgePatternStore
-from kosmo.contracts.chat import ChatRepository
-from kosmo.contracts.consistency import ConsistencyEvaluator, TraceabilityRepository
+from kosmo.contracts.ai.chat import ChatRepository
+from kosmo.contracts.ai.consistency import ConsistencyEvaluator, TraceabilityRepository
 from kosmo.contracts.llm.ports import Embedder, LLMClient
+from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.infrastructure.api.composition.skill_registration import build_skill_registry
+from kosmo.infrastructure.llm.dynamic_llm_client import (
+    DynamicUserLLMClient,
+    build_pydantic_ai_model,
+)
 from kosmo.infrastructure.llm.embedder import OpenAIEmbedder
 from kosmo.infrastructure.llm.knowledge_tools import (
     build_find_similar_sessions,
@@ -42,6 +46,7 @@ from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
 )
 from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
+from kosmo.infrastructure.security import FernetSecretCipher
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,32 +68,6 @@ class PipelineComponents:
     create_chat_session: CreateChatSessionUseCase
     list_chat_sessions: ListChatSessionsUseCase
     delete_chat_session: DeleteChatSessionUseCase
-
-
-def _build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
-    if provider == "deepseek":
-        from pydantic_ai.models.openai import OpenAIChatModel
-        from pydantic_ai.providers.openai import OpenAIProvider
-        from pydantic_ai.settings import ModelSettings
-
-        # DeepSeek v4 activa el thinking mode por defecto y, en ese modo, rechaza
-        # tool_choice (requerido por pydantic-ai para la salida estructurada).
-        # Se deshabilita el thinking para conservar el contrato determinista.
-        return OpenAIChatModel(
-            model,
-            provider=OpenAIProvider(base_url="https://api.deepseek.com", api_key=api_key),
-            settings=ModelSettings(extra_body={"thinking": {"type": "disabled"}}),
-        )
-    elif provider == "openai":
-        from pydantic_ai.models.openai import OpenAIChatModel
-        from pydantic_ai.providers.openai import OpenAIProvider
-
-        return OpenAIChatModel(
-            model,
-            provider=OpenAIProvider(api_key=api_key),
-        )
-
-    return f"{provider}:{model}"
 
 
 def _build_embedder(settings: Settings) -> Embedder | None:
@@ -117,11 +96,20 @@ def build_pipeline_components(
     session_factory: async_sessionmaker[AsyncSession],
     repos: RepositoryRegistry,
 ) -> PipelineComponents:
-    if settings.llm_provider.lower() == "noop":
-        llm_client: LLMClient = NoopLLMClient()
+    api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else None
+    if settings.fernet_master_key is not None:
+        cipher = FernetSecretCipher(settings.fernet_master_key.get_secret_value())
+        llm_client: LLMClient = DynamicUserLLMClient(
+            config_repo=repos.user_ai_configs,
+            cipher=cipher,
+            default_provider=settings.llm_provider,
+            default_model=settings.llm_model,
+            default_api_key=api_key,
+        )
+    elif settings.llm_provider.lower() == "noop":
+        llm_client = NoopLLMClient()
     else:
-        api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else None
-        model = _build_pydantic_ai_model(settings.llm_provider, settings.llm_model, api_key)
+        model = build_pydantic_ai_model(settings.llm_provider, settings.llm_model, api_key)
         llm_client = PydanticAILLMClient(model=model)
 
     context_builder = ContextBuilder(

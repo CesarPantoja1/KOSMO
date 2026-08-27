@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import httpx
 
-from kosmo.contracts.codegen import ValidationRunResult, ValidationStep, ValidationStepResult
+from kosmo.contracts.sdd.codegen import ValidationRunResult, ValidationStep, ValidationStepResult
 from kosmo.domain.codegen.parse_validation_output import parse_step_output
 
 

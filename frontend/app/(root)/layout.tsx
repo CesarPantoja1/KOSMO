@@ -1,3 +1,10 @@
+import { RootNavbar } from '@/widgets/root-navbar/ui/RootNavbar';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-	return <>{children}</>;
+	return (
+		<>
+			<RootNavbar />
+			{children}
+		</>
+	);
 }

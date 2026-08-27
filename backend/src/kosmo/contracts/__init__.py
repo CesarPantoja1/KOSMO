@@ -1,4 +1,23 @@
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.ai_config import (
+    DEFAULT_AI_MODEL,
+    DEFAULT_AI_PROVIDER,
+    SUPPORTED_MODELS_PER_PROVIDER,
+    AIConfigError,
+    AIConfigView,
+    AIConnectionTester,
+    AIConnectionTestError,
+    AIProvider,
+    InvalidAIModelError,
+    InvalidAIProviderError,
+    InvalidApiKeyError,
+    SaveAIConfigInput,
+    TestAIConnectionInput,
+    TestAIConnectionResult,
+    UserAiConfig,
+    UserAiConfigRepository,
+    mask_api_key,
+)
+from kosmo.contracts.ai.chat import (
     AppliedChange,
     ChatRepository,
     ChatRole,
@@ -9,7 +28,18 @@ from kosmo.contracts.chat import (
     SugerenciaCambio,
     SugerenciaCambioLLM,
 )
-from kosmo.contracts.codegen import (
+from kosmo.contracts.ai.consistency import (
+    ArtefactoAfectado,
+    ArtifactAction,
+    ConsistencyEvaluationOutput,
+    ConsistencyEvaluator,
+    ConsistencyStatus,
+    ImpactItem,
+    PhasePropagationInfo,
+    ReporteConsistencia,
+    TraceabilityRepository,
+)
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     FeatureImplementation,
@@ -31,17 +61,6 @@ from kosmo.contracts.codegen import (
     WorkspaceRepository,
     WorkspaceStatus,
 )
-from kosmo.contracts.consistency import (
-    ArtefactoAfectado,
-    ArtifactAction,
-    ConsistencyEvaluationOutput,
-    ConsistencyEvaluator,
-    ConsistencyStatus,
-    ImpactItem,
-    PhasePropagationInfo,
-    ReporteConsistencia,
-    TraceabilityRepository,
-)
 from kosmo.contracts.sdd.ids import (
     ChatHistoryId,
     ChatMessageId,
@@ -50,9 +69,14 @@ from kosmo.contracts.sdd.ids import (
 )
 
 __all__ = [
+    "AIConfigError",
+    "AIConfigView",
+    "AIConnectionTestError",
+    "AIConnectionTester",
+    "AIProvider",
     "AppliedChange",
-    "ArtifactAction",
     "ArtefactoAfectado",
+    "ArtifactAction",
     "ChatHistoryId",
     "ChatMessageId",
     "ChatRepository",
@@ -62,6 +86,8 @@ __all__ = [
     "ConsistencyEvaluationOutput",
     "ConsistencyEvaluator",
     "ConsistencyStatus",
+    "DEFAULT_AI_MODEL",
+    "DEFAULT_AI_PROVIDER",
     "DiffCambio",
     "FeatureImplementation",
     "FeatureImplementationRepository",
@@ -72,6 +98,9 @@ __all__ = [
     "ImpactItem",
     "ImplementationId",
     "ImplementationPlan",
+    "InvalidAIModelError",
+    "InvalidAIProviderError",
+    "InvalidApiKeyError",
     "MensajeChat",
     "OpenCodeClientPort",
     "OpenCodeEvent",
@@ -80,9 +109,15 @@ __all__ = [
     "PhasePropagationInfo",
     "ReporteConsistencia",
     "RespuestaChatLLM",
+    "SUPPORTED_MODELS_PER_PROVIDER",
+    "SaveAIConfigInput",
     "SugerenciaCambio",
     "SugerenciaCambioLLM",
+    "TestAIConnectionInput",
+    "TestAIConnectionResult",
     "TraceabilityRepository",
+    "UserAiConfig",
+    "UserAiConfigRepository",
     "ValidationErrorDetail",
     "ValidationRunResult",
     "ValidationSeverity",
@@ -92,4 +127,5 @@ __all__ = [
     "WorkspaceManagerPort",
     "WorkspaceRepository",
     "WorkspaceStatus",
+    "mask_api_key",
 ]
