@@ -1,5 +1,10 @@
 # Variables de Entorno - Guía Completa
 
+> La configuración canónica de autenticación y Redis en Staging/Producción está
+> en [deploy/AUTH_REDIS_CONFIGURATION.md](deploy/AUTH_REDIS_CONFIGURATION.md).
+> Algunos ejemplos históricos de este documento usan nombres anteriores y no
+> deben copiarse a los secretos de despliegue.
+
 ## Frontend (.env.* en `frontend/`)
 
 ### .env.example (Plantilla para desarrollo local)
