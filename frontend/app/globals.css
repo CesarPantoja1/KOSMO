@@ -32,6 +32,7 @@
 	--color-primary-50: #ecfdf5;
 	--color-primary-100: #d1fae5;
 	--color-primary-200: #a7f3d0;
+	--color-primary-400: #34d399;
 	--color-primary-500: #10b981;
 	--color-primary-600: #059669;
 	--color-primary-900: #064e3b;
@@ -40,6 +41,7 @@
 	--color-ai: #8b5cf6;
 	--color-ai-50: #f5f3ff;
 	--color-ai-100: #ede9fe;
+	--color-ai-400: #a78bfa;
 	--color-ai-500: #8b5cf6;
 	--color-ai-600: #7c3aed;
 	--color-ai-900: #4c1d95;
@@ -359,4 +361,85 @@ body {
 		opacity: 1;
 		transform: translateX(0);
 	}
+}
+
+/* =========================
+- MOCK APP ANIMATIONS
+========================= */
+
+@keyframes mock-fade-in-up {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes mock-type {
+	from {
+		width: 0;
+	}
+	to {
+		width: 100%;
+	}
+}
+
+@keyframes mock-cursor-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0;
+	}
+}
+
+@keyframes mock-code-line {
+	from {
+		opacity: 0;
+		transform: translateX(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes mock-row-slide {
+	from {
+		opacity: 0;
+		transform: translateX(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+.mock-animate-item {
+	animation: mock-fade-in-up 0.3s ease-out forwards;
+	opacity: 0;
+}
+
+.mock-animate-type {
+	overflow: hidden;
+	white-space: nowrap;
+	animation: mock-type 1.5s steps(40) forwards;
+}
+
+.mock-animate-code {
+	animation: mock-code-line 0.3s ease-out forwards;
+	opacity: 0;
+}
+
+.mock-animate-row {
+	animation: mock-row-slide 0.3s ease-out forwards;
+	opacity: 0;
+}
+
+.mock-cursor {
+	animation: mock-cursor-blink 1s step-end infinite;
 }

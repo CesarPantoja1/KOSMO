@@ -2,15 +2,14 @@ import type { InputHTMLAttributes } from "react";
 
 import { cn } from "@/lib/utils";
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  isInvalid?: boolean;
+}
+
+export function Input({ className, isInvalid, ...props }: InputProps) {
   return (
     <input
-      className={cn(
-        "h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900",
-        "placeholder:text-neutral-400 focus:border-indigo-500 focus:outline-2 focus:outline-indigo-600",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
+      className={cn("form-control", isInvalid && "is-invalid", className)}
       {...props}
     />
   );

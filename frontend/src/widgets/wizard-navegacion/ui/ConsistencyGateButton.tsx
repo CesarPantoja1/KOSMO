@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAppStore } from 'app/store/app.store';
+import { useAppStore } from '@/features/app-state';
 import {
 	CONSISTENCY_REVIEW_ROUTES,
 	firstPhaseToReview,

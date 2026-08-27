@@ -111,8 +111,43 @@ export function parseApiError(res: Response, body: unknown): ApiError {
 
 export function formatApiError(err: unknown, fallback: string): string {
 	if (err instanceof ApiError) {
+		if (
+			err.type === 'urn:kosmo:ai:auth-error' ||
+			err.type === 'urn:kosmo:ai:invalid-key'
+		) {
+			return (
+				err.detail ||
+				'Tu clave de API de IA no es válida o ha expirado. Por favor, revísala y actualízala en tu Perfil (Pestaña IA).'
+			);
+		}
+		const detailOrMessage = (err.detail ?? err.message ?? '').toLowerCase();
+		if (
+			detailOrMessage.includes('clave de api') ||
+			detailOrMessage.includes('api key') ||
+			detailOrMessage.includes('api_key') ||
+			detailOrMessage.includes('invalid api key')
+		) {
+			return (
+				err.detail ||
+				'Tu clave de API de IA no es válida o ha expirado. Por favor, revísala y actualízala en tu Perfil (Pestaña IA).'
+			);
+		}
 		const base = err.title ?? err.detail ?? err.message;
 		return err.traceId ? `${base} (trace_id: ${err.traceId})` : base;
 	}
-	return err instanceof Error && err.message ? err.message : fallback;
+	if (err instanceof Error && err.message) {
+		const msgLower = err.message.toLowerCase();
+		if (
+			msgLower.includes('clave de api') ||
+			msgLower.includes('api key') ||
+			msgLower.includes('api_key') ||
+			msgLower.includes('ai_auth_error')
+		) {
+			return err.message.includes('Perfil')
+				? err.message
+				: 'Tu clave de API de IA no es válida o ha expirado. Por favor, revísala y actualízala en tu Perfil (Pestaña IA).';
+		}
+		return err.message;
+	}
+	return fallback;
 }

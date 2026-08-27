@@ -4,7 +4,7 @@ import pytest
 
 from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
 from kosmo.contracts import AppliedChange, DiffCambio
-from kosmo.contracts.consistency import ConsistencyEvaluationOutput
+from kosmo.contracts.ai.consistency import ConsistencyEvaluationOutput
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.feature import Feature
@@ -514,7 +514,7 @@ async def test_evaluate_empty_changes_uses_automatic_diff() -> None:
 @pytest.mark.asyncio
 async def test_evaluate_empty_changes_without_previous_version_returns_no_impact() -> None:
     """applied_changes vacío sin versión previa guardada debe retornar sin impacto sin llamar al agente."""
-    from kosmo.contracts.consistency import ConsistencyStatus
+    from kosmo.contracts.ai.consistency import ConsistencyStatus
 
     # Arrange
     project = _make_project("prj_noversion")
@@ -717,7 +717,7 @@ async def test_enrich_impact_logs_when_ears_parsing_fails() -> None:
     from structlog.testing import capture_logs
 
     from kosmo.application.consistency.enrich_impact import enrich_impact_items
-    from kosmo.contracts.consistency import (
+    from kosmo.contracts.ai.consistency import (
         ArtifactAction,
         ConsistencyEvaluationOutput,
         ConsistencyStatus,
@@ -1019,7 +1019,7 @@ def test_consistency_evaluation_mode_exposes_knowledge_tools() -> None:
 @pytest.mark.asyncio
 async def test_evaluate_skips_when_only_cosmetic_changes() -> None:
     """Cambios solo cosméticos no deben disparar evaluación LLM."""
-    from kosmo.contracts.consistency import ConsistencyStatus
+    from kosmo.contracts.ai.consistency import ConsistencyStatus
     from kosmo.domain.sdd.document_converters import markdown_to_document
 
     # Arrange
@@ -1099,7 +1099,7 @@ async def test_evaluate_runs_with_chat_change_despite_cosmetic_diff() -> None:
 async def test_enrich_impact_requirements_with_statement_fragment() -> None:
     """Un fragmento de statement sin ### debe enriquecerse con display_id y título."""
     from kosmo.application.consistency.enrich_impact import enrich_impact_items
-    from kosmo.contracts.consistency import (
+    from kosmo.contracts.ai.consistency import (
         ArtifactAction,
         ConsistencyEvaluationOutput,
         ConsistencyStatus,
@@ -1171,7 +1171,7 @@ async def test_enrich_impact_requirements_with_statement_fragment() -> None:
 async def test_enrich_impact_requirements_with_actor_subphrase_fragment() -> None:
     """Un fragmento corto como el nombre del actor debe correlacionarse con el requisito que lo contiene."""
     from kosmo.application.consistency.enrich_impact import enrich_impact_items
-    from kosmo.contracts.consistency import (
+    from kosmo.contracts.ai.consistency import (
         ArtifactAction,
         ConsistencyEvaluationOutput,
         ConsistencyStatus,
@@ -1238,7 +1238,7 @@ async def test_enrich_impact_requirements_with_actor_subphrase_fragment() -> Non
 async def test_enrich_impact_feature_diff_no_muestra_origen() -> None:
     """El diff de una feature no expone el 'Origen:' interno al usuario final."""
     from kosmo.application.consistency.enrich_impact import enrich_impact_items
-    from kosmo.contracts.consistency import (
+    from kosmo.contracts.ai.consistency import (
         ArtifactAction,
         ConsistencyEvaluationOutput,
         ConsistencyStatus,

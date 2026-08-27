@@ -31,6 +31,9 @@ from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo imp
 from kosmo.infrastructure.persistence.postgres.repositories.traceability_repo import (
     SqlAlchemyTraceabilityRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.user_ai_config_repo import (
+    SqlAlchemyUserAiConfigRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
     SqlAlchemyWorkspaceRepository,
 )
@@ -52,6 +55,7 @@ class RepositoryRegistry:
     consistency_evaluations: SqlAlchemyConsistencyEvaluationRepository
     workspaces: SqlAlchemyWorkspaceRepository
     implementations: SqlAlchemyFeatureImplementationRepository
+    user_ai_configs: SqlAlchemyUserAiConfigRepository
 
     @classmethod
     def build(cls, session_factory: async_sessionmaker[AsyncSession]) -> RepositoryRegistry:
@@ -68,4 +72,5 @@ class RepositoryRegistry:
             consistency_evaluations=SqlAlchemyConsistencyEvaluationRepository(session_factory),
             workspaces=SqlAlchemyWorkspaceRepository(session_factory),
             implementations=SqlAlchemyFeatureImplementationRepository(session_factory),
+            user_ai_configs=SqlAlchemyUserAiConfigRepository(session_factory),
         )

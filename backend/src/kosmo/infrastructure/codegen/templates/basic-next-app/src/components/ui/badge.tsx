@@ -3,11 +3,12 @@ import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const toneClasses = {
-  neutral: "bg-neutral-100 text-neutral-700",
-  success: "bg-emerald-50 text-emerald-700",
-  warning: "bg-amber-50 text-amber-700",
-  danger: "bg-red-50 text-red-700",
-  primary: "bg-indigo-50 text-indigo-700",
+  neutral: "bg-light text-dark border",
+  success: "bg-success-subtle text-success-emphasis border border-success-subtle",
+  warning: "bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+  danger: "bg-danger-subtle text-danger-emphasis border border-danger-subtle",
+  primary: "bg-primary-subtle text-primary-emphasis border border-primary-subtle",
+  info: "bg-info-subtle text-info-emphasis border border-info-subtle",
 } as const;
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -18,7 +19,7 @@ export function Badge({ className, tone = "neutral", ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "badge rounded-pill fw-medium d-inline-flex align-items-center gap-1",
         toneClasses[tone],
         className,
       )}

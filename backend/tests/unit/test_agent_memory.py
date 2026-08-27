@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts.agent_memory import AgentSessionSummary
+from kosmo.contracts.memory.agent_memory import AgentSessionSummary
 from kosmo.contracts.pipeline.phase_contexts import DiscoveryPhaseContext
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import AgentMemoryId, ProjectId

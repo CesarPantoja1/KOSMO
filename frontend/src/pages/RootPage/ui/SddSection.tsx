@@ -1,12 +1,13 @@
 import { Ai } from '@/shared/ui';
 
 const steps = [
-	['01', 'Business Idea', 'Tu conocimiento'],
-	['02', 'Discovery', 'IA'],
-	['03', 'Functionalities', 'IA + negocio'],
-	['04', 'EARS Criteria', 'Especificación'],
-	['05', 'Activity Diagrams', 'Modelo'],
-	['06', 'Code', 'Generación'],
+	['01', 'Idea', 'Tu conocimiento'],
+	['02', 'Descubrimiento', 'IA'],
+	['03', 'Funcionalidades', 'IA + negocio'],
+	['04', 'Criterios', 'Especificación'],
+	['05', 'Diagramas', 'Modelo'],
+	['06', 'Implementación', 'Generación'],
+	['07', 'Aplicación', 'Resultado'],
 ];
 
 const sddItems = [
@@ -22,13 +23,13 @@ export function SddSection() {
 		<section id='metodologia' className='border-t border-neutral-200 py-24'>
 			<div className='mx-auto grid max-w-7xl items-center gap-14 px-6 lg:grid-cols-2'>
 				<div>
-					<p className='text-xs font-medium uppercase tracking-[0.25em] text-ai-500'>
+					<p className='text-xs font-medium uppercase tracking-[0.25em] text-neutral-400'>
 						La metodología
 					</p>
 
 					<h2 className='mt-4 text-4xl font-bold text-neutral-800'>
 						Spec Driven
-						<span className='text-ai-500'> Development</span>
+						<span className='text-neutral-800'> Development</span>
 					</h2>
 
 					<p className='mt-6 leading-8 text-neutral-500'>
@@ -40,7 +41,7 @@ export function SddSection() {
 					<div className='mt-8 space-y-4'>
 						{sddItems.map((item, index) => (
 							<div key={item} className='flex items-center gap-4'>
-								<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ai-50 text-xs text-ai-600'>
+								<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs text-neutral-500'>
 									{index + 1}
 								</div>
 
@@ -68,14 +69,14 @@ export function SddSection() {
 						{steps.map(([number, title, description], index) => (
 							<div key={number}>
 								<div className='flex items-center gap-4 rounded-xl border border-neutral-200 bg-neutral-0 p-4'>
-									<span className='text-xs font-medium text-ai-500'>{number}</span>
+									<span className='text-xs font-medium text-neutral-400'>{number}</span>
 
 									<div className='flex-1'>
 										<p className='text-sm font-medium text-neutral-800'>{title}</p>
 										<p className='mt-1 text-xs text-neutral-500'>{description}</p>
 									</div>
 
-									{index < 5 && <span className='text-neutral-300'>↓</span>}
+									{index < 6 && <span className='text-neutral-300'>↓</span>}
 								</div>
 							</div>
 						))}

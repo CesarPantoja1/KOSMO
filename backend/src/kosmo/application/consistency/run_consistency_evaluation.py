@@ -9,8 +9,8 @@ import structlog
 
 from kosmo.application.consistency.consistency_snapshot import fetch_snapshot_parts
 from kosmo.application.consistency.enrich_impact import enrich_impact_items, impact_item_to_dict
-from kosmo.contracts.chat import AppliedChange, DiffCambio
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.chat import AppliedChange, DiffCambio
+from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationRepository,
     ConsistencyEvaluationStatus,

@@ -1,9 +1,9 @@
 'use client';
 
-import { Ai, CharacterCounter, Send, toast } from '@/shared/ui';
-import { formatApiError } from '@/shared/api';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useProjectStore } from '@/entities/project';
+import { formatApiError } from '@/shared/api';
+import { CharacterCounter, Send, toast } from '@/shared/ui';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';

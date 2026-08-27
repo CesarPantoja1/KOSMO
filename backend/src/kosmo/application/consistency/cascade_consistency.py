@@ -10,8 +10,8 @@ from ulid import ULID
 
 from kosmo.application.consistency.enrich_impact import enrich_impact_items, impact_item_to_dict
 from kosmo.contracts import ConsistencyEvaluator
-from kosmo.contracts.chat import AppliedChange
-from kosmo.contracts.consistency import DOWNSTREAM_TARGETS, ConsistencyStatus
+from kosmo.contracts.ai.chat import AppliedChange
+from kosmo.contracts.ai.consistency import DOWNSTREAM_TARGETS, ConsistencyStatus
 from kosmo.contracts.sdd.document import SPEC_TO_API_PHASE, SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId

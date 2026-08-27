@@ -41,6 +41,22 @@ export { Logo } from './icons/Logo';
 export { Lightbulb } from './icons/Lightbulb';
 export { AiOrb } from './icons/AiOrb';
 export { KeyIcon } from './icons/KeyIcon';
+export { default as WarningIcon } from './icons/WarningIcon';
+export { default as SuccessCheckIcon } from './icons/SuccessCheckIcon';
+export { default as ScreensIcon } from './icons/ScreensIcon';
+export { default as EntitiesIcon } from './icons/EntitiesIcon';
+export { default as RulesIcon } from './icons/RulesIcon';
+export { default as StarIcon } from './icons/StarIcon';
+export { default as ShieldCheckIcon } from './icons/ShieldCheckIcon';
+export { default as FlowIcon } from './icons/FlowIcon';
+export { default as FolderSmallIcon } from './icons/FolderSmallIcon';
+export { default as FileIcon } from './icons/FileIcon';
+export { default as SmallCheckIcon } from './icons/SmallCheckIcon';
+export { default as AiOrbCenterIcon } from './icons/AiOrbCenterIcon';
+export { default as CheckCircleWhiteIcon } from './icons/CheckCircleWhiteIcon';
+export { default as SparkleIcon } from './icons/SparkleIcon';
+export { default as InfoCircleIcon } from './icons/InfoCircleIcon';
+export { default as PlusSmallIcon } from './icons/PlusSmallIcon';
 
 // toast
 export { toast, ToasterProvider } from './toast';

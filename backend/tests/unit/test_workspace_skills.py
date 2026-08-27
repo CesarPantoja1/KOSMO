@@ -98,7 +98,7 @@ def test_kosmo_nextjs_skill_content() -> None:
     assert "Server Components por Defecto" in content
     assert "'use client'" in content
     assert "NextResponse.json" in content
-    assert "Tailwind CSS" in content
+    assert "Bootstrap 5" in content
     assert "cn(" in content
 
 
@@ -113,11 +113,10 @@ def test_kosmo_ui_skill_content() -> None:
     assert "feature-registry.ts" in content
     assert "Desacople" in content
 
-    # Diseño: modelo mental, arquetipos y anti-IA
-    assert "modelo mental" in content
-    assert "Storefront" in content
-    assert "Dashboard" in content
-    assert "No parecer hecho con IA" in content
+    # Diseño: Bootstrap 5, arquetipos y anti-IA
+    assert "Bootstrap 5" in content
+    assert "dashboard" in content or "Dashboard" in content
+    assert "Anti-" in content or "anti-" in content
     assert "src/components/ui/" in content
     assert "Español" in content or "español" in content
 

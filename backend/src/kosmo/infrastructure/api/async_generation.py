@@ -14,7 +14,7 @@ from kosmo.application.chat.validate_phase_context import (
     ValidatePhaseContextOutput,
     ValidatePhaseContextUseCase,
 )
-from kosmo.contracts.chat import ModificacionChat
+from kosmo.contracts.ai.chat import ModificacionChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 
@@ -131,18 +131,39 @@ async def sse_chat_response(
                     )
                 else:
                     yield "data: " + json.dumps(_message_dict(item), ensure_ascii=False) + "\n\n"
-        except Exception:
+        except Exception as exc:
             # Frontera de transporte: el stream ya empezó, así que el error se
             # comunica como evento SSE para que el cliente muestre feedback.
             _log.exception("chat.stream_error", phase=document_type.value)
-            yield (
-                "data: "
-                + json.dumps(
-                    {"type": "error", "message": "Error interno al procesar el mensaje. Reintenta más tarde."},
-                    ensure_ascii=False,
+            from kosmo.contracts.sdd.errors import AIProviderAuthError
+            from kosmo.infrastructure.llm.dynamic_llm_client import is_ai_auth_error
+
+            if isinstance(exc, AIProviderAuthError) or is_ai_auth_error(exc):
+                msg = (
+                    exc.problem.detail
+                    if isinstance(exc, AIProviderAuthError)
+                    else (
+                        "Tu clave de API de IA no es válida o ha expirado. "
+                        "Por favor, revísala en Perfil > Configuración de IA."
+                    )
                 )
-                + "\n\n"
-            )
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {"type": "error", "code": "ai_auth_error", "message": msg},
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
+            else:
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {"type": "error", "message": "Error interno al procesar el mensaje. Reintenta más tarde."},
+                        ensure_ascii=False,
+                    )
+                    + "\n\n"
+                )
 
     return StreamingResponse(
         event_stream(),

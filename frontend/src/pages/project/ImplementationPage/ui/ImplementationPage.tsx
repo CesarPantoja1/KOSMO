@@ -9,7 +9,7 @@ import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
 import { AsideCharacteristic } from '@/widgets';
 import { Implementation, toast } from '@/shared/ui';
-import { Ai, ArrowLeft, CursorClickFill } from '@/shared/ui';
+import { Ai, ArrowLeft, CursorClickFill, SuccessCheckIcon, WarningIcon } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { ImplementationLiveProgress } from './ImplementationLiveProgress';
 
@@ -89,16 +89,7 @@ const ImplementationPage = () => {
 
 			{status === 'failed' && errorMessage && (
 				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
-					<svg
-						className='h-5 w-5 shrink-0 text-warning-600'
-						viewBox='0 0 24 24'
-						fill='none'
-						stroke='currentColor'
-						strokeWidth='2'
-					>
-						<circle cx='12' cy='12' r='9' />
-						<path d='M12 8v4M12 16h.01' />
-					</svg>
+				<WarningIcon size={20} color='text-warning-600' />
 					<p className='text-sm text-warning-700'>{errorMessage}</p>
 				</div>
 			)}
@@ -251,15 +242,7 @@ const ImplementationPage = () => {
 
 										<div className='flex flex-col my-auto items-center gap-5 px-12'>
 											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-success-50'>
-												<svg
-													className='h-10 w-10 text-success-600'
-													viewBox='0 0 24 24'
-													fill='none'
-													stroke='currentColor'
-													strokeWidth='2'
-												>
-													<path d='M5 12l4 4L19 6' />
-												</svg>
+											<SuccessCheckIcon size={40} color='text-success-600' />
 											</div>
 											<div className='flex flex-col items-center gap-2 text-center max-w-md'>
 												<h3 className='text-neutral-800 text-lg font-semibold'>

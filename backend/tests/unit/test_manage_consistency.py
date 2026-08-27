@@ -12,7 +12,7 @@ from kosmo.application.consistency.manage_consistency import (
     GetConsistencyReviewUseCase,
     GetConsistencyStatusUseCase,
 )
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluation,
     ConsistencyEvaluationStatus,
 )

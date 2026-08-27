@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from kosmo.contracts.consistency import TraceabilityRepository
+from kosmo.contracts.ai.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.contracts.sdd.repositories import RequirementRepository
 

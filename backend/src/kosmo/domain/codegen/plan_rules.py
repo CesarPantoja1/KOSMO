@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from kosmo.contracts.codegen import FileAction, ImplementationPlan
+from kosmo.contracts.sdd.codegen import FileAction, ImplementationPlan
 from kosmo.domain.codegen.path_safety import (
     UnsafePathError,
     sanitize_relative_path,

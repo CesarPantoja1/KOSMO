@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     FeatureImplementation,
     FeatureImplementationStatus,
 )

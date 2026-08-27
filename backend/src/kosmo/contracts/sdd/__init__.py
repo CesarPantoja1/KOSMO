@@ -17,14 +17,25 @@ from kosmo.contracts.sdd.ids import (
 )
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.repositories import ActivityDiagramRepository
+from kosmo.contracts.sdd.ux_context import (
+    BootstrapDesignTokens,
+    BusinessArchetype,
+    DataDensity,
+    ShellPattern,
+    UXAnalysisOutput,
+    UXContext,
+)
 
 __all__ = [
     "ActivityDiagramId",
     "ActivityDiagramRepository",
     "ApiKey",
     "AuditId",
+    "BootstrapDesignTokens",
+    "BusinessArchetype",
     "ChatHistoryId",
     "ChatMessageId",
+    "DataDensity",
     "DiagramNotFoundError",
     "DiagramaActividad",
     "Feature",
@@ -33,7 +44,10 @@ __all__ = [
     "Project",
     "ProjectId",
     "RequirementId",
+    "ShellPattern",
     "SpecId",
     "TaskId",
+    "UXAnalysisOutput",
+    "UXContext",
     "UserId",
 ]

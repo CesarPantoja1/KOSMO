@@ -8,7 +8,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
 )
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCase
 from kosmo.config import Settings
-from kosmo.contracts.codegen import CodeRunnerPort
+from kosmo.contracts.sdd.codegen import CodeRunnerPort
 from kosmo.infrastructure.cloudflare.preview import CloudflareTunnelPreviewPublisher
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager

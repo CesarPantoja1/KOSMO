@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.errors import (
     DocumentNotFoundError,

@@ -5,12 +5,12 @@ from typing import Any
 
 import structlog
 
-from kosmo.contracts.agent_memory import (
+from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
+from kosmo.contracts.memory.agent_memory import (
     AgentMemoryPort,
     KnowledgePattern,
     KnowledgePatternStore,
 )
-from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.domain.sdd.id_generator import IdGenerator
 

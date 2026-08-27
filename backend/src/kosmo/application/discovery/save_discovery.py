@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
-from kosmo.contracts.persistence import OutboxPort
+from kosmo.contracts.persistence.persistence import OutboxPort
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kosmo.contracts.chat import AppliedChange, DiffCambio
+from kosmo.contracts.ai.chat import AppliedChange, DiffCambio
 from kosmo.contracts.pipeline.consistency_phase_context import DownstreamArtifact
 from kosmo.domain.sdd.consistency_filter import (
     extract_key_terms,

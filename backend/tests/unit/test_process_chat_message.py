@@ -11,7 +11,7 @@ from kosmo.application.chat.process_chat_message import (
     ProcessChatMessageOutput,
     ProcessChatMessageUseCase,
 )
-from kosmo.contracts.chat import (
+from kosmo.contracts.ai.chat import (
     ChatMessageId,
     ChatRole,
     DiffCambio,

@@ -7,7 +7,7 @@ from typing import Any, Self, cast
 
 import httpx
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     OpenCodeClientPort,
     OpenCodeEvent,
     OpenCodeEventType,

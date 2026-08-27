@@ -1,8 +1,9 @@
 import { API_BASE_URL } from './config';
-import { useAuthStore, authHeaders } from '@/entities/user';
-import type { TokenPairResponse } from '@/entities/user';
+import { useAuthStore } from '@/shared/model/auth.store';
+import { authHeaders } from './headers';
+import type { TokenPairResponse } from './auth.types';
 import { parseApiError } from './errors';
-import { clearAllStores } from '@/shared/lib/clearAllStores';
+import { clearAllStores } from '@/features/app-state';
 
 let isRefreshing = false;
 let failedQueue: {
@@ -46,7 +47,8 @@ export const apiClient = async <T>(
 		!isAuthDisabled &&
 		res.status === 401 &&
 		refreshToken &&
-		!url.includes('/auth/token')
+		!url.includes('/auth/token') &&
+		!url.includes('/auth/refresh')
 	) {
 		if (isRefreshing) {
 			return new Promise((resolve, reject) => {
@@ -100,6 +102,17 @@ export const apiClient = async <T>(
 	}
 
 	if (!res.ok) {
+		if (
+			!isAuthDisabled &&
+			res.status === 401 &&
+			!url.includes('/auth/token') &&
+			!url.includes('/auth/authorize')
+		) {
+			clearAllStores();
+			if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+				window.location.href = '/?session_expired=true';
+			}
+		}
 		throw parseApiError(res, await res.json().catch(() => null));
 	}
 
@@ -107,3 +120,4 @@ export const apiClient = async <T>(
 
 	return res.json();
 };
+

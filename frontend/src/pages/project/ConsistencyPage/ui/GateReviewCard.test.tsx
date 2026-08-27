@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ReviewCard } from '@/entities/consistency';
 
-vi.mock('@/feature/plantuml-viewer', () => ({
+vi.mock('@/features/plantuml-viewer', () => ({
 	PlantUmlViewer: ({
 		source,
 		showControls,
@@ -98,7 +98,12 @@ describe('GateReviewCard', () => {
 
 	it('sigue usando texto para otros tipos de artefacto', () => {
 		render(
-			<GateReviewCard card={makeCard()} busy={false} onApply={() => {}} onDiscard={() => {}} />,
+			<GateReviewCard
+				card={makeCard()}
+				busy={false}
+				onApply={() => {}}
+				onDiscard={() => {}}
+			/>,
 		);
 
 		expect(screen.queryAllByTestId('plantuml-viewer')).toHaveLength(0);

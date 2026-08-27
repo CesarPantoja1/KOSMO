@@ -1,10 +1,10 @@
 'use client';
 
-import { useAuthStore, authApi } from '@/entities/user';
+import { authApi } from '@/entities/user';
 import { formatApiError } from '@/shared/api';
 import { Close } from '@/shared/ui';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface RegisterModalProps {
 	onClose: () => void;
@@ -12,7 +12,6 @@ interface RegisterModalProps {
 }
 
 const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
-	const { accessToken } = useAuthStore();
 	const router = useRouter();
 
 	const [email, setEmail] = useState('');
@@ -21,14 +20,6 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 
 	const [error, setError] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
-
-	const isAuthDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
-
-	useEffect(() => {
-		if (isAuthDisabled || accessToken) {
-			onClose();
-		}
-	}, [accessToken, isAuthDisabled, onClose]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -73,8 +64,6 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 			setIsLoading(false);
 		}
 	};
-
-	if (isAuthDisabled) return null;
 
 	return (
 		<form

@@ -1,4 +1,12 @@
-// TYPES
+// Re-export from shared (auth moved to shared layer)
+export {
+	useAuthStore,
+	clearAuthStore,
+} from '@/shared/model/auth.store';
+export type { AuthState, User } from '@/shared/model/auth.store';
+
+export { authApi } from '@/shared/api/auth';
+export { authHeaders } from '@/shared/api/headers';
 export type {
 	RegisterRequest,
 	AuthorizeRequest,
@@ -11,20 +19,7 @@ export type {
 	TokenPairResponse,
 	PrincipalView,
 	OAuthErrorResponse,
-	User,
-} from './model/types';
+} from '@/shared/api/auth.types';
 
-// SCHEMA
-export { UserSchema } from './model/user-schema';
-
-// STORE
-export { useAuthStore, clearAuthStore } from './model/store';
-export type { AuthState } from './model/store';
-
-// API
-export { authApi } from './api/auth';
-export { authHeaders } from './api/headers';
+// User-specific API (stays in entity)
 export { getUser } from './api/user-api';
-
-// UI
-export { UserCard } from './ui/UserCard';

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import structlog
 
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     ValidationRunResult,
     ValidationStep,

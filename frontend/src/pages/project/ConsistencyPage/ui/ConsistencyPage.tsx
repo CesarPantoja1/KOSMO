@@ -9,7 +9,7 @@ import {
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
 import { useRequirementsStore } from '@/entities/requirements';
-import { preloadPlantUmlEngine } from '@/feature/plantuml-viewer/lib/engine-loader';
+import { preloadPlantUmlEngine } from '@/features/plantuml-viewer/lib/engine-loader';
 import { formatApiError } from '@/shared/api';
 import { ArrowLeft, ModalConfirm, toast } from '@/shared/ui';
 import Link from 'next/link';
@@ -63,7 +63,6 @@ const ConsistencyPage = () => {
 	const reviewLoading = useConsistencyGateStore((s) => s.reviewLoading);
 	const cardsByPhase = useConsistencyGateStore((s) => s.cardsByPhase);
 	const actionByEvaluation = useConsistencyGateStore((s) => s.actionByEvaluation);
-	const activity = useConsistencyGateStore((s) => s.activity);
 	const loadStatus = useConsistencyGateStore((s) => s.loadStatus);
 	const loadReview = useConsistencyGateStore((s) => s.loadReview);
 	const applyEvaluation = useConsistencyGateStore((s) => s.applyEvaluation);

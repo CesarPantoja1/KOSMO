@@ -10,8 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from kosmo.contracts.ai.chat import HistorialChat, MensajeChat
 from kosmo.contracts.auth import TokenPair
-from kosmo.contracts.chat import HistorialChat, MensajeChat
 
 # Enumeraciones de negocio
 
@@ -705,7 +705,7 @@ class ChatResponse(BaseModel):
 
     @classmethod
     def from_redirect(cls, target_phase: str, redirect_message: str) -> "ChatResponse":
-        from kosmo.contracts.chat import ChatRole
+        from kosmo.contracts.ai.chat import ChatRole
         from kosmo.contracts.sdd.ids import ChatMessageId
         from kosmo.domain.sdd.id_generator import IdGenerator
 
@@ -919,3 +919,42 @@ class ProjectPreviewResponse(BaseModel):
     """URL de la vista previa del proyecto activo."""
 
     url: str = Field(description="URL pública de la vista previa del proyecto")
+
+
+class AIModelInfoResponse(BaseModel):
+    id: str
+    display_name: str
+    tier: str
+
+
+class AIProviderInfoResponse(BaseModel):
+    value: str
+    label: str
+    models: list[AIModelInfoResponse]
+
+
+class AIConfigResponse(BaseModel):
+    provider: str
+    model: str
+    is_custom: bool
+    has_api_key: bool
+    masked_key: str | None = None
+    updated_at: datetime | None = None
+
+
+class SaveAIConfigRequest(BaseModel):
+    provider: str
+    model: str
+    api_key: str
+
+
+class TestAIConnectionRequest(BaseModel):
+    provider: str
+    model: str
+    api_key: str | None = None
+
+
+class TestAIConnectionResponse(BaseModel):
+    is_connected: bool
+    detected_model: str
+    message: str

@@ -12,7 +12,7 @@ from kosmo.application.codegen.validate_workspace import (
     WorkspaceNotFoundError,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.codegen import (
+from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
     FeatureImplementation,
     OpenCodeEvent,

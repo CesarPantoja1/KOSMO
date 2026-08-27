@@ -6,8 +6,8 @@ from kosmo.application.projects.delete_project import (
     DeleteProjectInput,
     DeleteProjectUseCase,
 )
-from kosmo.contracts.chat import ChatRole, ChatSession, MensajeChat
-from kosmo.contracts.consistency import ConsistencyEvaluation, ConsistencyEvaluationStatus
+from kosmo.contracts.ai.chat import ChatRole, ChatSession, MensajeChat
+from kosmo.contracts.ai.consistency import ConsistencyEvaluation, ConsistencyEvaluationStatus
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.errors import ProjectNotFoundError

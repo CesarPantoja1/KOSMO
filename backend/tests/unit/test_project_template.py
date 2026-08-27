@@ -76,7 +76,7 @@ def test_package_json_structure_and_dependencies() -> None:
     assert "drizzle-orm" in deps
     assert "better-sqlite3" in deps
     assert "clsx" in deps
-    assert "tailwind-merge" in deps
+    assert "bootstrap" in deps
     assert "lucide-react" in deps
 
     # Assert — DevDependencies
@@ -91,8 +91,6 @@ def test_package_json_structure_and_dependencies() -> None:
     assert "eslint" in dev_deps
     assert "@eslint/js" in dev_deps
     assert "typescript-eslint" in dev_deps
-    assert "tailwindcss" in dev_deps
-    assert "@tailwindcss/postcss" in dev_deps
 
 
 @pytest.mark.unit

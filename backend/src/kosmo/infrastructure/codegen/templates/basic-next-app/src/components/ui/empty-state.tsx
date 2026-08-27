@@ -14,19 +14,20 @@ export function EmptyState({ icon: Icon, title, description, action, className }
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-neutral-300 bg-white p-10 text-center",
+        "d-flex flex-column align-items-center justify-content-center text-center p-5 rounded border border-dashed bg-white",
         className,
       )}
     >
       {Icon ? (
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100">
-          <Icon className="h-6 w-6 text-neutral-500" />
+        <div
+          className="d-flex align-items-center justify-content-center rounded-circle bg-light mb-3 text-secondary"
+          style={{ width: "3.5rem", height: "3.5rem" }}
+        >
+          <Icon size={24} />
         </div>
       ) : null}
-      <div>
-        <p className="text-sm font-semibold text-neutral-900">{title}</p>
-        {description ? <p className="mt-1 text-sm text-neutral-500">{description}</p> : null}
-      </div>
+      <h6 className="fw-semibold text-dark mb-1">{title}</h6>
+      {description ? <p className="text-muted small mb-3">{description}</p> : null}
       {action}
     </div>
   );

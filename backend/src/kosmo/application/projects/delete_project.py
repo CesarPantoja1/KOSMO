@@ -4,13 +4,13 @@ from dataclasses import dataclass
 
 import structlog
 
-from kosmo.contracts.agent_memory import AgentMemoryPort
-from kosmo.contracts.chat import ChatRepository
-from kosmo.contracts.codegen import WorkspaceManagerPort
-from kosmo.contracts.consistency import (
+from kosmo.contracts.ai.chat import ChatRepository
+from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluationRepository,
     TraceabilityRepository,
 )
+from kosmo.contracts.memory.agent_memory import AgentMemoryPort
+from kosmo.contracts.sdd.codegen import WorkspaceManagerPort
 from kosmo.contracts.sdd.errors import ProjectNotFoundError
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.sdd.repositories import (

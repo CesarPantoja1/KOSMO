@@ -14,6 +14,7 @@ from kosmo.contracts.auth import (
     TokenRevokedError,
 )
 from kosmo.infrastructure.api.dependencies.container import get_container
+from kosmo.infrastructure.llm.dynamic_llm_client import current_user_id
 
 _bearer_scheme = HTTPBearer(auto_error=False, description="JWT de acceso (RS256)")
 
@@ -24,14 +25,18 @@ async def get_principal(
 ) -> Principal:
     if settings.auth_disabled:
         mock_user = request.headers.get("x-mock-user", "dev_user")
-        return Principal(subject=mock_user, scopes=frozenset({"*"}))
+        principal = Principal(subject=mock_user, scopes=frozenset({"*"}))
+        current_user_id.set(principal.subject)
+        return principal
     if credentials is None:
         raise _to_http(MissingTokenError("Missing bearer token"))
     container = get_container(request)
     assert container.auth is not None
     verify: VerifyAccessToken = container.auth.verify_access_token
     try:
-        return await verify.execute(credentials.credentials)
+        principal = await verify.execute(credentials.credentials)
+        current_user_id.set(principal.subject)
+        return principal
     except AuthError as exc:
         raise _to_http(exc) from exc
 

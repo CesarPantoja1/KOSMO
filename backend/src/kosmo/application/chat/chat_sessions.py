@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from kosmo.contracts.chat import ChatRepository, ChatSession, ChatSessionSummary
+from kosmo.contracts.ai.chat import ChatRepository, ChatSession, ChatSessionSummary
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 from kosmo.domain.sdd.id_generator import IdGenerator
