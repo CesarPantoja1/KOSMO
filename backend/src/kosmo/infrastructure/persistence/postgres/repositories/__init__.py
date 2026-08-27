@@ -12,6 +12,10 @@ from kosmo.infrastructure.persistence.postgres.repositories.feature_implementati
 from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
 )
+from kosmo.infrastructure.persistence.postgres.repositories.project_integration_repo import (
+    SqlAlchemyCodeSyncLogRepository,
+    SqlAlchemyProjectGitHubIntegrationRepository,
+)
 from kosmo.infrastructure.persistence.postgres.repositories.project_repo import (
     SqlAlchemyProjectRepository,
 )
@@ -34,9 +38,11 @@ __all__ = [
     "SqlAlchemyActivityDiagramRepository",
     "SqlAlchemyAuditEventSink",
     "SqlAlchemyChatRepository",
+    "SqlAlchemyCodeSyncLogRepository",
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyFeatureImplementationRepository",
     "SqlAlchemyFeatureRepository",
+    "SqlAlchemyProjectGitHubIntegrationRepository",
     "SqlAlchemyProjectRepository",
     "SqlAlchemyRequirementRepository",
     "SqlAlchemyUserAiConfigRepository",

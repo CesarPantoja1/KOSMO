@@ -116,6 +116,16 @@ class GitHubClientPort(Protocol):
         ...
 
 
+class GitHubSyncStatus(enum.StrEnum):
+    """Estado del ciclo de vida y sincronización del repositorio remoto en GitHub."""
+
+    NOT_CREATED = "not_created"
+    CREATED = "created"
+    SYNCING = "syncing"
+    SYNCED = "synced"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True, slots=True)
 class UserGitHubIntegration:
     """Configuración de integración con GitHub a nivel de usuario."""
@@ -131,9 +141,17 @@ class ProjectGitHubIntegration:
     """Vínculo de un proyecto de KOSMO con un repositorio remoto en GitHub."""
 
     project_id: ProjectId
-    repo_url: str
+    repo_url: str = ""
+    repo_name: str | None = None
+    is_public: bool = False
     default_branch: str = "main"
+    last_push_at: datetime | None = None
+    last_commit_hash: str | None = None
+    sync_status: GitHubSyncStatus = GitHubSyncStatus.NOT_CREATED
+    error_message: str | None = None
     last_synced_at: datetime | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,7 +175,9 @@ class UserGitHubIntegrationRepository(Protocol):
 class ProjectGitHubIntegrationRepository(Protocol):
     async def get_by_project_id(self, project_id: ProjectId) -> ProjectGitHubIntegration | None: ...
 
-    async def save(self, integration: ProjectGitHubIntegration) -> None: ...
+    async def save(self, integration: ProjectGitHubIntegration) -> ProjectGitHubIntegration: ...
+
+    async def delete_by_project_id(self, project_id: ProjectId) -> bool: ...
 
 
 class CodeSyncLogRepository(Protocol):

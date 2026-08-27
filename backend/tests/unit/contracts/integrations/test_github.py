@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -13,6 +13,7 @@ from kosmo.contracts.integrations.github import (
     GitHubRepository,
     GitHubRepositoryAlreadyExistsError,
     GitHubResourceNotFoundError,
+    GitHubSyncStatus,
     GitHubUser,
     ProjectGitHubIntegration,
     UserGitHubIntegration,
@@ -45,8 +46,52 @@ def test_project_github_integration_defaults() -> None:
     # Assert
     assert integration.project_id == "proj-1"
     assert integration.repo_url == "https://github.com/testuser/testrepo"
+    assert integration.repo_name is None
+    assert integration.is_public is False
     assert integration.default_branch == "main"
+    assert integration.last_push_at is None
+    assert integration.last_commit_hash is None
+    assert integration.sync_status == GitHubSyncStatus.NOT_CREATED
+    assert integration.error_message is None
     assert integration.last_synced_at is None
+    assert isinstance(integration.created_at, datetime)
+    assert isinstance(integration.updated_at, datetime)
+
+
+@pytest.mark.unit
+def test_project_github_integration_full_fields() -> None:
+    # Arrange
+    now = datetime.now(UTC)
+    # Act
+    integration = ProjectGitHubIntegration(
+        project_id=ProjectId("prj_01"),
+        repo_name="my-cool-repo",
+        repo_url="https://github.com/octocat/my-cool-repo",
+        is_public=True,
+        default_branch="master",
+        last_push_at=now,
+        last_commit_hash="abc12345",
+        sync_status=GitHubSyncStatus.SYNCED,
+        error_message=None,
+    )
+
+    # Assert
+    assert integration.repo_name == "my-cool-repo"
+    assert integration.is_public is True
+    assert integration.default_branch == "master"
+    assert integration.last_push_at == now
+    assert integration.last_commit_hash == "abc12345"
+    assert integration.sync_status == GitHubSyncStatus.SYNCED
+
+
+@pytest.mark.unit
+def test_github_sync_status_values() -> None:
+    # Arrange & Act & Assert
+    assert GitHubSyncStatus.NOT_CREATED.value == "not_created"
+    assert GitHubSyncStatus.CREATED.value == "created"
+    assert GitHubSyncStatus.SYNCING.value == "syncing"
+    assert GitHubSyncStatus.SYNCED.value == "synced"
+    assert GitHubSyncStatus.FAILED.value == "failed"
 
 
 @pytest.mark.unit

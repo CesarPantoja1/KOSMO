@@ -669,3 +669,40 @@ class InMemoryUserGitHubIntegrationRepository:
         existed = str(user_id) in self.integrations
         self.integrations.pop(str(user_id), None)
         return existed
+
+
+class InMemoryProjectGitHubIntegrationRepository:
+    """Implementa ProjectGitHubIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.github import ProjectGitHubIntegration
+
+        self.integrations: dict[str, ProjectGitHubIntegration] = {}
+
+    async def get_by_project_id(self, project_id: Any) -> Any:
+        return self.integrations.get(str(project_id))
+
+    async def save(self, integration: Any) -> Any:
+        self.integrations[str(integration.project_id)] = integration
+        return integration
+
+    async def delete_by_project_id(self, project_id: Any) -> bool:
+        existed = str(project_id) in self.integrations
+        self.integrations.pop(str(project_id), None)
+        return existed
+
+
+class InMemoryCodeSyncLogRepository:
+    """Implementa CodeSyncLogRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.github import CodeSyncLog
+
+        self.logs: list[CodeSyncLog] = []
+
+    async def add_log(self, log: Any) -> None:
+        self.logs.append(log)
+
+    async def get_logs_by_project(self, project_id: Any) -> list[Any]:
+        project_str = str(project_id)
+        return [log for log in self.logs if str(log.project_id) == project_str]
