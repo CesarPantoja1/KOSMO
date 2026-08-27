@@ -9,11 +9,16 @@ import pytest
 from kosmo.infrastructure.git import (
     GitError,
     git_add,
+    git_build_authenticated_url,
     git_commit,
+    git_current_branch,
     git_has_commits,
     git_head_hash,
     git_init,
     git_is_clean,
+    git_push,
+    git_remote_add_or_update,
+    git_remote_get_url,
     git_revert_commit,
     git_rollback,
     git_status,
@@ -208,3 +213,141 @@ def test_git_operations_on_nonexistent_dir_raise_git_error() -> None:
 
     with pytest.raises(GitError, match="El directorio del workspace no existe"):
         git_status(non_existent)
+
+
+@pytest.mark.unit
+def test_git_remote_add_and_update() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path)
+
+        assert git_remote_get_url(path, "origin") is None
+
+        # Agregar remoto inicial
+        git_remote_add_or_update(path, name="origin", url="https://github.com/test-org/test-repo.git")
+        assert git_remote_get_url(path, "origin") == "https://github.com/test-org/test-repo.git"
+
+        # Actualizar remoto existente
+        git_remote_add_or_update(path, name="origin", url="https://github.com/test-org/updated-repo.git")
+        assert git_remote_get_url(path, "origin") == "https://github.com/test-org/updated-repo.git"
+
+
+@pytest.mark.unit
+def test_git_remote_add_empty_url_raises() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path)
+
+        with pytest.raises(GitError, match="La URL del repositorio remoto no puede estar vacía"):
+            git_remote_add_or_update(path, name="origin", url="")
+
+        with pytest.raises(GitError, match="La URL del repositorio remoto no puede estar vacía"):
+            git_remote_add_or_update(path, name="origin", url="   ")
+
+
+@pytest.mark.unit
+def test_git_current_branch() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path, initial_branch="main")
+        (path / "readme.md").write_text("# Test", encoding="utf-8")
+        git_add(path)
+        git_commit(path, "feat: init")
+
+        assert git_current_branch(path) == "main"
+
+        # Crear y cambiar a otra rama
+        subprocess.run(["git", "checkout", "-b", "feature/test-branch"], cwd=path, check=True)
+        assert git_current_branch(path) == "feature/test-branch"
+
+
+@pytest.mark.unit
+def test_git_build_authenticated_url() -> None:
+    # URL estándar HTTPS
+    auth_url = git_build_authenticated_url("https://github.com/owner/project.git", "ghp_secretToken123")
+    assert auth_url == "https://x-access-token:ghp_secretToken123@github.com/owner/project.git"
+
+    # URL con credenciales previas incrustadas
+    auth_url_clean = git_build_authenticated_url("https://old_user:old_token@github.com/owner/project.git", "ghp_new")
+    assert auth_url_clean == "https://x-access-token:ghp_new@github.com/owner/project.git"
+
+    # Token vacío
+    with pytest.raises(GitError, match="El token de acceso no puede estar vacío"):
+        git_build_authenticated_url("https://github.com/owner/project.git", "")
+
+
+@pytest.mark.unit
+def test_git_push_to_local_bare_repository() -> None:
+    with tempfile.TemporaryDirectory() as bare_dir, tempfile.TemporaryDirectory() as ws_dir:
+        bare_path = Path(bare_dir)
+        ws_path = Path(ws_dir)
+
+        # Inicializar repositorio remoto bare local
+        subprocess.run(["git", "init", "--bare", "-b", "main"], cwd=bare_path, check=True)
+
+        # Inicializar workspace local y crear commit
+        git_init(ws_path, initial_branch="main")
+        (ws_path / "app.ts").write_text("console.log('kosmo');", encoding="utf-8")
+        git_add(ws_path)
+        git_commit(ws_path, "feat: initial app code")
+        local_head = git_head_hash(ws_path)
+        assert local_head is not None
+
+        # Configurar remoto y hacer push
+        git_remote_add_or_update(ws_path, name="origin", url=str(bare_path.resolve()))
+        pushed_sha = git_push(ws_path, remote="origin", branch="main", set_upstream=True)
+
+        assert pushed_sha == local_head
+
+        # Verificar que el remoto bare recibió el commit en main
+        res_bare = subprocess.run(
+            ["git", "rev-parse", "main"], cwd=bare_path, capture_output=True, text=True, check=True
+        )
+        assert res_bare.stdout.strip() == local_head
+
+        # Push incremental subsecuente
+        (ws_path / "utils.ts").write_text("export const add = (a: number, b: number) => a + b;", encoding="utf-8")
+        git_add(ws_path)
+        git_commit(ws_path, "feat: add utils")
+        second_head = git_head_hash(ws_path)
+
+        second_pushed_sha = git_push(ws_path, remote="origin", branch="main", force_with_lease=True)
+        assert second_pushed_sha == second_head
+
+        res_bare_second = subprocess.run(
+            ["git", "rev-parse", "main"], cwd=bare_path, capture_output=True, text=True, check=True
+        )
+        assert res_bare_second.stdout.strip() == second_head
+
+
+@pytest.mark.unit
+def test_git_push_without_commits_raises() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path)
+
+        with pytest.raises(GitError, match="El repositorio no tiene commits para enviar al remoto"):
+            git_push(path, remote="origin")
+
+
+@pytest.mark.unit
+def test_git_push_token_sanitization_in_error() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        git_init(path)
+        (path / "file.txt").write_text("data", encoding="utf-8")
+        git_add(path)
+        git_commit(path, "feat: commit")
+
+        # Intentar push a una URL inalcanzable con token secreto
+        secret_token = "ghp_SuperSecretOAuthToken999"
+        invalid_url = "https://github.com/nonexistent-org-999999/nonexistent-repo-999999.git"
+
+        with pytest.raises(GitError) as exc_info:
+            git_push(path, remote=invalid_url, token=secret_token)
+
+        err_text = str(exc_info.value)
+        # El token en claro NO debe aparecer nunca en el mensaje de error
+        assert secret_token not in err_text
+        # Debe haberse enmascarado
+        assert "https://***@" in err_text
