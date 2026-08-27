@@ -355,7 +355,24 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
-             grep -q '^DATABASE_URL=.' .env
+             for key in DATABASE_URL REDIS_URL REDIS_PASSWORD FERNET_MASTER_KEY CORS_ALLOWED_ORIGINS; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required authentication variable: ${key}" >&2
+                 exit 1
+               fi
+             done
+             for key in JWT_ISSUER JWT_AUDIENCE; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required JWT variable: ${key}" >&2
+                 exit 1
+               fi
+             done
+             for key_file in secrets/jwt_private.pem secrets/jwt_public.pem; do
+               if [ ! -s "$key_file" ]; then
+                 echo "Missing required JWT key file: ${key_file}" >&2
+                 exit 1
+               fi
+             done
              grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env
              for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
                if ! grep -q "^${key}=." .env; then
@@ -373,8 +390,21 @@ jobs:
              docker login ghcr.io --username "${{ vars.PRODUCTION_GHCR_USERNAME }}" --password-stdin
              install -d -m 0750 workspaces
              docker run --rm -v "$PWD/workspaces:/workspaces" alpine:3.22 chown -R 1000:1000 /workspaces
+             docker compose -p kosmo -f compose.yaml config -q
              docker compose -p kosmo -f compose.yaml pull
+             docker run --rm -v "$PWD/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:alpine nginx -t
+             docker run --rm \
+               -v "$PWD/secrets/jwt_private.pem:/run/kosmo-secrets/jwt_private.pem:ro" \
+               -v "$PWD/secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro" \
+               --entrypoint sh "${{ needs.build-backend.outputs.api_image }}" \
+               -c "test -r /run/kosmo-secrets/jwt_private.pem && test -r /run/kosmo-secrets/jwt_public.pem"
              docker run --rm --env-file .env --network kosmo-network \
+               -e ENV=production \
+               -e AUTH_DISABLED=false \
+               -e JWT_PRIVATE_KEY_PATH=/run/kosmo-secrets/jwt_private.pem \
+               -e JWT_PUBLIC_KEY_PATH=/run/kosmo-secrets/jwt_public.pem \
+               -v "$PWD/secrets/jwt_private.pem:/run/kosmo-secrets/jwt_private.pem:ro" \
+               -v "$PWD/secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro" \
                --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
              docker compose -p kosmo -f compose.yaml up -d
              # Reload the transferred Nginx configuration after app containers

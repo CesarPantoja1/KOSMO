@@ -55,6 +55,8 @@ htmlcov/
 .env
 .env.local
 .secrets/
+deploy/staging/secrets/
+deploy/production/secrets/
 
 # Node
 node_modules/
