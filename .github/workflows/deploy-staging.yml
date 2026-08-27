@@ -143,10 +143,10 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.web }}
           build-args: |
-            NEXT_PUBLIC_API_URL=https://staging-kosmo.cespan.dev
+            NEXT_PUBLIC_API_URL=
             NEXT_PUBLIC_APP_NAME=KOSMO
             NEXT_PUBLIC_APP_ENV=deployment
-            NEXT_PUBLIC_AUTH_DISABLED=true
+            NEXT_PUBLIC_AUTH_DISABLED=false
             NEXT_PUBLIC_USE_MOCKS=false
 
   build-opencode:
@@ -371,6 +371,24 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
+             for key in DATABASE_URL REDIS_URL REDIS_PASSWORD FERNET_MASTER_KEY CORS_ALLOWED_ORIGINS; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required authentication variable: ${key}" >&2
+                 exit 1
+               fi
+             done
+             for key in JWT_ISSUER JWT_AUDIENCE; do
+               if ! grep -q "^${key}=." .env; then
+                 echo "Missing required JWT variable: ${key}" >&2
+                 exit 1
+               fi
+             done
+             for key_file in secrets/jwt_private.pem secrets/jwt_public.pem; do
+               if [ ! -s "$key_file" ]; then
+                 echo "Missing required JWT key file: ${key_file}" >&2
+                 exit 1
+               fi
+             done
              for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
@@ -393,8 +411,21 @@ jobs:
              install -d -m 0750 workspaces
              docker run --rm -v "$PWD/workspaces:/workspaces" alpine:3.22 chown -R 1000:1000 /workspaces
              docker network inspect kosmo-staging-network >/dev/null 2>&1 || docker network create kosmo-staging-network >/dev/null
+             docker compose -f compose.yaml config -q
              docker compose -f compose.yaml pull
+             docker run --rm -v "$PWD/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:alpine nginx -t
+             docker run --rm \
+               -v "$PWD/secrets/jwt_private.pem:/run/kosmo-secrets/jwt_private.pem:ro" \
+               -v "$PWD/secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro" \
+               --entrypoint sh "${{ needs.build-backend.outputs.api_image }}" \
+               -c "test -r /run/kosmo-secrets/jwt_private.pem && test -r /run/kosmo-secrets/jwt_public.pem"
              docker run --rm --env-file .env --network kosmo-staging-network \
+               -e ENV=staging \
+               -e AUTH_DISABLED=false \
+               -e JWT_PRIVATE_KEY_PATH=/run/kosmo-secrets/jwt_private.pem \
+               -e JWT_PUBLIC_KEY_PATH=/run/kosmo-secrets/jwt_public.pem \
+               -v "$PWD/secrets/jwt_private.pem:/run/kosmo-secrets/jwt_private.pem:ro" \
+               -v "$PWD/secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro" \
                --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
              docker compose -f compose.yaml up -d --remove-orphans
              # Reload the transferred Nginx configuration after app containers
