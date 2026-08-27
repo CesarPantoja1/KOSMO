@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from kosmo.contracts.integrations.github import (
-    UserGitHubIntegration,
-    ProjectGitHubIntegration,
     CodeSyncLog,
     CodeSyncStatus,
+    ProjectGitHubIntegration,
+    UserGitHubIntegration,
 )
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Optional, Protocol
+from datetime import UTC, datetime
+from typing import Protocol
 
 from ulid import ULID
 
@@ -32,7 +32,7 @@ class ProjectGitHubIntegration:
     project_id: ProjectId
     repo_url: str
     default_branch: str = "main"
-    last_synced_at: Optional[datetime] = None
+    last_synced_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,20 +41,20 @@ class CodeSyncLog:
 
     id: ULID = field(default_factory=ULID)
     project_id: ProjectId = field(default_factory=lambda: ProjectId(""))
-    commit_sha: Optional[str] = None
+    commit_sha: str | None = None
     status: CodeSyncStatus = CodeSyncStatus.FAILED
-    message: Optional[str] = None
+    message: str | None = None
     synced_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class UserGitHubIntegrationRepository(Protocol):
-    async def get_by_user_id(self, user_id: UserId) -> Optional[UserGitHubIntegration]: ...
+    async def get_by_user_id(self, user_id: UserId) -> UserGitHubIntegration | None: ...
 
     async def save(self, integration: UserGitHubIntegration) -> None: ...
 
 
 class ProjectGitHubIntegrationRepository(Protocol):
-    async def get_by_project_id(self, project_id: ProjectId) -> Optional[ProjectGitHubIntegration]: ...
+    async def get_by_project_id(self, project_id: ProjectId) -> ProjectGitHubIntegration | None: ...
 
     async def save(self, integration: ProjectGitHubIntegration) -> None: ...
 
