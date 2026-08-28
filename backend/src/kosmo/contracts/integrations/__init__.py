@@ -1,5 +1,6 @@
-"""Contratos de integración con servicios externos."""
+"""Contratos de integraciÃ³n con servicios externos."""
 
+from kosmo.contracts.integrations.git import GitWorkspacePort
 from kosmo.contracts.integrations.github import (
     CodeSyncLog,
     CodeSyncStatus,
@@ -26,6 +27,7 @@ from kosmo.contracts.integrations.user_integration import (
 )
 
 __all__ = [
+    "GitWorkspacePort",
     "CodeSyncLog",
     "CodeSyncStatus",
     "GitHubApiError",
