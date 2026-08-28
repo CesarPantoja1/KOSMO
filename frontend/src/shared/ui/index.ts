@@ -59,5 +59,12 @@ export { default as InfoCircleIcon } from './icons/InfoCircleIcon';
 export { default as PlusSmallIcon } from './icons/PlusSmallIcon';
 
 // toast
-export { toast, ToasterProvider } from './toast';
-export type { ToastContent, ToastVariant, ToastPosition } from './toast';
+
+export { toast } from './toast/toast';
+export { ToasterProvider } from './toast/ToasterProvider';
+export type {
+	ToastContent,
+	ToastVariant,
+	ToastPosition,
+	ToastOptions,
+} from './toast/types';

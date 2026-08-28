@@ -1,5 +1,13 @@
+import type { IntegrationStatus } from '@/entities/integration';
+import {
+	connectIntegration,
+	disconnectIntegration,
+	getIntegrationStatus,
+} from '@/entities/integration';
 import { User } from '@/entities/user';
-import { useState } from 'react';
+import { GITHUB_CLIENT_ID, GITHUB_SCOPES, PUBLIC_APP_DOMAIN } from '@/shared/api';
+import { toast } from '@/shared/ui/toast/toast';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type CuentaTabProps = {
 	user: User | null;
@@ -53,24 +61,80 @@ const CuentaTab = ({ user }: CuentaTabProps) => {
 					</div>
 				</div>
 			</div>
-			<IntegrationsMock />
+			<GitHubIntegration />
 		</div>
 	);
 };
 
 export { CuentaTab };
 
-function IntegrationsMock() {
-	const [connected, setConnected] = useState(false);
-	const [loading, setLoading] = useState(false);
+function GitHubIntegration() {
+	const [status, setStatus] = useState<IntegrationStatus | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [actionLoading, setActionLoading] = useState(false);
+	const popupRef = useRef<Window | null>(null);
 
-	const handleToggle = () => {
-		setLoading(true);
-		setTimeout(() => {
-			setConnected(!connected);
-			setLoading(false);
-		}, 800);
+	useEffect(() => {
+		getIntegrationStatus('github')
+			.then(setStatus)
+			.catch(() =>
+				toast.error('No se pudo verificar el estado de la integración con GitHub.'),
+			)
+			.finally(() => setLoading(false));
+	}, []);
+
+	const handleOAuthMessage = useCallback((event: MessageEvent) => {
+		if (event.origin !== window.location.origin) return;
+		if (event.data?.type !== 'github-oauth-code') return;
+
+		const code = event.data.code as string;
+		if (!code) return;
+
+		setActionLoading(true);
+		connectIntegration('github', {
+			code,
+			redirect_uri: `${PUBLIC_APP_DOMAIN}/perfil`,
+		})
+			.then((result) => {
+				setStatus(result);
+				toast.success(
+					`Cuenta de GitHub vinculada como @${result.username ?? 'desconocido'}.`,
+				);
+			})
+			.catch(() =>
+				toast.error('Error al vincular la cuenta de GitHub. Intenta de nuevo.'),
+			)
+			.finally(() => setActionLoading(false));
+
+		popupRef.current?.close();
+		popupRef.current = null;
+	}, []);
+
+	useEffect(() => {
+		window.addEventListener('message', handleOAuthMessage);
+		return () => window.removeEventListener('message', handleOAuthMessage);
+	}, [handleOAuthMessage]);
+
+	const handleConnect = () => {
+		const redirectUri = `${PUBLIC_APP_DOMAIN}/perfil`;
+		const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${GITHUB_SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+		popupRef.current = window.open(url, 'github-oauth', 'width=600,height=700');
 	};
+
+	const handleDisconnect = () => {
+		setActionLoading(true);
+		disconnectIntegration('github')
+			.then(() => {
+				setStatus({ provider: 'github', is_connected: false });
+				toast.success('Cuenta de GitHub desconectada.');
+			})
+			.catch(() =>
+				toast.error('Error al desconectar la cuenta de GitHub. Intenta de nuevo.'),
+			)
+			.finally(() => setActionLoading(false));
+	};
+
+	const isConnected = status?.is_connected ?? false;
 
 	return (
 		<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
@@ -87,18 +151,26 @@ function IntegrationsMock() {
 					<div>
 						<p className='text-neutral-800 font-medium'>GitHub</p>
 						<p className='text-neutral-500 text-sm'>
-							{connected ? 'Conectado' : 'No conectado'}
+							{loading
+								? 'Verificando...'
+								: isConnected
+									? `Conectado${status?.username ? ` como @${status.username}` : ''}`
+									: 'No conectado'}
 						</p>
 					</div>
 				</div>
-				<button
-					type='button'
-					onClick={handleToggle}
-					disabled={loading}
-					className={connected ? 'btn btn-sm btn-destructive' : 'btn btn-primary btn-sm'}
-				>
-					{loading ? 'Procesando...' : connected ? 'Desconectar' : 'Conectar'}
-				</button>
+				{!loading && (
+					<button
+						type='button'
+						onClick={isConnected ? handleDisconnect : handleConnect}
+						disabled={actionLoading}
+						className={
+							isConnected ? 'btn btn-sm btn-destructive' : 'btn btn-primary btn-sm'
+						}
+					>
+						{actionLoading ? 'Procesando...' : isConnected ? 'Desconectar' : 'Conectar'}
+					</button>
+				)}
 			</div>
 		</div>
 	);

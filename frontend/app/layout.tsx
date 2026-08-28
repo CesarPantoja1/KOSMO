@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { ToasterProvider } from '@/shared/ui/toast';
+import { ToasterProvider } from '@/shared/ui';
 import localFont from 'next/font/local';
 import './globals.css';
 
