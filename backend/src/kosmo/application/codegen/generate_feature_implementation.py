@@ -53,6 +53,7 @@ from kosmo.domain.codegen.parse_validation_output import (
     derive_fix_directives,
     format_validation_errors_for_prompt,
 )
+from kosmo.domain.codegen.path_safety import UnsafePathError, sanitize_relative_path
 from kosmo.domain.codegen.plan_rules import validate_plan
 from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
@@ -88,6 +89,25 @@ class OpenCodeUnavailableError(ValueError):
         ),
     ) -> None:
         super().__init__(message)
+
+
+def _normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | None:
+    """Normaliza y valida una ruta de archivo generada para asegurar que sea relativa y segura."""
+    raw_str = raw_path.strip()
+    if not raw_str:
+        return None
+    try:
+        p = Path(raw_str)
+        ws_p = Path(workspace_dir).resolve()
+        if p.is_absolute():
+            p_resolved = p.resolve()
+            if p_resolved.is_relative_to(ws_p):
+                rel = p_resolved.relative_to(ws_p)
+                return sanitize_relative_path(str(rel))
+            return None
+        return sanitize_relative_path(raw_str)
+    except (UnsafePathError, ValueError):
+        return None
 
 
 @dataclass(frozen=True)
@@ -514,17 +534,23 @@ class GenerateFeatureImplementationUseCase:
                 if ev.event_type == OpenCodeEventType.FILE_EDIT:
                     file_path: object = ev.data.get("path")
                     if file_path is not None:
-                        generated_files.add(str(file_path))
+                        normalized_p = _normalize_generated_file_path(str(file_path), workspace_dir)
+                        if normalized_p:
+                            generated_files.add(normalized_p)
                 elif ev.event_type == OpenCodeEventType.BUILD_COMPLETE:
                     files_obj: object = ev.data.get("files")
                     if isinstance(files_obj, list):
                         files_items: list[object] = list(files_obj)  # type: ignore[reportUnknownVariableType]
                         for f_item in files_items:
-                            generated_files.add(str(f_item))
+                            normalized_p = _normalize_generated_file_path(str(f_item), workspace_dir)
+                            if normalized_p:
+                                generated_files.add(normalized_p)
 
             if not generated_files:
                 for op in plan_operations:
-                    generated_files.add(op.path)
+                    normalized_p = _normalize_generated_file_path(op.path, workspace_dir)
+                    if normalized_p:
+                        generated_files.add(normalized_p)
 
             # 9. Fase Validación & Reintentos (hasta max_retries)
             attempt = 0
@@ -645,7 +671,9 @@ class GenerateFeatureImplementationUseCase:
                         if ev.event_type == OpenCodeEventType.FILE_EDIT:
                             file_path_fix: object = ev.data.get("path")
                             if file_path_fix is not None:
-                                generated_files.add(str(file_path_fix))
+                                normalized_p = _normalize_generated_file_path(str(file_path_fix), workspace_dir)
+                                if normalized_p:
+                                    generated_files.add(normalized_p)
 
             # 10. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:

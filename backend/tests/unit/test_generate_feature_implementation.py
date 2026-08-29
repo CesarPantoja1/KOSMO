@@ -11,6 +11,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
     MissingDiagramError,
     MissingRequirementsError,
     OpenCodeUnavailableError,
+    _normalize_generated_file_path,
 )
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.codegen import (
@@ -1947,3 +1948,109 @@ async def test_plan_and_build_prompts_include_drizzle_database_directives() -> N
     assert "src/db/schema.ts" in build_prompt
     assert "drizzle-orm/sqlite-core" in build_prompt
     assert "src/db/index.ts" in build_prompt
+
+
+@pytest.mark.unit
+def test_normalize_generated_file_path_relative_and_absolute() -> None:
+    # Arrange
+    ws_dir = "/tmp/workspace/project_123"
+
+    # Act & Assert
+    assert _normalize_generated_file_path("src/app/page.tsx", ws_dir) == "src/app/page.tsx"
+    assert _normalize_generated_file_path("./src/features/logic.ts", ws_dir) == "src/features/logic.ts"
+    assert _normalize_generated_file_path("src\\components\\Button.tsx", ws_dir) == "src/components/Button.tsx"
+    assert _normalize_generated_file_path("../../etc/passwd", ws_dir) is None
+    assert _normalize_generated_file_path("", ws_dir) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_filters_unsafe_and_normalizes_generated_file_paths() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+
+    class MaliciousPathsOpenCodeClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if agent == "plan":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_COMPLETE,
+                    session_id=session_id,
+                    data={"operations": [{"path": "src/features/gastos-seguros/logic.ts", "action": "create"}]},
+                )
+            elif agent == "build":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": "./src/app/gastos-seguros/page.tsx", "content": "export default function() {}"},
+                )
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": "src/lib/feature-registry.ts", "content": "export const features = [];"},
+                )
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": "../../outside.txt", "content": "malicious"},
+                )
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.BUILD_COMPLETE,
+                    session_id=session_id,
+                    data={"files": ["src\\features\\gastos-seguros\\manifest.ts", "../escaped.ts"]},
+                )
+
+    opencode_client = MaliciousPathsOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_SAFE")
+    prj_id = ProjectId("prj_01HT_SAFE")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Gastos seguros",
+        slug="gastos-seguros",
+        description="Feature segura",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Requisito")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_safe"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert "src/app/gastos-seguros/page.tsx" in output.generated_files
+    assert "src/features/gastos-seguros/manifest.ts" in output.generated_files
+    assert "src/lib/feature-registry.ts" in output.generated_files
+    assert "../../outside.txt" not in output.generated_files
+    assert "../escaped.ts" not in output.generated_files
