@@ -68,6 +68,12 @@ class RegisterRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    name: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Nombre completo del usuario (obligatorio).",
+        examples=["Gianfranco"],
+    )
     email: EmailStr = Field(
         description=(
             "Dirección de correo electrónico del nuevo usuario. "
@@ -304,7 +310,7 @@ class TokenPairResponse(BaseModel):
 
 
 class PrincipalView(BaseModel):
-    """Identidad del usuario autenticado extraída del access token verificado."""
+    """Identidad y perfil del usuario autenticado extraída del access token y persistencia."""
 
     subject: str = Field(
         description=(
@@ -313,6 +319,21 @@ class PrincipalView(BaseModel):
             "Formato: prefijo de recurso + ULID (ej: ``usr-01HXYAZABCDEFGHIJKLMNOP``)."
         ),
         examples=["usr-01HXYAZABCDEFGHIJKLMNOP"],
+    )
+    name: str | None = Field(
+        default=None,
+        description="Nombre completo del usuario.",
+        examples=["Gianfranco"],
+    )
+    email: str | None = Field(
+        default=None,
+        description="Correo electrónico del usuario.",
+        examples=["usuario@ejemplo.com"],
+    )
+    avatar_url: str | None = Field(
+        default=None,
+        description="URL de la foto de perfil o avatar del usuario.",
+        examples=["https://avatars.githubusercontent.com/u/123456?v=4"],
     )
     scopes: list[str] = Field(
         description=(
@@ -333,9 +354,18 @@ class UserPublic(BaseModel):
         ),
         examples=["usr-01HXYAZABCDEFGHIJKLMNOP"],
     )
+    name: str = Field(
+        description="Nombre completo del usuario.",
+        examples=["Gianfranco"],
+    )
     email: EmailStr = Field(
         description="Dirección de correo verificada y normalizada del usuario.",
         examples=["usuario@ejemplo.com"],
+    )
+    avatar_url: str | None = Field(
+        default=None,
+        description="URL del avatar del usuario.",
+        examples=["https://avatars.githubusercontent.com/u/123456?v=4"],
     )
     created_at: datetime = Field(
         description="Timestamp ISO-8601 (UTC) de creación de la cuenta.",

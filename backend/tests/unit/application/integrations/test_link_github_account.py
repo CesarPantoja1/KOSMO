@@ -37,13 +37,19 @@ def principal():
 
 
 @pytest.fixture
-def use_case(mock_oauth_client, mock_cipher, mock_repo):
+def mock_user_repo():
+    return AsyncMock()
+
+
+@pytest.fixture
+def use_case(mock_oauth_client, mock_cipher, mock_repo, mock_user_repo):
     return LinkGitHubAccountUseCase(
         oauth_client=mock_oauth_client,
         cipher=mock_cipher,
         repo=mock_repo,
         client_id="test-client-id",
         client_secret="test-client-secret",
+        user_repo=mock_user_repo,
     )
 
 
@@ -52,13 +58,19 @@ async def test_link_github_account_success(
     mock_oauth_client: AsyncMock,
     mock_cipher: MagicMock,
     mock_repo: AsyncMock,
+    mock_user_repo: AsyncMock,
     principal: Principal,
 ):
     cmd = LinkGitHubAccountCommand(code="temp-code")
     mock_oauth_client.exchange_oauth_code.return_value = GitHubOAuthToken(
         access_token="gho_test_token", scope="read:user,repo"
     )
-    mock_oauth_client.get_authenticated_user.return_value = GitHubUser(login="octocat", id=1)
+    mock_oauth_client.get_authenticated_user.return_value = GitHubUser(
+        login="octocat",
+        id=1,
+        name="Octo Cat",
+        avatar_url="https://github.com/images/octocat.png",
+    )
     mock_cipher.encrypt.return_value = EncryptedSecret(ciphertext=b"encrypted-bytes")
 
     await use_case.execute(principal, cmd)
@@ -77,6 +89,13 @@ async def test_link_github_account_success(
     assert integration.user_id == "user-1"
     assert integration.github_username == "octocat"
     assert integration.encrypted_token == "ZW5jcnlwdGVkLWJ5dGVz"  # base64(b"encrypted-bytes")
+
+    # Actualizar perfil del usuario
+    mock_user_repo.update_profile.assert_called_once_with(
+        user_id="user-1",
+        name="Octo Cat",
+        avatar_url="https://github.com/images/octocat.png",
+    )
 
 
 async def test_link_github_account_missing_repo_scope(

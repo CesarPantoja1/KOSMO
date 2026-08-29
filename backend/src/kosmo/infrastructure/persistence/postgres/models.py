@@ -16,6 +16,8 @@ class UserModel(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(pg.CITEXT(), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, server_default="")
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

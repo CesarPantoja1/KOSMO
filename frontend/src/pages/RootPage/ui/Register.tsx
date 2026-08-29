@@ -14,6 +14,7 @@ interface RegisterModalProps {
 const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 	const router = useRouter();
 
+	const [name, setName] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,7 +24,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!email || !password || !confirmPassword) {
+		if (!name.trim() || !email.trim() || !password || !confirmPassword) {
 			setError('Todos los campos son obligatorios');
 			return;
 		}
@@ -42,8 +43,8 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 		setError('');
 
 		try {
-			await authApi.register(email, password);
-			await authApi.login(email, password);
+			await authApi.register(name.trim(), email.trim(), password);
+			await authApi.login(email.trim(), password);
 			router.push('/proyecto');
 			onClose();
 		} catch (err) {
@@ -91,6 +92,20 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 			)}
 
 			<div className='flex flex-col gap-4'>
+				<div>
+					<label className='block text-neutral-600 text-sm font-medium mb-1.5'>
+						Nombre completo
+					</label>
+					<input
+						type='text'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						placeholder='Tu nombre y apellido'
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						disabled={isLoading}
+						autoComplete='name'
+					/>
+				</div>
 				<div>
 					<label className='block text-neutral-600 text-sm font-medium mb-1.5'>
 						Correo electrónico

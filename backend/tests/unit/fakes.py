@@ -257,7 +257,29 @@ class InMemoryUserRepository:
         self.users[user_id] = User(
             id=existing.id,
             email=existing.email,
+            name=existing.name,
+            avatar_url=existing.avatar_url,
             hashed_password=hashed_password,
+            created_at=existing.created_at,
+            disabled_at=existing.disabled_at,
+        )
+
+    async def update_profile(
+        self,
+        *,
+        user_id: str,
+        name: str | None = None,
+        avatar_url: str | None = None,
+    ) -> None:
+        existing = self.users.get(user_id)
+        if existing is None:
+            return
+        self.users[user_id] = User(
+            id=existing.id,
+            email=existing.email,
+            name=name if name is not None else existing.name,
+            avatar_url=avatar_url if avatar_url is not None else existing.avatar_url,
+            hashed_password=existing.hashed_password,
             created_at=existing.created_at,
             disabled_at=existing.disabled_at,
         )

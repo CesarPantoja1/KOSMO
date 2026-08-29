@@ -1,6 +1,7 @@
 import base64
 from dataclasses import dataclass
 
+from kosmo.contracts.auth.ports import UserRepository
 from kosmo.contracts.auth.principal import Principal
 from kosmo.contracts.auth.secrets import SecretCipher
 from kosmo.contracts.integrations.github import (
@@ -19,7 +20,7 @@ class LinkGitHubAccountCommand:
 
 
 class LinkGitHubAccountUseCase:
-    """Intercambia un cÃ³digo de autorizaciÃ³n OAuth por un token de acceso y lo persiste cifrado."""
+    """Intercambia un código de autorización OAuth por un token de acceso y lo persiste cifrado."""
 
     def __init__(
         self,
@@ -28,12 +29,14 @@ class LinkGitHubAccountUseCase:
         repo: UserGitHubIntegrationRepository,
         client_id: str,
         client_secret: str,
+        user_repo: UserRepository | None = None,
     ) -> None:
         self._oauth_client = oauth_client
         self._cipher = cipher
         self._repo = repo
         self._client_id = client_id
         self._client_secret = client_secret
+        self._user_repo = user_repo
 
     async def execute(self, principal: Principal, cmd: LinkGitHubAccountCommand) -> UserGitHubIntegration:
         if not self._client_id or not self._client_secret:
@@ -64,4 +67,12 @@ class LinkGitHubAccountUseCase:
         )
 
         await self._repo.save(integration)
+
+        if self._user_repo is not None:
+            await self._user_repo.update_profile(
+                user_id=principal.subject,
+                name=user.name if user.name else None,
+                avatar_url=user.avatar_url if user.avatar_url else None,
+            )
+
         return integration

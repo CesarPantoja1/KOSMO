@@ -6,7 +6,7 @@ import {
 	disconnectIntegration,
 	getIntegrationStatus,
 } from '@/entities/integration';
-import { User } from '@/entities/user';
+import { authApi, useAuthStore, User } from '@/entities/user';
 import {
 	GITHUB_CLIENT_ID,
 	GITHUB_SCOPES,
@@ -23,50 +23,39 @@ type CuentaTabProps = {
 };
 
 const CuentaTab = ({ user }: CuentaTabProps) => {
-	const subject = user?.subject || 'No disponible';
-	const scopes = user?.scopes || [];
+	const displayName = user?.name || user?.email || 'Usuario';
+	const initials =
+		displayName
+			.split(' ')
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((part) => part[0].toUpperCase())
+			.join('') || 'U';
 
 	return (
 		<div className='flex flex-col gap-6 animate-fade-in'>
 			<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
-				<h3 className='text-lg font-semibold text-neutral-800 mb-4'>
+				<h3 className='text-lg font-semibold text-neutral-800 mb-5'>
 					Información del usuario
 				</h3>
-				<div className='flex flex-col gap-4'>
-					<div>
-						<label className='text-neutral-500 text-sm font-medium mb-1.5 block'>
-							Subject
-						</label>
-						<p className='text-neutral-800 font-mono text-sm bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2.5'>
-							{subject}
-						</p>
-					</div>
-					<div>
-						<label className='text-neutral-500 text-sm font-medium mb-1.5 block'>
-							Scopes
-						</label>
-						<div className='flex flex-wrap gap-2'>
-							{scopes.length > 0 ? (
-								scopes.map((scope) => (
-									<span
-										key={scope}
-										className='text-xs font-medium px-2.5 py-1 rounded-full bg-primary-500/10 text-primary-600 border border-primary-500/20'
-									>
-										{scope}
-									</span>
-								))
-							) : (
-								<span className='text-neutral-400 text-sm'>Sin scopes</span>
-							)}
+				<div className='flex items-center gap-5'>
+					{user?.avatar_url ? (
+						// eslint-disable-next-line @next/next/no-img-element
+						<img
+							src={user.avatar_url}
+							alt={displayName}
+							className='w-16 h-16 rounded-full object-cover border-2 border-neutral-200 shadow-sm'
+						/>
+					) : (
+						<div className='w-16 h-16 rounded-full bg-primary-500/10 text-primary-600 flex items-center justify-center text-xl font-bold border border-primary-500/20 shadow-sm'>
+							{initials}
 						</div>
-					</div>
-					<div>
-						<label className='text-neutral-500 text-sm font-medium mb-1.5 block'>
-							Estado
-						</label>
-						<span className='text-xs font-medium px-2.5 py-1 rounded-full bg-success-50 text-success-700 border border-success-500/20'>
-							Activo
-						</span>
+					)}
+					<div className='flex flex-col gap-1 min-w-0'>
+						<h4 className='text-xl font-bold text-neutral-800 truncate'>{displayName}</h4>
+						{user?.email && (
+							<p className='text-sm text-neutral-500 truncate'>{user.email}</p>
+						)}
 					</div>
 				</div>
 			</div>
@@ -154,11 +143,17 @@ function OAuthIntegrationRow({
 				code,
 				redirect_uri: `${PUBLIC_APP_DOMAIN}/perfil`,
 			})
-				.then((result) => {
+				.then(async (result) => {
 					setStatus(result);
 					toast.success(
 						`Cuenta de ${label} vinculada como @${result.username ?? 'desconocido'}.`,
 					);
+					try {
+						const updatedUser = await authApi.getMe();
+						useAuthStore.getState().setUser(updatedUser);
+					} catch {
+						// Noop si falla la actualización de la tienda
+					}
 				})
 				.catch((err) =>
 					toast.error(

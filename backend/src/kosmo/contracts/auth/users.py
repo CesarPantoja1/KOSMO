@@ -7,7 +7,9 @@ class User:
     id: str
     email: str
     hashed_password: str
-    created_at: datetime
+    name: str = ""
+    avatar_url: str | None = None
+    created_at: datetime | None = None
     disabled_at: datetime | None = None
 
     @property

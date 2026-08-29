@@ -81,8 +81,9 @@ async def test_register_creates_user_with_argon2_hash() -> None:
     audit_sink = InMemoryAuditEventSink()
     register = RegisterUser(user_repository=repo, password_hasher=hasher, audit_sink=audit_sink)
 
-    user = await register.execute(email="alice@example.com", password="password-12345")
+    user = await register.execute(name="Alice", email="alice@example.com", password="password-12345")
 
+    assert user.name == "Alice"
     assert user.email == "alice@example.com"
     assert user.hashed_password.startswith("$argon2id$")
     assert hasher.verify(user.hashed_password, "password-12345") is True
@@ -93,10 +94,19 @@ async def test_register_creates_user_with_argon2_hash() -> None:
 async def test_register_rejects_duplicate_email() -> None:
     repo = InMemoryUserRepository()
     register = RegisterUser(user_repository=repo, password_hasher=_hasher(), audit_sink=InMemoryAuditEventSink())
-    await register.execute(email="alice@example.com", password="password-12345")
+    await register.execute(name="Alice", email="alice@example.com", password="password-12345")
 
     with pytest.raises(UserAlreadyExistsError):
-        await register.execute(email="alice@example.com", password="another-pwd-67890")
+        await register.execute(name="Alice 2", email="alice@example.com", password="another-pwd-67890")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_register_rejects_empty_name() -> None:
+    repo = InMemoryUserRepository()
+    register = RegisterUser(user_repository=repo, password_hasher=_hasher(), audit_sink=InMemoryAuditEventSink())
+    with pytest.raises(ValueError, match="El nombre no puede estar vacío"):
+        await register.execute(name="   ", email="alice@example.com", password="password-12345")
 
 
 @pytest.mark.asyncio
@@ -115,7 +125,7 @@ async def test_authorize_with_valid_credentials_emits_code() -> None:
         audit_sink=audit_sink,
     )
 
-    await register.execute(email="bob@example.com", password="password-12345")
+    await register.execute(name="Bob", email="bob@example.com", password="password-12345")
     challenge = s256_challenge("verifier" * 8)
 
     entry = await authorize.execute(
@@ -145,7 +155,7 @@ async def test_authorize_with_wrong_password_raises() -> None:
         login_attempt_store=InMemoryLoginAttemptStore(),
         audit_sink=audit_sink,
     )
-    await register.execute(email="bob@example.com", password="password-12345")
+    await register.execute(name="Bob", email="bob@example.com", password="password-12345")
 
     with pytest.raises(InvalidCredentialsError):
         await authorize.execute(
@@ -171,7 +181,7 @@ async def test_authorize_records_failure_on_bad_credentials() -> None:
         login_attempt_store=attempt_store,
         audit_sink=audit_sink,
     )
-    await register.execute(email="dave@example.com", password="password-12345")
+    await register.execute(name="Dave", email="dave@example.com", password="password-12345")
 
     for _ in range(3):
         with pytest.raises(InvalidCredentialsError):
@@ -200,7 +210,7 @@ async def test_authorize_locks_account_after_max_failures() -> None:
         login_attempt_store=attempt_store,
         audit_sink=audit_sink,
     )
-    await register.execute(email="eve@example.com", password="password-12345")
+    await register.execute(name="Eve", email="eve@example.com", password="password-12345")
     challenge = s256_challenge("verifier" * 8)
 
     for _ in range(_MAX_FAILURES):
@@ -238,7 +248,7 @@ async def test_authorize_clears_attempts_on_successful_login() -> None:
         login_attempt_store=attempt_store,
         audit_sink=audit_sink,
     )
-    await register.execute(email="frank@example.com", password="password-12345")
+    await register.execute(name="Frank", email="frank@example.com", password="password-12345")
     challenge = s256_challenge("verifier" * 8)
 
     for _ in range(5):
@@ -286,7 +296,7 @@ async def test_exchange_consumes_code_and_emits_pair() -> None:
         issue_token_pair=issue,
     )
 
-    await register.execute(email="bob@example.com", password="password-12345")
+    await register.execute(name="Bob", email="bob@example.com", password="password-12345")
     verifier = "verifier" * 8
     entry = await authorize.execute(
         email="bob@example.com",
@@ -329,7 +339,7 @@ async def test_exchange_rejects_mismatched_verifier() -> None:
         issue_token_pair=IssueTokenPair(issuer=issuer, revocation_store=token_store),
     )
 
-    await register.execute(email="bob@example.com", password="password-12345")
+    await register.execute(name="Bob", email="bob@example.com", password="password-12345")
     entry = await authorize.execute(
         email="bob@example.com",
         password="password-12345",

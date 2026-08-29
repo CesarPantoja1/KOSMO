@@ -56,6 +56,7 @@ def build_integrations_components(
         repo=repos.user_github_integrations,
         client_id=client_id,
         client_secret=client_secret,
+        user_repo=repos.users,
     )
 
     sync_github_repository = SyncGitHubRepositoryUseCase(

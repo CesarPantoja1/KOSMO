@@ -11,6 +11,8 @@ def _to_entity(row: UserModel) -> User:
     return User(
         id=row.id,
         email=row.email,
+        name=row.name,
+        avatar_url=row.avatar_url,
         hashed_password=row.hashed_password,
         created_at=row.created_at,
         disabled_at=row.disabled_at,
@@ -37,6 +39,8 @@ class SqlAlchemyUserRepository:
         stmt = pg_insert(UserModel).values(
             id=user.id,
             email=user.email,
+            name=user.name,
+            avatar_url=user.avatar_url,
             hashed_password=user.hashed_password,
             created_at=user.created_at,
             disabled_at=user.disabled_at,
@@ -56,4 +60,22 @@ class SqlAlchemyUserRepository:
             if row is None:
                 return
             row.hashed_password = hashed_password
+            await session.commit()
+
+    async def update_profile(
+        self,
+        *,
+        user_id: str,
+        name: str | None = None,
+        avatar_url: str | None = None,
+    ) -> None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(UserModel).where(UserModel.id == user_id).with_for_update())
+            row = result.scalar_one_or_none()
+            if row is None:
+                return
+            if name is not None:
+                row.name = name
+            if avatar_url is not None:
+                row.avatar_url = avatar_url
             await session.commit()

@@ -207,10 +207,19 @@ export function MainNavbar({ children }: MainNavbarProps) {
 						>
 							{isSidebarExpanded ? (
 								<>
-									<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
+									{user?.avatar_url ? (
+										// eslint-disable-next-line @next/next/no-img-element
+										<img
+											src={user.avatar_url}
+											alt={user.name || 'Avatar'}
+											className='w-9 h-9 rounded-full object-cover shrink-0 border border-neutral-600'
+										/>
+									) : (
+										<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
+									)}
 									<div className='flex-1 min-w-0 flex flex-col justify-center'>
 										<h4 className='text-neutral-0 text-sm font-semibold truncate'>
-											{user?.subject || 'Usuario'}
+											{user?.name || user?.email || 'Usuario'}
 										</h4>
 										<button
 											onClick={() => router.push('/perfil')}
@@ -238,7 +247,16 @@ export function MainNavbar({ children }: MainNavbarProps) {
 										}}
 										className='flex items-center justify-center'
 									>
-										<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
+										{user?.avatar_url ? (
+											// eslint-disable-next-line @next/next/no-img-element
+											<img
+												src={user.avatar_url}
+												alt={user.name || 'Avatar'}
+												className='w-9 h-9 rounded-full object-cover shrink-0 border border-neutral-600'
+											/>
+										) : (
+											<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
+										)}
 									</button>
 									{showUserMenu && (
 										<div

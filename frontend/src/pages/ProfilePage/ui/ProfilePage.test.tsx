@@ -4,15 +4,34 @@ import * as integrationApi from '@/entities/integration/api/api';
 import { ProfilePage } from './ProfilePage';
 import { CuentaTab } from './CuentaTab';
 
-vi.mock('@/entities/user', () => ({
-	useAuthStore: (selector: (state: { user: { subject: string; scopes: string[] } }) => unknown) =>
-		selector({
-			user: {
+vi.mock('@/entities/user', () => {
+	const fakeState = {
+		user: {
+			subject: 'usr_01HTESTUSER1234567890',
+			name: 'Gianfranco Dev',
+			email: 'gian@example.com',
+			avatar_url: null,
+			scopes: ['agent:run', 'profile:read'],
+		},
+	};
+	const useAuthStoreFn = (selector: (state: typeof fakeState) => unknown) => selector(fakeState);
+	useAuthStoreFn.getState = () => ({
+		user: fakeState.user,
+		setUser: vi.fn(),
+	});
+	return {
+		useAuthStore: useAuthStoreFn,
+		authApi: {
+			getMe: vi.fn().mockResolvedValue({
 				subject: 'usr_01HTESTUSER1234567890',
+				name: 'Octo Cat',
+				email: 'octo@github.com',
+				avatar_url: 'https://github.com/images/octocat.png',
 				scopes: ['agent:run', 'profile:read'],
-			},
-		}),
-}));
+			}),
+		},
+	};
+});
 
 vi.mock('@/features/ai-config', () => ({
 	AiConfigForm: () => <div data-testid='ai-config-form'>AI Config Form</div>,
@@ -31,7 +50,7 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 		vi.clearAllMocks();
 	});
 
-	it('renderiza la información del usuario y los scopes de sesión', async () => {
+	it('renderiza la información del usuario con nombre y correo', async () => {
 		vi.spyOn(integrationApi, 'getIntegrationStatus').mockResolvedValue({
 			provider: 'github',
 			is_connected: false,
@@ -40,10 +59,9 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 		render(<ProfilePage />);
 
 		expect(screen.getByText('Perfil')).toBeInTheDocument();
-		expect(screen.getByText('usr_01HTESTUSER1234567890')).toBeInTheDocument();
-		expect(screen.getByText('agent:run')).toBeInTheDocument();
-		expect(screen.getByText('profile:read')).toBeInTheDocument();
-		expect(screen.getByText('Activo')).toBeInTheDocument();
+		expect(screen.getByText('Gianfranco Dev')).toBeInTheDocument();
+		expect(screen.getByText('gian@example.com')).toBeInTheDocument();
+		expect(screen.getByText('GD')).toBeInTheDocument();
 	});
 
 	it('abre el popup de OAuth con la URL correcta al pulsar Conectar', async () => {
