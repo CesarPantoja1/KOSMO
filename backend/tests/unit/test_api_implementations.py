@@ -15,6 +15,7 @@ from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
     FeatureImplementation,
+    FeatureImplementationStatus,
     OpenCodeEvent,
     OpenCodeEventType,
     ValidationStep,
@@ -123,6 +124,20 @@ class FakeImplementationRepo:
             updated_at=now,
         )
 
+    async def by_feature_id(self, feature_id: FeatureId) -> FeatureImplementation | None:
+        if str(feature_id) != "feat_01":
+            return None
+        now = datetime.now(UTC)
+        return FeatureImplementation(
+            id=ImplementationId("impl_feat_01"),
+            feature_id=FeatureId("feat_01"),
+            project_id=ProjectId("prj_01"),
+            status=FeatureImplementationStatus.IMPLEMENTED,
+            generated_files=self.generated_files,
+            created_at=now,
+            updated_at=now,
+        )
+
 
 class FakeFeatureRepo:
     async def by_id(self, feature_id: FeatureId) -> Feature:
@@ -165,12 +180,27 @@ class FakeWorkspaceRepo:
         )
 
 
+class FakeRequirementRepo:
+    async def by_feature_id(self, feature_id: FeatureId) -> str:
+        return "### Requisitos\n- REQ-01.01: Registrar\n- REQ-01.02: Listar"
+
+
+class FakeTraceabilityRepo:
+    async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
+        return {
+            "upstream": [{"type": "requirement", "id": "req_01"}],
+            "downstream": [{"type": "code", "id": "src/app/page.tsx"}],
+        }
+
+
 class FakeRepos:
     def __init__(self, workspace_dir: str) -> None:
-        self.implementations = FakeImplementationRepo(("src/app/page.tsx",))
+        self.implementations = FakeImplementationRepo(("src/app/page.tsx", "src/features/foo/components/Foo.tsx"))
         self.workspaces = FakeWorkspaceRepo(workspace_dir)
         self.features = FakeFeatureRepo()
         self.projects = FakeProjectRepo()
+        self.requirements = FakeRequirementRepo()
+        self.traceability = FakeTraceabilityRepo()
 
 
 class FakeValidateUseCase:
@@ -434,3 +464,31 @@ def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
     assert kwargs["implementation_id"] == "impl_feat_del_api"
     assert kwargs["input_data"].feature.id == FeatureId("feat_del_api")
     assert kwargs["input_data"].feature.slug == "registrar-productos"
+
+
+def test_get_implementation_by_feature_returns_dynamic_metrics(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(str(tmp_path / "workspaces" / "prj_01"))
+
+    # Act
+    response = client.get(
+        "/api/v1/implementations",
+        params={"feature_id": "feat_01"},
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["implementation_id"] == "impl_feat_01"
+    assert data["feature_id"] == "feat_01"
+    assert data["screens_count"] == 2
+    assert data["requirements_count"] == 2
+    assert data["validations_passed"] == 4
+    assert data["validations_total"] == 4
+    assert data["traceability_edges_count"] > 0
+    assert "Next.js" in data["technologies"]

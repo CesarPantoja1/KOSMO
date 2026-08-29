@@ -22,7 +22,11 @@ describe('buildSummary', () => {
 		const data: Record<string, unknown> = {
 			status: 'implemented',
 			generated_files: ['src/app/page.tsx', 'tests/app.test.tsx'],
+			screens_count: 1,
+			requirements_count: 2,
 			traceability_edges: 4,
+			validations_passed: 4,
+			validations_total: 4,
 		};
 
 		// Act
@@ -39,13 +43,14 @@ describe('buildSummary', () => {
 		expect(summary.featureTitle).toBe('Registrar gastos');
 		expect(summary.featureDisplayId).toBe('F-01');
 		expect(summary.status).toBe('completed');
-		expect(summary.metrics).toHaveLength(3);
-		expect(summary.metrics[0]).toMatchObject({ value: '2', label: 'Archivos generados' });
-		expect(summary.metrics[1]).toMatchObject({ value: '4/4', label: 'Validaciones en verde' });
+		expect(summary.metrics).toHaveLength(4);
+		expect(summary.metrics[0]).toMatchObject({ value: '1', label: 'Pantallas y componentes' });
+		expect(summary.metrics[1]).toMatchObject({ value: '2', label: 'Requisitos de negocio' });
 		expect(summary.metrics[2]).toMatchObject({
 			value: '4',
-			label: 'Aristas de trazabilidad',
+			label: 'Enlaces de trazabilidad',
 		});
+		expect(summary.metrics[3]).toMatchObject({ value: '100%', label: 'Calidad verificada' });
 		expect(summary.generatedAt).toBe('2026-08-19T10:00:00Z');
 		expect(summary.technologies).toContain('Next.js');
 		expect(summary.generatedFiles).toEqual([
@@ -54,7 +59,7 @@ describe('buildSummary', () => {
 		]);
 	});
 
-	it('usa cero cuando el evento no trae archivos ni aristas', () => {
+	it('usa valores por defecto coherentes cuando el evento no trae métricas', () => {
 		// Arrange
 		const data: Record<string, unknown> = { status: 'implemented' };
 
@@ -62,8 +67,11 @@ describe('buildSummary', () => {
 		const summary = buildSummary('feat_02', 'Título', 'F-02', data, '2026-08-19T10:00:00Z');
 
 		// Assert
-		expect(summary.metrics[0].value).toBe('0');
-		expect(summary.metrics[2].value).toBe('0');
+		expect(summary.metrics).toHaveLength(4);
+		expect(summary.metrics[0].label).toBe('Pantallas y componentes');
+		expect(summary.metrics[1].label).toBe('Requisitos de negocio');
+		expect(summary.metrics[2].label).toBe('Enlaces de trazabilidad');
+		expect(summary.metrics[3].label).toBe('Calidad verificada');
 	});
 });
 

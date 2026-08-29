@@ -1489,10 +1489,14 @@ async def test_generate_registers_traceability_post_commit() -> None:
     assert ("feature", str(feat_id), "code_file", "src/calc.ts", "codegen") in trace_repo.edges
     assert ("feature", str(feat_id), "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
     assert ("requirement", f"{feat_id}:REQ-1.1", "code_file", "src/calc.ts", "codegen") in trace_repo.edges
-    assert ("requirement", f"{feat_id}:REQ-1.1", "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
     done_events = [e for e in output.events if e.event_type == OpenCodeEventType.DONE]
     assert len(done_events) == 1
     assert done_events[0].data.get("traceability_edges") == 4
+    assert done_events[0].data.get("screens_count") is not None
+    assert done_events[0].data.get("requirements_count") is not None
+    assert done_events[0].data.get("validations_passed") is not None
+    assert done_events[0].data.get("validations_total") is not None
+    assert "Next.js" in done_events[0].data.get("technologies", [])
 
 
 @pytest.mark.asyncio

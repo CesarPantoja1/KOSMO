@@ -920,6 +920,12 @@ class ImplementationRecordResponse(BaseModel):
     project_id: str = Field(description="ID del proyecto al que pertenece la característica")
     status: str = Field(description="Estado actual de la implementación")
     generated_files: list[str] = Field(default_factory=list, description="Archivos generados")
+    screens_count: int = Field(default=0, description="Cantidad de pantallas y componentes generados")
+    requirements_count: int = Field(default=0, description="Cantidad de requisitos de negocio cubiertos")
+    validations_passed: int = Field(default=0, description="Pasos de validación exitosos")
+    validations_total: int = Field(default=0, description="Total de pasos de validación")
+    traceability_edges_count: int = Field(default=0, description="Total de aristas de trazabilidad registradas")
+    technologies: list[str] = Field(default_factory=list, description="Tecnologías principales del proyecto")
     updated_at: datetime = Field(description="Última actualización del registro")
 
 

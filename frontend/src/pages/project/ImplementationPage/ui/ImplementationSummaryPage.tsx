@@ -78,22 +78,22 @@ if (!cancelled) setPreviewLoading(false);
 
 	if (!summary) {
 		return (
-			<section className='page-container'>
-				<div className='flex flex-col items-center justify-center min-h-[60vh] gap-4'>
+			<div className='h-full w-full overflow-y-auto px-4 md:px-6 py-6 pb-24'>
+				<div className='max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-4'>
 					<p className='text-neutral-500'>No hay resumen disponible.</p>
 					<Link href='/proyecto/codigo' className='btn btn-secondary'>
 						Volver a Implementación
 					</Link>
 				</div>
-			</section>
+			</div>
 		);
 	}
 
 	return (
-		<section className='page-container'>
-			<div className='page-header'>
+		<div className='h-full w-full overflow-y-auto px-4 md:px-6 py-4 pb-24'>
+			<div className='max-w-7xl mx-auto flex flex-col gap-6'>
 				{currentProjectId && (
-					<div className='mb-4'>
+					<div>
 						<GestionRepositorioGitHub
 							viewState={github.viewState}
 							status={github.status}
@@ -109,7 +109,7 @@ if (!cancelled) setPreviewLoading(false);
 					</div>
 				)}
 
-				<div className='flex items-start justify-between gap-4'>
+				<div className='flex items-start justify-between gap-4 border-b border-neutral-100 pb-4'>
 					<div className='flex flex-col gap-1'>
 						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
 							Resumen de implementación
@@ -123,26 +123,28 @@ if (!cancelled) setPreviewLoading(false);
 					</button>
 				</div>
 
-				<div className='grid lg:grid-cols-2 gap-6 mt-6'>
+				<div className='grid lg:grid-cols-2 gap-6'>
 					<div className='flex flex-col gap-6'>
-						<div className='grid grid-cols-2 gap-3'>
+						<div className='grid grid-cols-2 gap-4'>
 							{summary.metrics.map((metric) => (
 								<div
 									key={metric.label}
-									className='rounded-lg border border-neutral-100 bg-neutral-50 p-4'
+									className='rounded-xl border border-neutral-200 bg-neutral-0 p-5 shadow-xs transition-shadow hover:shadow-sm'
 								>
 									<div
-										className={`mb-3 flex h-9 w-9 items-center justify-center rounded-md ${metric.iconBg}`}
+										className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${metric.iconBg}`}
 									>
 										{iconMap[metric.icon]}
 									</div>
 									<p className='text-2xl font-bold text-neutral-900'>{metric.value}</p>
-									<p className='mt-1 text-xs text-neutral-500'>{metric.label}</p>
+									<p className='mt-1 text-xs md:text-sm text-neutral-500 font-medium'>
+										{metric.label}
+									</p>
 								</div>
 							))}
 						</div>
 
-						<div>
+						<div className='rounded-xl border border-neutral-200 bg-neutral-0 p-5 shadow-xs'>
 							<h3 className='mb-3 text-sm font-semibold text-neutral-800'>Tecnologías</h3>
 							<div className='flex flex-wrap gap-2'>
 								{summary.technologies.map((t) => (
@@ -156,7 +158,7 @@ if (!cancelled) setPreviewLoading(false);
 							</div>
 						</div>
 
-						<div>
+						<div className='rounded-xl border border-neutral-200 bg-neutral-0 p-5 shadow-xs'>
 							<h3 className='mb-3 text-sm font-semibold text-neutral-800'>
 								¿Qué puedes hacer ahora?
 							</h3>
@@ -173,33 +175,33 @@ if (!cancelled) setPreviewLoading(false);
 						</div>
 					</div>
 
-					<div className='flex flex-col items-center justify-center gap-6 rounded-xl bg-ai-50/40 border border-neutral-200 p-8'>
-						<div className='relative mx-auto flex h-36 w-36 items-center justify-center'>
-							<div className='absolute inset-4 rounded-2xl bg-ai-100' />
-							<div className='relative flex h-20 w-20 items-center justify-center rounded-xl border-2 border-ai-500 bg-neutral-0 shadow-2'>
-								<AiOrbCenterIcon size={40} color='text-ai-600' />
+					<div className='flex flex-col items-center justify-center gap-6 rounded-2xl bg-ai-50/40 border border-ai-200/60 p-6 md:p-8 text-center shadow-xs'>
+						<div className='relative mx-auto flex h-32 w-32 items-center justify-center'>
+							<div className='absolute inset-3 rounded-2xl bg-ai-100/70' />
+							<div className='relative flex h-18 w-18 items-center justify-center rounded-xl border-2 border-ai-500 bg-neutral-0 shadow-md'>
+								<AiOrbCenterIcon size={36} color='text-ai-600' />
 							</div>
-							<div className='absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-full bg-success-500 shadow-2'>
-								<CheckCircleWhiteIcon size={20} color='text-neutral-0' />
+							<div className='absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-full bg-success-500 shadow-md'>
+								<CheckCircleWhiteIcon size={18} color='text-neutral-0' />
 							</div>
-							<div className='absolute left-0 top-4 text-ai-500'>
-								<SparkleIcon size={20} />
+							<div className='absolute left-0 top-3 text-ai-500'>
+								<SparkleIcon size={18} />
 							</div>
-							<div className='absolute bottom-3 right-0 text-ai-500'>
-								<SparkleIcon size={16} />
+							<div className='absolute bottom-2 right-0 text-ai-500'>
+								<SparkleIcon size={14} />
 							</div>
 						</div>
 
 						<div className='text-center'>
-							<h3 className='text-lg font-bold text-neutral-900'>
+							<h3 className='text-lg md:text-xl font-bold text-neutral-900'>
 								¡Tu aplicación está lista!
 							</h3>
-							<p className='mx-auto mt-2 max-w-xs text-sm text-neutral-500'>
+							<p className='mx-auto mt-2 max-w-sm text-sm text-neutral-500 leading-relaxed'>
 								Hemos generado la estructura y lógica de tu proyecto a partir de todo lo
 								que definiste en KOSMO.
 							</p>
 							{previewLoading ? (
-								<button type='button' disabled className='btn btn-primary mt-4'>
+								<button type='button' disabled className='btn btn-primary mt-4 py-2.5 px-6'>
 									Preparando vista previa...
 								</button>
 							) : previewUrl ? (
@@ -207,20 +209,24 @@ if (!cancelled) setPreviewLoading(false);
 									href={previewUrl}
 									target='_blank'
 									rel='noopener noreferrer'
-									className='btn btn-primary mt-4'
+									className='btn btn-primary mt-4 py-2.5 px-6 inline-flex items-center gap-2'
 								>
 									Ver aplicación
 								</a>
 							) : (
-								<button type='button' disabled className='btn btn-primary mt-4'>
+								<button
+									type='button'
+									disabled
+									className='btn btn-primary mt-4 py-2.5 px-6 opacity-60'
+								>
 									Vista previa no disponible
 								</button>
 							)}
 						</div>
 
-						<div className='w-full rounded-lg border border-ai-100 bg-neutral-0 p-4 text-left'>
-							<div className='flex gap-3'>
-								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ai-50'>
+						<div className='w-full rounded-xl border border-ai-100 bg-neutral-0 p-4 text-left shadow-xs'>
+							<div className='flex gap-3 items-start'>
+								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ai-50 mt-0.5'>
 									<InfoCircleIcon size={16} color='text-ai-600' />
 								</div>
 								<div>
@@ -235,16 +241,16 @@ if (!cancelled) setPreviewLoading(false);
 							</div>
 						</div>
 
-						<div className='w-full rounded-lg border border-primary-100 bg-primary-50 p-4 text-left'>
-							<div className='flex gap-3'>
-								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-100'>
+						<div className='w-full rounded-xl border border-primary-100 bg-primary-50/70 p-4 text-left shadow-xs'>
+							<div className='flex gap-3 items-start'>
+								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-100 mt-0.5'>
 									<PlusSmallIcon size={16} color='text-primary-600' />
 								</div>
 								<div>
 									<p className='text-sm font-semibold text-primary-900'>
 										No necesitas escribir código
 									</p>
-									<p className='mt-1 text-xs leading-5 text-primary-900/70'>
+									<p className='mt-1 text-xs leading-5 text-primary-900/80'>
 										KOSMO se encarga de la parte técnica para que puedas enfocarte en tu
 										aplicación.
 									</p>
@@ -254,7 +260,7 @@ if (!cancelled) setPreviewLoading(false);
 					</div>
 				</div>
 			</div>
-		</section>
+		</div>
 	);
 };
 
