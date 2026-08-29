@@ -446,3 +446,34 @@ def test_derive_fix_directives_tests_and_build_failure() -> None:
     # Assert
     assert any("Lógica y pruebas:" in d for d in directives)
     assert any("Compilación Next.js:" in d for d in directives)
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_database_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TYPECHECK,
+                success=False,
+                errors=(
+                    ValidationErrorDetail(
+                        file="src/db/schema.ts",
+                        line=5,
+                        column=1,
+                        message="Cannot find name 'sqliteTable'",
+                        severity=ValidationSeverity.ERROR,
+                        code="TS2304",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Base de datos / Drizzle:" in d for d in directives)
+    assert any("src/db/schema.ts" in d for d in directives)

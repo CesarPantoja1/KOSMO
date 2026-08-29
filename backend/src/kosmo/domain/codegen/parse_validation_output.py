@@ -346,6 +346,24 @@ def derive_fix_directives(validation_result: ValidationRunResult) -> tuple[str, 
     if ValidationStep.LINT in failed_steps:
         directives.append("Linter: Limpia imports no utilizados y corrige errores de formato de ESLint.")
 
+    has_db_error = any(
+        "src/db" in (err.file or "").lower() or "drizzle" in (err.file or "").lower()
+        for step_res in validation_result.steps
+        if not step_res.success
+        for err in step_res.errors
+    ) or any(
+        "src/db" in msg.lower() or "drizzle" in msg.lower()
+        for step_res in validation_result.steps
+        if not step_res.success
+        for msg in step_res.error_messages
+    )
+
+    if has_db_error:
+        directives.append(
+            "Base de datos / Drizzle: Verifica las definiciones de tablas en `src/db/schema.ts` usando "
+            "`sqliteTable`, `text`, `integer`, `real` de `drizzle-orm/sqlite-core` y consultas tipadas con `db`."
+        )
+
     if ValidationStep.BUILD in failed_steps:
         directives.append(
             "Compilación Next.js: Asegúrate de agregar `'use client'` al inicio de los componentes con "

@@ -1888,3 +1888,62 @@ async def test_generate_includes_ears_and_diagram_in_build_prompt() -> None:
     assert "## Requisitos EARS\n# REQ-1.1: El sistema registrará el monto del gasto" in build_prompt
     assert "## Diagrama de Actividad\n@startuml" in build_prompt
     assert "## Plan aprobado" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_plan_and_build_prompts_include_drizzle_database_directives() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará el gasto")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
+    assert "src/db/schema.ts" in plan_prompt
+    assert "kosmo-drizzle" in plan_prompt
+
+    build_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "build")
+    assert "src/db/schema.ts" in build_prompt
+    assert "drizzle-orm/sqlite-core" in build_prompt
+    assert "src/db/index.ts" in build_prompt

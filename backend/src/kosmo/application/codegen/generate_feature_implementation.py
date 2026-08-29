@@ -417,8 +417,10 @@ class GenerateFeatureImplementationUseCase:
                 "2. La ruta de la feature en `src/app/<slug>/page.tsx`.\n"
                 "3. El registro del manifest en `src/lib/feature-registry.ts` "
                 "(la navegación del shell se deriva del registro).\n"
-                "4. Los tests de la lógica.\n"
-                "Lee las skills `kosmo-ui` y `kosmo-nextjs` antes de planificar la UI."
+                "4. Los tests de la lógica en Vitest.\n"
+                "5. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
+                "para declarar las tablas con Drizzle ORM.\n"
+                "Lee las skills `kosmo-ui`, `kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
             )
 
             plan_operations: list[FileOperation] = []
@@ -486,6 +488,9 @@ class GenerateFeatureImplementationUseCase:
                 "3. Ruta en `src/app/<slug>/page.tsx` que renderiza el componente principal de la feature.\n"
                 "4. Registro del manifest en `src/lib/feature-registry.ts` (importa el manifest del slice).\n"
                 "5. Actualiza `src/lib/site.ts` con el nombre, descripción y arquetipo reales del proyecto.\n"
+                "6. Persistencia de datos: Si la feature maneja persistencia, define las tablas en `src/db/schema.ts` "
+                "usando `drizzle-orm/sqlite-core` y consume `db` desde `src/db/index.ts`. "
+                "Prohibido usar arreglos volátiles en memoria para datos persistentes.\n"
                 "La UI debe adaptarse a la naturaleza del negocio (ver visión y directivas UX), "
                 "mantener el modelo mental del usuario (navegación del registro, estados vacío/error/loading) "
                 "y usar textos en español neutro con los mensajes de validación reales de la lógica. "
