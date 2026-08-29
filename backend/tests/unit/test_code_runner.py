@@ -64,12 +64,15 @@ async def test_run_step_typecheck_with_tsc_errors() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_step_timeout_handling() -> None:
     # Arrange
     runner = SubprocessCodeRunner()
     mock_proc = MagicMock()
+    mock_proc.pid = 9999
     mock_proc.kill = MagicMock()
+    mock_proc.wait = AsyncMock(return_value=0)
 
     async def slow_communicate() -> tuple[bytes, bytes]:
         await asyncio.sleep(10)
@@ -77,7 +80,10 @@ async def test_run_step_timeout_handling() -> None:
 
     mock_proc.communicate = AsyncMock(side_effect=slow_communicate)
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)):
+    with (
+        patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)),
+        patch("subprocess.run") as mock_sub_run,
+    ):
         # Act
         result = await runner.run_step("/tmp/workspace", ValidationStep.TESTS, timeout_seconds=1)
 
@@ -86,7 +92,7 @@ async def test_run_step_timeout_handling() -> None:
         assert result.success is False
         assert result.exit_code == -1
         assert "timed out" in result.raw_output
-        mock_proc.kill.assert_called_once()
+        assert mock_proc.kill.called or mock_sub_run.called
 
 
 @pytest.mark.unit
@@ -340,3 +346,32 @@ async def test_custom_step_commands() -> None:
         # Assert
         mock_shell.assert_awaited_once()
         assert mock_shell.call_args[0][0] == "custom-tsc"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_uses_custom_and_default_step_timeouts() -> None:
+    # Arrange
+    custom_timeouts = {ValidationStep.TYPECHECK: 15, ValidationStep.TESTS: 45}
+    runner = SubprocessCodeRunner(step_timeouts=custom_timeouts)
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+    with (
+        patch("pathlib.Path.is_dir", return_value=True),
+        patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)),
+        patch.object(runner, "run_step", wraps=runner.run_step) as spy_run_step,
+    ):
+        # Act
+        result = await runner.run_pipeline(
+            "/tmp/workspace",
+            steps=(ValidationStep.TYPECHECK, ValidationStep.TESTS),
+        )
+
+        # Assert
+        assert result.all_passed is True
+        assert spy_run_step.call_count == 2
+        assert spy_run_step.call_args_list[0].kwargs["timeout_seconds"] == 15
+        assert spy_run_step.call_args_list[1].kwargs["timeout_seconds"] == 45
