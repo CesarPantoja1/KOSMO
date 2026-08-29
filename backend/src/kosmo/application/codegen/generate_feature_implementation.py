@@ -467,11 +467,41 @@ class GenerateFeatureImplementationUseCase:
                                 )
 
             if not plan_operations:
-                plan_operations.append(
-                    FileOperation(path=f"src/{feature.slug}.ts", action=FileAction.CREATE),
-                )
-                plan_operations.append(
-                    FileOperation(path=f"tests/{feature.slug}.test.ts", action=FileAction.CREATE),
+                manifest_set = {
+                    item.strip().replace("\\", "/").lstrip("./").lstrip("/")
+                    for item in (workspace.manifest_files or ())
+                }
+                registry_path = "src/lib/feature-registry.ts"
+                reg_action = FileAction.MODIFY if registry_path in manifest_set else FileAction.CREATE
+
+                plan_operations.extend(
+                    [
+                        FileOperation(
+                            path=f"src/features/{feature.slug}/logic.ts",
+                            action=FileAction.CREATE,
+                            description="Lógica de negocio pura de la característica",
+                        ),
+                        FileOperation(
+                            path=f"src/features/{feature.slug}/manifest.ts",
+                            action=FileAction.CREATE,
+                            description="Manifiesto y metadatos de la característica",
+                        ),
+                        FileOperation(
+                            path=f"src/app/{feature.slug}/page.tsx",
+                            action=FileAction.CREATE,
+                            description="Página de la interfaz de usuario de la característica",
+                        ),
+                        FileOperation(
+                            path=registry_path,
+                            action=reg_action,
+                            description="Registro de la característica en el catálogo de la aplicación",
+                        ),
+                        FileOperation(
+                            path=f"tests/{feature.slug}.test.ts",
+                            action=FileAction.CREATE,
+                            description="Pruebas unitarias de la lógica de la característica",
+                        ),
+                    ]
                 )
 
             impl_plan = ImplementationPlan(

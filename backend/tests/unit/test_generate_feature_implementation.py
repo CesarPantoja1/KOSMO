@@ -2122,3 +2122,93 @@ async def test_generate_handles_unexpected_exception_marks_failed_and_releases_l
     assert saved_impl is not None
     assert saved_impl.status == FeatureImplementationStatus.FAILED
     assert len(opencode_client.closed_sessions) >= 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_uses_canonical_slice_operations_when_plan_agent_returns_no_operations() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+
+    class EmptyPlanOpenCodeClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if agent == "plan":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_COMPLETE,
+                    session_id=session_id,
+                    data={"operations": []},  # Empty operations -> triggers fallback
+                )
+            elif agent == "build":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.BUILD_COMPLETE,
+                    session_id=session_id,
+                    data={
+                        "files": [
+                            "src/features/inventario/logic.ts",
+                            "src/features/inventario/manifest.ts",
+                            "src/app/inventario/page.tsx",
+                            "src/lib/feature-registry.ts",
+                            "tests/inventario.test.ts",
+                        ]
+                    },
+                )
+
+    opencode_client = EmptyPlanOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_FALLBACK")
+    prj_id = ProjectId("prj_01HT_FALLBACK")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Inventario",
+        slug="inventario",
+        description="Feature inventario",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Requisito")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_fallback"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert output.implementation is not None
+    assert output.implementation.plan is not None
+
+    paths = [op.path for op in output.implementation.plan.operations]
+    assert "src/features/inventario/logic.ts" in paths
+    assert "src/features/inventario/manifest.ts" in paths
+    assert "src/app/inventario/page.tsx" in paths
+    assert "src/lib/feature-registry.ts" in paths
+    assert "tests/inventario.test.ts" in paths
