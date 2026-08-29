@@ -41,6 +41,8 @@ export { Logo } from './icons/Logo';
 export { Lightbulb } from './icons/Lightbulb';
 export { AiOrb } from './icons/AiOrb';
 export { KeyIcon } from './icons/KeyIcon';
+export { default as GitHub } from './icons/GitHub';
+export { default as Railway } from './icons/Railway';
 export { default as WarningIcon } from './icons/WarningIcon';
 export { default as SuccessCheckIcon } from './icons/SuccessCheckIcon';
 export { default as ScreensIcon } from './icons/ScreensIcon';

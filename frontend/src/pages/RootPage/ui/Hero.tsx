@@ -12,9 +12,12 @@ import {
 	Requirements,
 } from '@/shared/ui';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/shared/model';
 
 interface HeroProps {
 	onComenzar: () => void;
+	onVerVideo: () => void;
 }
 
 const sidebarItems = [
@@ -128,7 +131,9 @@ const appReservations = [
 	{ sala: 'Sala B - Piso 2', fecha: '18 Mar, 09:00', estado: 'Confirmada' },
 ];
 
-export function Hero({ onComenzar }: HeroProps) {
+export function Hero({ onComenzar, onVerVideo }: HeroProps) {
+	const router = useRouter();
+	const user = useAuthStore((s) => s.user);
 	const [activeStep, setActiveStep] = useState(0);
 	const [typedText, setTypedText] = useState('');
 	const [visibleDiagramNodes, setVisibleDiagramNodes] = useState(0);
@@ -215,16 +220,27 @@ export function Hero({ onComenzar }: HeroProps) {
 					</p>
 
 					<div className='mt-8 flex flex-wrap gap-4'>
-						<button
-							type='button'
-							onClick={onComenzar}
-							className='btn btn-primary btn-lg'
-						>
-							Comenzar ahora
-							<ArrowRight size={16} color='text-neutral-0' />
-						</button>
+						{user ? (
+							<button
+								type='button'
+								onClick={() => router.push('/proyecto')}
+								className='btn btn-primary btn-lg'
+							>
+								Mis Proyectos
+								<ArrowRight size={16} color='text-neutral-0' />
+							</button>
+						) : (
+							<button
+								type='button'
+								onClick={onComenzar}
+								className='btn btn-primary btn-lg'
+							>
+								Comenzar ahora
+								<ArrowRight size={16} color='text-neutral-0' />
+							</button>
+						)}
 
-						<button className='btn btn-secondary btn-lg'>
+						<button className='btn btn-secondary btn-lg' onClick={onVerVideo}>
 							Ver cómo funciona
 							<ArrowRight size={16} color='text-neutral-0' />
 						</button>
@@ -585,12 +601,12 @@ export function Hero({ onComenzar }: HeroProps) {
 									<ArrowRight size={14} color='text-neutral-0' />
 								</button>
 							)}
-							{activeStep === 6 && (
-								<button onClick={onComenzar} className='btn btn-primary btn-sm'>
-									Comenzar ahora
-									<ArrowRight size={14} color='text-neutral-0' />
-								</button>
-							)}
+						{activeStep === 6 && (
+							<button onClick={user ? () => router.push('/proyecto') : onComenzar} className='btn btn-primary btn-sm'>
+								{user ? 'Mis Proyectos' : 'Comenzar ahora'}
+								<ArrowRight size={14} color='text-neutral-0' />
+							</button>
+						)}
 						</div>
 					</div>
 				</div>

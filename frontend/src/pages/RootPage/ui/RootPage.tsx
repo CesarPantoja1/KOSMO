@@ -10,9 +10,11 @@ import { ApiKeySection } from './ApiKeySection';
 import { CtaSection } from './CtaSection';
 import { AuthModal } from './AuthModal';
 import { SessionExpiredWatcher } from './SessionExpiredWatcher';
+import { VideoOverlay } from './VideoOverlay';
 
 export function RootPage() {
 	const [showAuthModal, setShowAuthModal] = useState(false);
+	const [showVideo, setShowVideo] = useState(false);
 	const [sessionExpired, setSessionExpired] = useState(false);
 
 	const handleSessionExpired = () => {
@@ -27,7 +29,7 @@ export function RootPage() {
 	return (
 		<div className='min-h-screen bg-neutral-0 text-neutral-800'>
 			<RootNavbar onComenzar={handleComenzar} />
-			<Hero onComenzar={handleComenzar} />
+			<Hero onComenzar={handleComenzar} onVerVideo={() => setShowVideo(true)} />
 			<Features />
 			<FlowSteps />
 			<SddSection />
@@ -41,6 +43,7 @@ export function RootPage() {
 			<Suspense fallback={null}>
 				<SessionExpiredWatcher onDetected={handleSessionExpired} />
 			</Suspense>
+			<VideoOverlay isOpen={showVideo} onClose={() => setShowVideo(false)} />
 		</div>
 	);
 }

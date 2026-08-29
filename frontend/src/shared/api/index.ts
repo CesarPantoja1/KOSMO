@@ -23,4 +23,6 @@ export {
 	USE_MOCKS,
 	GITHUB_CLIENT_ID,
 	GITHUB_SCOPES,
+	RAILWAY_CLIENT_ID,
+	RAILWAY_SCOPES,
 } from './config';

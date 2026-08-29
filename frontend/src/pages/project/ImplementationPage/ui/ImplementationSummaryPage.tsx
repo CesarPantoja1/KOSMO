@@ -3,7 +3,8 @@
 import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
-import { useProjectStore } from '@/entities/project';
+import { useProjectStore, useProjectGithubRepo } from '@/entities/project';
+import { GestionRepositorioGitHub } from '@/widgets';
 import {
 	AiOrbCenterIcon,
 	CheckCircleWhiteIcon,
@@ -37,6 +38,9 @@ const ImplementationSummaryPage = () => {
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
 
+	const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
+	const github = useProjectGithubRepo(currentProjectId);
+
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 	const selectedCharacteristic = useCharacteristicStore(
 		(s) => s.currentCharacteristics.find((c) => c.id === s.selectedId) ?? null,
@@ -65,11 +69,11 @@ const ImplementationSummaryPage = () => {
 				if (!cancelled) setPreviewUrl(null);
 			})
 			.finally(() => {
-				if (!cancelled) setPreviewLoading(false);
-			});
-		return () => {
-			cancelled = true;
-		};
+if (!cancelled) setPreviewLoading(false);
+	});
+	return () => {
+		cancelled = true;
+	};
 	}, []);
 
 	if (!summary) {
@@ -88,6 +92,23 @@ const ImplementationSummaryPage = () => {
 	return (
 		<section className='page-container'>
 			<div className='page-header'>
+				{currentProjectId && (
+					<div className='mb-4'>
+						<GestionRepositorioGitHub
+							viewState={github.viewState}
+							status={github.status}
+							loading={github.loading}
+							error={github.error}
+							onCreate={async (input) => {
+								await github.createRepo(input);
+							}}
+							onSync={async () => {
+								await github.sync();
+							}}
+						/>
+					</div>
+				)}
+
 				<div className='flex items-start justify-between gap-4'>
 					<div className='flex flex-col gap-1'>
 						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>

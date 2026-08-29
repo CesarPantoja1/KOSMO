@@ -6,10 +6,17 @@ import Link from 'next/link';
 import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
-import { useProjectStore } from '@/entities/project';
+import { useProjectStore, useProjectGithubRepo } from '@/entities/project';
 import { AsideCharacteristic } from '@/widgets';
-import { Implementation, toast } from '@/shared/ui';
-import { Ai, ArrowLeft, CursorClickFill, SuccessCheckIcon, WarningIcon } from '@/shared/ui';
+import { FormularioCreacionRepositorio } from '@/features/crear-repositorio';
+import { GitHub, Implementation, Load, toast } from '@/shared/ui';
+import {
+	Ai,
+	ArrowLeft,
+	CursorClickFill,
+	SuccessCheckIcon,
+	WarningIcon,
+} from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { ImplementationLiveProgress } from './ImplementationLiveProgress';
 
@@ -29,6 +36,8 @@ const ImplementationPage = () => {
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 
 	const hasDiagram = useModelingStore((s) => s.hasDiagram);
+
+	const github = useProjectGithubRepo(currentProjectId ?? null);
 
 	const selectedCharacteristic = characteristics.find((c) => c.id === selectedId) ?? null;
 	const hasCharacteristics = characteristics.length > 0;
@@ -83,13 +92,15 @@ const ImplementationPage = () => {
 		);
 	};
 
+	const repoGate = github.viewState === 'not-linked' || github.viewState === 'create';
+
 	return (
 		<>
 			{isGenerating && <ImplementationLiveProgress progress={progress} />}
 
 			{status === 'failed' && errorMessage && (
 				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
-				<WarningIcon size={20} color='text-warning-600' />
+					<WarningIcon size={20} color='text-warning-600' />
 					<p className='text-sm text-warning-700'>{errorMessage}</p>
 				</div>
 			)}
@@ -108,16 +119,76 @@ const ImplementationPage = () => {
 							</p>
 						</div>
 
-						{hasCharacteristics && hasAnyImplementation && (
-							<div className='flex items-center gap-3 shrink-0'>
-								<Link href='/proyecto/codigo/resumen' className='btn btn-primary'>
-									Ver resumen
-								</Link>
-							</div>
-						)}
+{!repoGate && hasCharacteristics && hasAnyImplementation && (
+						<div className='flex items-center gap-3 shrink-0'>
+							<Link href='/proyecto/codigo/resumen' className='btn btn-primary'>
+								Ver resumen
+							</Link>
+						</div>
+					)}
 					</div>
 
-					{!hasCharacteristics ? (
+					{repoGate && (
+						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
+							{github.viewState === 'not-linked' ? (
+								<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
+									<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
+										<GitHub size={40} color='text-neutral-400' />
+									</div>
+									<div className='flex flex-col gap-2'>
+										<h3 className='text-xl font-semibold text-neutral-800'>
+											Conecta tu cuenta de GitHub
+										</h3>
+										<p className='text-neutral-500 text-base'>
+											Para generar e implementar el código de tu proyecto necesitas
+											conectar tu cuenta de GitHub.
+										</p>
+									</div>
+									<Link href='/perfil' className='btn btn-primary'>
+										<GitHub size={18} color='' />
+										Conectar cuenta de GitHub
+									</Link>
+								</div>
+							) : (
+								<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
+									<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
+										<GitHub size={40} color='text-neutral-400' />
+									</div>
+									<div className='flex flex-col gap-2'>
+										<h3 className='text-xl font-semibold text-neutral-800'>
+											Crea el repositorio de tu proyecto
+										</h3>
+										<p className='text-neutral-500 text-base'>
+											Define el nombre y la visibilidad del repositorio para continuar
+											con la implementación.
+										</p>
+									</div>
+									<FormularioCreacionRepositorio
+										suggestedRepoName={github.status?.suggested_repo_name ?? null}
+										submitting={github.loading}
+										onSubmit={async (input) => {
+											await github.createRepo(input);
+										}}
+									/>
+								</div>
+							)}
+						</div>
+					)}
+
+					{github.viewState === 'loading' && (
+						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
+							<div className='flex flex-col items-center gap-4 text-neutral-500'>
+								<span className='inline-flex animate-spin text-primary-500'>
+									<Load size={24} color='text-current' />
+								</span>
+								<p className='text-sm'>Verificando estado del repositorio...</p>
+							</div>
+						</div>
+					)}
+
+					{!repoGate && github.viewState !== 'loading' && (
+						<>
+							{!hasCharacteristics ? (
 						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 							<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
 								<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
@@ -215,7 +286,10 @@ const ImplementationPage = () => {
 														creará la estructura de implementación automáticamente.
 													</p>
 												</div>
-												<button onClick={handleGenerate} className='btn btn-ai'>
+												<button
+													onClick={handleGenerate}
+													className='btn btn-ai'
+												>
 													<Ai color='' size={18} />
 													Generar implementación
 												</button>
@@ -242,7 +316,7 @@ const ImplementationPage = () => {
 
 										<div className='flex flex-col my-auto items-center gap-5 px-12'>
 											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-success-50'>
-											<SuccessCheckIcon size={40} color='text-success-600' />
+												<SuccessCheckIcon size={40} color='text-success-600' />
 											</div>
 											<div className='flex flex-col items-center gap-2 text-center max-w-md'>
 												<h3 className='text-neutral-800 text-lg font-semibold'>
@@ -259,6 +333,8 @@ const ImplementationPage = () => {
 								)}
 							</div>
 						</div>
+					)}
+						</>
 					)}
 				</div>
 			</section>

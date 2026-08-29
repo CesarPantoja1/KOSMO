@@ -1,13 +1,21 @@
-import type { IntegrationStatus } from '@/entities/integration';
+import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { IntegrationProvider, IntegrationStatus } from '@/entities/integration';
 import {
 	connectIntegration,
 	disconnectIntegration,
 	getIntegrationStatus,
 } from '@/entities/integration';
 import { User } from '@/entities/user';
-import { GITHUB_CLIENT_ID, GITHUB_SCOPES, PUBLIC_APP_DOMAIN } from '@/shared/api';
+import {
+	GITHUB_CLIENT_ID,
+	GITHUB_SCOPES,
+	PUBLIC_APP_DOMAIN,
+	RAILWAY_CLIENT_ID,
+	RAILWAY_SCOPES,
+} from '@/shared/api';
+import { GitHub, Railway } from '@/shared/ui';
 import { toast } from '@/shared/ui/toast/toast';
-import { useCallback, useEffect, useRef, useState } from 'react';
 
 type CuentaTabProps = {
 	user: User | null;
@@ -61,54 +69,93 @@ const CuentaTab = ({ user }: CuentaTabProps) => {
 					</div>
 				</div>
 			</div>
-			<GitHubIntegration />
+			<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
+				<h3 className='text-lg font-semibold text-neutral-800 mb-4'>Integraciones</h3>
+				<div className='flex flex-col divide-y divide-neutral-100'>
+					<OAuthIntegrationRow
+						provider='github'
+						label='GitHub'
+						icon={<GitHub size={24} color='text-neutral-800' />}
+						messageType='github-oauth-code'
+						buildAuthUrl={(redirectUri) =>
+							`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${GITHUB_SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}`
+						}
+					/>
+					<OAuthIntegrationRow
+						provider='railway'
+						label='Railway'
+						icon={<Railway size={24} color='text-neutral-800' />}
+						messageType='railway-oauth-code'
+						buildAuthUrl={(redirectUri) =>
+							`https://backboard.railway.com/oauth/auth?response_type=code&client_id=${RAILWAY_CLIENT_ID}&scope=${encodeURIComponent(RAILWAY_SCOPES)}&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=consent`
+						}
+					/>
+				</div>
+			</div>
 		</div>
 	);
 };
 
 export { CuentaTab };
 
-function GitHubIntegration() {
+type OAuthIntegrationRowProps = {
+	provider: IntegrationProvider;
+	label: string;
+	icon: ReactNode;
+	messageType: string;
+	buildAuthUrl: (redirectUri: string) => string;
+};
+
+function OAuthIntegrationRow({
+	provider,
+	label,
+	icon,
+	messageType,
+	buildAuthUrl,
+}: OAuthIntegrationRowProps) {
 	const [status, setStatus] = useState<IntegrationStatus | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [actionLoading, setActionLoading] = useState(false);
 	const popupRef = useRef<Window | null>(null);
 
 	useEffect(() => {
-		getIntegrationStatus('github')
+		getIntegrationStatus(provider)
 			.then(setStatus)
 			.catch(() =>
-				toast.error('No se pudo verificar el estado de la integración con GitHub.'),
+				toast.error(`No se pudo verificar el estado de la integración con ${label}.`),
 			)
 			.finally(() => setLoading(false));
-	}, []);
+	}, [provider, label]);
 
-	const handleOAuthMessage = useCallback((event: MessageEvent) => {
-		if (event.origin !== window.location.origin) return;
-		if (event.data?.type !== 'github-oauth-code') return;
+	const handleOAuthMessage = useCallback(
+		(event: MessageEvent) => {
+			if (event.origin !== window.location.origin) return;
+			if (event.data?.type !== messageType) return;
 
-		const code = event.data.code as string;
-		if (!code) return;
+			const code = event.data.code as string;
+			if (!code) return;
 
-		setActionLoading(true);
-		connectIntegration('github', {
-			code,
-			redirect_uri: `${PUBLIC_APP_DOMAIN}/perfil`,
-		})
-			.then((result) => {
-				setStatus(result);
-				toast.success(
-					`Cuenta de GitHub vinculada como @${result.username ?? 'desconocido'}.`,
-				);
+			setActionLoading(true);
+			connectIntegration(provider, {
+				code,
+				redirect_uri: `${PUBLIC_APP_DOMAIN}/perfil`,
 			})
-			.catch(() =>
-				toast.error('Error al vincular la cuenta de GitHub. Intenta de nuevo.'),
-			)
-			.finally(() => setActionLoading(false));
+				.then((result) => {
+					setStatus(result);
+					toast.success(
+						`Cuenta de ${label} vinculada como @${result.username ?? 'desconocido'}.`,
+					);
+				})
+				.catch(() =>
+					toast.error(`Error al vincular la cuenta de ${label}. Intenta de nuevo.`),
+				)
+				.finally(() => setActionLoading(false));
 
-		popupRef.current?.close();
-		popupRef.current = null;
-	}, []);
+			popupRef.current?.close();
+			popupRef.current = null;
+		},
+		[provider, label, messageType],
+	);
 
 	useEffect(() => {
 		window.addEventListener('message', handleOAuthMessage);
@@ -117,19 +164,22 @@ function GitHubIntegration() {
 
 	const handleConnect = () => {
 		const redirectUri = `${PUBLIC_APP_DOMAIN}/perfil`;
-		const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${GITHUB_SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-		popupRef.current = window.open(url, 'github-oauth', 'width=600,height=700');
+		popupRef.current = window.open(
+			buildAuthUrl(redirectUri),
+			`oauth-${provider}`,
+			'width=600,height=700',
+		);
 	};
 
 	const handleDisconnect = () => {
 		setActionLoading(true);
-		disconnectIntegration('github')
+		disconnectIntegration(provider)
 			.then(() => {
-				setStatus({ provider: 'github', is_connected: false });
-				toast.success('Cuenta de GitHub desconectada.');
+				setStatus({ provider, is_connected: false });
+				toast.success(`Cuenta de ${label} desconectada.`);
 			})
 			.catch(() =>
-				toast.error('Error al desconectar la cuenta de GitHub. Intenta de nuevo.'),
+				toast.error(`Error al desconectar la cuenta de ${label}. Intenta de nuevo.`),
 			)
 			.finally(() => setActionLoading(false));
 	};
@@ -137,19 +187,12 @@ function GitHubIntegration() {
 	const isConnected = status?.is_connected ?? false;
 
 	return (
-		<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
-			<h3 className='text-lg font-semibold text-neutral-800 mb-4'>Integraciones</h3>
+		<div className='flex flex-col gap-4 py-4 first:pt-0 last:pb-0'>
 			<div className='flex items-center justify-between'>
 				<div className='flex items-center gap-3'>
-					<svg
-						className='w-6 h-6 text-neutral-800'
-						viewBox='0 0 24 24'
-						fill='currentColor'
-					>
-						<path d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z' />
-					</svg>
+					{icon}
 					<div>
-						<p className='text-neutral-800 font-medium'>GitHub</p>
+						<p className='text-neutral-800 font-medium'>{label}</p>
 						<p className='text-neutral-500 text-sm'>
 							{loading
 								? 'Verificando...'
