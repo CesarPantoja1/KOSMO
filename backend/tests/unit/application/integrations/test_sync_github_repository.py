@@ -6,6 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from kosmo.application.integrations.execute_ephemeral_validation import (
+    EphemeralValidationError,
+    ExecuteEphemeralValidationResult,
+)
 from kosmo.application.integrations.sync_github_repository import (
     SyncGitHubRepositoryCommand,
     SyncGitHubRepositoryUseCase,
@@ -19,7 +23,7 @@ from kosmo.contracts.integrations.github import (
     ProjectGitHubIntegration,
     UserGitHubIntegration,
 )
-from kosmo.contracts.sdd.codegen import CodeWorkspace
+from kosmo.contracts.sdd.codegen import CodeWorkspace, ValidationStep
 from kosmo.contracts.sdd.ids import ProjectId, UserId, WorkspaceId
 from kosmo.infrastructure.git import GitError
 
@@ -383,3 +387,139 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
     logged_entry = sync_log_repo.add_log.call_args[0][0]
     assert logged_entry.status == CodeSyncStatus.SUCCESS
     assert logged_entry.commit_sha == "initial_hash_001"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_fails_when_ephemeral_validation_fails(
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    github_client: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+    sync_log_repo: AsyncMock,
+) -> None:
+    # Arrange
+    project_id = ProjectId("proj-ephem-fail")
+    user_id = UserId("usr-1")
+
+    existing_integration = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="proj-repo",
+        repo_url="https://github.com/octocat/proj-repo.git",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    project_repo.get_by_project_id.return_value = existing_integration
+    project_repo.save.side_effect = lambda integration: integration
+
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"token"
+    workspace_manager.get_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-1"
+    )
+
+    ephemeral_validator = AsyncMock()
+    ephemeral_validator.execute.return_value = ExecuteEphemeralValidationResult(
+        is_valid=False,
+        failed_step=ValidationStep.TESTS,
+        error_summary=("Vitest failed with 2 failing tests",),
+        steps=(),
+    )
+
+    use_case = SyncGitHubRepositoryUseCase(
+        project_github_repo=project_repo,
+        user_github_repo=user_repo,
+        github_client=github_client,
+        git_workspace=git_workspace,
+        workspace_manager=workspace_manager,
+        cipher=cipher,
+        sync_log_repo=sync_log_repo,
+        ephemeral_validator=ephemeral_validator,
+    )
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+
+    # Act & Assert
+    with pytest.raises(EphemeralValidationError) as exc_info:
+        await use_case.execute(cmd, user_id)
+
+    assert "Validación efímera fallida en el paso 'tests'" in str(exc_info.value)
+    # Git push no debió ejecutarse
+    git_workspace.push.assert_not_called()
+
+    # Estado actualizado a FAILED
+    saved_states = [call[0][0] for call in project_repo.save.call_args_list]
+    final_saved_state = saved_states[-1]
+    assert final_saved_state.sync_status == GitHubSyncStatus.FAILED
+    assert "Validación efímera fallida" in (final_saved_state.error_message or "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_proceeds_when_ephemeral_validation_passes(
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    github_client: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+    sync_log_repo: AsyncMock,
+) -> None:
+    # Arrange
+    project_id = ProjectId("proj-ephem-pass")
+    user_id = UserId("usr-1")
+
+    existing_integration = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="proj-repo",
+        repo_url="https://github.com/octocat/proj-repo.git",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    project_repo.get_by_project_id.return_value = existing_integration
+    project_repo.save.side_effect = lambda integration: integration
+
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"token"
+    workspace_manager.get_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-1"
+    )
+    git_workspace.build_authenticated_url.return_value = "https://auth-url"
+    git_workspace.push.return_value = "valid_commit_hash_789"
+
+    ephemeral_validator = AsyncMock()
+    ephemeral_validator.execute.return_value = ExecuteEphemeralValidationResult(
+        is_valid=True,
+        steps=(),
+        error_summary=(),
+    )
+
+    use_case = SyncGitHubRepositoryUseCase(
+        project_github_repo=project_repo,
+        user_github_repo=user_repo,
+        github_client=github_client,
+        git_workspace=git_workspace,
+        workspace_manager=workspace_manager,
+        cipher=cipher,
+        sync_log_repo=sync_log_repo,
+        ephemeral_validator=ephemeral_validator,
+    )
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+
+    # Act
+    result = await use_case.execute(cmd, user_id)
+
+    # Assert
+    ephemeral_validator.execute.assert_called_once()
+    git_workspace.push.assert_called_once()
+    assert result.sync_status == GitHubSyncStatus.SYNCED
+    assert result.last_commit_hash == "valid_commit_hash_789"

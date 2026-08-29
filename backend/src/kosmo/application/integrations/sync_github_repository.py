@@ -4,6 +4,11 @@ import base64
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
+from kosmo.application.integrations.execute_ephemeral_validation import (
+    EphemeralValidationError,
+    ExecuteEphemeralValidationCommand,
+    ExecuteEphemeralValidationUseCase,
+)
 from kosmo.contracts.auth.secrets import EncryptedSecret, SecretCipher
 from kosmo.contracts.integrations.git import GitWorkspacePort
 from kosmo.contracts.integrations.github import (
@@ -40,6 +45,7 @@ class SyncGitHubRepositoryUseCase:
         workspace_manager: WorkspaceManagerPort,
         cipher: SecretCipher,
         sync_log_repo: CodeSyncLogRepository,
+        ephemeral_validator: ExecuteEphemeralValidationUseCase | None = None,
     ) -> None:
         self._project_repo = project_github_repo
         self._user_repo = user_github_repo
@@ -48,6 +54,7 @@ class SyncGitHubRepositoryUseCase:
         self._workspace_manager = workspace_manager
         self._cipher = cipher
         self._sync_log_repo = sync_log_repo
+        self._ephemeral_validator = ephemeral_validator
 
     async def execute(
         self,
@@ -123,6 +130,21 @@ class SyncGitHubRepositoryUseCase:
                     is_public=is_public,
                 )
                 await self._project_repo.save(project_integration)
+
+            # Validación previa en contenedor efímero si se proveyó validador
+            if self._ephemeral_validator is not None:
+                val_res = await self._ephemeral_validator.execute(
+                    ExecuteEphemeralValidationCommand(
+                        workspace_path=workspace.workspace_dir,
+                        project_id=cmd.project_id,
+                    )
+                )
+                if not val_res.is_valid:
+                    error_msg = (
+                        f"Validación efímera fallida en el paso '{val_res.failed_step}': "
+                        f"{'; '.join(val_res.error_summary)}"
+                    )
+                    raise EphemeralValidationError(error_msg, step=val_res.failed_step, errors=val_res.error_summary)
 
             # Configurar Git local y pushear (push inicial o incremental)
             auth_url = self._git_workspace.build_authenticated_url(repo_url, token)
