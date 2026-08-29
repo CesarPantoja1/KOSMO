@@ -285,26 +285,31 @@ class GenerateFeatureImplementationUseCase:
         input_data: GenerateFeatureImplementationInput,
         event_collector: Callable[[OpenCodeEvent], Awaitable[None]] | None = None,
     ) -> GenerateFeatureImplementationOutput:
-        # 1. Validar existencia de Feature
-        feature = await self._feature_repo.by_id(input_data.feature_id)
+        # 1. Consultar precondiciones concurrentemente
+        feature, req_markdown, diagram, is_healthy = await asyncio.gather(
+            self._feature_repo.by_id(input_data.feature_id),
+            self._requirement_repo.by_feature_id(input_data.feature_id),
+            self._activity_diagram_repo.by_feature_id(input_data.feature_id),
+            self._opencode_client.health_check(),
+        )
+
+        # 2. Validar existencia de Feature
         if feature is None:
             raise FeatureNotFoundError(
                 feature_id=str(input_data.feature_id),
                 instance=f"/api/v1/features/{input_data.feature_id}/implementation",
             )
 
-        # 2. Validar presencia de requisitos EARS (CA-02)
-        req_markdown = await self._requirement_repo.by_feature_id(input_data.feature_id)
+        # 3. Validar presencia de requisitos EARS (CA-02)
         if not req_markdown or not req_markdown.strip():
             raise MissingRequirementsError(_DEFAULT_REQ_MSG)
 
-        # 3. Validar presencia de diagrama de actividad (CA-03)
-        diagram = await self._activity_diagram_repo.by_feature_id(input_data.feature_id)
+        # 4. Validar presencia de diagrama de actividad (CA-03)
         if diagram is None or not diagram.diagram_syntax.strip():
             raise MissingDiagramError(_DEFAULT_DIAG_MSG)
 
-        # 4. Verificar disponibilidad de OpenCode antes de adquirir recursos
-        if not await self._opencode_client.health_check():
+        # 5. Verificar disponibilidad de OpenCode antes de adquirir recursos
+        if not is_healthy:
             raise OpenCodeUnavailableError()
 
         run_id = ULID().hex
