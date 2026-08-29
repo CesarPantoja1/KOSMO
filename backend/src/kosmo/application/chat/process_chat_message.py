@@ -40,7 +40,11 @@ from kosmo.domain.sdd.chat_edit_applier import (
     apply_markdown_suggestion,
     check_fragment_terms,
 )
-from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
+from kosmo.domain.sdd.document_converters import (
+    document_to_markdown,
+    markdown_to_document,
+    slugify_spanish,
+)
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 if TYPE_CHECKING:
@@ -465,7 +469,7 @@ class ProcessChatMessageUseCase:
             updated = dataclasses.replace(
                 feature,
                 title=new_value,
-                slug=new_value.lower().replace(" ", "-"),
+                slug=slugify_spanish(new_value) or feature.slug,
             )
         else:
             updated = dataclasses.replace(feature, **{attr: new_value})

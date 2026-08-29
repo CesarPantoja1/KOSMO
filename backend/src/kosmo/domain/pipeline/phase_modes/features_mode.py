@@ -22,6 +22,8 @@ from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.pipeline._dict_utils import dict_str_keys
+from kosmo.domain.sdd.document_converters import slugify_spanish
+from kosmo.domain.sdd.id_generator import IdGenerator
 
 FIRST_GENERATION_COUNT = 5
 
@@ -343,7 +345,6 @@ class FeaturesMode:
         from kosmo.contracts.pipeline.phase_contexts import FeaturesPhaseContext
         from kosmo.contracts.pipeline.phase_outputs import FeatureSet
         from kosmo.contracts.sdd.feature import Feature
-        from kosmo.domain.sdd.id_generator import IdGenerator
 
         project_id = ProjectId("")
         if isinstance(context, FeaturesPhaseContext) and context.project_id is not None:
@@ -360,7 +361,7 @@ class FeaturesMode:
                     id=FeatureId(IdGenerator.generate("feature")),
                     number=int(item.get("number", 0)),
                     title=title,
-                    slug=title.lower().replace(" ", "-"),
+                    slug=slugify_spanish(title) or f"feature-{item.get('number', 0)}",
                     description=str(item.get("description", "")),
                     project_id=project_id,
                     origin=str(item.get("origin", "")),

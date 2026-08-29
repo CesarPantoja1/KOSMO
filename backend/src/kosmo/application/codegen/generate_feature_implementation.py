@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+import structlog
 from ulid import ULID
 
 from kosmo.application.codegen.analyze_ux_context import (
@@ -57,7 +58,9 @@ from kosmo.domain.codegen.path_safety import UnsafePathError, sanitize_relative_
 from kosmo.domain.codegen.plan_rules import validate_plan
 from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
-from kosmo.domain.sdd.document_converters import document_to_markdown
+from kosmo.domain.sdd.document_converters import document_to_markdown, slugify_spanish
+
+_log = structlog.get_logger("kosmo.codegen.generate")
 
 _DEFAULT_REQ_MSG = "Esta característica no tiene requisitos EARS generados. Genera los requisitos antes de continuar."
 _DEFAULT_DIAG_MSG = (
@@ -416,6 +419,7 @@ class GenerateFeatureImplementationUseCase:
             )
 
             # 7. Fase Plan: análisis UX y prompt al Plan Agent
+            feature_slug = slugify_spanish(feature.slug) or feature.slug
             project_context = await self._build_project_context(
                 feature.project_id,
                 current_feature_id=feature.id,
@@ -461,15 +465,17 @@ class GenerateFeatureImplementationUseCase:
                 f"## Requisitos EARS\n{req_markdown}\n\n"
                 f"## Diagrama de Actividad\n{diagram.diagram_syntax}\n\n"
                 "Propón un plan de implementación detallando los archivos a crear y modificar.\n"
-                "OBLIGATORIO: la feature debe entregar una UI funcional con Bootstrap 5. El plan debe incluir:\n"
+                "OBLIGATORIO: la feature DEBE entregar una solución 100% FUNCIONAL DE EXTREMO A EXTREMO "
+                "(Frontend + Backend + Base de Datos). El plan debe incluir:\n"
                 "1. El slice autocontenido en `src/features/<slug>/` (manifest.ts, logic.ts, components/).\n"
-                "2. La ruta de la feature en `src/app/<slug>/page.tsx`.\n"
+                "2. La ruta navegable y página principal en `src/app/<slug>/page.tsx` con export default "
+                "que renderice la vista interactiva (formularios, listas, acciones).\n"
                 "3. El registro del manifest en `src/lib/feature-registry.ts` "
                 "(IMPORTANTE: añade la feature al array `features` existente sin eliminar las features previas; "
                 "la navegación del shell se deriva del registro).\n"
                 "4. Los tests de la lógica en Vitest.\n"
                 "5. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
-                "para declarar las tablas con Drizzle ORM.\n"
+                "para declarar las tablas con Drizzle ORM y la integración de lectura/escritura.\n"
                 "Lee las skills `kosmo-ui`, `kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
             )
 
@@ -484,54 +490,56 @@ class GenerateFeatureImplementationUseCase:
                             if isinstance(op_item, dict):
                                 op_dict: dict[object, object] = dict(op_item)  # type: ignore[reportUnknownVariableType]
                                 action_raw = op_dict.get("action", "create")
-                                action_val = str(action_raw).lower() if action_raw is not None else "create"
-                                action = FileAction.CREATE if action_val == "create" else FileAction.MODIFY
-                                path_val = str(op_dict.get("path", ""))
-                                desc_val = str(op_dict.get("description", ""))
-                                plan_operations.append(
-                                    FileOperation(
-                                        path=path_val,
-                                        action=action,
-                                        description=desc_val,
+                                path_raw = str(op_dict.get("path", "")).strip()
+                                desc_raw = str(op_dict.get("description", "")).strip()
+                                norm_path = _normalize_generated_file_path(path_raw, workspace_dir)
+                                if norm_path:
+                                    try:
+                                        action = FileAction(str(action_raw).lower())
+                                    except ValueError:
+                                        action = FileAction.CREATE
+                                    plan_operations.append(
+                                        FileOperation(action=action, path=norm_path, description=desc_raw)
                                     )
-                                )
 
+            # Fallback canónico con arquitectura de feature slices si el Plan Agent no produjo operaciones
             if not plan_operations:
-                manifest_set = {
-                    item.strip().replace("\\", "/").lstrip("./").lstrip("/")
-                    for item in (workspace.manifest_files or ())
-                }
-                registry_path = "src/lib/feature-registry.ts"
-                reg_action = FileAction.MODIFY if registry_path in manifest_set else FileAction.CREATE
-
-                plan_operations.extend(
-                    [
-                        FileOperation(
-                            path=f"src/features/{feature.slug}/logic.ts",
-                            action=FileAction.CREATE,
-                            description="Lógica de negocio pura de la característica",
-                        ),
-                        FileOperation(
-                            path=f"src/features/{feature.slug}/manifest.ts",
-                            action=FileAction.CREATE,
-                            description="Manifiesto y metadatos de la característica",
-                        ),
-                        FileOperation(
-                            path=f"src/app/{feature.slug}/page.tsx",
-                            action=FileAction.CREATE,
-                            description="Página de la interfaz de usuario de la característica",
-                        ),
-                        FileOperation(
-                            path=registry_path,
-                            action=reg_action,
-                            description="Registro de la característica en el catálogo de la aplicación",
-                        ),
-                        FileOperation(
-                            path=f"tests/{feature.slug}.test.ts",
-                            action=FileAction.CREATE,
-                            description="Pruebas unitarias de la lógica de la característica",
-                        ),
-                    ]
+                existing_manifest = set(workspace.manifest_files if workspace else ())
+                registry_action = (
+                    FileAction.MODIFY if "src/lib/feature-registry.ts" in existing_manifest else FileAction.CREATE
+                )
+                plan_operations = [
+                    FileOperation(
+                        action=FileAction.CREATE,
+                        path=f"src/features/{feature_slug}/logic.ts",
+                        description=f"Lógica de negocio y tipos para {feature.title}",
+                    ),
+                    FileOperation(
+                        action=FileAction.CREATE,
+                        path=f"src/features/{feature_slug}/manifest.ts",
+                        description=f"Manifiesto del slice de {feature.title}",
+                    ),
+                    FileOperation(
+                        action=FileAction.CREATE,
+                        path=f"src/app/{feature_slug}/page.tsx",
+                        description=f"Página y UI principal de {feature.title}",
+                    ),
+                    FileOperation(
+                        action=registry_action,
+                        path="src/lib/feature-registry.ts",
+                        description=f"Registro de {feature.title} en el catálogo global de navegación",
+                    ),
+                    FileOperation(
+                        action=FileAction.CREATE,
+                        path=f"tests/{feature_slug}.test.ts",
+                        description=f"Pruebas unitarias de {feature.title}",
+                    ),
+                ]
+                _log.info(
+                    "codegen.fallback_plan_used",
+                    feature_id=str(feature.id),
+                    slug=feature_slug,
+                    operations_count=len(plan_operations),
                 )
 
             impl_plan = ImplementationPlan(
@@ -559,13 +567,18 @@ class GenerateFeatureImplementationUseCase:
                 f"## Diagrama de Actividad\n{diagram.diagram_syntax}\n\n"
                 f"## Plan aprobado\n{plan_lines}\n\n"
                 "Implementa el código y las pruebas respetando el plan aprobado.\n"
-                "OBLIGATORIO: entrega la UI funcional completa de la feature usando 100% Bootstrap 5:\n"
-                "1. Lógica de negocio pura en `src/features/<slug>/logic.ts` (con tests en Vitest).\n"
-                "2. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
+                "OBLIGATORIO: entrega una funcionalidad 100% OPERATIVA Y COMPLETA "
+                "(Frontend + Backend + Base de Datos) usando Bootstrap 5:\n"
+                "1. Frontend interactivo en `src/app/<slug>/page.tsx`: DEBE contener `export default` y "
+                "renderizar la vista operativa de la feature con componentes funcionales (formularios con captura "
+                "de datos, tablas de registros, botones de acción con respuesta real, feedback de error/éxito "
+                "y estados de carga). PROHIBIDO dejar páginas vacías o stubs que provoquen error 404 al navegar.\n"
+                "2. Lógica de negocio y backend en `src/features/<slug>/logic.ts` (con tests exhaustivos en Vitest) "
+                "y Server Actions o API routes si se requiere.\n"
+                "3. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
                 "`src/components/ui/` (Button, Card, Input, Label, Badge, Textarea, EmptyState, "
                 "PageHeader, Table, Stat, Select, Tabs, Modal, Alert, Steps, BadgeStatus) y clases de Bootstrap 5. "
                 "PROHIBIDO el uso de Tailwind CSS.\n"
-                "3. Ruta en `src/app/<slug>/page.tsx` que renderiza el componente principal de la feature.\n"
                 "4. Registro del manifest en `src/lib/feature-registry.ts` "
                 "(IMPORTANTE: importa el manifest del nuevo slice y añádelo al array `features` existente "
                 "sin borrar ni sobrescribir las entradas de features anteriores; "
@@ -577,25 +590,14 @@ class GenerateFeatureImplementationUseCase:
                 "La UI debe adaptarse a la naturaleza del negocio (ver visión y directivas UX), "
                 "mantener el modelo mental del usuario (navegación del registro, estados vacío/error/loading) "
                 "y usar textos en español neutro con los mensajes de validación reales de la lógica. "
-                "No dejes la feature sin pantalla."
-            )
-
-            await _emit(
-                OpenCodeEvent(
-                    event_type=OpenCodeEventType.BUILD_PROGRESS,
-                    session_id=session_id,
-                    data={
-                        "delta": f"Iniciando generación de código y componentes para '{feature.title}'...",
-                        "stage": "building",
-                    },
-                )
+                "No dejes la feature sin pantalla funcional."
             )
 
             generated_files: set[str] = set()
             async for ev in self._opencode_client.send_prompt(session_id, build_prompt, agent="build"):
                 await _emit(ev)
                 if ev.event_type == OpenCodeEventType.FILE_EDIT:
-                    file_path: object = ev.data.get("path")
+                    file_path: object = ev.data.get("path") or ev.data.get("file")
                     if file_path is not None:
                         normalized_p = _normalize_generated_file_path(str(file_path), workspace_dir)
                         if normalized_p:
@@ -608,12 +610,6 @@ class GenerateFeatureImplementationUseCase:
                             normalized_p = _normalize_generated_file_path(str(f_item), workspace_dir)
                             if normalized_p:
                                 generated_files.add(normalized_p)
-
-            if not generated_files:
-                for op in plan_operations:
-                    normalized_p = _normalize_generated_file_path(op.path, workspace_dir)
-                    if normalized_p:
-                        generated_files.add(normalized_p)
 
             # 9. Fase Validación & Reintentos (hasta max_retries)
             attempt = 0
@@ -636,8 +632,8 @@ class GenerateFeatureImplementationUseCase:
                 # 1. Validación estructural post-build (page.tsx, slice, feature-registry.ts)
                 structural_result = validate_workspace_feature_structure(
                     workspace_dir=workspace_dir,
-                    feature_slug=feature.slug,
-                    extra_files=generated_files | set(workspace.manifest_files if workspace else ()),
+                    feature_slug=feature_slug,
+                    extra_files=generated_files,
                 )
 
                 # 2. Validación técnica (tsc, eslint, vitest, build)
@@ -749,7 +745,7 @@ class GenerateFeatureImplementationUseCase:
                 )
                 await self._workspace_manager.commit_workspace(
                     feature.project_id,
-                    f"feat({feature.slug}): implement feature {feature.display_id} - {feature.title}",
+                    f"feat({feature_slug}): implement feature {feature.display_id} - {feature.title}",
                 )
                 await self._workspace_manager.publish_preview(feature.project_id)
                 impl = dataclasses.replace(

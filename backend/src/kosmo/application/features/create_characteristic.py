@@ -10,7 +10,7 @@ from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository
-from kosmo.domain.sdd.document_converters import document_to_markdown
+from kosmo.domain.sdd.document_converters import document_to_markdown, slugify_spanish
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 _log = structlog.get_logger(__name__)
@@ -127,7 +127,7 @@ class CreateCharacteristicUseCase:
             project_id=input_data.project_id,
             number=next_number,
             title=input_data.title.strip(),
-            slug=input_data.title.strip().lower().replace(" ", "-"),
+            slug=slugify_spanish(input_data.title) or f"feature-{next_number}",
             description=input_data.description,
             origin=origin,
         )
