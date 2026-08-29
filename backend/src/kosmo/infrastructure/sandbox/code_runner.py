@@ -236,8 +236,14 @@ class SubprocessCodeRunner(CodeRunnerPort):
         ),
         run_id: str = "",
         step_timeouts: dict[ValidationStep, int] | None = None,
+        fail_fast: bool = False,
     ) -> ValidationRunResult:
-        """Ejecuta secuencialmente los pasos deteniéndose en el primer fallo (gate secuencial)."""
+        """Ejecuta los pasos de validación.
+
+        Por defecto (fail_fast=False), ejecuta los pasos de análisis estático y pruebas
+        para recopilar un diagnóstico integral, omitiendo únicamente el empaquetado (BUILD)
+        si se detectan errores previos.
+        """
         if not (Path(workspace_dir) / "node_modules").is_dir():
             install_result = await self.run_command(
                 workspace_dir,
@@ -264,6 +270,11 @@ class SubprocessCodeRunner(CodeRunnerPort):
         results: list[ValidationStepResult] = []
 
         for step in steps:
+            if fail_fast and any(not r.success for r in results):
+                break
+            if step == ValidationStep.BUILD and any(not r.success for r in results):
+                break
+
             timeout = (step_timeouts or self._step_timeouts).get(step, 120)
             result = await self.run_step(workspace_dir, step, timeout_seconds=timeout)
             _log.info(
@@ -275,8 +286,6 @@ class SubprocessCodeRunner(CodeRunnerPort):
                 duration_ms=result.duration_ms,
             )
             results.append(result)
-            if not result.success:
-                break
 
         all_passed = len(results) == len(steps) and all(r.success for r in results)
         total_duration = sum(r.duration_ms for r in results)

@@ -218,11 +218,22 @@ class EphemeralDockerCodeRunner(CodeRunnerPort):
             ValidationStep.BUILD,
         ),
         run_id: str = "",
+        fail_fast: bool = False,
     ) -> ValidationRunResult:
-        """Ejecuta secuencialmente los pasos en contenedores Docker efímeros deteniéndose en el primer fallo."""
+        """Ejecuta los pasos de validación en contenedores Docker efímeros.
+
+        Por defecto (fail_fast=False), ejecuta los pasos de análisis estático y pruebas
+        para recopilar un diagnóstico integral, omitiendo únicamente el empaquetado (BUILD)
+        si se detectan errores previos.
+        """
         results: list[ValidationStepResult] = []
 
         for step in steps:
+            if fail_fast and any(not r.success for r in results):
+                break
+            if step == ValidationStep.BUILD and any(not r.success for r in results):
+                break
+
             result = await self.run_step(workspace_dir, step)
             _log.info(
                 "docker_runner.step_done",
@@ -233,8 +244,6 @@ class EphemeralDockerCodeRunner(CodeRunnerPort):
                 duration_ms=result.duration_ms,
             )
             results.append(result)
-            if not result.success:
-                break
 
         all_passed = len(results) == len(steps) and all(r.success for r in results)
         total_duration = sum(r.duration_ms for r in results)

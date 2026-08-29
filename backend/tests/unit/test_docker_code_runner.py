@@ -282,7 +282,42 @@ async def test_run_pipeline_all_pass() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_pipeline_stops_on_first_failure() -> None:
+async def test_run_pipeline_stops_on_first_failure_with_fail_fast() -> None:
+    # Arrange
+    runner = EphemeralDockerCodeRunner()
+    tsc_fail_output = b"src/index.ts(1,1): error TS2304: Cannot find name 'foo'.\n"
+
+    call_count = 0
+
+    async def mock_communicate() -> tuple[bytes, bytes]:
+        nonlocal call_count
+        call_count += 1
+        return (tsc_fail_output, b"")
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 2
+    mock_proc.communicate = AsyncMock(side_effect=mock_communicate)
+
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
+        # Act
+        run_result = await runner.run_pipeline(
+            "/tmp/workspace",
+            steps=(ValidationStep.TYPECHECK, ValidationStep.LINT, ValidationStep.TESTS, ValidationStep.BUILD),
+            fail_fast=True,
+        )
+
+        # Assert
+        assert run_result.all_passed is False
+        assert len(run_result.steps) == 1
+        assert run_result.steps[0].step == ValidationStep.TYPECHECK
+        assert run_result.steps[0].success is False
+        assert len(run_result.error_summary) == 1
+        assert call_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_comprehensive_diagnostics_executes_checks_and_skips_build() -> None:
     # Arrange
     runner = EphemeralDockerCodeRunner()
     tsc_fail_output = b"src/index.ts(1,1): error TS2304: Cannot find name 'foo'.\n"
@@ -305,10 +340,12 @@ async def test_run_pipeline_stops_on_first_failure() -> None:
             steps=(ValidationStep.TYPECHECK, ValidationStep.LINT, ValidationStep.TESTS, ValidationStep.BUILD),
         )
 
-        # Assert
+        # Assert: TYPECHECK, LINT, TESTS executed (3), but BUILD skipped
         assert run_result.all_passed is False
-        assert len(run_result.steps) == 1
-        assert run_result.steps[0].step == ValidationStep.TYPECHECK
-        assert run_result.steps[0].success is False
-        assert len(run_result.error_summary) == 1
-        assert call_count == 1
+        assert len(run_result.steps) == 3
+        assert call_count == 3
+        assert [s.step for s in run_result.steps] == [
+            ValidationStep.TYPECHECK,
+            ValidationStep.LINT,
+            ValidationStep.TESTS,
+        ]

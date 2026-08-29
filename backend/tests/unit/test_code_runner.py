@@ -130,7 +130,7 @@ async def test_run_command_executes_allowed_command() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_pipeline_stops_on_first_failure(tmp_path) -> None:
+async def test_run_pipeline_stops_on_first_failure_with_fail_fast(tmp_path) -> None:
     # Arrange
     runner = SubprocessCodeRunner()
     (tmp_path / "node_modules").mkdir()
@@ -151,6 +151,7 @@ async def test_run_pipeline_stops_on_first_failure(tmp_path) -> None:
                 ValidationStep.TESTS,
                 ValidationStep.BUILD,
             ),
+            fail_fast=True,
         )
 
         # Assert
@@ -159,8 +160,43 @@ async def test_run_pipeline_stops_on_first_failure(tmp_path) -> None:
         assert pipeline_result.steps[0].step == ValidationStep.TYPECHECK
         assert pipeline_result.steps[0].success is False
         assert len(pipeline_result.error_summary) > 0
-        # Only typecheck was executed (no npm install)
         assert mock_shell.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_pipeline_comprehensive_diagnostics_executes_checks_and_skips_build(tmp_path) -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+    (tmp_path / "node_modules").mkdir()
+
+    fail_output = b"src/index.ts:1:1: error TS2304: Cannot find name 'foo'.\n"
+
+    mock_proc_fail = MagicMock()
+    mock_proc_fail.returncode = 1
+    mock_proc_fail.communicate = AsyncMock(return_value=(fail_output, b""))
+
+    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_fail)) as mock_shell:
+        # Act
+        pipeline_result = await runner.run_pipeline(
+            str(tmp_path),
+            steps=(
+                ValidationStep.TYPECHECK,
+                ValidationStep.LINT,
+                ValidationStep.TESTS,
+                ValidationStep.BUILD,
+            ),
+        )
+
+        # Assert: TYPECHECK, LINT, TESTS executed (3), but BUILD skipped
+        assert pipeline_result.all_passed is False
+        assert len(pipeline_result.steps) == 3
+        assert mock_shell.await_count == 3
+        assert [s.step for s in pipeline_result.steps] == [
+            ValidationStep.TYPECHECK,
+            ValidationStep.LINT,
+            ValidationStep.TESTS,
+        ]
 
 
 @pytest.mark.unit
