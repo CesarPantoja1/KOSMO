@@ -1402,7 +1402,7 @@ async def test_retry_history_accumulated() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_build_prompt_excluye_requisitos() -> None:
+async def test_build_prompt_incluye_requisitos() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
     requirement_repo = InMemoryRequirementRepository()
@@ -1447,14 +1447,15 @@ async def test_build_prompt_excluye_requisitos() -> None:
     # Act
     await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
 
-    # Assert — el plan aprobado ya sintetiza los requisitos; no se duplican en Build
+    # Assert — el build prompt contiene el plan, descripción, requisitos EARS y diagrama
     build_prompts = [prompt for (_, prompt, agent) in opencode_client.prompts_sent if agent == "build"]
     assert len(build_prompts) == 1
     build_prompt = build_prompts[0]
     assert "Plan aprobado" in build_prompt
     assert "[create] src/app/registrar-gastos/page.tsx" in build_prompt
     assert "[create] tests/registrar-gastos.test.ts" in build_prompt
-    assert "# REQ-1.1" not in build_prompt
+    assert "# REQ-1.1: El sistema registrará los gastos" in build_prompt
+    assert "## Diagrama de Actividad" in build_prompt
 
 
 @pytest.mark.asyncio
@@ -1831,3 +1832,59 @@ async def test_generate_omits_implemented_features_section_when_none_exist() -> 
     assert output.success is True
     plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
     assert "### Funcionalidades ya implementadas en el proyecto" not in plan_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_includes_ears_and_diagram_in_build_prompt() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    prj_id = ProjectId("prj_01HT_APP")
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará el monto del gasto")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Ingresar monto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    build_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "build")
+    assert "## Descripción\nPermite registrar transacciones de gastos" in build_prompt
+    assert "## Requisitos EARS\n# REQ-1.1: El sistema registrará el monto del gasto" in build_prompt
+    assert "## Diagrama de Actividad\n@startuml" in build_prompt
+    assert "## Plan aprobado" in build_prompt
