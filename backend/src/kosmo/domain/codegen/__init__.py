@@ -1,4 +1,5 @@
 from kosmo.domain.codegen.parse_validation_output import (
+    format_validation_errors_for_prompt,
     parse_eslint_output,
     parse_next_build_output,
     parse_step_output,
@@ -41,6 +42,7 @@ __all__ = [
     "ensure_safe_path",
     "ensure_valid_plan",
     "format_site_config",
+    "format_validation_errors_for_prompt",
     "is_safe_path",
     "parse_eslint_output",
     "parse_next_build_output",

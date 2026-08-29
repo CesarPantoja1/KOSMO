@@ -49,7 +49,7 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
-from kosmo.domain.codegen.parse_validation_output import truncate_error_output
+from kosmo.domain.codegen.parse_validation_output import format_validation_errors_for_prompt
 from kosmo.domain.codegen.plan_rules import validate_plan
 from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
@@ -606,9 +606,9 @@ class GenerateFeatureImplementationUseCase:
                 retry_history.append(validation_result.error_summary)
 
                 if attempt < input_data.max_retries:
-                    error_feedback = truncate_error_output(
-                        "\n".join(validation_result.error_summary),
-                        max_chars=2000,
+                    error_feedback = format_validation_errors_for_prompt(
+                        validation_result,
+                        max_chars=6000,
                     )
 
                     # Emitir evento RETRY para notificar al frontend

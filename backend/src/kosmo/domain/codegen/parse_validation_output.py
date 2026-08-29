@@ -4,6 +4,7 @@ import re
 
 from kosmo.contracts.sdd.codegen import (
     ValidationErrorDetail,
+    ValidationRunResult,
     ValidationSeverity,
     ValidationStep,
     ValidationStepResult,
@@ -258,7 +259,7 @@ def parse_step_output(
     )
 
 
-def truncate_error_output(raw_output: str, max_chars: int = 4000) -> str:
+def truncate_error_output(raw_output: str, max_chars: int = 6000) -> str:
     """Trunca el texto de salida respetando un límite de caracteres para presupuestos de tokens."""
     if len(raw_output) <= max_chars:
         return raw_output
@@ -267,3 +268,32 @@ def truncate_error_output(raw_output: str, max_chars: int = 4000) -> str:
     head = raw_output[:half]
     tail = raw_output[-half:]
     return f"{head}\n\n... [Output truncated for token budget] ...\n\n{tail}"
+
+
+def format_validation_errors_for_prompt(
+    validation_result: ValidationRunResult,
+    max_chars: int = 6000,
+) -> str:
+    """Construye un reporte estructurado y priorizado de errores por paso para alimentar el fix prompt."""
+    sections: list[str] = []
+    for step_res in validation_result.steps:
+        if step_res.success:
+            continue
+
+        step_name = step_res.step.value if hasattr(step_res.step, "value") else str(step_res.step)
+        step_header = f"### Fallo en paso: {step_name.upper()}"
+
+        if step_res.error_messages:
+            msgs = "\n".join(f"- {msg}" for msg in step_res.error_messages)
+            sections.append(f"{step_header}\n{msgs}")
+        elif step_res.raw_output:
+            truncated = truncate_error_output(step_res.raw_output.strip(), max_chars=2000)
+            sections.append(f"{step_header}\n```\n{truncated}\n```")
+        else:
+            sections.append(f"{step_header}\n- Falló con código de salida {step_res.exit_code}")
+
+    combined = "\n\n".join(sections)
+    if not combined and validation_result.error_summary:
+        combined = "\n".join(f"- {s}" for s in validation_result.error_summary)
+
+    return truncate_error_output(combined, max_chars=max_chars)

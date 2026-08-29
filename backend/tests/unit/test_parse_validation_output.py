@@ -4,11 +4,13 @@ import pytest
 
 from kosmo.contracts.sdd.codegen import (
     ValidationErrorDetail,
+    ValidationRunResult,
     ValidationSeverity,
     ValidationStep,
     ValidationStepResult,
 )
 from kosmo.domain.codegen.parse_validation_output import (
+    format_validation_errors_for_prompt,
     parse_eslint_output,
     parse_next_build_output,
     parse_step_output,
@@ -288,3 +290,79 @@ def test_truncate_error_output() -> None:
     truncated = truncate_error_output(long_text, max_chars=500)
     assert len(truncated) <= 550  # includes truncation notice
     assert "truncated" in truncated.lower()
+
+
+@pytest.mark.unit
+def test_format_validation_errors_for_prompt_groups_by_step() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TYPECHECK,
+                success=False,
+                error_messages=("src/index.ts:12:5 - error TS2322: Type mismatch.",),
+            ),
+            ValidationStepResult(
+                step=ValidationStep.LINT,
+                success=True,
+            ),
+            ValidationStepResult(
+                step=ValidationStep.TESTS,
+                success=False,
+                error_messages=("tests/app.test.ts: AssertionError: expected false to be true",),
+            ),
+        ),
+        error_summary=("Typecheck falló", "Tests fallaron"),
+    )
+
+    # Act
+    feedback = format_validation_errors_for_prompt(run_result, max_chars=6000)
+
+    # Assert
+    assert "### Fallo en paso: TYPECHECK" in feedback
+    assert "src/index.ts:12:5 - error TS2322" in feedback
+    assert "### Fallo en paso: TESTS" in feedback
+    assert "tests/app.test.ts: AssertionError" in feedback
+    assert "### Fallo en paso: LINT" not in feedback
+
+
+@pytest.mark.unit
+def test_format_validation_errors_for_prompt_fallback_raw_output() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.BUILD,
+                success=False,
+                exit_code=1,
+                raw_output="Next.js build failed: missing module './foo'",
+            ),
+        ),
+    )
+
+    # Act
+    feedback = format_validation_errors_for_prompt(run_result)
+
+    # Assert
+    assert "### Fallo en paso: BUILD" in feedback
+    assert "Next.js build failed: missing module './foo'" in feedback
+
+
+@pytest.mark.unit
+def test_format_validation_errors_for_prompt_all_passed() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=True,
+        steps=(
+            ValidationStepResult(step=ValidationStep.TYPECHECK, success=True),
+            ValidationStepResult(step=ValidationStep.TESTS, success=True),
+        ),
+    )
+
+    # Act
+    feedback = format_validation_errors_for_prompt(run_result)
+
+    # Assert
+    assert feedback == ""
