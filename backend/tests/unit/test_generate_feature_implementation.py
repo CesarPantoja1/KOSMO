@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -2212,3 +2213,70 @@ async def test_generate_uses_canonical_slice_operations_when_plan_agent_returns_
     assert "src/app/inventario/page.tsx" in paths
     assert "src/lib/feature-registry.ts" in paths
     assert "tests/inventario.test.ts" in paths
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generate_injects_existing_db_schema_into_prompts_when_present(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(tmp_path))
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_DBSCHEMA")
+    prj_id = ProjectId("prj_01HT_DBSCHEMA")
+
+    # Crear el workspace con src/db/schema.ts previo
+    db_dir = tmp_path / "src" / "db"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    schema_file = db_dir / "schema.ts"
+    schema_file.write_text("export const products = sqliteTable('products', { id: text('id').primaryKey() });\n")
+
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Gestión de Categorías",
+        slug="categorias",
+        description="Categorías de productos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Categorías")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_schema"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert len(opencode_client.prompts_sent) >= 2
+    plan_prompt = opencode_client.prompts_sent[0][1]
+    build_prompt = opencode_client.prompts_sent[1][1]
+
+    assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in plan_prompt
+    assert "export const products = sqliteTable('products'" in plan_prompt
+    assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in build_prompt
+    assert "export const products = sqliteTable('products'" in build_prompt

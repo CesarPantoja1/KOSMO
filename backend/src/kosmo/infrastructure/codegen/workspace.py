@@ -386,7 +386,6 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             if self._workspace_repo:
                 updated = await self._workspace_repo.update_lock(project_id, is_locked=True)
                 if updated is None:
-                    # El CAS/INSERT de la DB decidió que otro proceso tiene el lock
                     raise WorkspaceLockedError(
                         f"Workspace for project '{project_id}' is currently locked by another process."
                     )

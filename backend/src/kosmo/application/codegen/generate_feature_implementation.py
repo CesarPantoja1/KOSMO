@@ -110,6 +110,22 @@ def _normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | N
         return None
 
 
+def _get_existing_db_schema_context(workspace_dir: str | None) -> str:
+    """Lee el esquema Drizzle existente de src/db/schema.ts para contexto de generación incremental."""
+    if not workspace_dir:
+        return ""
+    schema_path = Path(workspace_dir) / "src" / "db" / "schema.ts"
+    if not schema_path.is_file():
+        return ""
+    try:
+        content = schema_path.read_text(encoding="utf-8").strip()
+        if content:
+            return f"\n### Esquema de base de datos actual (`src/db/schema.ts`)\n```typescript\n{content}\n```"
+    except Exception:
+        pass
+    return ""
+
+
 @dataclass(frozen=True)
 class GenerateFeatureImplementationInput:
     feature_id: FeatureId
@@ -169,8 +185,9 @@ class GenerateFeatureImplementationUseCase:
         self,
         project_id: ProjectId,
         current_feature_id: FeatureId | None = None,
+        workspace_dir: str | None = None,
     ) -> str:
-        """Construye el bloque de contexto del proyecto (nombre, descripción, visión y features previas)."""
+        """Construye el bloque de contexto del proyecto (visión, features previas y schema de BD)."""
         lines: list[str] = ["## Contexto del proyecto"]
         if self._project_repo is not None:
             project = await self._project_repo.by_id(project_id)
@@ -196,6 +213,12 @@ class GenerateFeatureImplementationUseCase:
         )
         if implemented_context:
             lines.append(f"\n### Funcionalidades ya implementadas en el proyecto\n{implemented_context}")
+
+        # Contexto de base de datos existente
+        if workspace_dir:
+            db_context = _get_existing_db_schema_context(workspace_dir)
+            if db_context:
+                lines.append(db_context)
 
         return "\n".join(lines)
 
@@ -396,6 +419,7 @@ class GenerateFeatureImplementationUseCase:
             project_context = await self._build_project_context(
                 feature.project_id,
                 current_feature_id=feature.id,
+                workspace_dir=workspace_dir,
             )
             ux_analysis = await self._ux_analyzer.execute(
                 UXAnalysisInput(feature_id=feature.id, project_id=feature.project_id)
