@@ -40,6 +40,7 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceManagerPort,
 )
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
+from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -141,8 +142,12 @@ class GenerateFeatureImplementationUseCase:
             requirement_repo=requirement_repo,
         )
 
-    async def _build_project_context(self, project_id: ProjectId) -> str:
-        """Construye el bloque de contexto del proyecto (nombre, descripción y visión) para los prompts."""
+    async def _build_project_context(
+        self,
+        project_id: ProjectId,
+        current_feature_id: FeatureId | None = None,
+    ) -> str:
+        """Construye el bloque de contexto del proyecto (nombre, descripción, visión y features previas)."""
         lines: list[str] = ["## Contexto del proyecto"]
         if self._project_repo is not None:
             project = await self._project_repo.by_id(project_id)
@@ -160,6 +165,55 @@ class GenerateFeatureImplementationUseCase:
                     vision = ""
                 if vision:
                     lines.append(f"\n### Visión del producto (descubrimiento)\n{vision}")
+
+        # Contexto inter-feature: funcionalidades ya implementadas
+        implemented_context = await self._build_implemented_features_context(
+            project_id=project_id,
+            current_feature_id=current_feature_id,
+        )
+        if implemented_context:
+            lines.append(f"\n### Funcionalidades ya implementadas en el proyecto\n{implemented_context}")
+
+        return "\n".join(lines)
+
+    async def _build_implemented_features_context(
+        self,
+        project_id: ProjectId,
+        current_feature_id: FeatureId | None = None,
+    ) -> str:
+        """Construye un resumen conciso de funcionalidades ya implementadas para evitar duplicación."""
+        try:
+            implementations = await self._implementation_repo.list_by_project(project_id)
+        except Exception:
+            return ""
+
+        implemented_impls = [
+            impl
+            for impl in implementations
+            if impl.status == FeatureImplementationStatus.IMPLEMENTED
+            and (current_feature_id is None or impl.feature_id != current_feature_id)
+        ]
+        if not implemented_impls:
+            return ""
+
+        feature_map: dict[str, Feature] = {}
+        try:
+            features = await self._feature_repo.list_by_project(project_id)
+            feature_map = {str(f.id): f for f in features}
+        except Exception:
+            feature_map = {}
+
+        lines: list[str] = []
+        for impl in implemented_impls:
+            feat = feature_map.get(str(impl.feature_id))
+            title = feat.title if feat else str(impl.feature_id)
+            slug = feat.slug if feat else ""
+            slug_info = f" (slug: `{slug}`)" if slug else ""
+            files_preview = ", ".join(f"`{f}`" for f in impl.generated_files[:4])
+            if len(impl.generated_files) > 4:
+                files_preview += f" (+{len(impl.generated_files) - 4} archivos)"
+            files_info = f" — Archivos: {files_preview}" if impl.generated_files else ""
+            lines.append(f"- **{title}**{slug_info}{files_info}")
 
         return "\n".join(lines)
 
@@ -311,7 +365,10 @@ class GenerateFeatureImplementationUseCase:
             )
 
             # 7. Fase Plan: análisis UX y prompt al Plan Agent
-            project_context = await self._build_project_context(feature.project_id)
+            project_context = await self._build_project_context(
+                feature.project_id,
+                current_feature_id=feature.id,
+            )
             ux_analysis = await self._ux_analyzer.execute(
                 UXAnalysisInput(feature_id=feature.id, project_id=feature.project_id)
             )

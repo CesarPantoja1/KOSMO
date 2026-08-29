@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
 import pytest
 
@@ -1691,3 +1692,142 @@ async def test_generate_fails_when_structural_validation_fails() -> None:
     assert structure_step.success is False
     assert any("page.tsx" in msg for msg in structure_step.error_messages)
     assert any("src/features/registrar-gastos/" in msg for msg in structure_step.error_messages)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_includes_implemented_features_in_context() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    prj_id = ProjectId("prj_01HT_APP")
+
+    # Feature 1 ya implementada previamente
+    feat1_id = FeatureId("feat_01HT_AUTH")
+    feature1 = Feature(
+        id=feat1_id,
+        number=1,
+        title="Autenticación de usuarios",
+        slug="auth",
+        description="Login y registro",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature1)
+    await impl_repo.save(
+        FeatureImplementation(
+            id=ImplementationId("impl_01"),
+            project_id=prj_id,
+            feature_id=feat1_id,
+            status=FeatureImplementationStatus.IMPLEMENTED,
+            generated_files=("src/app/auth/page.tsx", "src/features/auth/logic.ts"),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+
+    # Feature 2 a generar ahora
+    feat2_id = FeatureId("feat_02HT_GASTOS")
+    feature2 = Feature(
+        id=feat2_id,
+        number=2,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Registro de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature2)
+    await requirement_repo.save(feat2_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_02"),
+            feature_id=feat2_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat2_id))
+
+    # Assert
+    assert output.success is True
+    # Verificar que el prompt contenga la sección de funcionalidades ya implementadas
+    plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
+    assert "### Funcionalidades ya implementadas en el proyecto" in plan_prompt
+    assert "Autenticación de usuarios" in plan_prompt
+    assert "slug: `auth`" in plan_prompt
+    assert "src/app/auth/page.tsx" in plan_prompt
+
+    build_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "build")
+    assert "### Funcionalidades ya implementadas en el proyecto" in build_prompt
+    assert "Autenticación de usuarios" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_omits_implemented_features_section_when_none_exist() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    prj_id = ProjectId("prj_01HT_APP")
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
+    assert "### Funcionalidades ya implementadas en el proyecto" not in plan_prompt
