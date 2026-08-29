@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import contextvars
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
@@ -213,11 +214,49 @@ class DynamicUserLLMClient(LLMClient):
                 raise
         return ("", [])
 
-    def stream_typed[T](
+    @asynccontextmanager
+    async def stream_typed[T](
         self,
         prompt: PromptTemplate,
         output_type: type[T],
         temperature: float = 0.1,
         max_tokens: int = 4096,
-    ) -> AsyncIterator[StreamedTypedResult[T]]:
-        raise NotImplementedError("Streaming must resolve client dynamically via async context")
+    ) -> AsyncGenerator[StreamedTypedResult[T]]:
+        client = await self._resolve_client()
+        stream_fn: Any = getattr(client, "stream_typed", None)
+        if callable(stream_fn):
+            try:
+                async with stream_fn(
+                    prompt=prompt,
+                    output_type=output_type,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ) as streamed:  # type: ignore[reportUnknownVariableType]
+                    yield streamed  # type: ignore[reportReturnType]
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
+        else:
+            result = await client.complete_typed(
+                prompt=prompt,
+                output_type=output_type,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            class _FallbackStreamed:
+                def __init__(self, data: T):
+                    self._data = data
+
+                async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
+                    content = getattr(self._data, "content", None)
+                    if isinstance(content, str):
+                        yield content
+                    else:
+                        yield str(self._data)
+
+                async def get_data(self) -> T:
+                    return self._data
+
+            yield _FallbackStreamed(result)  # type: ignore[reportReturnType]

@@ -131,7 +131,7 @@ async def test_execute_ephemeral_validation_resolves_workspace_from_project_id(
 ) -> None:
     # Arrange
     project_id = ProjectId("proj-resolver")
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-1"),
         project_id=project_id,
         workspace_dir="/tmp/resolved/workspace/path",
@@ -152,7 +152,7 @@ async def test_execute_ephemeral_validation_resolves_workspace_from_project_id(
 
     # Assert
     assert result.is_valid is True
-    workspace_manager.get_workspace.assert_called_once_with(project_id)
+    workspace_manager.ensure_workspace.assert_called_once_with(project_id)
     code_runner.run_step.assert_called_once_with(
         workspace_dir="/tmp/resolved/workspace/path",
         step=ValidationStep.TYPECHECK,
@@ -168,7 +168,7 @@ async def test_execute_ephemeral_validation_raises_when_workspace_not_found(
 ) -> None:
     # Arrange
     project_id = ProjectId("proj-missing")
-    workspace_manager.get_workspace.return_value = None
+    workspace_manager.ensure_workspace.return_value = None
 
     cmd = ExecuteEphemeralValidationCommand(project_id=project_id)
 

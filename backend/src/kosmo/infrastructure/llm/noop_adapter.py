@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
 
@@ -101,7 +104,17 @@ class NoopLLMClient:
         max_tokens: int = 4096,
     ) -> T:
         response = await self.complete(prompt, temperature=temperature, max_tokens=max_tokens)
-        return output_type.model_validate(json.loads(response.text))  # type: ignore[reportAttributeAccessIssue]
+        if output_type is str:
+            return response.text  # type: ignore[return-value]
+        if hasattr(output_type, "model_validate"):
+            try:
+                return output_type.model_validate(json.loads(response.text))  # type: ignore[reportAttributeAccessIssue]
+            except Exception:
+                field_names = list(getattr(output_type, "model_fields", {}).keys())
+                if field_names:
+                    return output_type.model_validate({field_names[0]: response.text})  # type: ignore[reportAttributeAccessIssue]
+                return output_type.model_validate({})  # type: ignore[reportAttributeAccessIssue]
+        return response.text  # type: ignore[return-value]
 
     @property
     def supports_native_tools(self) -> bool:
@@ -116,3 +129,28 @@ class NoopLLMClient:
         max_tokens: int = 2000,  # noqa: ARG002
     ) -> tuple[str, list[ToolCallRecord]]:
         return ("", [])
+
+    @asynccontextmanager
+    async def stream_typed[T](
+        self,
+        prompt: PromptTemplate,
+        output_type: type[T],
+        temperature: float = 0.1,  # noqa: ARG002
+        max_tokens: int = 4096,  # noqa: ARG002
+    ) -> AsyncGenerator[Any]:
+        class _NoopStreamed:
+            def __init__(self, data: T):
+                self._data = data
+
+            async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
+                content = getattr(self._data, "content", None)
+                if isinstance(content, str):
+                    yield content
+                else:
+                    yield str(self._data)
+
+            async def get_data(self) -> T:
+                return self._data
+
+        typed_res = await self.complete_typed(prompt, output_type=output_type)
+        yield _NoopStreamed(typed_res)
