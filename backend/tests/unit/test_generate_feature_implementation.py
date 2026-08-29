@@ -2278,5 +2278,7 @@ async def test_generate_injects_existing_db_schema_into_prompts_when_present(
 
     assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in plan_prompt
     assert "export const products = sqliteTable('products'" in plan_prompt
+    assert "sin eliminar las features previas" in plan_prompt
     assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in build_prompt
     assert "export const products = sqliteTable('products'" in build_prompt
+    assert "sin borrar ni sobrescribir las entradas de features anteriores" in build_prompt
