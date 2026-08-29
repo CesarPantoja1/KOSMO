@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from kosmo.contracts.integrations.git import GitWorkspacePort
 from kosmo.infrastructure.git import (
     GitError,
+    LocalGitWorkspaceAdapter,
     git_add,
     git_build_authenticated_url,
     git_commit,
@@ -351,3 +353,15 @@ def test_git_push_token_sanitization_in_error() -> None:
         assert secret_token not in err_text
         # Debe haberse enmascarado
         assert "https://***@" in err_text
+
+
+@pytest.mark.unit
+def test_local_git_workspace_adapter_implements_protocol() -> None:
+    # Arrange
+    adapter = LocalGitWorkspaceAdapter()
+
+    # Assert
+    assert isinstance(adapter, GitWorkspacePort)
+
+    auth_url = adapter.build_authenticated_url("https://github.com/octocat/repo.git", "token123")
+    assert auth_url == "https://x-access-token:token123@github.com/octocat/repo.git"

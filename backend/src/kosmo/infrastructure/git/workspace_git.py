@@ -280,3 +280,19 @@ def git_push(
 def git_revert_commit(workspace_path: Path | str, commit: str) -> None:
     """Revierte un commit conservando el resto del historial (git revert --no-edit)."""
     _run_git(["git", "revert", "--no-edit", commit], workspace_path, check=True)
+
+
+class LocalGitWorkspaceAdapter:
+    """Adaptador de infraestructura para operaciones Git en el workspace local."""
+
+    def remote_add_or_update(self, workspace_path: str, name: str, url: str) -> None:
+        """Añade un remoto al repositorio local o actualiza su URL si ya existe."""
+        git_remote_add_or_update(workspace_path, name=name, url=url)
+
+    def build_authenticated_url(self, repo_url: str, token: str) -> str:
+        """Construye una URL HTTPS autenticada utilizando el token provisto."""
+        return git_build_authenticated_url(repo_url, token)
+
+    def push(self, workspace_path: str, remote: str = "origin", branch: str | None = None) -> str:
+        """Ejecuta git push hacia el repositorio remoto, validando commits."""
+        return git_push(workspace_path, remote=remote, branch=branch)

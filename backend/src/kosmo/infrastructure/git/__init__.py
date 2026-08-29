@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from kosmo.infrastructure.git.workspace_git import (
     GitError,
+    LocalGitWorkspaceAdapter,
     git_add,
     git_build_authenticated_url,
     git_commit,
@@ -20,6 +21,7 @@ from kosmo.infrastructure.git.workspace_git import (
 
 __all__ = [
     "GitError",
+    "LocalGitWorkspaceAdapter",
     "git_add",
     "git_build_authenticated_url",
     "git_commit",

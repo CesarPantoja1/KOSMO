@@ -1,6 +1,7 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
+@runtime_checkable
 class GitWorkspacePort(Protocol):
     """Puerto para interactuar con repositorios Git locales del workspace."""
 
