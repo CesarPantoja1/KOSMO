@@ -2054,3 +2054,71 @@ async def test_generate_feature_filters_unsafe_and_normalizes_generated_file_pat
     assert "src/lib/feature-registry.ts" in output.generated_files
     assert "../../outside.txt" not in output.generated_files
     assert "../escaped.ts" not in output.generated_files
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_handles_unexpected_exception_marks_failed_and_releases_lock() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+
+    class CrashingOpenCodeClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            raise RuntimeError("Fatal unhandled crash inside generator")
+            yield  # unreachable
+
+    opencode_client = CrashingOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_CRASH")
+    prj_id = ProjectId("prj_01HT_CRASH")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Gastos crash",
+        slug="gastos-crash",
+        description="Feature crash",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Requisito")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_crash"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act & Assert
+    with pytest.raises(RuntimeError, match="Fatal unhandled crash inside generator"):
+        await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert: Lock liberado, sesión cerrada y estado en base de datos marcado como FAILED
+    assert str(prj_id) not in workspace_manager.locked_projects
+    saved_impl = await impl_repo.by_feature_id(feat_id)
+    assert saved_impl is not None
+    assert saved_impl.status == FeatureImplementationStatus.FAILED
+    assert len(opencode_client.closed_sessions) >= 1

@@ -806,8 +806,21 @@ class GenerateFeatureImplementationUseCase:
                     events=tuple(collected_events),
                 )
 
+        except Exception:
+            with contextlib.suppress(Exception):
+                current_impl = await self._implementation_repo.by_feature_id(input_data.feature_id)
+                if current_impl is not None and current_impl.status == FeatureImplementationStatus.IN_PROGRESS:
+                    await self._implementation_repo.save(
+                        dataclasses.replace(
+                            current_impl,
+                            status=FeatureImplementationStatus.FAILED,
+                            updated_at=datetime.now(UTC),
+                        )
+                    )
+            raise
         finally:
             if session_id is not None:
                 with contextlib.suppress(Exception):
                     await self._opencode_client.close_session(session_id)
-            await self._workspace_manager.release_lock(feature.project_id)
+            with contextlib.suppress(Exception):
+                await self._workspace_manager.release_lock(feature.project_id)
