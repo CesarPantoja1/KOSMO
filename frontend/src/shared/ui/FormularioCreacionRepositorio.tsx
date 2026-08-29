@@ -1,11 +1,10 @@
 'use client';
 
+import { normalizeRepoName, z } from '@/shared/lib';
+import { Send } from '@/shared/ui';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from '@/shared/lib';
-import { GitHub } from '@/shared/ui';
-import { normalizeRepoName } from '../lib/normalize-repo-name';
 import { ConfirmacionVisibilidadRepositorio } from './ConfirmacionVisibilidadRepositorio';
 
 type FormValues = {
@@ -28,7 +27,11 @@ const repoNameSchema = z.object({
 	is_public: z.boolean(),
 });
 
-const FormularioCreacionRepositorio = ({ suggestedRepoName, submitting = false, onSubmit }: Props) => {
+const FormularioCreacionRepositorio = ({
+	suggestedRepoName,
+	submitting = false,
+	onSubmit,
+}: Props) => {
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [pendingValues, setPendingValues] = useState<FormValues | null>(null);
 
@@ -170,12 +173,8 @@ const FormularioCreacionRepositorio = ({ suggestedRepoName, submitting = false, 
 				</div>
 
 				<div className='flex items-center justify-end gap-3'>
-					<button
-						type='submit'
-						disabled={submitting}
-						className='btn btn-primary'
-					>
-						<GitHub size={18} />
+					<button type='submit' disabled={submitting} className='btn btn-primary'>
+						<Send color='text-white' size={18} />
 						{submitting ? 'Creando repositorio...' : 'Crear repositorio'}
 					</button>
 				</div>

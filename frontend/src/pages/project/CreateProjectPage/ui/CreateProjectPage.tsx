@@ -1,16 +1,19 @@
 'use client';
 
 import { getProjects, type Project } from '@/entities/project';
+import { useIntegrationGate } from '@/shared/lib/useIntegrationGate';
 import { useEffect, useRef, useState } from 'react';
 import { CreateProjectForm } from './CreateProjectForm';
 
 const CreateProjectPage = () => {
+	const { isReady } = useIntegrationGate();
 	const [projects, setProjects] = useState<Project[]>([]);
 	const [showForm, setShowForm] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 	const videoRef = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
+		if (!isReady) return;
 		const fetchProjects = async () => {
 			try {
 				const data = await getProjects();
@@ -22,7 +25,7 @@ const CreateProjectPage = () => {
 			}
 		};
 		fetchProjects();
-	}, []);
+	}, [isReady]);
 
 	const handleLoadedData = () => {
 		if (videoRef.current) {
@@ -46,7 +49,7 @@ const CreateProjectPage = () => {
 		}
 	};
 
-	if (isLoading) {
+	if (!isReady || isLoading) {
 		return (
 			<div className='flex items-center justify-center h-full'>
 				<div className='animate-spin-custom h-8 w-8 border-2 border-primary-500 border-t-transparent rounded-full' />
@@ -76,7 +79,9 @@ const CreateProjectPage = () => {
 				{/* Header row */}
 				<div className='flex items-start justify-between gap-4'>
 					<div className='flex flex-col gap-1'>
-						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>Crear Proyecto</h1>
+						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>
+							Crear Proyecto
+						</h1>
 						<p className='text-neutral-500 text-sm md:text-base'>
 							Define la idea central y los objetivos de tu aplicación. Una descripción
 							clara le permitirá al asistente estructurar correctamente las etapas
