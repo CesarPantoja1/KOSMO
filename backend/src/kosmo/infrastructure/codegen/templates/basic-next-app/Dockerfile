@@ -1,4 +1,4 @@
-﻿FROM node:20-alpine AS base
+FROM node:20-alpine AS base
 
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
@@ -21,6 +21,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_PATH=/data/db.sqlite
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
