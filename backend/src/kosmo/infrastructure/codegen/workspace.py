@@ -27,6 +27,7 @@ from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectReposito
 from kosmo.infrastructure.git import (
     git_add,
     git_commit,
+    git_has_commits,
     git_head_hash,
     git_init,
     git_revert_commit,
@@ -266,10 +267,12 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 skill_file.parent.mkdir(parents=True, exist_ok=True)
                 skill_file.write_text(skill_content, encoding="utf-8")
 
-        if self._git_init and created_new:
+        if self._git_init:
             with contextlib.suppress(Exception):
-                git_add(target_dir)
-                git_commit(target_dir, "chore: initialize workspace template and configurations")
+                git_init(target_dir)
+                if not git_has_commits(target_dir):
+                    git_add(target_dir)
+                    git_commit(target_dir, "chore: initialize workspace template and configurations")
 
         # Pre-instalar dependencias al crear el workspace para que la primera
         # validación no consuma el timeout de npm install dentro del pipeline.

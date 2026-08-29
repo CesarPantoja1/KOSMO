@@ -78,8 +78,8 @@ class ExecuteEphemeralValidationUseCase:
         if not workspace_dir and cmd.project_id is not None:
             if self._workspace_manager is None:
                 raise ValueError("No se proporcionó WorkspaceManagerPort para resolver el project_id.")
-            workspace = await self._workspace_manager.get_workspace(cmd.project_id)
-            if workspace is None or not workspace.workspace_dir:
+            workspace = await self._workspace_manager.ensure_workspace(cmd.project_id)
+            if not workspace or not workspace.workspace_dir:
                 raise ValueError(
                     f"No se encontró el directorio físico del workspace para el proyecto '{cmd.project_id}'."
                 )

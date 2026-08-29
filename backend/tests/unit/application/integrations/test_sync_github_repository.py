@@ -121,7 +121,7 @@ async def test_sync_github_repository_incremental_push_success(
     )
     cipher.decrypt.return_value = b"ghp_real_decrypted_token"
 
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-proj-1"),
         project_id=project_id,
         workspace_dir="/tmp/workspaces/proj-existing",
@@ -200,7 +200,7 @@ async def test_sync_github_repository_incremental_push_recovers_from_previous_fa
         encrypted_token=base64.b64encode(b"encrypted").decode("utf-8"),
     )
     cipher.decrypt.return_value = b"token"
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws"
     )
     git_workspace.build_authenticated_url.return_value = "https://auth-url"
@@ -248,7 +248,7 @@ async def test_sync_github_repository_incremental_push_fails_when_git_push_fails
         encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
     )
     cipher.decrypt.return_value = b"token"
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-1"
     )
     git_workspace.build_authenticated_url.return_value = "https://auth-url"
@@ -303,7 +303,7 @@ async def test_sync_github_repository_raises_when_workspace_not_found(
         github_username="octocat",
         encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
     )
-    workspace_manager.get_workspace.return_value = None
+    workspace_manager.ensure_workspace.return_value = None
     cmd = SyncGitHubRepositoryCommand(project_id=ProjectId("proj-1"))
 
     # Act & Assert
@@ -338,7 +338,7 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
         encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
     )
     cipher.decrypt.return_value = b"token"
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-initial"
     )
 
@@ -419,7 +419,7 @@ async def test_sync_github_repository_fails_when_ephemeral_validation_fails(
         encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
     )
     cipher.decrypt.return_value = b"token"
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-1"
     )
 
@@ -489,7 +489,7 @@ async def test_sync_github_repository_proceeds_when_ephemeral_validation_passes(
         encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
     )
     cipher.decrypt.return_value = b"token"
-    workspace_manager.get_workspace.return_value = CodeWorkspace(
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
         id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-1"
     )
     git_workspace.build_authenticated_url.return_value = "https://auth-url"

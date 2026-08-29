@@ -65,7 +65,7 @@ class SyncGitHubRepositoryUseCase:
         if not user_integration:
             raise ValueError("El usuario no tiene su cuenta vinculada con GitHub.")
 
-        workspace = await self._workspace_manager.get_workspace(cmd.project_id)
+        workspace = await self._workspace_manager.ensure_workspace(cmd.project_id)
         if not workspace or not workspace.workspace_dir:
             raise ValueError("No se encontró el directorio físico del workspace para el proyecto.")
 
