@@ -10,6 +10,7 @@ from kosmo.contracts.sdd.codegen import (
     ValidationStepResult,
 )
 from kosmo.domain.codegen.parse_validation_output import (
+    derive_fix_directives,
     format_validation_errors_for_prompt,
     parse_eslint_output,
     parse_next_build_output,
@@ -366,3 +367,82 @@ def test_format_validation_errors_for_prompt_all_passed() -> None:
 
     # Assert
     assert feedback == ""
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_structural_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.STRUCTURE,
+                success=False,
+                error_messages=("Falta crear src/app/gastos/page.tsx",),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Estructura:" in d for d in directives)
+    assert any("page.tsx" in d for d in directives)
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_import_and_type_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TYPECHECK,
+                success=False,
+                errors=(
+                    ValidationErrorDetail(
+                        file="src/features/gastos/logic.ts",
+                        line=1,
+                        column=1,
+                        message="Cannot find module '@/lib/db'",
+                        severity=ValidationSeverity.ERROR,
+                        code="TS2307",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Importaciones:" in d for d in directives)
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_tests_and_build_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TESTS,
+                success=False,
+                error_messages=("AssertionError: expected 5 to be 10",),
+            ),
+            ValidationStepResult(
+                step=ValidationStep.BUILD,
+                success=False,
+                error_messages=("Next build failed",),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Lógica y pruebas:" in d for d in directives)
+    assert any("Compilación Next.js:" in d for d in directives)

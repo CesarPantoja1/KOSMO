@@ -297,3 +297,62 @@ def format_validation_errors_for_prompt(
         combined = "\n".join(f"- {s}" for s in validation_result.error_summary)
 
     return truncate_error_output(combined, max_chars=max_chars)
+
+
+def derive_fix_directives(validation_result: ValidationRunResult) -> tuple[str, ...]:
+    """Genera directivas de corrección específicas y accionables según las categorías de fallos detectados."""
+    directives: list[str] = []
+    failed_steps = {s.step for s in validation_result.steps if not s.success}
+
+    if ValidationStep.STRUCTURE in failed_steps:
+        directives.append(
+            "Estructura: Asegúrate de crear `src/app/<slug>/page.tsx`, la carpeta `src/features/<slug>/` "
+            "y registrar el manifest de la funcionalidad en `src/lib/feature-registry.ts`."
+        )
+
+    has_import_error = False
+    for step_res in validation_result.steps:
+        if not step_res.success:
+            for err in step_res.errors:
+                code_str = (err.code or "").upper()
+                msg_str = (err.message or "").lower()
+                if "module_not_found" in code_str or "ts2307" in code_str or "cannot find module" in msg_str:
+                    has_import_error = True
+                    break
+            if not has_import_error and any(
+                "cannot find module" in m.lower() or "module not found" in m.lower() for m in step_res.error_messages
+            ):
+                has_import_error = True
+
+    if has_import_error:
+        directives.append(
+            "Importaciones: Corrige las rutas de importación relativas o alias `@/` y "
+            "verifica que los archivos exporten los símbolos requeridos."
+        )
+
+    if ValidationStep.TYPECHECK in failed_steps and not has_import_error:
+        directives.append(
+            "Tipado TypeScript: Corrige las firmas de funciones, parámetros y tipos de retorno "
+            "para cumplir estrictamente con los contratos declarados."
+        )
+
+    if ValidationStep.TESTS in failed_steps:
+        directives.append(
+            "Lógica y pruebas: Ajusta la lógica de negocio en `src/features/<slug>/logic.ts` para "
+            "satisfacer los criterios y aserciones de Vitest según los requisitos EARS. "
+            "No elimines ni desactives pruebas válidas."
+        )
+
+    if ValidationStep.LINT in failed_steps:
+        directives.append("Linter: Limpia imports no utilizados y corrige errores de formato de ESLint.")
+
+    if ValidationStep.BUILD in failed_steps:
+        directives.append(
+            "Compilación Next.js: Asegúrate de agregar `'use client'` al inicio de los componentes con "
+            "interactividad o hooks de React (useState, useEffect, onClick) y verificar el empaquetado."
+        )
+
+    if not directives:
+        directives.append("Corrige los archivos necesarios en el workspace para resolver los errores detectados.")
+
+    return tuple(directives)

@@ -49,7 +49,10 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
-from kosmo.domain.codegen.parse_validation_output import format_validation_errors_for_prompt
+from kosmo.domain.codegen.parse_validation_output import (
+    derive_fix_directives,
+    format_validation_errors_for_prompt,
+)
 from kosmo.domain.codegen.plan_rules import validate_plan
 from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
@@ -624,10 +627,13 @@ class GenerateFeatureImplementationUseCase:
                         )
                     )
 
+                    directives = derive_fix_directives(validation_result)
+                    directives_block = "\n".join(f"- {d}" for d in directives)
+
                     fix_prompt = (
-                        f"La validación falló en el intento {attempt}/{input_data.max_retries}.\n"
+                        f"La validación falló en el intento {attempt}/{input_data.max_retries}.\n\n"
                         f"## Errores detectados:\n{error_feedback}\n\n"
-                        "Corrige los archivos necesarios para resolver estos errores."
+                        f"## Directivas de corrección:\n{directives_block}"
                     )
                     async for ev in self._opencode_client.send_prompt(session_id, fix_prompt, agent="build"):
                         await _emit(ev)
