@@ -31,6 +31,7 @@ class FileAction(StrEnum):
 
 
 class ValidationStep(StrEnum):
+    STRUCTURE = "structure"
     TYPECHECK = "typecheck"
     LINT = "lint"
     TESTS = "tests"

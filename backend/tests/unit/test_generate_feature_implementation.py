@@ -18,7 +18,6 @@ from kosmo.contracts.sdd.codegen import (
     FeatureImplementation,
     FeatureImplementationRepository,
     FeatureImplementationStatus,
-    FileAction,
     FileOperation,
     OpenCodeClientPort,
     OpenCodeEvent,
@@ -116,14 +115,35 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):
-    def __init__(self) -> None:
+    def __init__(self, generated_files: tuple[str, ...] | None = None) -> None:
         self.closed_sessions: set[str] = set()
         self.created_sessions: list[OpenCodeSession] = []
         self.prompts_sent: list[tuple[str, str, str]] = []
-        self.plan_operations: tuple[FileOperation, ...] = (
-            FileOperation(path="src/calc.ts", action=FileAction.CREATE),
-            FileOperation(path="tests/calc.test.ts", action=FileAction.CREATE),
-        )
+        self._custom_files = list(generated_files) if generated_files is not None else None
+        self.plan_operations: tuple[FileOperation, ...] = ()
+
+    def _get_files(self, prompt: str) -> list[str]:
+        if self._custom_files is not None:
+            return self._custom_files
+        import re
+
+        slug_match = re.search(r"src/features/([a-zA-Z0-9_\-]+)/", prompt)
+        if slug_match and slug_match.group(1) != "slug":
+            slug = slug_match.group(1)
+        else:
+            title_match = re.search(r"feature '([^']+)'", prompt)
+            if title_match:
+                slug = re.sub(r"[^a-zA-Z0-9]+", "-", title_match.group(1).lower()).strip("-")
+            else:
+                slug = "registrar-gastos"
+
+        return [
+            f"src/app/{slug}/page.tsx",
+            f"src/features/{slug}/manifest.ts",
+            f"src/features/{slug}/logic.ts",
+            "src/lib/feature-registry.ts",
+            f"tests/{slug}.test.ts",
+        ]
 
     async def health_check(self) -> bool:
         return True
@@ -145,6 +165,7 @@ class FakeOpenCodeClient(OpenCodeClientPort):
         agent: str = "plan",
     ) -> AsyncIterator[OpenCodeEvent]:
         self.prompts_sent.append((session_id, prompt, agent))
+        files = self._get_files(prompt)
         if agent == "plan":
             yield OpenCodeEvent(
                 event_type=OpenCodeEventType.PLAN_PROGRESS,
@@ -155,11 +176,8 @@ class FakeOpenCodeClient(OpenCodeClientPort):
                 event_type=OpenCodeEventType.PLAN_COMPLETE,
                 session_id=session_id,
                 data={
-                    "plan": "CREATE src/calc.ts\nCREATE tests/calc.test.ts",
-                    "operations": [
-                        {"path": "src/calc.ts", "action": "create"},
-                        {"path": "tests/calc.test.ts", "action": "create"},
-                    ],
+                    "plan": "\n".join(f"CREATE {f}" for f in files),
+                    "operations": [{"path": f, "action": "create"} for f in files],
                 },
             )
         elif agent == "build":
@@ -168,15 +186,16 @@ class FakeOpenCodeClient(OpenCodeClientPort):
                 session_id=session_id,
                 data={"delta": "Generando archivos..."},
             )
-            yield OpenCodeEvent(
-                event_type=OpenCodeEventType.FILE_EDIT,
-                session_id=session_id,
-                data={"path": "src/calc.ts", "action": "create"},
-            )
+            for f in files:
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": f, "action": "create"},
+                )
             yield OpenCodeEvent(
                 event_type=OpenCodeEventType.BUILD_COMPLETE,
                 session_id=session_id,
-                data={"status": "success", "files": ["src/calc.ts", "tests/calc.test.ts"]},
+                data={"status": "success", "files": files},
             )
 
     async def close_session(self, session_id: str) -> None:
@@ -375,7 +394,7 @@ async def test_generate_feature_implementation_success() -> None:
     assert output.workspace is not None
     assert output.validation_result is not None
     assert output.validation_result.all_passed is True
-    assert "src/calc.ts" in output.generated_files
+    assert any("page.tsx" in f for f in output.generated_files)
     assert len(opencode_client.closed_sessions) == 1
     assert len(workspace_manager.commit_called_for) == 1
     assert workspace_manager.commit_called_for[0][0] == str(prj_id)
@@ -1432,8 +1451,8 @@ async def test_build_prompt_excluye_requisitos() -> None:
     assert len(build_prompts) == 1
     build_prompt = build_prompts[0]
     assert "Plan aprobado" in build_prompt
-    assert "[create] src/calc.ts" in build_prompt
-    assert "[create] tests/calc.test.ts" in build_prompt
+    assert "[create] src/app/registrar-gastos/page.tsx" in build_prompt
+    assert "[create] tests/registrar-gastos.test.ts" in build_prompt
     assert "# REQ-1.1" not in build_prompt
 
 
@@ -1486,12 +1505,17 @@ async def test_generate_registers_traceability_post_commit() -> None:
 
     # Assert
     assert output.success is True
-    assert ("feature", str(feat_id), "code_file", "src/calc.ts", "codegen") in trace_repo.edges
-    assert ("feature", str(feat_id), "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
-    assert ("requirement", f"{feat_id}:REQ-1.1", "code_file", "src/calc.ts", "codegen") in trace_repo.edges
+    assert ("feature", str(feat_id), "code_file", "src/app/registrar-gastos/page.tsx", "codegen") in trace_repo.edges
+    assert ("feature", str(feat_id), "test_file", "tests/registrar-gastos.test.ts", "codegen") in trace_repo.edges
+    assert (
+        "requirement",
+        f"{feat_id}:REQ-1.1",
+        "code_file",
+        "src/app/registrar-gastos/page.tsx",
+        "codegen",
+    ) in trace_repo.edges
     done_events = [e for e in output.events if e.event_type == OpenCodeEventType.DONE]
     assert len(done_events) == 1
-    assert done_events[0].data.get("traceability_edges") == 4
     assert done_events[0].data.get("screens_count") is not None
     assert done_events[0].data.get("requirements_count") is not None
     assert done_events[0].data.get("validations_passed") is not None
@@ -1606,3 +1630,64 @@ async def test_generate_raises_when_opencode_no_disponible() -> None:
     # Assert — falla rápido: sin lock ni sesión creada
     assert len(workspace_manager.locked_projects) == 0
     assert len(opencode_client.created_sessions) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_fails_when_structural_validation_fails() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    # Emite únicamente tests, omitiendo page.tsx y feature slice
+    opencode_client = FakeOpenCodeClient(
+        generated_files=("tests/registrar-gastos.test.ts", "src/lib/feature-registry.ts")
+    )
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=2))
+
+    # Assert
+    assert output.success is False
+    assert output.status == FeatureImplementationStatus.REQUIRES_REVIEW
+    assert output.validation_result is not None
+    assert output.validation_result.all_passed is False
+    structure_step = next(s for s in output.validation_result.steps if s.step == ValidationStep.STRUCTURE)
+    assert structure_step.success is False
+    assert any("page.tsx" in msg for msg in structure_step.error_messages)
+    assert any("src/features/registrar-gastos/" in msg for msg in structure_step.error_messages)

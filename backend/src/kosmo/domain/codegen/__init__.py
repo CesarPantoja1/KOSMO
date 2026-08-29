@@ -23,6 +23,11 @@ from kosmo.domain.codegen.plan_rules import (
     ensure_valid_plan,
     validate_plan,
 )
+from kosmo.domain.codegen.structural_validator import (
+    StructuralValidationResult,
+    validate_feature_structure,
+    validate_workspace_feature_structure,
+)
 
 __all__ = [
     "PROTECTED_WORKSPACE_FILES",
@@ -30,6 +35,7 @@ __all__ = [
     "PlanRuleViolation",
     "PlanRuleViolationType",
     "PlanValidationResult",
+    "StructuralValidationResult",
     "UnsafePathError",
     "ensure_safe_path",
     "ensure_valid_plan",
@@ -42,6 +48,8 @@ __all__ = [
     "parse_vitest_output",
     "sanitize_relative_path",
     "truncate_error_output",
+    "validate_feature_structure",
     "validate_plan",
     "validate_safe_path",
+    "validate_workspace_feature_structure",
 ]

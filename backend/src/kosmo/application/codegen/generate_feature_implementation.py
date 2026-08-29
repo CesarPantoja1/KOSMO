@@ -31,7 +31,11 @@ from kosmo.contracts.sdd.codegen import (
     OpenCodeClientPort,
     OpenCodeEvent,
     OpenCodeEventType,
+    ValidationErrorDetail,
     ValidationRunResult,
+    ValidationSeverity,
+    ValidationStep,
+    ValidationStepResult,
     WorkspaceManagerPort,
 )
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
@@ -45,6 +49,7 @@ from kosmo.contracts.sdd.repositories import (
 )
 from kosmo.domain.codegen.parse_validation_output import truncate_error_output
 from kosmo.domain.codegen.plan_rules import validate_plan
+from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
 from kosmo.domain.sdd.document_converters import document_to_markdown
 
 _DEFAULT_REQ_MSG = "Esta característica no tiene requisitos EARS generados. Genera los requisitos antes de continuar."
@@ -452,7 +457,50 @@ class GenerateFeatureImplementationUseCase:
                         },
                     )
                 )
-                validation_result = await self._code_runner.run_pipeline(workspace_dir, run_id=run_id)
+                # 1. Validación estructural post-build (page.tsx, slice, feature-registry.ts)
+                structural_result = validate_workspace_feature_structure(
+                    workspace_dir=workspace_dir,
+                    feature_slug=feature.slug,
+                    extra_files=generated_files | set(workspace.manifest_files if workspace else ()),
+                )
+
+                # 2. Validación técnica (tsc, eslint, vitest, build)
+                tech_result = await self._code_runner.run_pipeline(workspace_dir, run_id=run_id)
+
+                # 3. Consolidación de resultados
+                if not structural_result.is_valid:
+                    structural_step = ValidationStepResult(
+                        step=ValidationStep.STRUCTURE,
+                        success=False,
+                        error_messages=structural_result.errors,
+                        errors=tuple(
+                            ValidationErrorDetail(
+                                file=err.split(":")[-1].strip() if ":" in err else "workspace",
+                                message=err,
+                                severity=ValidationSeverity.ERROR,
+                            )
+                            for err in structural_result.errors
+                        ),
+                    )
+                    combined_steps = (structural_step,) + tech_result.steps
+                    combined_errors = structural_result.errors + tech_result.error_summary
+                    validation_result = dataclasses.replace(
+                        tech_result,
+                        steps=combined_steps,
+                        all_passed=False,
+                        error_summary=combined_errors,
+                    )
+                else:
+                    structural_step = ValidationStepResult(
+                        step=ValidationStep.STRUCTURE,
+                        success=True,
+                    )
+                    combined_steps = (structural_step,) + tech_result.steps
+                    validation_result = dataclasses.replace(
+                        tech_result,
+                        steps=combined_steps,
+                    )
+
                 impl = dataclasses.replace(
                     impl,
                     attempt_count=attempt,
