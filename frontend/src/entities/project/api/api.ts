@@ -74,19 +74,7 @@ const mockDeleteProject = async (id: string): Promise<void> => {
 	mockProjects.splice(index, 1);
 };
 
-const mockGitHubStatus: Record<string, ProjectGitHubStatus> = {
-	'mock-project-1': {
-		has_repository: true,
-		repo_name: 'kosmo-sistema-de-punto-de-venta',
-		repo_url: 'https://github.com/mock-user/kosmo-sistema-de-punto-de-venta',
-		is_public: false,
-		last_push_at: '2026-08-22T18:45:00Z',
-		last_commit_hash: '7f4b82d3e91a0c5b6e8f4a1c3d5e7b9a2f1e4c6a',
-		sync_status: 'synced',
-		suggested_repo_name: 'kosmo-sistema-de-punto-de-venta',
-		error_message: null,
-	},
-};
+const mockGitHubStatus: Record<string, ProjectGitHubStatus> = {};
 
 const mockGetProjectGitHubStatus = async (id: string): Promise<ProjectGitHubStatus> => {
 	await delay(400);

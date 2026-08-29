@@ -7,7 +7,12 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // --- Mock data ---
 
 const mockStatuses: Record<string, IntegrationStatus> = {
-	github: { provider: 'github', is_connected: false },
+	github: {
+		provider: 'github',
+		is_connected: true,
+		username: 'mock-user',
+		connected_at: new Date().toISOString(),
+	},
 	railway: { provider: 'railway', is_connected: false },
 };
 

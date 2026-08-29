@@ -14,6 +14,12 @@ export const projectSchema = z.object({
     .min(50, 'Mínimo 50 caracteres')
     .max(1000, 'Máximo 1000 caracteres')
     .refine((val) => !hasEmoji(val), 'No se permiten emojis'),
+  repo_name: z
+    .string()
+    .trim()
+    .min(1, 'Ingresa el nombre del repositorio')
+    .max(100, 'El nombre no puede superar los 100 caracteres'),
+  is_public: z.boolean(),
 })
 
 export type ProjectFormData = z.infer<typeof projectSchema>
