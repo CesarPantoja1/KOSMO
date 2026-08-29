@@ -45,6 +45,9 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         server_password: str | None = None,
         model: str | None = None,
         timeout_seconds: float = 600.0,
+        connect_timeout_seconds: float = 10.0,
+        read_timeout_seconds: float = 300.0,
+        write_timeout_seconds: float = 30.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -52,6 +55,9 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         self._server_password = server_password
         self._model = model
         self._timeout_seconds = timeout_seconds
+        self._connect_timeout_seconds = connect_timeout_seconds
+        self._read_timeout_seconds = read_timeout_seconds
+        self._write_timeout_seconds = write_timeout_seconds
 
         if client is not None:
             self._client = client
@@ -59,7 +65,12 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         else:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
-                timeout=httpx.Timeout(self._timeout_seconds, connect=10.0),
+                timeout=httpx.Timeout(
+                    timeout=self._timeout_seconds,
+                    connect=self._connect_timeout_seconds,
+                    read=self._read_timeout_seconds,
+                    write=self._write_timeout_seconds,
+                ),
                 headers=self._get_auth_headers(),
             )
             self._owns_client = True
@@ -92,10 +103,10 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         await self.aclose()
 
     async def health_check(self) -> bool:
-        """Verifica la disponibilidad del servidor OpenCode."""
+        """Verifica la disponibilidad del servidor OpenCode con timeout corto."""
         try:
             headers = self._get_auth_headers()
-            response = await self._client.get("/health", headers=headers)
+            response = await self._client.get("/health", headers=headers, timeout=5.0)
             return response.is_success
         except Exception:
             return False
@@ -281,6 +292,26 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                 timestamp=datetime.now(UTC),
             )
 
+        except httpx.TimeoutException as exc:
+            yield OpenCodeEvent(
+                event_type=OpenCodeEventType.ERROR,
+                session_id=session_id,
+                data={
+                    "error": f"Tiempo de espera agotado al comunicar con OpenCode: {exc}",
+                    "timeout": True,
+                },
+                timestamp=datetime.now(UTC),
+            )
+        except httpx.HTTPError as exc:
+            yield OpenCodeEvent(
+                event_type=OpenCodeEventType.ERROR,
+                session_id=session_id,
+                data={
+                    "error": f"Error de conexión HTTP con OpenCode: {exc}",
+                    "connection_error": True,
+                },
+                timestamp=datetime.now(UTC),
+            )
         except Exception as exc:
             yield OpenCodeEvent(
                 event_type=OpenCodeEventType.ERROR,
