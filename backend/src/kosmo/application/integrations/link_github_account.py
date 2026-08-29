@@ -34,7 +34,7 @@ class LinkGitHubAccountUseCase:
         self._client_id = client_id
         self._client_secret = client_secret
 
-    async def execute(self, principal: Principal, cmd: LinkGitHubAccountCommand) -> None:
+    async def execute(self, principal: Principal, cmd: LinkGitHubAccountCommand) -> UserGitHubIntegration:
         token = await self._oauth_client.exchange_oauth_code(
             client_id=self._client_id,
             client_secret=self._client_secret,
@@ -57,3 +57,4 @@ class LinkGitHubAccountUseCase:
         )
 
         await self._repo.save(integration)
+        return integration
