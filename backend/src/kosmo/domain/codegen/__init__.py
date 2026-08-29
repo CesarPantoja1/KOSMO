@@ -23,6 +23,7 @@ from kosmo.domain.codegen.plan_rules import (
     ensure_valid_plan,
     validate_plan,
 )
+from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import (
     StructuralValidationResult,
     validate_feature_structure,
@@ -39,6 +40,7 @@ __all__ = [
     "UnsafePathError",
     "ensure_safe_path",
     "ensure_valid_plan",
+    "format_site_config",
     "is_safe_path",
     "parse_eslint_output",
     "parse_next_build_output",

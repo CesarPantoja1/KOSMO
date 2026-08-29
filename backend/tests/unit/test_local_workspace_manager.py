@@ -15,7 +15,9 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceRepository,
     WorkspaceStatus,
 )
-from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
+from kosmo.contracts.sdd.ids import ProjectId, UserId, WorkspaceId
+from kosmo.contracts.sdd.project import Project
+from kosmo.domain.sdd.document_converters import markdown_to_document
 from kosmo.infrastructure.codegen.workspace import (
     LocalWorkspaceManager,
     WorkspaceLockedError,
@@ -24,6 +26,7 @@ from kosmo.infrastructure.git import GitError
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
     LOCK_STALE_AFTER_MINUTES,
 )
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryProjectRepository
 
 
 class FakeWorkspaceRepository(WorkspaceRepository):
@@ -1131,3 +1134,90 @@ async def test_ensure_workspace_continues_when_npm_install_fails() -> None:
         assert ws.workspace_dir is not None
         assert Path(ws.workspace_dir).exists()
         assert code_runner.commands == [("npm install", 600)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_initializes_site_ts_with_dashboard_archetype() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        project_repo = InMemoryProjectRepository()
+        document_repo = InMemoryDocumentRepository()
+        project_id = ProjectId("prj_dashboard_01")
+        await project_repo.save(
+            Project(
+                id=project_id,
+                name="GastoJusto",
+                slug="gasto-justo",
+                description="Control de gastos y finanzas personales",
+                owner_id=UserId("usr_01"),
+            )
+        )
+        await document_repo.save_discovery(
+            project_id,
+            markdown_to_document(
+                "# Visión del producto\n\n"
+                "Sistema para registrar gastos, monitorear presupuestos y ver balances y reportes."
+            ),
+        )
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+            document_repo=document_repo,
+        )
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.workspace_dir is not None
+        site_file = Path(ws.workspace_dir) / "src" / "lib" / "site.ts"
+        assert site_file.exists()
+        content = site_file.read_text(encoding="utf-8")
+        assert 'name: "GastoJusto"' in content
+        assert 'archetype: "dashboard"' in content
+        assert 'primaryColor: "#4f46e5"' in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_initializes_site_ts_with_storefront_archetype() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        project_repo = InMemoryProjectRepository()
+        document_repo = InMemoryDocumentRepository()
+        project_id = ProjectId("prj_store_01")
+        await project_repo.save(
+            Project(
+                id=project_id,
+                name="Tienda Ropa",
+                slug="tienda-ropa",
+                description="Catálogo y venta de prendas",
+                owner_id=UserId("usr_01"),
+            )
+        )
+        await document_repo.save_discovery(
+            project_id,
+            markdown_to_document(
+                "# Visión del producto\n\nCatálogo de productos para compras de clientes con carrito de compras."
+            ),
+        )
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+            document_repo=document_repo,
+        )
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.workspace_dir is not None
+        site_file = Path(ws.workspace_dir) / "src" / "lib" / "site.ts"
+        assert site_file.exists()
+        content = site_file.read_text(encoding="utf-8")
+        assert 'name: "Tienda Ropa"' in content
+        assert 'archetype: "storefront"' in content
+        assert 'primaryColor: "#0f766e"' in content

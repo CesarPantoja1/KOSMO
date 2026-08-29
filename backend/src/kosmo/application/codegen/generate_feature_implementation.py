@@ -7,6 +7,7 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from ulid import ULID
 
@@ -49,6 +50,7 @@ from kosmo.contracts.sdd.repositories import (
 )
 from kosmo.domain.codegen.parse_validation_output import truncate_error_output
 from kosmo.domain.codegen.plan_rules import validate_plan
+from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
 from kosmo.domain.sdd.document_converters import document_to_markdown
 
@@ -313,6 +315,23 @@ class GenerateFeatureImplementationUseCase:
             ux_analysis = await self._ux_analyzer.execute(
                 UXAnalysisInput(feature_id=feature.id, project_id=feature.project_id)
             )
+
+            # Sincronizar site.ts con el arquetipo y tokens reales del análisis UX
+            site_file = Path(workspace_dir) / "src" / "lib" / "site.ts"
+            if site_file.exists() and self._project_repo:
+                with contextlib.suppress(Exception):
+                    proj = await self._project_repo.by_id(feature.project_id)
+                    p_name = proj.name if proj and proj.name else "KOSMO App"
+                    p_desc = (proj.description if proj and proj.description else "") or "Aplicación generada con KOSMO."
+                    site_file.write_text(
+                        format_site_config(
+                            name=p_name,
+                            description=p_desc,
+                            archetype=ux_analysis.ux_context.archetype.value,
+                            primary_color=ux_analysis.ux_context.tokens.primary_color,
+                        ),
+                        encoding="utf-8",
+                    )
 
             await _emit(
                 OpenCodeEvent(

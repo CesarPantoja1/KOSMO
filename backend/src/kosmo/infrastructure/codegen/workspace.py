@@ -14,6 +14,10 @@ from typing import cast
 
 import structlog
 
+from kosmo.application.codegen.analyze_ux_context import (
+    THEME_TOKENS_BY_ARCHETYPE,
+    classify_archetype,
+)
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
@@ -24,6 +28,8 @@ from kosmo.contracts.sdd.codegen import (
 )
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
+from kosmo.domain.codegen.site_config import format_site_config
+from kosmo.domain.sdd.document_converters import document_to_markdown
 from kosmo.infrastructure.git import (
     git_add,
     git_commit,
@@ -229,25 +235,29 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 encoding="utf-8",
             )
 
-        # Actualizar site.ts con el nombre y descripción del proyecto
+        # Actualizar site.ts con el nombre, descripción y arquetipo reales del proyecto
         site_file = target_dir / "src" / "lib" / "site.ts"
         if site_file.exists() and self._project_repo:
             with contextlib.suppress(Exception):
                 proj = await self._project_repo.by_id(project_id)
                 if proj and proj.name:
                     desc = proj.description or "Aplicación generada con KOSMO."
-                    content = (
-                        "export const siteConfig = {\n"
-                        f'  name: "{proj.name}",\n'
-                        f'  description: "{desc}",\n'
-                        '  archetype: "saas_tool" as\n'
-                        '    | "storefront"\n'
-                        '    | "dashboard"\n'
-                        '    | "workflow"\n'
-                        '    | "saas_tool"\n'
-                        '    | "content",\n'
-                        '  primaryColor: "#0f766e",\n'
-                        "} as const;\n"
+                    archetype_val = "saas_tool"
+                    primary_color = "#0f766e"
+                    if self._document_repo is not None:
+                        discovery_doc = await self._document_repo.get_discovery(project_id)
+                        if discovery_doc is not None:
+                            discovery_md = document_to_markdown(discovery_doc)
+                            arch = classify_archetype(discovery_md)
+                            archetype_val = arch.value
+                            tokens = THEME_TOKENS_BY_ARCHETYPE.get(arch)
+                            if tokens:
+                                primary_color = tokens.primary_color
+                    content = format_site_config(
+                        name=proj.name,
+                        description=desc,
+                        archetype=archetype_val,
+                        primary_color=primary_color,
                     )
                     site_file.write_text(content, encoding="utf-8")
 
