@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -14,5 +15,5 @@ export interface FeatureManifest {
   title: string;
   description: string;
   route: string;
-  icon: LucideIcon;
+  icon?: LucideIcon | ComponentType<{ size?: number; className?: string }>;
 }
