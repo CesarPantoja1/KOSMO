@@ -13,6 +13,7 @@ import {
 	PUBLIC_APP_DOMAIN,
 	RAILWAY_CLIENT_ID,
 	RAILWAY_SCOPES,
+	formatApiError,
 } from '@/shared/api';
 import { GitHub, Railway } from '@/shared/ui';
 import { toast } from '@/shared/ui/toast/toast';
@@ -78,7 +79,7 @@ const CuentaTab = ({ user }: CuentaTabProps) => {
 						icon={<GitHub size={24} color='text-neutral-800' />}
 						messageType='github-oauth-code'
 						buildAuthUrl={(redirectUri) =>
-							`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${GITHUB_SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}`
+							`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${GITHUB_SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}&state=github`
 						}
 					/>
 					<OAuthIntegrationRow
@@ -87,7 +88,7 @@ const CuentaTab = ({ user }: CuentaTabProps) => {
 						icon={<Railway size={24} color='text-neutral-800' />}
 						messageType='railway-oauth-code'
 						buildAuthUrl={(redirectUri) =>
-							`https://backboard.railway.com/oauth/auth?response_type=code&client_id=${RAILWAY_CLIENT_ID}&scope=${encodeURIComponent(RAILWAY_SCOPES)}&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=consent`
+							`https://backboard.railway.com/oauth/auth?response_type=code&client_id=${RAILWAY_CLIENT_ID}&scope=${encodeURIComponent(RAILWAY_SCOPES)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=railway&prompt=consent`
 						}
 					/>
 				</div>
@@ -117,12 +118,18 @@ function OAuthIntegrationRow({
 	const [loading, setLoading] = useState(true);
 	const [actionLoading, setActionLoading] = useState(false);
 	const popupRef = useRef<Window | null>(null);
+	const processingCodeRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		getIntegrationStatus(provider)
 			.then(setStatus)
-			.catch(() =>
-				toast.error(`No se pudo verificar el estado de la integración con ${label}.`),
+			.catch((err) =>
+				toast.error(
+					formatApiError(
+						err,
+						`No se pudo verificar el estado de la integración con ${label}.`,
+					),
+				),
 			)
 			.finally(() => setLoading(false));
 	}, [provider, label]);
@@ -130,10 +137,17 @@ function OAuthIntegrationRow({
 	const handleOAuthMessage = useCallback(
 		(event: MessageEvent) => {
 			if (event.origin !== window.location.origin) return;
+			if (event.data?.type === 'oauth-error') {
+				toast.error(`Error en la autorización de ${label}: ${event.data.error || 'Acceso denegado'}`);
+				popupRef.current?.close();
+				popupRef.current = null;
+				return;
+			}
 			if (event.data?.type !== messageType) return;
 
 			const code = event.data.code as string;
-			if (!code) return;
+			if (!code || processingCodeRef.current === code) return;
+			processingCodeRef.current = code;
 
 			setActionLoading(true);
 			connectIntegration(provider, {
@@ -146,10 +160,18 @@ function OAuthIntegrationRow({
 						`Cuenta de ${label} vinculada como @${result.username ?? 'desconocido'}.`,
 					);
 				})
-				.catch(() =>
-					toast.error(`Error al vincular la cuenta de ${label}. Intenta de nuevo.`),
+				.catch((err) =>
+					toast.error(
+						formatApiError(
+							err,
+							`Error al vincular la cuenta de ${label}. Intenta de nuevo.`,
+						),
+					),
 				)
-				.finally(() => setActionLoading(false));
+				.finally(() => {
+					setActionLoading(false);
+					processingCodeRef.current = null;
+				});
 
 			popupRef.current?.close();
 			popupRef.current = null;

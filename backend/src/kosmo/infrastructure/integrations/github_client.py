@@ -300,6 +300,11 @@ class GitHubHttpClient(GitHubClientPort):
 
         try:
             response = await self._client.post(self._oauth_url, json=payload, headers=headers)
+            if response.status_code == 404:
+                raise GitHubAuthenticationError(
+                    "GitHub rechazó el intercambio OAuth (404 Not Found). "
+                    "Verifica que GITHUB_CLIENT_ID y GITHUB_CLIENT_SECRET pertenezcan a una OAuth App válida en GitHub."
+                )
             if not response.is_success:
                 self._handle_response_error(response, "intercambiar código OAuth")
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/entities/user';
 import { AiConfigTab } from './AiConfigTab';
 import { CuentaTab } from './CuentaTab';
@@ -10,6 +10,30 @@ type TabType = 'cuenta' | 'ia';
 function ProfilePage() {
 	const user = useAuthStore((state) => state.user);
 	const [activeTab, setActiveTab] = useState<TabType>('cuenta');
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		if (!window.opener || window.opener === window) return;
+
+		const params = new URLSearchParams(window.location.search);
+		const code = params.get('code');
+		const error = params.get('error') || params.get('error_description');
+		const state = (params.get('state') || params.get('provider') || '').toLowerCase();
+
+		if (code || error) {
+			const type = state === 'railway' ? 'railway-oauth-code' : 'github-oauth-code';
+			try {
+				if (code) {
+					window.opener.postMessage({ type, code }, window.location.origin);
+				} else if (error) {
+					window.opener.postMessage({ type: 'oauth-error', error }, window.location.origin);
+				}
+			} catch {
+				// Noop si el opener no está accesible
+			}
+			window.close();
+		}
+	}, []);
 
 	return (
 		<div className='min-h-screen bg-neutral-0 p-6'>

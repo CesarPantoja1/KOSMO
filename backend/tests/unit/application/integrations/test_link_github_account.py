@@ -95,3 +95,28 @@ async def test_link_github_account_missing_repo_scope(
 
     assert "repo" in str(exc.value)
     mock_repo.save.assert_not_called()
+
+
+async def test_link_github_account_missing_credentials(
+    mock_oauth_client: AsyncMock,
+    mock_cipher: MagicMock,
+    mock_repo: AsyncMock,
+    principal: Principal,
+):
+    use_case = LinkGitHubAccountUseCase(
+        oauth_client=mock_oauth_client,
+        cipher=mock_cipher,
+        repo=mock_repo,
+        client_id="",
+        client_secret="",
+    )
+    cmd = LinkGitHubAccountCommand(code="temp-code")
+
+    from kosmo.contracts.integrations.github import GitHubAuthenticationError
+
+    with pytest.raises(GitHubAuthenticationError) as exc:
+        await use_case.execute(principal, cmd)
+
+    assert "no está configurada" in str(exc.value)
+    mock_oauth_client.exchange_oauth_code.assert_not_called()
+    mock_repo.save.assert_not_called()

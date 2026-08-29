@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from kosmo.contracts.auth.principal import Principal
 from kosmo.contracts.auth.secrets import SecretCipher
 from kosmo.contracts.integrations.github import (
+    GitHubAuthenticationError,
     GitHubClientPort,
     GitHubPermissionError,
     UserGitHubIntegration,
@@ -35,6 +36,12 @@ class LinkGitHubAccountUseCase:
         self._client_secret = client_secret
 
     async def execute(self, principal: Principal, cmd: LinkGitHubAccountCommand) -> UserGitHubIntegration:
+        if not self._client_id or not self._client_secret:
+            raise GitHubAuthenticationError(
+                "La integración con GitHub no está configurada en el servidor "
+                "(faltan GITHUB_CLIENT_ID o GITHUB_CLIENT_SECRET en las variables de entorno)."
+            )
+
         token = await self._oauth_client.exchange_oauth_code(
             client_id=self._client_id,
             client_secret=self._client_secret,
