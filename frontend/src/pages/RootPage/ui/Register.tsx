@@ -43,9 +43,9 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 		setError('');
 
 		try {
-			await authApi.register(name.trim(), email.trim(), password);
-			await authApi.login(email.trim(), password);
-			router.push('/proyecto');
+			await authApi.register(name, email, password);
+			await authApi.login(email, password);
+			router.push('/onboarding');
 			onClose();
 		} catch (err) {
 			const status = (err as { status?: number }).status;
@@ -73,7 +73,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 		>
 			<div className='flex items-center justify-between mb-8'>
 				<div className='text-center flex-1'>
-					<h1 className='text-3xl font-bold text-ai-500'>KOSMO</h1>
+					<h1 className='text-3xl font-bold text-primary-500'>KOSMO</h1>
 					<p className='text-neutral-500 mt-2'>Crear cuenta</p>
 				</div>
 				<button
@@ -98,7 +98,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 					</label>
 					<input
 						type='text'
-						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-400'
 						placeholder='Tu nombre y apellido'
 						value={name}
 						onChange={(e) => setName(e.target.value)}
@@ -112,7 +112,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 					</label>
 					<input
 						type='email'
-						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-400'
 						placeholder='tu@email.com'
 						value={email}
 						onChange={(e) => setEmail(e.target.value)}
@@ -126,7 +126,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 					</label>
 					<input
 						type='password'
-						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-400'
 						placeholder='Mínimo 12 caracteres'
 						value={password}
 						onChange={(e) => setPassword(e.target.value)}
@@ -140,7 +140,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 					</label>
 					<input
 						type='password'
-						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-400'
 						placeholder='Repite tu contraseña'
 						value={confirmPassword}
 						onChange={(e) => setConfirmPassword(e.target.value)}
@@ -151,7 +151,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 				<button
 					type='submit'
 					disabled={isLoading}
-					className='btn btn-ai btn-lg w-full mt-2'
+					className='btn btn-primary btn-lg w-full mt-2'
 				>
 					{isLoading ? 'Registrando...' : 'Registrarse'}
 				</button>
@@ -160,7 +160,7 @@ const Register = ({ onClose, onSwitchToLogin }: RegisterModalProps) => {
 					<button
 						type='button'
 						onClick={onSwitchToLogin}
-						className='text-ai-500 hover:text-ai-600 text-sm font-medium transition-colors'
+						className='text-primary-500 hover:text-primary-600 text-sm font-medium transition-colors'
 					>
 						¿Ya tienes cuenta? Inicia sesión
 					</button>

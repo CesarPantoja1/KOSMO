@@ -73,7 +73,7 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 		>
 			<div className='flex items-center justify-between mb-8'>
 				<div className='text-center flex-1'>
-					<h1 className='text-3xl font-bold text-ai-500'>KOSMO</h1>
+					<h1 className='text-3xl font-bold text-primary-500'>KOSMO</h1>
 					<p className='text-neutral-500 mt-2'>Iniciar sesión</p>
 				</div>
 				<button
@@ -104,7 +104,7 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 					</label>
 					<input
 						type='email'
-						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-400'
 						placeholder='tu@email.com'
 						value={email}
 						onChange={(e) => setEmail(e.target.value)}
@@ -118,7 +118,7 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 					</label>
 					<input
 						type='password'
-						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-ai-500 transition-colors placeholder:text-neutral-400'
+						className='w-full bg-neutral-50 border border-neutral-300 text-neutral-800 rounded-lg px-3 py-2.5 outline-none focus:border-primary-500 transition-colors placeholder:text-neutral-400'
 						placeholder='Tu contraseña'
 						value={password}
 						onChange={(e) => setPassword(e.target.value)}
@@ -129,7 +129,7 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 				<button
 					type='submit'
 					disabled={isLoading || retryAfter > 0}
-					className='btn btn-ai btn-lg w-full mt-2'
+					className='btn btn-primary btn-lg w-full mt-2'
 				>
 					{isLoading
 						? 'Iniciando...'
@@ -142,7 +142,7 @@ const Login = ({ onClose, onSwitchToRegister, sessionExpired }: LoginModalProps)
 					<button
 						type='button'
 						onClick={onSwitchToRegister}
-						className='text-ai-500 hover:text-ai-600 text-sm font-medium transition-colors'
+						className='text-primary-500 hover:text-primary-600 text-sm font-medium transition-colors'
 					>
 						¿No tienes cuenta? Regístrate
 					</button>

@@ -267,7 +267,7 @@ export function Hero({ onComenzar, onVerVideo }: HeroProps) {
 						<div className='grid grid-cols-[145px_1fr]'>
 							{/* SIDEBAR */}
 							<div className='border-r border-neutral-200 p-3'>
-								<div className='mb-5 px-3 text-[10px] uppercase tracking-wider text-neutral-500'>
+								<div className='mb-5 px-1 text-[10px] uppercase tracking-wider text-neutral-500'>
 									Proyecto
 								</div>
 
@@ -275,13 +275,13 @@ export function Hero({ onComenzar, onVerVideo }: HeroProps) {
 									<button
 										key={item.label}
 										onClick={() => goToStep(index)}
-										className={`mb-1 w-full rounded-lg px-3 py-2 text-left text-xs transition-colors ${
+										className={`inline-flex items-center mb-1 w-full rounded-lg px-1 py-2 text-left text-xs transition-colors ${
 											activeStep === index
-												? 'bg-ai-50 text-ai-600'
+												? 'bg-ai-50'
 												: 'text-neutral-500 hover:bg-neutral-50'
 										}`}
 									>
-										<span className='mr-2 inline-flex items-center'>{item.icon}</span>
+										<span className='mr-1 inline-flex items-center'>{item.icon}</span>
 										{item.label}
 									</button>
 								))}
@@ -601,12 +601,15 @@ export function Hero({ onComenzar, onVerVideo }: HeroProps) {
 									<ArrowRight size={14} color='text-neutral-0' />
 								</button>
 							)}
-						{activeStep === 6 && (
-							<button onClick={user ? () => router.push('/proyecto') : onComenzar} className='btn btn-primary btn-sm'>
-								{user ? 'Mis Proyectos' : 'Comenzar ahora'}
-								<ArrowRight size={14} color='text-neutral-0' />
-							</button>
-						)}
+							{activeStep === 6 && (
+								<button
+									onClick={user ? () => router.push('/proyecto') : onComenzar}
+									className='btn btn-primary btn-sm'
+								>
+									{user ? 'Mis Proyectos' : 'Comenzar ahora'}
+									<ArrowRight size={14} color='text-neutral-0' />
+								</button>
+							)}
 						</div>
 					</div>
 				</div>
