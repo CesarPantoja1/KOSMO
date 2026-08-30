@@ -43,7 +43,7 @@ function ProfilePage() {
 		<>
 			<RootNavbar />
 
-			<div className='min-h-screen bg-neutral-50 p-6'>
+			<div className='min-h-screen p-6'>
 				<div className='max-w-3xl mx-auto'>
 					<div className='mb-6'>
 						<h1 className='text-2xl font-bold text-neutral-800'>Perfil</h1>
