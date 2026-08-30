@@ -9,11 +9,3 @@ export const API_BASE_URL =
 export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
 export const PUBLIC_APP_DOMAIN =
 	process.env.NEXT_PUBLIC_DOMAIN_APP || 'http://localhost:3000';
-
-// GITHUB
-export const GITHUB_CLIENT_ID = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || '';
-export const GITHUB_SCOPES = 'repo';
-
-// RAILWAY
-export const RAILWAY_CLIENT_ID = process.env.NEXT_PUBLIC_RAILWAY_CLIENT_ID || '';
-export const RAILWAY_SCOPES = 'openid email profile offline_access';

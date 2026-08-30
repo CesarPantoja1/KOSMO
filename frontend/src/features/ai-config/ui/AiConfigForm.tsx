@@ -15,18 +15,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface AiConfigFormProps {
 	onSaved?: () => void;
+	embedded?: boolean;
 }
 
-export function AiConfigForm({ onSaved }: AiConfigFormProps) {
-	const {
-		config,
-		providers,
-		loading,
-		error,
-		saveConfig,
-		deleteConfig,
-		fetchProviders,
-	} = useAiConfigStore();
+export function AiConfigForm({ onSaved, embedded }: AiConfigFormProps) {
+	const { config, providers, loading, error, saveConfig, deleteConfig, fetchProviders } =
+		useAiConfigStore();
 
 	const [provider, setProvider] = useState<AIProvider>(
 		config?.provider && config.provider !== 'kosmo_default'
@@ -114,7 +108,11 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 	const hasExistingKey = config?.has_api_key ?? false;
 	const canSave = apiKey.trim().length > 0 && !loading;
 
-	const tierOrder: Array<'flagship' | 'balanced' | 'fast'> = ['flagship', 'balanced', 'fast'];
+	const tierOrder: Array<'flagship' | 'balanced' | 'fast'> = [
+		'flagship',
+		'balanced',
+		'fast',
+	];
 	const modelsByTier = tierOrder
 		.map((tier) => ({
 			tier,
@@ -122,10 +120,14 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		}))
 		.filter((group) => group.models.length > 0);
 
+	const cardClasses = embedded
+		? 'flex flex-col gap-4'
+		: 'bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6';
+
 	return (
-		<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
+		<div className={cardClasses}>
 			<div className='flex items-center justify-between mb-4'>
-				<h3 className='text-lg font-semibold text-neutral-800'>Configuración de IA</h3>
+				<h3 className='text-lg font-semibold text-neutral-800'>Configura tu API Key</h3>
 				{hasExistingKey && !isEditing && (
 					<span className='text-xs font-medium px-2.5 py-1 rounded-full bg-success-50 text-success-700 border border-success-500/20'>
 						Configurado
@@ -267,4 +269,3 @@ export function AiConfigForm({ onSaved }: AiConfigFormProps) {
 		</div>
 	);
 }
-

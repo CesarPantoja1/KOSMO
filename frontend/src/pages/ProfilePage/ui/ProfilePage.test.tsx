@@ -4,6 +4,15 @@ import * as integrationApi from '@/entities/integration/api/api';
 import { ProfilePage } from './ProfilePage';
 import { CuentaTab } from './CuentaTab';
 
+vi.mock('next/navigation', () => ({
+	useRouter: () => ({
+		push: vi.fn(),
+		replace: vi.fn(),
+		back: vi.fn(),
+	}),
+	usePathname: () => '/perfil',
+}));
+
 vi.mock('@/entities/user', () => {
 	const fakeState = {
 		user: {
@@ -32,6 +41,21 @@ vi.mock('@/entities/user', () => {
 		},
 	};
 });
+
+vi.mock('@/shared/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@/shared/api')>();
+	return {
+		...actual,
+		authApi: {
+			...actual.authApi,
+			logout: vi.fn().mockResolvedValue(undefined),
+		},
+	};
+});
+
+vi.mock('@/features/app-state', () => ({
+	clearAllStores: vi.fn(),
+}));
 
 vi.mock('@/features/ai-config', () => ({
 	AiConfigForm: () => <div data-testid='ai-config-form'>AI Config Form</div>,
@@ -126,7 +150,7 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText('Conectado como @octocat')).toBeInTheDocument();
+			expect(screen.getByText('@octocat')).toBeInTheDocument();
 		});
 	});
 
