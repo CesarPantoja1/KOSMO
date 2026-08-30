@@ -2,7 +2,8 @@
 
 import { getProjects, type Project } from '@/entities/project';
 import { useIntegrationGate } from '@/shared/lib/useIntegrationGate';
-import { useEffect, useRef, useState } from 'react';
+import { VideoIntro } from '@/shared/ui/VideoIntro';
+import { useEffect, useState } from 'react';
 import { CreateProjectForm } from './CreateProjectForm';
 
 const CreateProjectPage = () => {
@@ -10,7 +11,6 @@ const CreateProjectPage = () => {
 	const [projects, setProjects] = useState<Project[]>([]);
 	const [showForm, setShowForm] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
-	const videoRef = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
 		if (!isReady) return;
@@ -27,28 +27,6 @@ const CreateProjectPage = () => {
 		fetchProjects();
 	}, [isReady]);
 
-	const handleLoadedData = () => {
-		if (videoRef.current) {
-			videoRef.current.playbackRate = 0.7;
-		}
-	};
-
-	const handleVideoEnd = () => {
-		setTimeout(() => {
-			setShowForm(true);
-		}, 3000);
-	};
-
-	const handleTimeUpdate = () => {
-		const video = videoRef.current;
-		if (!video) return;
-
-		const remaining = video.duration - video.currentTime;
-		if (remaining <= 3 && video.volume > 0) {
-			video.volume = Math.max(0, video.volume - 0.02);
-		}
-	};
-
 	if (!isReady || isLoading) {
 		return (
 			<div className='flex items-center justify-center h-full'>
@@ -61,14 +39,9 @@ const CreateProjectPage = () => {
 
 	if (hasNoProjects && !showForm) {
 		return (
-			<video
-				ref={videoRef}
+			<VideoIntro
 				src='/kosmo_intruduction.mp4'
-				autoPlay
-				onLoadedData={handleLoadedData}
-				onTimeUpdate={handleTimeUpdate}
-				onEnded={handleVideoEnd}
-				className='fixed inset-0 w-full h-full object-cover z-50'
+				onEnded={() => setShowForm(true)}
 			/>
 		);
 	}

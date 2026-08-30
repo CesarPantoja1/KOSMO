@@ -10,7 +10,7 @@ import { ApiKeySection } from './ApiKeySection';
 import { CtaSection } from './CtaSection';
 import { AuthModal } from './AuthModal';
 import { SessionExpiredWatcher } from './SessionExpiredWatcher';
-import { VideoOverlay } from './VideoOverlay';
+import { VideoIntro } from '@/shared/ui/VideoIntro';
 
 export function RootPage() {
 	const [showAuthModal, setShowAuthModal] = useState(false);
@@ -43,7 +43,13 @@ export function RootPage() {
 			<Suspense fallback={null}>
 				<SessionExpiredWatcher onDetected={handleSessionExpired} />
 			</Suspense>
-			<VideoOverlay isOpen={showVideo} onClose={() => setShowVideo(false)} />
+			{showVideo && (
+				<VideoIntro
+					overlay
+					src='/kosmo_intruduction.mp4'
+					onEnded={() => setShowVideo(false)}
+				/>
+			)}
 		</div>
 	);
 }
