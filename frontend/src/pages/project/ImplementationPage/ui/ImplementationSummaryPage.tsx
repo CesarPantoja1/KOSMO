@@ -151,7 +151,7 @@ const ImplementationSummaryPage = () => {
 
 	return (
 		<div className='page-container'>
-			<div className='max-w-7xl mx-auto flex flex-col gap-6'>
+			<div className='page-header overflow-y-auto! pb-8'>
 				<div className='flex items-start justify-between gap-4 pb-4'>
 					<div className='flex flex-col gap-1'>
 						<h1 className='text-neutral-800 text-lg md:text-xl font-bold'>

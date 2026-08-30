@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import type { Project } from '@/entities/project'
 
 const hasEmoji = (value: string) => /\p{Extended_Pictographic}/u.test(value)
 
-export const projectSchema = z.object({
+const baseProjectSchema = z.object({
   name: z
     .string()
     .min(3, 'Mínimo 3 caracteres')
@@ -14,12 +15,18 @@ export const projectSchema = z.object({
     .min(50, 'Mínimo 50 caracteres')
     .max(1000, 'Máximo 1000 caracteres')
     .refine((val) => !hasEmoji(val), 'No se permiten emojis'),
-  repo_name: z
-    .string()
-    .trim()
-    .min(1, 'Ingresa el nombre del repositorio')
-    .max(100, 'El nombre no puede superar los 100 caracteres'),
+  repo_name: z.string(),
   is_public: z.boolean(),
 })
 
-export type ProjectFormData = z.infer<typeof projectSchema>
+export type ProjectFormData = z.infer<typeof baseProjectSchema>
+
+export function createProjectSchema(existingProjects: Project[]) {
+  return baseProjectSchema.refine(
+    (val) =>
+      !existingProjects.some(
+        (p) => p.name.toLowerCase().trim() === val.name.toLowerCase().trim(),
+      ),
+    { message: 'Ya existe un proyecto con ese nombre', path: ['name'] },
+  )
+}

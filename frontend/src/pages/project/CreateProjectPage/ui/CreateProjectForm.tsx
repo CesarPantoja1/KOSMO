@@ -7,29 +7,34 @@ import {
 	type Project,
 } from '@/entities/project';
 import { ConfirmacionVisibilidadRepositorio, Send } from '@/shared/ui';
-import { normalizeRepoName } from '@/shared/lib';
 import { formatApiError } from '@/shared/api';
 import { CharacterCounter, GitHub, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
-import { projectSchema, type ProjectFormData } from '../model/types';
+import { createProjectSchema, type ProjectFormData } from '../model/types';
 
 const alphaRegex = /[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
 	const setProjectState = useProjectStore((s) => s.setProjectState);
+	const projects = useProjectStore((s) => s.projects);
+	const getProjects = useProjectStore((s) => s.getProjects);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [phase, setPhase] = useState<'creating-project' | 'creating-repo' | null>(null);
 	const [showPublicConfirm, setShowPublicConfirm] = useState(false);
 	const [pendingValues, setPendingValues] = useState<ProjectFormData | null>(null);
 	const createdProjectRef = useRef<Project | null>(null);
 
+	useEffect(() => {
+		if (projects.length === 0) getProjects();
+	}, [projects.length, getProjects]);
+
 	const { control, handleSubmit, setValue, watch } = useForm<ProjectFormData>({
 		mode: 'onSubmit',
-		resolver: zodResolver(projectSchema),
+		resolver: zodResolver(createProjectSchema(projects)),
 		defaultValues: {
 			name: '',
 			description: '',
@@ -49,12 +54,7 @@ const CreateProjectForm = () => {
 	} = useController({ name: 'description', control });
 
 	const {
-		field: {
-			value: repoNameValue,
-			onChange: repoNameOnChange,
-			onBlur: repoNameOnBlur,
-			ref: repoNameRef,
-		},
+		field: { value: repoNameValue, ref: repoNameRef },
 		fieldState: { error: repoNameError },
 	} = useController({ name: 'repo_name', control });
 
@@ -63,6 +63,13 @@ const CreateProjectForm = () => {
 	} = useController({ name: 'is_public', control });
 
 	const watchedName = watch('name');
+
+	useEffect(() => {
+		const repoName = watchedName.trim()
+			? `kosmo-${watchedName.toLowerCase().replace(/\s+/g, '-')}`
+			: 'kosmo-repositorio';
+		setValue('repo_name', repoName);
+	}, [watchedName, setValue]);
 
 	const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		let value = e.target.value;
@@ -79,10 +86,6 @@ const CreateProjectForm = () => {
 			value = value.slice(0, 1000);
 		}
 		descOnChange(value);
-	};
-
-	const handleRepoNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		repoNameOnChange(normalizeRepoName(e.target.value));
 	};
 
 	const doSubmit = async (data: ProjectFormData) => {
@@ -130,10 +133,6 @@ const CreateProjectForm = () => {
 		setValue('is_public', false);
 	};
 
-	const suggestedRepoName = watchedName.trim()
-		? `kosmo-${watchedName.toLowerCase().replace(/\s+/g, '-')}`
-		: 'kosmo-repositorio';
-
 	return (
 		<>
 			<form
@@ -142,7 +141,7 @@ const CreateProjectForm = () => {
 				noValidate
 			>
 				{/* Form card */}
-				<div className='flex flex-col gap-6 px-8 pt-8 pb-6 rounded-xl shadow-sm border border-neutral-200 bg-neutral-0'>
+				<div className='flex flex-col px-8 pt-8 pb-6 rounded-xl shadow-sm border border-neutral-200 bg-neutral-0'>
 					{/* Name field */}
 					<div className='flex flex-col gap-2'>
 						<label
@@ -189,7 +188,7 @@ const CreateProjectForm = () => {
 							onBlur={descOnBlur}
 							onChange={handleDescChange}
 							placeholder='Describe el problema de negocio que quieres resolver...'
-							className='w-full min-h-40 px-4 py-3 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200 resize-none'
+							className='w-full min-h-30 px-4 py-3 text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200 resize-none'
 						/>
 						<div className='flex justify-between items-center gap-2'>
 							{descError ? (
@@ -204,7 +203,7 @@ const CreateProjectForm = () => {
 					</div>
 
 					{/* Repository section */}
-					<div className='flex flex-col gap-5 pt-4 border-t border-neutral-100'>
+					<div className='flex flex-col gap-5 pt-4'>
 						<div className='flex items-center gap-2'>
 							<div className='flex h-8 w-8 items-center justify-center rounded-md bg-neutral-100'>
 								<GitHub size={18} color='text-neutral-800' />
@@ -227,10 +226,10 @@ const CreateProjectForm = () => {
 								id='repo-name'
 								type='text'
 								value={repoNameValue}
-								onBlur={repoNameOnBlur}
-								onChange={handleRepoNameChange}
+								readOnly
+								disabled
 								placeholder='ej. kosmo-gestion-inventarios'
-								className='w-full min-h-11 px-4 py-2.5 font-mono text-sm text-neutral-800 placeholder:text-neutral-400 bg-neutral-50 border border-neutral-300 rounded-md focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-all duration-200'
+								className='w-full min-h-11 px-4 py-2.5 font-mono text-sm text-neutral-500 bg-neutral-100 border border-neutral-200 rounded-md cursor-not-allowed'
 								autoComplete='off'
 								maxLength={100}
 							/>
@@ -240,8 +239,7 @@ const CreateProjectForm = () => {
 								</p>
 							) : (
 								<p className='text-neutral-400 text-xs'>
-									Solo minúsculas, números y guiones. Se sugiere{' '}
-									<span className='font-mono'>{suggestedRepoName}</span>.
+									Se genera automáticamente a partir del nombre del proyecto.
 								</p>
 							)}
 						</div>
@@ -297,7 +295,7 @@ const CreateProjectForm = () => {
 					</div>
 
 					{/* Actions — al final del formulario */}
-					<div className='flex items-center justify-end gap-3 pt-2 border-t border-neutral-100'>
+					<div className='flex items-center justify-end gap-3 pt-2 mt-4'>
 						<button
 							type='button'
 							onClick={() => router.push('/proyecto')}
