@@ -2,8 +2,16 @@
 
 import Link from 'next/link';
 import type { ProjectGitHubStatus, ProjectGithubViewState } from '@/entities/project';
-import { FormularioCreacionRepositorio } from '@/features/crear-repositorio';
-import { ArrowRight, Clock, GitHub, Load, SuccessCheckIcon, toast, WarningIcon } from '@/shared/ui';
+import { FormularioCreacionRepositorio } from '@/shared/ui';
+import {
+	ArrowRight,
+	Clock,
+	GitHub,
+	Load,
+	SuccessCheckIcon,
+	toast,
+	WarningIcon,
+} from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 
 type Props = {
@@ -28,7 +36,8 @@ const formatDate = (iso: string | null | undefined): string => {
 	});
 };
 
-const shortHash = (hash: string | null | undefined): string => (hash ? hash.slice(0, 7) : '—');
+const shortHash = (hash: string | null | undefined): string =>
+	hash ? hash.slice(0, 7) : '—';
 
 const GestionRepositorioGitHub = ({
 	viewState,
@@ -57,7 +66,7 @@ const GestionRepositorioGitHub = ({
 	};
 
 	return (
-		<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6'>
+		<div className='bg-neutral-0 border border-neutral-200 rounded-xl shadow-sm p-6 w-full'>
 			<div className='flex items-center justify-between mb-4'>
 				<div className='flex items-center gap-2'>
 					<div className='flex h-8 w-8 items-center justify-center rounded-md bg-neutral-100'>
@@ -135,8 +144,8 @@ const GestionRepositorioGitHub = ({
 							Crea el repositorio de tu proyecto
 						</p>
 						<p className='text-sm text-neutral-500'>
-							Define el nombre y la visibilidad. El código de tus funcionalidades se subirá
-							al repositorio de GitHub.
+							Define el nombre y la visibilidad. El código de tus funcionalidades se
+							subirá al repositorio de GitHub.
 						</p>
 					</div>
 					<FormularioCreacionRepositorio
