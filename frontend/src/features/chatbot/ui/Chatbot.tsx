@@ -1,6 +1,6 @@
 'use client';
 
-import { Ai, Close, Send } from '@/shared/ui';
+import { Ai, Close, Logo, Send } from '@/shared/ui';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChatbotMessage } from './chatbot-message';
@@ -91,7 +91,7 @@ export const Chatbot = ({
 			<header className='flex items-center justify-between border-b border-ai-600 bg-ai-500 px-2 py-1.5 md:px-2.5 md:py-2'>
 				{sessionSelector || (
 					<div className='flex items-center gap-1.5'>
-						<Ai size={14} color='text-neutral-0' />
+						<Logo size={14} className='text-neutral-0' />
 						<h3 className='font-semibold text-neutral-0 text-xs md:text-sm'>{title}</h3>
 					</div>
 				)}

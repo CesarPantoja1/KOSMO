@@ -2006,7 +2006,28 @@ paths:
 
   # ══════════════════════════════ AI CONFIG (HU-25 BYOK) ══════════════════════════════
 
-  /api/v1/user/ai-config:
+  /api/v1/ai-config/providers:
+    get:
+      tags: [ai-config]
+      summary: Obtener catálogo de proveedores y modelos de IA disponibles
+      description: >-
+        Devuelve el catálogo completo de proveedores de Inteligencia Artificial soportados
+        (Anthropic, OpenAI, Google, OpenRouter) junto con los modelos disponibles y sus respectivos tiers
+        para facilitar la selección dinámica en el formulario de configuración.
+      operationId: ai_config_get_providers
+      responses:
+        "200":
+          description: Catálogo de proveedores y modelos de IA disponibles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AIProviderInfoResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/ai-config:
     get:
       tags: [ai-config]
       summary: Obtener configuración del proveedor de IA del usuario
@@ -2024,7 +2045,7 @@ paths:
                 $ref: "#/components/schemas/AIConfigResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
-    put:
+    post:
       tags: [ai-config]
       summary: Guardar o actualizar configuración del proveedor de IA
       description: >-
@@ -2059,16 +2080,12 @@ paths:
         de código al proveedor y modelo predeterminados de KOSMO.
       operationId: ai_config_delete
       responses:
-        "200":
-          description: Credenciales eliminadas y configuración restablecida a los valores predeterminados
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AIConfigResponse"
+        "204":
+          description: Credenciales eliminadas y configuración restablecida a los valores predeterminados. Sin cuerpo de respuesta.
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/v1/user/ai-config/test:
+  /api/v1/ai-config/test:
     post:
       tags: [ai-config]
       summary: Probar conexión con proveedor de IA
@@ -2086,7 +2103,7 @@ paths:
               $ref: "#/components/schemas/TestAIConnectionRequest"
       responses:
         "200":
-          description: Resultado de la prueba de conexión
+          description: Resultado cualitativo de la prueba de conexión
           content:
             application/json:
               schema:
@@ -3875,6 +3892,43 @@ components:
       description: Identificador del proveedor de Inteligencia Artificial
       example: anthropic
 
+    AIModelInfoResponse:
+      type: object
+      description: Información de un modelo de IA soportado por un proveedor
+      properties:
+        id:
+           type: string
+           description: Identificador del modelo para invocación de API
+           example: claude-3-5-sonnet-20241022
+        display_name:
+           type: string
+           description: Nombre legible del modelo para la interfaz de usuario
+           example: Claude 3.5 Sonnet
+        tier:
+           type: string
+           description: Nivel de capacidad o propósito del modelo (ej. fast, premium, reasoning)
+           example: premium
+      required: [id, display_name, tier]
+
+    AIProviderInfoResponse:
+      type: object
+      description: Información de un proveedor de IA y sus modelos disponibles
+      properties:
+        value:
+           type: string
+           description: Identificador único del proveedor (anthropic, openai, google, openrouter)
+           example: anthropic
+        label:
+           type: string
+           description: Nombre legible del proveedor para la interfaz
+           example: Anthropic
+        models:
+           type: array
+           items:
+             $ref: "#/components/schemas/AIModelInfoResponse"
+           description: Lista de modelos soportados por el proveedor
+      required: [value, label, models]
+
     AIConfigResponse:
       type: object
       description: Estado y configuración del proveedor de IA del usuario
@@ -4060,6 +4114,11 @@ components:
           example: "7f4b82d3e91a0c5b6e8f4a1c3d5e7b9a2f1e4c6a"
         sync_status:
           $ref: "#/components/schemas/GitHubSyncStatusEnum"
+        suggested_repo_name:
+          type: string
+          nullable: true
+          description: Nombre de repositorio sugerido normalizado (ej. kosmo-{slug}) si aún no existe
+          example: "kosmo-gestion-inventarios"
         error_message:
           type: string
           nullable: true

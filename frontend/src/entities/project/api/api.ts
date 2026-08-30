@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { Project } from '../model/types';
+import type { Project, ProjectGitHubStatus, PushGitHubRequest } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -74,6 +74,40 @@ const mockDeleteProject = async (id: string): Promise<void> => {
 	mockProjects.splice(index, 1);
 };
 
+const mockGitHubStatus: Record<string, ProjectGitHubStatus> = {};
+
+const mockGetProjectGitHubStatus = async (id: string): Promise<ProjectGitHubStatus> => {
+	await delay(400);
+	const found = mockGitHubStatus[id];
+	if (found) return { ...found };
+	return {
+		has_repository: false,
+		sync_status: 'not_created',
+		suggested_repo_name: `kosmo-${id}`,
+		error_message: null,
+	};
+};
+
+const mockPushToGitHub = async (
+	id: string,
+	repoName?: string,
+): Promise<ProjectGitHubStatus> => {
+	await delay(800);
+	const name = repoName ?? mockGitHubStatus[id]?.repo_name ?? `kosmo-${id}`;
+	mockGitHubStatus[id] = {
+		has_repository: true,
+		repo_name: name,
+		repo_url: `https://github.com/mock-user/${name}`,
+		is_public: false,
+		last_push_at: new Date().toISOString(),
+		last_commit_hash: 'mock-commit-hash',
+		sync_status: 'synced',
+		suggested_repo_name: name,
+		error_message: null,
+	};
+	return { ...mockGitHubStatus[id] };
+};
+
 // --- Real implementations ---
 
 const realGetProjects = (): Promise<Project[]> =>
@@ -92,6 +126,15 @@ export const realCreateProject = (body: { name: string; description: string }) =
 const realDeleteProject = (id: string): Promise<void> =>
 	apiClient<void>(`/api/v1/projects/${id}`, { method: 'DELETE' });
 
+const realGetProjectGitHubStatus = (id: string): Promise<ProjectGitHubStatus> =>
+	apiClient<ProjectGitHubStatus>(`/api/v1/projects/${id}/github`, { method: 'GET' });
+
+const realPushToGitHub = (id: string, body: PushGitHubRequest): Promise<ProjectGitHubStatus> =>
+	apiClient<ProjectGitHubStatus>(`/api/v1/projects/${id}/github/push`, {
+		method: 'POST',
+		body: JSON.stringify(body),
+	});
+
 // --- Exports (switch based on USE_MOCKS) ---
 
 export const getProjects = (): Promise<Project[]> =>
@@ -107,3 +150,14 @@ export const createProject = (body: {
 
 export const deleteProject = (id: string): Promise<void> =>
 	USE_MOCKS ? mockDeleteProject(id) : realDeleteProject(id);
+
+export const getProjectGitHubStatus = (id: string): Promise<ProjectGitHubStatus> =>
+	USE_MOCKS ? mockGetProjectGitHubStatus(id) : realGetProjectGitHubStatus(id);
+
+export const pushProjectToGitHub = (
+	id: string,
+	body: PushGitHubRequest,
+): Promise<ProjectGitHubStatus> =>
+	USE_MOCKS
+		? mockPushToGitHub(id, body.repo_name ?? undefined)
+		: realPushToGitHub(id, body);

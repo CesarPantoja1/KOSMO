@@ -1,15 +1,17 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { clearAllStores, useAppStore } from '@/features/app-state';
+import { useAppStore } from '@/features/app-state';
 
 import { Project, useProjectStore } from '@/entities/project';
-import { authApi, useAuthStore } from '@/entities/user';
-import { ComputerDesktop, Home, Logo, Sidebar, UserCircle } from '@/shared/ui';
-import { ModalConfirm } from '@/shared/ui/ModalConfirm';
+import { useAuthStore } from '@/entities/user';
 import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
+
+import { ProjectNavigation } from './ProjectNavigation';
+import { SidebarBrand } from './SidebarBrand';
+import { UserSection } from './UserSection';
 
 interface MainNavbarProps {
 	children: React.ReactNode;
@@ -21,10 +23,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 	const user = useAuthStore((s) => s.user);
 
 	const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
-	const [showUserMenu, setShowUserMenu] = useState(false);
-	const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
-	const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-	const userMenuRef = useRef<HTMLDivElement>(null);
 	const router = useRouter();
 
 	useEffect(() => {
@@ -37,18 +35,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		};
 		fetchProjects();
 	}, [getProjectsStore]);
-
-	useEffect(() => {
-		const handleClickOutside = (e: MouseEvent) => {
-			if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-				setShowUserMenu(false);
-			}
-		};
-		if (showUserMenu) {
-			document.addEventListener('mousedown', handleClickOutside);
-		}
-		return () => document.removeEventListener('mousedown', handleClickOutside);
-	}, [showUserMenu]);
 
 	const currentProject = useProjectStore((s) => s.currentProject);
 	const isEditorMaximized = useAppStore((s) => s.isEditorMaximized);
@@ -72,21 +58,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 		router.push('/proyecto/descubrimiento');
 	};
 
-	const handleLogout = async () => {
-		const { hasUnsavedChanges } = useAppStore.getState();
-		if (hasUnsavedChanges) {
-			setShowLogoutConfirm(true);
-			return;
-		}
-		await executeLogout();
-	};
-
-	const executeLogout = async () => {
-		await authApi.logout();
-		clearAllStores();
-		router.push('/');
-	};
-
 	return (
 		<>
 			<header className='flex h-screen max-h-screen overflow-hidden transition-all duration-300'>
@@ -94,180 +65,20 @@ export function MainNavbar({ children }: MainNavbarProps) {
 					<div
 						className={`flex max-h-screen flex-col bg-neutral-900 transition-all duration-300 shrink-0 ${isSidebarExpanded ? 'w-64' : 'w-13'}`}
 					>
-						{/* Logo / Brand */}
-						<div className='relative group flex min-h-16 items-center justify-center border-b border-neutral-700'>
-							{isSidebarExpanded ? (
-								<>
-									<button
-										className='text-xl font-bold text-neutral-0 cursor-pointer whitespace-nowrap tracking-widest'
-										onClick={() => router.push('/')}
-									>
-										KOSMO
-									</button>
-									<button
-										className='absolute top-0 bottom-0 right-3 flex items-center justify-center cursor-pointer text-neutral-400 hover:text-neutral-0 transition-colors'
-										onClick={() => setIsSidebarExpanded(false)}
-									>
-										<Sidebar size={22} color='text-current' />
-									</button>
-								</>
-							) : (
-								<>
-									<span className='select-none group-hover:invisible'>
-										<Logo size={28} />
-									</span>
-									<button
-										className='absolute top-0 bottom-0 flex items-center justify-center cursor-pointer text-neutral-400 hover:text-neutral-0 transition-colors opacity-0 group-hover:opacity-100'
-										onClick={() => setIsSidebarExpanded(true)}
-									>
-										<Sidebar size={22} color='text-current' />
-									</button>
-								</>
-							)}
-						</div>
+						<SidebarBrand
+							isSidebarExpanded={isSidebarExpanded}
+							onToggle={() => setIsSidebarExpanded(!isSidebarExpanded)}
+						/>
 
-						{/* Project list */}
-						<div className='flex flex-col flex-1 py-3 px-1 overflow-y-auto'>
-							{isSidebarExpanded ? (
-								<div className='flex flex-col gap-1'>
-									<button
-										className='flex items-center px-3 py-2.5 gap-2.5 cursor-pointer rounded-md transition-colors text-neutral-300 hover:bg-neutral-800 hover:text-neutral-0 border-l-2 border-transparent'
-										onClick={handleHomeClick}
-										title='Inicio'
-									>
-										<Home size={20} color='text-neutral-500' />
-										<span className='flex-1 text-left truncate font-medium'>Inicio</span>
-									</button>
-									<span className='text-neutral-500 text-xs font-semibold uppercase tracking-wider px-3 pb-2 pt-1'>
-										Proyectos
-									</span>
-									{projects.map((project) => {
-										const isActive = currentProject?.id === project.id;
-										return (
-											<button
-												key={project.id}
-												type='button'
-												className={`flex items-center px-3 py-2.5 gap-2.5 cursor-pointer rounded-md transition-colors text-left ${
-													isActive
-														? 'bg-neutral-700 text-neutral-0 border-l-2 border-primary-500'
-														: 'text-neutral-300 hover:bg-neutral-800 hover:text-neutral-0 border-l-2 border-transparent'
-												}`}
-												onClick={() => handleProjectClick(project)}
-												title={project.name}
-											>
-												<ComputerDesktop
-													size={20}
-													color={isActive ? 'text-primary-500' : 'text-neutral-500'}
-												/>
-												<span className='flex-1 text-left truncate font-medium capitalize'>
-													{project.name}
-												</span>
-											</button>
-										);
-									})}
-								</div>
-							) : (
-								<div className='flex flex-col gap-1 items-center'>
-									<button
-										className='flex items-center justify-center w-10 h-10 cursor-pointer rounded-md transition-colors text-neutral-400 hover:bg-neutral-800 hover:text-neutral-0'
-										onClick={handleHomeClick}
-										title='Inicio'
-									>
-										<Home size={20} color='text-current' />
-									</button>
-									{projects.map((project) => {
-										const isActive = currentProject?.id === project.id;
-										return (
-											<button
-												key={project.id}
-												type='button'
-												className={`flex items-center justify-center w-10 h-10 cursor-pointer rounded-md transition-colors ${
-													isActive
-														? 'bg-neutral-700 text-neutral-0'
-														: 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-0'
-												}`}
-												onClick={() => handleProjectClick(project)}
-												title={project.name}
-											>
-												<span className='text-sm font-semibold'>
-													{project.name.slice(0, 2).toUpperCase()}
-												</span>
-											</button>
-										);
-									})}
-								</div>
-							)}
-						</div>
+						<ProjectNavigation
+							projects={projects}
+							currentProject={currentProject}
+							isSidebarExpanded={isSidebarExpanded}
+							onHomeClick={handleHomeClick}
+							onProjectClick={handleProjectClick}
+						/>
 
-						{/* User section */}
-						<div
-							className={`border-t border-neutral-700 inline-flex items-center gap-3 overflow-hidden mt-auto ${
-								isSidebarExpanded ? 'px-3 py-4 justify-start' : 'p-2 py-4 justify-center'
-							}`}
-						>
-							{isSidebarExpanded ? (
-								<>
-									<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
-									<div className='flex-1 min-w-0 flex flex-col justify-center'>
-										<h4 className='text-neutral-0 text-sm font-semibold truncate'>
-											{user?.subject || 'Usuario'}
-										</h4>
-										<button
-											onClick={() => router.push('/perfil')}
-											className='text-left text-neutral-500 text-xs font-normal hover:text-neutral-300 transition-colors'
-										>
-											Perfil
-										</button>
-										<button
-											onClick={handleLogout}
-											className='text-left text-neutral-500 text-xs font-normal hover:text-neutral-300 transition-colors'
-										>
-											Cerrar sesión
-										</button>
-									</div>
-								</>
-							) : (
-								<div className='relative' ref={userMenuRef}>
-									<button
-										onClick={(e) => {
-											const rect = (
-												e.currentTarget as HTMLElement
-											).getBoundingClientRect();
-											setMenuPos({ x: rect.right + 8, y: rect.bottom - 80 });
-											setShowUserMenu(!showUserMenu);
-										}}
-										className='flex items-center justify-center'
-									>
-										<UserCircle size={36} color='text-neutral-400' className='shrink-0' />
-									</button>
-									{showUserMenu && (
-										<div
-											className='fixed w-40 bg-neutral-800 border border-neutral-700 rounded-lg shadow-lg z-50'
-											style={{ left: menuPos.x, bottom: window.innerHeight - menuPos.y }}
-										>
-											<button
-												onClick={() => {
-													router.push('/perfil');
-													setShowUserMenu(false);
-												}}
-												className='w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-neutral-0 rounded-t-lg transition-colors'
-											>
-												Perfil
-											</button>
-											<button
-												onClick={() => {
-													handleLogout();
-													setShowUserMenu(false);
-												}}
-												className='w-full text-left px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-700 hover:text-neutral-0 rounded-b-lg transition-colors'
-											>
-												Cerrar sesión
-											</button>
-										</div>
-									)}
-								</div>
-							)}
-						</div>
+						<UserSection user={user} isSidebarExpanded={isSidebarExpanded} />
 					</div>
 				)}
 
@@ -282,19 +93,6 @@ export function MainNavbar({ children }: MainNavbarProps) {
 					<section className='min-h-0 flex-1 overflow-hidden'>{children}</section>
 				</main>
 			</header>
-			{showLogoutConfirm && (
-				<ModalConfirm
-					title='Cerrar sesión'
-					description='Tiene cambios sin guardar. ¿Desea cerrar sesión de todos modos? Se perderán los cambios no guardados.'
-					cancelText='Cancelar'
-					confirmText='Cerrar sesión'
-					onCancel={() => setShowLogoutConfirm(false)}
-					onConfirm={() => {
-						setShowLogoutConfirm(false);
-						executeLogout();
-					}}
-				/>
-			)}
 		</>
 	);
 }

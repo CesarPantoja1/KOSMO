@@ -23,7 +23,9 @@ from kosmo.infrastructure.api.routers.discovery import router as discovery_route
 from kosmo.infrastructure.api.routers.documents import router as documents_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
+from kosmo.infrastructure.api.routers.github import router as github_router
 from kosmo.infrastructure.api.routers.implementations import router as implementations_router
+from kosmo.infrastructure.api.routers.integrations import router as integrations_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
 from kosmo.infrastructure.api.routers.mcp import router as mcp_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
@@ -332,6 +334,8 @@ app.include_router(documents_router)
 app.include_router(traceability_router)
 app.include_router(mcp_router)
 app.include_router(implementations_router)
+app.include_router(integrations_router)
+app.include_router(github_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)

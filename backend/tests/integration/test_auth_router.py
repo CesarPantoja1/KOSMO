@@ -193,6 +193,7 @@ def client() -> TestClient:
     app.state.container = SimpleNamespace(
         redis=None,
         auth=SimpleNamespace(
+            user_repository=user_repository,
             register_user=RegisterUser(user_repository=user_repository, password_hasher=hasher, audit_sink=audit_sink),
             authorize_with_pkce=AuthorizeWithPkce(
                 user_repository=user_repository,
@@ -231,7 +232,10 @@ def _full_login_flow(
     verifier = "verifier" * 8
     challenge = s256_challenge(verifier)
 
-    register = client.post("/api/v1/auth/register", json={"email": email, "password": password})
+    register = client.post(
+        "/api/v1/auth/register",
+        json={"name": "Alice", "email": email, "password": password},
+    )
     assert register.status_code == 201, register.text
 
     authorize = client.post(
@@ -262,16 +266,17 @@ def _full_login_flow(
 def test_register_returns_201_and_user_payload(client: TestClient) -> None:
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": "alice@example.com", "password": "password-12345"},
+        json={"name": "Alice", "email": "alice@example.com", "password": "password-12345"},
     )
     assert response.status_code == 201
     body = response.json()
+    assert body["name"] == "Alice"
     assert body["email"] == "alice@example.com"
     assert "id" in body and "created_at" in body
 
 
 def test_register_rejects_duplicate_email_with_409(client: TestClient) -> None:
-    payload = {"email": "alice@example.com", "password": "password-12345"}
+    payload = {"name": "Alice", "email": "alice@example.com", "password": "password-12345"}
     client.post("/api/v1/auth/register", json=payload)
     second = client.post("/api/v1/auth/register", json=payload)
     assert second.status_code == 409
@@ -281,7 +286,7 @@ def test_register_rejects_duplicate_email_with_409(client: TestClient) -> None:
 def test_register_rejects_short_password(client: TestClient) -> None:
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": "alice@example.com", "password": "short"},
+        json={"name": "Alice", "email": "alice@example.com", "password": "short"},
     )
     assert response.status_code == 422
 
@@ -289,7 +294,7 @@ def test_register_rejects_short_password(client: TestClient) -> None:
 def test_authorize_rejects_invalid_credentials(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "alice@example.com", "password": "password-12345"},
+        json={"name": "Alice", "email": "alice@example.com", "password": "password-12345"},
     )
     response = client.post(
         "/api/v1/auth/authorize",
@@ -310,7 +315,7 @@ def test_authorize_rejects_invalid_credentials(client: TestClient) -> None:
 def test_token_exchange_fails_with_wrong_verifier(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "alice@example.com", "password": "password-12345"},
+        json={"name": "Alice", "email": "alice@example.com", "password": "password-12345"},
     )
     challenge = s256_challenge("verifier-A" * 8)
     auth = client.post(
@@ -392,6 +397,8 @@ def test_me_returns_principal_for_valid_token(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["scopes"] == ["read", "write"]
+    assert body["name"] == "Alice"
+    assert body["email"] == "alice@example.com"
 
 
 def test_me_rejects_missing_token(client: TestClient) -> None:
@@ -437,7 +444,7 @@ def test_schemas_unknown_returns_404(client: TestClient) -> None:
 def test_authorize_locks_account_after_max_failures(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "victim@example.com", "password": "password-12345"},
+        json={"name": "Victim", "email": "victim@example.com", "password": "password-12345"},
     )
     challenge = s256_challenge("verifier" * 8)
     bad_payload = {
@@ -463,7 +470,7 @@ def test_authorize_locks_account_after_max_failures(client: TestClient) -> None:
 def test_authorize_lockout_message_is_in_spanish(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "bob@example.com", "password": "password-12345"},
+        json={"name": "Bob", "email": "bob@example.com", "password": "password-12345"},
     )
     challenge = s256_challenge("verifier" * 8)
     bad_payload = {
@@ -486,7 +493,7 @@ def test_authorize_lockout_message_is_in_spanish(client: TestClient) -> None:
 def test_authorize_clears_lockout_on_successful_login(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",
-        json={"email": "carol@example.com", "password": "password-12345"},
+        json={"name": "Carol", "email": "carol@example.com", "password": "password-12345"},
     )
     challenge = s256_challenge("verifier" * 8)
     bad_payload = {

@@ -178,6 +178,20 @@ class UXAnalysisInput:
     project_id: ProjectId
 
 
+def classify_archetype(discovery_text: str, feature_title: str = "", feature_desc: str = "") -> BusinessArchetype:
+    """Clasifica el arquetipo de negocio determinísticamente mediante conteo de keywords."""
+    combined = f"{discovery_text} {feature_title} {feature_desc}".lower()
+    words = set(re.findall(r"\w+", combined))
+
+    scores: dict[BusinessArchetype, int] = {arch: len(words & kw) for arch, kw in ARCHETYPE_KEYWORDS.items()}
+
+    best_arch = max(scores, key=lambda k: scores[k])
+    if scores[best_arch] > 0:
+        return best_arch
+
+    return BusinessArchetype.SAAS_TOOL
+
+
 class UXAnalyzerUseCase:
     """Analizador determinista de UX y arquitectura de información contextual."""
 
@@ -203,7 +217,7 @@ class UXAnalyzerUseCase:
         feature_title = feature.title if feature else ""
         feature_desc = feature.description if feature else ""
 
-        archetype = self._classify_archetype(discovery_md, feature_title, feature_desc)
+        archetype = self.classify_archetype(discovery_md, feature_title, feature_desc)
         target_users = self._extract_actors(discovery_md)
         primary_goals = self._extract_goals(discovery_md)
 
@@ -230,17 +244,13 @@ class UXAnalyzerUseCase:
 
         return UXAnalysisOutput(ux_context=ux_context, prompt_block=prompt_block)
 
+    def classify_archetype(
+        self, discovery_text: str, feature_title: str = "", feature_desc: str = ""
+    ) -> BusinessArchetype:
+        return classify_archetype(discovery_text, feature_title, feature_desc)
+
     def _classify_archetype(self, discovery_text: str, feature_title: str, feature_desc: str) -> BusinessArchetype:
-        combined = f"{discovery_text} {feature_title} {feature_desc}".lower()
-        words = set(re.findall(r"\w+", combined))
-
-        scores: dict[BusinessArchetype, int] = {arch: len(words & kw) for arch, kw in ARCHETYPE_KEYWORDS.items()}
-
-        best_arch = max(scores, key=lambda k: scores[k])
-        if scores[best_arch] > 0:
-            return best_arch
-
-        return BusinessArchetype.SAAS_TOOL
+        return classify_archetype(discovery_text, feature_title, feature_desc)
 
     def _extract_actors(self, discovery_text: str) -> list[str]:
         actors: list[str] = []

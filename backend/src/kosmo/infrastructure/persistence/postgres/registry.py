@@ -5,36 +5,22 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.infrastructure.persistence.postgres.repositories import (
-    SqlAlchemyAuditEventSink,
-    SqlAlchemyProjectRepository,
-    SqlAlchemyUserRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
     SqlAlchemyActivityDiagramRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.chat_repo import SqlAlchemyChatRepository
-from kosmo.infrastructure.persistence.postgres.repositories.consistency_repo import (
+    SqlAlchemyAuditEventSink,
+    SqlAlchemyChatRepository,
+    SqlAlchemyCodeSyncLogRepository,
     SqlAlchemyConsistencyEvaluationRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.document_repo import (
     SqlAlchemyDocumentRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.feature_implementation_repo import (
     SqlAlchemyFeatureImplementationRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import (
     SqlAlchemyFeatureRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.requirement_repo import (
+    SqlAlchemyProjectGitHubIntegrationRepository,
+    SqlAlchemyProjectRepository,
     SqlAlchemyRequirementRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.traceability_repo import (
     SqlAlchemyTraceabilityRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.user_ai_config_repo import (
     SqlAlchemyUserAiConfigRepository,
-)
-from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
+    SqlAlchemyUserGitHubIntegrationRepository,
+    SqlAlchemyUserIntegrationRepository,
+    SqlAlchemyUserRepository,
     SqlAlchemyWorkspaceRepository,
 )
 
@@ -56,6 +42,10 @@ class RepositoryRegistry:
     workspaces: SqlAlchemyWorkspaceRepository
     implementations: SqlAlchemyFeatureImplementationRepository
     user_ai_configs: SqlAlchemyUserAiConfigRepository
+    project_integrations: SqlAlchemyProjectGitHubIntegrationRepository
+    sync_logs: SqlAlchemyCodeSyncLogRepository
+    user_integrations: SqlAlchemyUserIntegrationRepository
+    user_github_integrations: SqlAlchemyUserGitHubIntegrationRepository
 
     @classmethod
     def build(cls, session_factory: async_sessionmaker[AsyncSession]) -> RepositoryRegistry:
@@ -73,4 +63,8 @@ class RepositoryRegistry:
             workspaces=SqlAlchemyWorkspaceRepository(session_factory),
             implementations=SqlAlchemyFeatureImplementationRepository(session_factory),
             user_ai_configs=SqlAlchemyUserAiConfigRepository(session_factory),
+            project_integrations=SqlAlchemyProjectGitHubIntegrationRepository(session_factory),
+            sync_logs=SqlAlchemyCodeSyncLogRepository(session_factory),
+            user_integrations=SqlAlchemyUserIntegrationRepository(session_factory),
+            user_github_integrations=SqlAlchemyUserGitHubIntegrationRepository(session_factory),
         )

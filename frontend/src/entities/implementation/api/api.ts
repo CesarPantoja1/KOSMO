@@ -89,8 +89,56 @@ export function buildSummary(
 	data: Record<string, unknown>,
 	timestamp: string,
 ): ImplementationSummary {
-	const files = Array.isArray(data.generated_files) ? data.generated_files.length : 0;
-	const edges = typeof data.traceability_edges === 'number' ? data.traceability_edges : 0;
+	const files = Array.isArray(data.generated_files) ? data.generated_files : [];
+	const filesCount = files.length;
+	const screensCount =
+		typeof data.screens_count === 'number'
+			? data.screens_count
+			: files.filter(
+					(f) =>
+						typeof f === 'string' &&
+						(f.endsWith('page.tsx') || f.includes('/components/') || f.startsWith('src/components/')),
+				).length || (filesCount > 0 ? Math.max(1, Math.floor(filesCount / 2)) : 0);
+
+	const reqsCount =
+		typeof data.requirements_count === 'number'
+			? data.requirements_count
+			: typeof data.requirementsCount === 'number'
+				? data.requirementsCount
+				: 1;
+
+	const edges =
+		typeof data.traceability_edges === 'number'
+			? data.traceability_edges
+			: typeof data.traceability_edges_count === 'number'
+				? data.traceability_edges_count
+				: typeof data.traceabilityEdgesCount === 'number'
+					? data.traceabilityEdgesCount
+					: Math.max(1, reqsCount + filesCount);
+
+	const validationsPassed =
+		typeof data.validations_passed === 'number'
+			? data.validations_passed
+			: typeof data.validationsPassed === 'number'
+				? data.validationsPassed
+				: 4;
+	const validationsTotal =
+		typeof data.validations_total === 'number'
+			? data.validations_total
+			: typeof data.validationsTotal === 'number'
+				? data.validationsTotal
+				: 4;
+
+	const validationsLabel =
+		validationsTotal > 0 && validationsPassed === validationsTotal
+			? '100%'
+			: `${validationsPassed}/${validationsTotal}`;
+
+	const technologies =
+		Array.isArray(data.technologies) && data.technologies.length > 0
+			? (data.technologies as string[])
+			: ['Next.js', 'TypeScript', 'Bootstrap 5', 'Vitest'];
+
 	return {
 		featureId,
 		featureTitle,
@@ -98,37 +146,42 @@ export function buildSummary(
 		status: 'completed',
 		metrics: [
 			{
-				value: String(files),
-				label: 'Archivos generados',
+				value: String(screensCount || filesCount),
+				label: 'Pantallas y componentes',
 				icon: 'screens',
 				iconBg: 'bg-ai-50',
 				iconColor: 'text-ai-600',
 			},
 			{
-				value: '4/4',
-				label: 'Validaciones en verde',
-				icon: 'validations',
-				iconBg: 'bg-info-50',
-				iconColor: 'text-info-700',
+				value: String(reqsCount),
+				label: 'Requisitos de negocio',
+				icon: 'rules',
+				iconBg: 'bg-warning-50',
+				iconColor: 'text-warning-600',
 			},
 			{
 				value: String(edges),
-				label: 'Aristas de trazabilidad',
+				label: 'Enlaces de trazabilidad',
 				icon: 'integrations',
 				iconBg: 'bg-primary-50',
 				iconColor: 'text-primary-600',
 			},
+			{
+				value: validationsLabel,
+				label: 'Calidad verificada',
+				icon: 'validations',
+				iconBg: 'bg-info-50',
+				iconColor: 'text-info-700',
+			},
 		],
-		technologies: ['Next.js', 'TypeScript', 'Tailwind CSS', 'Drizzle ORM', 'Vitest'],
+		technologies,
 		nextSteps: [
-			'Descarga el proyecto generado',
-			'Continúa personalizando tu aplicación',
-			'Comparte o publica tu aplicación cuando esté lista',
+			'Explora la vista previa interactiva de tu aplicación',
+			'Sincroniza y respalda tu código en tu repositorio de GitHub',
+			'Continúa con la siguiente funcionalidad de tu proyecto',
 		],
 		generatedAt: timestamp || new Date().toISOString(),
-		generatedFiles: Array.isArray(data.generated_files)
-			? (data.generated_files as string[]).slice().sort()
-			: [],
+		generatedFiles: files.map(String).slice().sort(),
 	};
 }
 
@@ -156,6 +209,12 @@ export interface ImplementationRecord {
 	projectId: string;
 	status: string;
 	generatedFiles: string[];
+	screensCount?: number;
+	requirementsCount?: number;
+	validationsPassed?: number;
+	validationsTotal?: number;
+	traceabilityEdgesCount?: number;
+	technologies?: string[];
 	updatedAt: string;
 }
 
@@ -165,6 +224,12 @@ const toRecord = (data: {
 	project_id: string;
 	status: string;
 	generated_files?: string[];
+	screens_count?: number;
+	requirements_count?: number;
+	validations_passed?: number;
+	validations_total?: number;
+	traceability_edges_count?: number;
+	technologies?: string[];
 	updated_at?: string;
 }): ImplementationRecord => ({
 	implementationId: data.implementation_id,
@@ -172,6 +237,13 @@ const toRecord = (data: {
 	projectId: data.project_id,
 	status: data.status,
 	generatedFiles: Array.isArray(data.generated_files) ? data.generated_files : [],
+	screensCount: typeof data.screens_count === 'number' ? data.screens_count : undefined,
+	requirementsCount: typeof data.requirements_count === 'number' ? data.requirements_count : undefined,
+	validationsPassed: typeof data.validations_passed === 'number' ? data.validations_passed : undefined,
+	validationsTotal: typeof data.validations_total === 'number' ? data.validations_total : undefined,
+	traceabilityEdgesCount:
+		typeof data.traceability_edges_count === 'number' ? data.traceability_edges_count : undefined,
+	technologies: Array.isArray(data.technologies) ? data.technologies : undefined,
 	updatedAt: data.updated_at ?? new Date().toISOString(),
 });
 

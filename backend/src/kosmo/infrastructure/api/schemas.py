@@ -68,6 +68,12 @@ class RegisterRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    name: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Nombre completo del usuario (obligatorio).",
+        examples=["Gianfranco"],
+    )
     email: EmailStr = Field(
         description=(
             "Dirección de correo electrónico del nuevo usuario. "
@@ -304,7 +310,7 @@ class TokenPairResponse(BaseModel):
 
 
 class PrincipalView(BaseModel):
-    """Identidad del usuario autenticado extraída del access token verificado."""
+    """Identidad y perfil del usuario autenticado extraída del access token y persistencia."""
 
     subject: str = Field(
         description=(
@@ -313,6 +319,21 @@ class PrincipalView(BaseModel):
             "Formato: prefijo de recurso + ULID (ej: ``usr-01HXYAZABCDEFGHIJKLMNOP``)."
         ),
         examples=["usr-01HXYAZABCDEFGHIJKLMNOP"],
+    )
+    name: str | None = Field(
+        default=None,
+        description="Nombre completo del usuario.",
+        examples=["Gianfranco"],
+    )
+    email: str | None = Field(
+        default=None,
+        description="Correo electrónico del usuario.",
+        examples=["usuario@ejemplo.com"],
+    )
+    avatar_url: str | None = Field(
+        default=None,
+        description="URL de la foto de perfil o avatar del usuario.",
+        examples=["https://avatars.githubusercontent.com/u/123456?v=4"],
     )
     scopes: list[str] = Field(
         description=(
@@ -333,9 +354,18 @@ class UserPublic(BaseModel):
         ),
         examples=["usr-01HXYAZABCDEFGHIJKLMNOP"],
     )
+    name: str = Field(
+        description="Nombre completo del usuario.",
+        examples=["Gianfranco"],
+    )
     email: EmailStr = Field(
         description="Dirección de correo verificada y normalizada del usuario.",
         examples=["usuario@ejemplo.com"],
+    )
+    avatar_url: str | None = Field(
+        default=None,
+        description="URL del avatar del usuario.",
+        examples=["https://avatars.githubusercontent.com/u/123456?v=4"],
     )
     created_at: datetime = Field(
         description="Timestamp ISO-8601 (UTC) de creación de la cuenta.",
@@ -890,6 +920,12 @@ class ImplementationRecordResponse(BaseModel):
     project_id: str = Field(description="ID del proyecto al que pertenece la característica")
     status: str = Field(description="Estado actual de la implementación")
     generated_files: list[str] = Field(default_factory=list, description="Archivos generados")
+    screens_count: int = Field(default=0, description="Cantidad de pantallas y componentes generados")
+    requirements_count: int = Field(default=0, description="Cantidad de requisitos de negocio cubiertos")
+    validations_passed: int = Field(default=0, description="Pasos de validación exitosos")
+    validations_total: int = Field(default=0, description="Total de pasos de validación")
+    traceability_edges_count: int = Field(default=0, description="Total de aristas de trazabilidad registradas")
+    technologies: list[str] = Field(default_factory=list, description="Tecnologías principales del proyecto")
     updated_at: datetime = Field(description="Última actualización del registro")
 
 
@@ -958,3 +994,50 @@ class TestAIConnectionResponse(BaseModel):
     is_connected: bool
     detected_model: str
     message: str
+
+
+# ── Integrations & GitHub Sync (HU-23) ──
+
+
+class ConnectOAuthRequest(BaseModel):
+    """Payload para intercambiar el código temporal de OAuth por credenciales de acceso."""
+
+    code: str = Field(min_length=1, max_length=500, description="Código de autorización temporal devuelto por OAuth")
+    redirect_uri: str | None = Field(default=None, description="URI de redirección utilizada")
+
+
+class IntegrationStatusResponse(BaseModel):
+    """Estado de vinculación de una plataforma externa con la cuenta de usuario."""
+
+    provider: str = Field(description="Identificador del proveedor (github | railway)")
+    is_connected: bool = Field(description="True si la cuenta de usuario se encuentra vinculada")
+    username: str | None = Field(default=None, description="Nombre de usuario en la plataforma externa")
+    connected_at: datetime | None = Field(default=None, description="Marca de tiempo ISO-8601 UTC de la vinculación")
+
+
+class ProjectGitHubResponse(BaseModel):
+    """Metadatos de vinculación y sincronización con GitHub para un proyecto."""
+
+    has_repository: bool = Field(description="True si el proyecto ya cuenta con repositorio en GitHub")
+    repo_name: str | None = Field(default=None, description="Nombre del repositorio remoto en GitHub")
+    repo_url: str | None = Field(default=None, description="URL pública o accesible del repositorio en GitHub")
+    is_public: bool | None = Field(default=None, description="Visibilidad del repositorio (True=público)")
+    last_push_at: datetime | None = Field(default=None, description="Marca de tiempo UTC del último envío exitoso")
+    last_commit_hash: str | None = Field(default=None, description="Hash SHA-1 del último commit sincronizado")
+    sync_status: str = Field(description="Estado del ciclo de vida y sincronización del repositorio")
+    suggested_repo_name: str | None = Field(default=None, description="Nombre de repositorio sugerido normalizado")
+    error_message: str | None = Field(default=None, description="Detalle del error en caso de fallo en sincronización")
+
+
+class PushGitHubRequest(BaseModel):
+    """Payload para solicitar la creación de repositorio o push incremental de código."""
+
+    repo_name: str | None = Field(
+        default=None, min_length=1, max_length=100, description="Nombre deseado para el repositorio"
+    )
+    is_public: bool = Field(
+        default=False, description="Visibilidad del repositorio (privado por defecto; público requiere confirmación)"
+    )
+    commit_message: str | None = Field(
+        default=None, max_length=300, description="Mensaje descriptivo para el commit de sincronización"
+    )

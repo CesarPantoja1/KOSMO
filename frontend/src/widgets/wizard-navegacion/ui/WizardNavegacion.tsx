@@ -49,7 +49,7 @@ const phaseItems: {
 		href: '/proyecto/caracteristicas',
 		Icon: Characteristics,
 		label: 'FUNCIONALIDADES',
-		subtitle: 'Que debe hacer',
+		subtitle: 'Qué debe hacer',
 		consistencyPhase: 'features',
 	},
 	{

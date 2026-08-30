@@ -3,6 +3,10 @@ export { default as Loading } from './Loading';
 export { MarkdownText } from './markdown-text';
 export { ModalConfirm } from './ModalConfirm';
 export { CharacterCounter } from './CharacterCounter';
+export { OAuthIntegration } from './OAuthIntegration';
+export type { OAuthIntegrationProps } from './OAuthIntegration';
+export { ConfirmacionVisibilidadRepositorio } from './ConfirmacionVisibilidadRepositorio';
+export { FormularioCreacionRepositorio } from './FormularioCreacionRepositorio';
 
 // icons
 export { default as Ai } from './icons/Ai';
@@ -41,6 +45,8 @@ export { Logo } from './icons/Logo';
 export { Lightbulb } from './icons/Lightbulb';
 export { AiOrb } from './icons/AiOrb';
 export { KeyIcon } from './icons/KeyIcon';
+export { default as GitHub } from './icons/GitHub';
+export { default as Railway } from './icons/Railway';
 export { default as WarningIcon } from './icons/WarningIcon';
 export { default as SuccessCheckIcon } from './icons/SuccessCheckIcon';
 export { default as ScreensIcon } from './icons/ScreensIcon';
@@ -59,5 +65,12 @@ export { default as InfoCircleIcon } from './icons/InfoCircleIcon';
 export { default as PlusSmallIcon } from './icons/PlusSmallIcon';
 
 // toast
-export { toast, ToasterProvider } from './toast';
-export type { ToastContent, ToastVariant, ToastPosition } from './toast';
+
+export { toast } from './toast/toast';
+export { ToasterProvider } from './toast/ToasterProvider';
+export type {
+	ToastContent,
+	ToastVariant,
+	ToastPosition,
+	ToastOptions,
+} from './toast/types';

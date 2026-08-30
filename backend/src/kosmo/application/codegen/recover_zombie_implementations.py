@@ -36,6 +36,12 @@ async def recover_zombie_implementations(
             with contextlib.suppress(Exception):
                 await workspace_manager.release_lock(impl.project_id)
             await implementation_repo.save(replace(impl, status=FeatureImplementationStatus.FAILED, updated_at=now))
+            _log.info(
+                "codegen.zombie_recovered",
+                implementation_id=str(impl.id),
+                feature_id=str(impl.feature_id),
+                project_id=str(impl.project_id),
+            )
         except Exception:
             _log.exception(
                 "codegen.zombie_recovery_failed",

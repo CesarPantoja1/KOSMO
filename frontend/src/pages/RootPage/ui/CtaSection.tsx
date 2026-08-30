@@ -1,8 +1,13 @@
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/shared/model';
+
 interface CtaSectionProps {
 	onComenzar: () => void;
 }
 
 export function CtaSection({ onComenzar }: CtaSectionProps) {
+	const router = useRouter();
+	const user = useAuthStore((s) => s.user);
 	return (
 		<section className='relative overflow-hidden border-t border-neutral-200 bg-linear-to-r from-primary-500 to-primary-600 py-20'>
 			<div className='absolute inset-0 bg-[radial-linear(circle_at_50%_100%,rgba(255,255,255,0.15),transparent_40%)] pointer-events-none' />
@@ -19,10 +24,10 @@ export function CtaSection({ onComenzar }: CtaSectionProps) {
 
 				<button
 					type='button'
-					onClick={onComenzar}
+					onClick={user ? () => router.push('/proyecto') : onComenzar}
 					className='mt-8 rounded-xl bg-neutral-0 px-7 py-3.5 font-semibold text-primary-600 shadow-xl transition hover:-translate-y-0.5 cursor-pointer'
 				>
-					Comenzar ahora →
+					{user ? 'Mis Proyectos →' : 'Comenzar ahora →'}
 				</button>
 
 				<p className='mt-5 text-xs text-primary-100'>Necesitas un API Key para comenzar.</p>

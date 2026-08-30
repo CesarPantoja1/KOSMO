@@ -20,7 +20,10 @@ class RegisterUser:
     audit_sink: AuditEventSink
 
     @traced("auth.register")
-    async def execute(self, *, email: str, password: str) -> User:
+    async def execute(self, *, name: str, email: str, password: str) -> User:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("El nombre no puede estar vacío")
         normalized_email = email.strip().lower()
         existing = await self.user_repository.by_email(normalized_email)
         if existing is not None:
@@ -28,6 +31,8 @@ class RegisterUser:
         user = User(
             id=IdGenerator.generate("user"),
             email=normalized_email,
+            name=normalized_name,
+            avatar_url=None,
             hashed_password=await asyncio.to_thread(self.password_hasher.hash, password),
             created_at=datetime.now(UTC),
         )

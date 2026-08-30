@@ -10,11 +10,11 @@ import type {
 } from './auth.types';
 
 export const authApi = {
-	async register(email: string, password: string): Promise<UserPublic> {
+	async register(name: string, email: string, password: string): Promise<UserPublic> {
 		return apiClient<UserPublic>('/api/v1/auth/register', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ email, password }),
+			body: JSON.stringify({ name, email, password }),
 		});
 	},
 

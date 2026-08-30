@@ -4,11 +4,14 @@ import pytest
 
 from kosmo.contracts.sdd.codegen import (
     ValidationErrorDetail,
+    ValidationRunResult,
     ValidationSeverity,
     ValidationStep,
     ValidationStepResult,
 )
 from kosmo.domain.codegen.parse_validation_output import (
+    derive_fix_directives,
+    format_validation_errors_for_prompt,
     parse_eslint_output,
     parse_next_build_output,
     parse_step_output,
@@ -288,3 +291,189 @@ def test_truncate_error_output() -> None:
     truncated = truncate_error_output(long_text, max_chars=500)
     assert len(truncated) <= 550  # includes truncation notice
     assert "truncated" in truncated.lower()
+
+
+@pytest.mark.unit
+def test_format_validation_errors_for_prompt_groups_by_step() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TYPECHECK,
+                success=False,
+                error_messages=("src/index.ts:12:5 - error TS2322: Type mismatch.",),
+            ),
+            ValidationStepResult(
+                step=ValidationStep.LINT,
+                success=True,
+            ),
+            ValidationStepResult(
+                step=ValidationStep.TESTS,
+                success=False,
+                error_messages=("tests/app.test.ts: AssertionError: expected false to be true",),
+            ),
+        ),
+        error_summary=("Typecheck falló", "Tests fallaron"),
+    )
+
+    # Act
+    feedback = format_validation_errors_for_prompt(run_result, max_chars=6000)
+
+    # Assert
+    assert "### Fallo en paso: TYPECHECK" in feedback
+    assert "src/index.ts:12:5 - error TS2322" in feedback
+    assert "### Fallo en paso: TESTS" in feedback
+    assert "tests/app.test.ts: AssertionError" in feedback
+    assert "### Fallo en paso: LINT" not in feedback
+
+
+@pytest.mark.unit
+def test_format_validation_errors_for_prompt_fallback_raw_output() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.BUILD,
+                success=False,
+                exit_code=1,
+                raw_output="Next.js build failed: missing module './foo'",
+            ),
+        ),
+    )
+
+    # Act
+    feedback = format_validation_errors_for_prompt(run_result)
+
+    # Assert
+    assert "### Fallo en paso: BUILD" in feedback
+    assert "Next.js build failed: missing module './foo'" in feedback
+
+
+@pytest.mark.unit
+def test_format_validation_errors_for_prompt_all_passed() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=True,
+        steps=(
+            ValidationStepResult(step=ValidationStep.TYPECHECK, success=True),
+            ValidationStepResult(step=ValidationStep.TESTS, success=True),
+        ),
+    )
+
+    # Act
+    feedback = format_validation_errors_for_prompt(run_result)
+
+    # Assert
+    assert feedback == ""
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_structural_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.STRUCTURE,
+                success=False,
+                error_messages=("Falta crear src/app/gastos/page.tsx",),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Estructura:" in d for d in directives)
+    assert any("page.tsx" in d for d in directives)
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_import_and_type_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TYPECHECK,
+                success=False,
+                errors=(
+                    ValidationErrorDetail(
+                        file="src/features/gastos/logic.ts",
+                        line=1,
+                        column=1,
+                        message="Cannot find module '@/lib/db'",
+                        severity=ValidationSeverity.ERROR,
+                        code="TS2307",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Importaciones:" in d for d in directives)
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_tests_and_build_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TESTS,
+                success=False,
+                error_messages=("AssertionError: expected 5 to be 10",),
+            ),
+            ValidationStepResult(
+                step=ValidationStep.BUILD,
+                success=False,
+                error_messages=("Next build failed",),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Lógica y pruebas:" in d for d in directives)
+    assert any("Compilación Next.js:" in d for d in directives)
+
+
+@pytest.mark.unit
+def test_derive_fix_directives_database_failure() -> None:
+    # Arrange
+    run_result = ValidationRunResult(
+        all_passed=False,
+        steps=(
+            ValidationStepResult(
+                step=ValidationStep.TYPECHECK,
+                success=False,
+                errors=(
+                    ValidationErrorDetail(
+                        file="src/db/schema.ts",
+                        line=5,
+                        column=1,
+                        message="Cannot find name 'sqliteTable'",
+                        severity=ValidationSeverity.ERROR,
+                        code="TS2304",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    # Act
+    directives = derive_fix_directives(run_result)
+
+    # Assert
+    assert any("Base de datos / Drizzle:" in d for d in directives)
+    assert any("src/db/schema.ts" in d for d in directives)
