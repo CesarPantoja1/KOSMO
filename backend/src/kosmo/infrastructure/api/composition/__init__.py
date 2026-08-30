@@ -133,6 +133,7 @@ def build_app_components(settings: Settings) -> AppContainer:
         cipher,
         code_runner=codegen.code_runner,
     )
+    codegen.generate_feature_implementation.set_sync_github_repository(integrations.sync_github_repository)
 
     return AppContainer(
         settings=settings,

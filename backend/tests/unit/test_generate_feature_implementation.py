@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -2282,3 +2283,99 @@ async def test_generate_injects_existing_db_schema_into_prompts_when_present(
     assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in build_prompt
     assert "export const products = sqliteTable('products'" in build_prompt
     assert "sin borrar ni sobrescribir las entradas de features anteriores" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_auto_sync_github_ejecuta_push_tras_commit_exitoso(tmp_path: Path) -> None:
+    # Arrange
+    workspace_dir = tmp_path / "prj_github_test"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    page_file = workspace_dir / "src" / "app" / "iniciar-sesion" / "page.tsx"
+    page_file.parent.mkdir(parents=True, exist_ok=True)
+    page_file.write_text("export default function Page() { return <div>Login</div>; }", encoding="utf-8")
+
+    slice_file = workspace_dir / "src" / "features" / "iniciar-sesion" / "logic.ts"
+    slice_file.parent.mkdir(parents=True, exist_ok=True)
+    slice_file.write_text("export function login() { return true; }", encoding="utf-8")
+
+    registry_file = workspace_dir / "src" / "lib" / "feature-registry.ts"
+    registry_file.parent.mkdir(parents=True, exist_ok=True)
+    registry_file.write_text("export const features = [{ slug: 'iniciar-sesion' }];", encoding="utf-8")
+
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+    project_repo = InMemoryProjectRepository()
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(workspace_dir))
+    opencode_client = FakeOpenCodeClient(
+        generated_files=(
+            "src/app/iniciar-sesion/page.tsx",
+            "src/features/iniciar-sesion/logic.ts",
+            "src/lib/feature-registry.ts",
+        )
+    )
+    code_runner = FakeCodeRunner(should_pass=True)
+
+    proj_id = ProjectId("prj_gh_1")
+    owner_id = UserId("usr_gh_1")
+    await project_repo.save(
+        Project(
+            id=proj_id,
+            name="Test GH",
+            slug="test-gh",
+            description="",
+            owner_id=owner_id,
+        )
+    )
+
+    feat_id = FeatureId("feat_gh_1")
+    await feature_repo.save(
+        Feature(
+            id=feat_id,
+            project_id=proj_id,
+            number=1,
+            title="Iniciar sesión",
+            slug="iniciar-sesion",
+            description="Login feature",
+        )
+    )
+    await requirement_repo.save(feat_id, "# REQ-1")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_gh"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    mock_sync_use_case = AsyncMock()
+    mock_sync_use_case.execute.return_value = MagicMock(
+        repo_url="https://github.com/user/test-gh",
+        last_commit_hash="abc123456",
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+        project_repo=project_repo,
+        sync_github_repository=mock_sync_use_case,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert mock_sync_use_case.execute.called
+    call_args = mock_sync_use_case.execute.call_args
+    assert call_args[0][0].project_id == proj_id
+    assert call_args[0][1] == owner_id

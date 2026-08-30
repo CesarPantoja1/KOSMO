@@ -20,6 +20,10 @@ from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
     RegisterCodeTraceabilityUseCase,
 )
+from kosmo.application.integrations.sync_github_repository import (
+    SyncGitHubRepositoryCommand,
+    SyncGitHubRepositoryUseCase,
+)
 from kosmo.contracts.ai.consistency import TraceabilityRepository
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
@@ -165,6 +169,7 @@ class GenerateFeatureImplementationUseCase:
         project_repo: ProjectRepository | None = None,
         document_repo: DocumentRepository | None = None,
         ux_analyzer: UXAnalyzerUseCase | None = None,
+        sync_github_repository: SyncGitHubRepositoryUseCase | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -175,6 +180,7 @@ class GenerateFeatureImplementationUseCase:
         self._implementation_repo = implementation_repo
         self._project_repo = project_repo
         self._document_repo = document_repo
+        self._sync_github_repository = sync_github_repository
         self._ux_analyzer = ux_analyzer or UXAnalyzerUseCase(
             document_repo=document_repo,
             feature_repo=feature_repo,
@@ -183,6 +189,9 @@ class GenerateFeatureImplementationUseCase:
             traceability_repo=traceability_repo,
             requirement_repo=requirement_repo,
         )
+
+    def set_sync_github_repository(self, sync_github_repository: SyncGitHubRepositoryUseCase) -> None:
+        self._sync_github_repository = sync_github_repository
 
     async def _build_project_context(
         self,
@@ -743,9 +752,10 @@ class GenerateFeatureImplementationUseCase:
                         data={"delta": "Guardando cambios y publicando vista previa...", "stage": "finishing"},
                     )
                 )
+                commit_msg = f"feat({feature_slug}): implement feature {feature.display_id} - {feature.title}"
                 await self._workspace_manager.commit_workspace(
                     feature.project_id,
-                    f"feat({feature_slug}): implement feature {feature.display_id} - {feature.title}",
+                    commit_msg,
                 )
                 await self._workspace_manager.publish_preview(feature.project_id)
                 impl = dataclasses.replace(
@@ -755,6 +765,59 @@ class GenerateFeatureImplementationUseCase:
                     updated_at=datetime.now(UTC),
                 )
                 await self._implementation_repo.save(impl)
+
+                # Sincronización automática con GitHub si el proyecto cuenta con repositorio vinculado
+                if self._sync_github_repository is not None and self._project_repo is not None:
+                    try:
+                        proj = await self._project_repo.by_id(feature.project_id)
+                        if proj is not None and proj.owner_id:
+                            await _emit(
+                                OpenCodeEvent(
+                                    event_type=OpenCodeEventType.BUILD_PROGRESS,
+                                    session_id=session_id,
+                                    data={
+                                        "delta": "Sincronizando cambios con GitHub...",
+                                        "stage": "syncing_github",
+                                    },
+                                )
+                            )
+                            sync_cmd = SyncGitHubRepositoryCommand(
+                                project_id=feature.project_id,
+                                commit_message=commit_msg,
+                            )
+                            sync_res = await self._sync_github_repository.execute(sync_cmd, proj.owner_id)
+                            await _emit(
+                                OpenCodeEvent(
+                                    event_type=OpenCodeEventType.BUILD_PROGRESS,
+                                    session_id=session_id,
+                                    data={
+                                        "delta": f"Código sincronizado exitosamente con GitHub ({sync_res.repo_url})",
+                                        "stage": "github_synced",
+                                        "repo_url": sync_res.repo_url,
+                                        "commit_hash": sync_res.last_commit_hash,
+                                    },
+                                )
+                            )
+                    except Exception as sync_err:
+                        _log.warning(
+                            "codegen.github_auto_sync_failed",
+                            feature_id=str(feature.id),
+                            project_id=str(feature.project_id),
+                            error=str(sync_err),
+                        )
+                        await _emit(
+                            OpenCodeEvent(
+                                event_type=OpenCodeEventType.BUILD_PROGRESS,
+                                session_id=session_id,
+                                data={
+                                    "delta": (
+                                        "Nota: No se pudo sincronizar automáticamente con GitHub "
+                                        f"({sync_err}). Puedes sincronizar manualmente desde el resumen."
+                                    ),
+                                    "stage": "github_sync_warning",
+                                },
+                            )
+                        )
 
                 # Registro de trazabilidad post-commit: best-effort, no revierte una implementación exitosa
                 traceability_edges = 0
