@@ -45,6 +45,18 @@ class DeploymentConfigurationError(DeploymentApiError):
     """Lanzada cuando los parámetros de configuración del servicio o volumen son inválidos."""
 
 
+class DeploymentPreconditionError(DeploymentApiError):
+    """Lanzada cuando una precondición obligatoria para el despliegue no se cumple (409 Conflict)."""
+
+
+class DeploymentAccountNotLinkedError(DeploymentPreconditionError):
+    """Lanzada cuando el usuario no tiene vinculada su cuenta de la plataforma de despliegue."""
+
+
+class DeploymentRepositoryMissingError(DeploymentPreconditionError):
+    """Lanzada cuando el proyecto no posee un repositorio GitHub sincronizado para desplegar."""
+
+
 # Alias específicos para Railway
 RailwayApiError = DeploymentApiError
 RailwayAuthenticationError = DeploymentAuthenticationError
@@ -52,6 +64,9 @@ RailwayPermissionError = DeploymentPermissionError
 RailwayResourceNotFoundError = DeploymentResourceNotFoundError
 RailwayRateLimitError = DeploymentRateLimitError
 RailwayConfigurationError = DeploymentConfigurationError
+RailwayPreconditionError = DeploymentPreconditionError
+RailwayAccountNotLinkedError = DeploymentAccountNotLinkedError
+RailwayRepositoryMissingError = DeploymentRepositoryMissingError
 
 
 @dataclass(frozen=True, slots=True)

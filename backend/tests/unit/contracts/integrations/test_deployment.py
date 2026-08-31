@@ -5,23 +5,29 @@ from datetime import UTC, datetime
 import pytest
 
 from kosmo.contracts.integrations.deployment import (
+    DeploymentAccountNotLinkedError,
     DeploymentApiError,
     DeploymentAuthenticationError,
     DeploymentConfigurationError,
     DeploymentOAuthToken,
     DeploymentPermissionError,
+    DeploymentPreconditionError,
     DeploymentProvider,
     DeploymentRateLimitError,
+    DeploymentRepositoryMissingError,
     DeploymentResourceNotFoundError,
     DeploymentStatus,
     EnvironmentVariable,
     PortSpec,
     ProjectDeployment,
+    RailwayAccountNotLinkedError,
     RailwayApiError,
     RailwayAuthenticationError,
     RailwayConfigurationError,
     RailwayPermissionError,
+    RailwayPreconditionError,
     RailwayRateLimitError,
+    RailwayRepositoryMissingError,
     RailwayResourceNotFoundError,
     UserDeploymentIntegration,
     VolumeConfig,
@@ -157,6 +163,9 @@ def test_deployment_exception_hierarchy() -> None:
     assert issubclass(DeploymentResourceNotFoundError, DeploymentApiError)
     assert issubclass(DeploymentRateLimitError, DeploymentApiError)
     assert issubclass(DeploymentConfigurationError, DeploymentApiError)
+    assert issubclass(DeploymentPreconditionError, DeploymentApiError)
+    assert issubclass(DeploymentAccountNotLinkedError, DeploymentPreconditionError)
+    assert issubclass(DeploymentRepositoryMissingError, DeploymentPreconditionError)
 
     # Aliases
     assert RailwayApiError is DeploymentApiError
@@ -165,3 +174,6 @@ def test_deployment_exception_hierarchy() -> None:
     assert RailwayResourceNotFoundError is DeploymentResourceNotFoundError
     assert RailwayRateLimitError is DeploymentRateLimitError
     assert RailwayConfigurationError is DeploymentConfigurationError
+    assert RailwayPreconditionError is DeploymentPreconditionError
+    assert RailwayAccountNotLinkedError is DeploymentAccountNotLinkedError
+    assert RailwayRepositoryMissingError is DeploymentRepositoryMissingError
