@@ -389,6 +389,34 @@ class ProjectIntegrationModel(Base):
     last_commit_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="not_created")
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    # Campos de despliegue en la nube (HU-24)
+    service_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    public_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    deploy_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="not_created",
+        server_default="not_created",
+    )
+    build_logs_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_deployed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    volumes: Mapped[list[dict[str, Any]]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    ports: Mapped[list[dict[str, Any]]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    env_vars: Mapped[list[dict[str, Any]]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

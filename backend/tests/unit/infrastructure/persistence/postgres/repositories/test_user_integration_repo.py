@@ -4,6 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from kosmo.contracts.integrations.deployment import (
+    DeploymentProvider,
+    UserDeploymentIntegration,
+)
 from kosmo.contracts.integrations.github import UserGitHubIntegration
 from kosmo.contracts.integrations.user_integration import (
     IntegrationProvider,
@@ -12,6 +16,7 @@ from kosmo.contracts.integrations.user_integration import (
 from kosmo.contracts.sdd.ids import UserId
 from kosmo.infrastructure.persistence.postgres.models import UserIntegrationModel
 from kosmo.infrastructure.persistence.postgres.repositories.user_integration_repo import (
+    SqlAlchemyUserDeploymentIntegrationRepository,
     SqlAlchemyUserGitHubIntegrationRepository,
     SqlAlchemyUserIntegrationRepository,
 )
@@ -410,3 +415,81 @@ async def test_in_memory_user_integration_repository() -> None:
     assert await gh_repo.get_by_user_id(user_a) == gh_int
     assert await gh_repo.delete_by_user_id(user_a) is True
     assert await gh_repo.get_by_user_id(user_a) is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_user_deployment_integration_repository_adapter() -> None:
+    # Arrange
+    now = datetime.now(UTC)
+    rw_model = UserIntegrationModel(
+        id="uint_rw_01",
+        user_id="usr_01J00000000000000000000099",
+        provider="railway",
+        account_name="railway_dev",
+        access_token_enc="encrypted_rw_token",
+        refresh_token_enc=None,
+        scopes=["project:read", "project:write"],
+        created_at=now,
+        updated_at=now,
+    )
+    mock_session = _make_async_session_mock(returned_model=rw_model)
+    mock_session_factory = MagicMock(spec=async_sessionmaker)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    repo = SqlAlchemyUserDeploymentIntegrationRepository(session_factory=mock_session_factory)
+
+    # Act - Get
+    fetched = await repo.get_by_user_id(UserId("usr_01J00000000000000000000099"))
+
+    # Assert - Get
+    assert fetched is not None
+    assert fetched.user_id == UserId("usr_01J00000000000000000000099")
+    assert fetched.provider == DeploymentProvider.RAILWAY
+    assert fetched.provider_username == "railway_dev"
+    assert fetched.encrypted_token == "encrypted_rw_token"
+
+    # Act - Save
+    new_integration = UserDeploymentIntegration(
+        user_id=UserId("usr_01J00000000000000000000099"),
+        provider=DeploymentProvider.RAILWAY,
+        provider_username="railway_updated",
+        encrypted_token="new_encrypted_rw_token",
+    )
+    await repo.save(new_integration)
+
+    # Assert - Save
+    mock_session.commit.assert_awaited()
+
+    # Act - Delete
+    deleted = await repo.delete_by_user_id(UserId("usr_01J00000000000000000000099"))
+    assert deleted is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_in_memory_user_deployment_integration_repository() -> None:
+    # Arrange
+    from tests.unit.fakes import InMemoryUserDeploymentIntegrationRepository
+
+    repo = InMemoryUserDeploymentIntegrationRepository()
+    user_id = UserId("usr_DEPLOY_TEST")
+
+    int_rw = UserDeploymentIntegration(
+        user_id=user_id,
+        provider=DeploymentProvider.RAILWAY,
+        provider_username="rw_user",
+        encrypted_token="enc_rw_token",
+    )
+
+    # Act - Save
+    await repo.save(int_rw)
+
+    # Assert - Get
+    assert await repo.get_by_user_id(user_id) == int_rw
+
+    # Act - Delete
+    assert await repo.delete_by_user_id(user_id) is True
+    assert await repo.get_by_user_id(user_id) is None
+    assert await repo.delete_by_user_id(user_id) is False
