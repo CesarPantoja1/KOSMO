@@ -21,9 +21,42 @@ class DeploymentStatus(enum.StrEnum):
     FAILED = "failed"
 
 
+class DeploymentApiError(RuntimeError):
+    """Excepción base para errores ocurridos al comunicarse con la API de la plataforma de despliegue."""
+
+
+class DeploymentAuthenticationError(DeploymentApiError):
+    """Lanzada cuando el token de despliegue es inválido, expiró o fue rechazado por el proveedor."""
+
+
+class DeploymentPermissionError(DeploymentApiError):
+    """Lanzada cuando la cuenta no posee los permisos necesarios en la plataforma de despliegue."""
+
+
+class DeploymentResourceNotFoundError(DeploymentApiError):
+    """Lanzada cuando un recurso (servicio, volumen, proyecto) no existe en la plataforma de despliegue."""
+
+
+class DeploymentRateLimitError(DeploymentApiError):
+    """Lanzada cuando se excede el límite de solicitudes de la API de despliegue."""
+
+
+class DeploymentConfigurationError(DeploymentApiError):
+    """Lanzada cuando los parámetros de configuración del servicio o volumen son inválidos."""
+
+
+# Alias específicos para Railway
+RailwayApiError = DeploymentApiError
+RailwayAuthenticationError = DeploymentAuthenticationError
+RailwayPermissionError = DeploymentPermissionError
+RailwayResourceNotFoundError = DeploymentResourceNotFoundError
+RailwayRateLimitError = DeploymentRateLimitError
+RailwayConfigurationError = DeploymentConfigurationError
+
+
 @dataclass(frozen=True, slots=True)
 class VolumeConfig:
-    """ConfiguraciÃ³n declarativa de volumen persistente."""
+    """Configuración declarativa de volumen persistente."""
 
     mount_path: str
     size_mb: int | None = None
