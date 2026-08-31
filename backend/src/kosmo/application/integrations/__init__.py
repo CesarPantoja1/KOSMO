@@ -6,6 +6,10 @@ from kosmo.application.integrations.execute_ephemeral_validation import (
     ExecuteEphemeralValidationResult,
     ExecuteEphemeralValidationUseCase,
 )
+from kosmo.application.integrations.handle_deployment_failure import (
+    HandleDeploymentFailureCommand,
+    HandleDeploymentFailureUseCase,
+)
 from kosmo.application.integrations.link_deployment_provider import (
     LinkDeploymentPlatformCommand,
     LinkDeploymentPlatformUseCase,
@@ -46,6 +50,8 @@ __all__ = [
     "VincularPlataformaDespliegueUseCase",
     "LinkGitHubAccountCommand",
     "LinkGitHubAccountUseCase",
+    "HandleDeploymentFailureCommand",
+    "HandleDeploymentFailureUseCase",
     "MonitorDeploymentStatusCommand",
     "MonitorDeploymentStatusUseCase",
     "DeployRailwayCommand",
