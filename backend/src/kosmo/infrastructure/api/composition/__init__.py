@@ -88,6 +88,7 @@ class AppContainer:
         await self.codegen.opencode_client.aclose()
         if isinstance(self.codegen.code_runner, RemoteCodeRunner):
             await self.codegen.code_runner.aclose()
+        await self.integrations.deployment_worker.shutdown()
         await self.db_engine.dispose()
 
 

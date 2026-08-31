@@ -152,7 +152,7 @@ class ProjectDeploymentRepository(Protocol):
 
 
 class DeploymentProviderPort(Protocol):
-    """Puerto para la interacciÃ³n con la API de la plataforma de despliegue (Ej: Railway)."""
+    """Puerto para la interacción con la API de la plataforma de despliegue (Ej: Railway)."""
 
     async def exchange_oauth_code(self, code: str) -> DeploymentOAuthToken: ...
 
@@ -177,3 +177,23 @@ class DeploymentProviderPort(Protocol):
         Retorna (status, public_url, build_logs_url_or_error)
         """
         ...
+
+
+class DeploymentWorkerPort(Protocol):
+    """Puerto para el worker asíncrono de procesamiento y sondeo de despliegues."""
+
+    def start_monitoring(
+        self,
+        project_id: ProjectId,
+        user_id: UserId,
+        *,
+        max_attempts: int = 60,
+        delay_seconds: int = 10,
+        provider: DeploymentProvider = DeploymentProvider.RAILWAY,
+    ) -> object: ...
+
+    def is_monitoring(self, project_id: ProjectId) -> bool: ...
+
+    def cancel_monitoring(self, project_id: ProjectId) -> bool: ...
+
+    async def shutdown(self) -> None: ...
