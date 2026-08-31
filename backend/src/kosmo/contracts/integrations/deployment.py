@@ -81,12 +81,13 @@ class EnvironmentVariable:
 
 @dataclass(frozen=True, slots=True)
 class DeploymentOAuthToken:
-    """Token de acceso obtenido tras el flujo de autorizaciÃ³n OAuth del proveedor."""
+    """Token de acceso obtenido tras el flujo de autorización OAuth del proveedor."""
 
     access_token: str
     token_type: str = "bearer"
     refresh_token: str | None = None
     expires_in: int | None = None
+    scope: str = ""
 
 
 @dataclass(frozen=True, slots=True)

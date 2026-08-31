@@ -4,6 +4,13 @@ from kosmo.application.integrations.execute_ephemeral_validation import (
     ExecuteEphemeralValidationResult,
     ExecuteEphemeralValidationUseCase,
 )
+from kosmo.application.integrations.link_deployment_provider import (
+    LinkDeploymentPlatformCommand,
+    LinkDeploymentPlatformUseCase,
+    LinkDeploymentProviderCommand,
+    LinkDeploymentProviderUseCase,
+    VincularPlataformaDespliegueUseCase,
+)
 from kosmo.application.integrations.link_github_account import (
     LinkGitHubAccountCommand,
     LinkGitHubAccountUseCase,
@@ -18,8 +25,13 @@ __all__ = [
     "ExecuteEphemeralValidationCommand",
     "ExecuteEphemeralValidationResult",
     "ExecuteEphemeralValidationUseCase",
+    "LinkDeploymentPlatformCommand",
+    "LinkDeploymentPlatformUseCase",
+    "LinkDeploymentProviderCommand",
+    "LinkDeploymentProviderUseCase",
     "LinkGitHubAccountCommand",
     "LinkGitHubAccountUseCase",
     "SyncGitHubRepositoryCommand",
     "SyncGitHubRepositoryUseCase",
+    "VincularPlataformaDespliegueUseCase",
 ]
