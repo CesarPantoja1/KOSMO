@@ -355,7 +355,8 @@ class RailwayHttpClient(DeploymentProviderPort):
                     raise DeploymentAuthenticationError(
                         f"No autorizado en Railway para realizar esta operación ({err_msg}). "
                         "Verifica en tu panel de Railway si tienes un aviso de 'Acción necesaria' pendiente "
-                        "o si alcanzaste el límite de proyectos de tu plan Trial (elimina proyectos no utilizados si es necesario)."
+                        "o si alcanzaste el límite de proyectos de tu plan Trial "
+                        "(elimina proyectos no utilizados si es necesario)."
                     )
                 if "not found or is not accessible" in err_msg.lower():
                     raise DeploymentPermissionError(
