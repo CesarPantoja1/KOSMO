@@ -4,11 +4,21 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from kosmo.application.integrations.link_deployment_provider import (
+    LinkDeploymentPlatformCommand,
+    LinkDeploymentPlatformUseCase,
+)
 from kosmo.application.integrations.link_github_account import (
     LinkGitHubAccountCommand,
     LinkGitHubAccountUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.integrations.deployment import (
+    DeploymentApiError,
+    DeploymentAuthenticationError,
+    DeploymentPermissionError,
+    DeploymentProvider,
+)
 from kosmo.contracts.integrations.github import (
     GitHubApiError,
     GitHubAuthenticationError,
@@ -17,6 +27,7 @@ from kosmo.contracts.integrations.github import (
 from kosmo.contracts.sdd.ids import UserId
 from kosmo.infrastructure.api.dependencies import (
     get_container,
+    get_link_deployment_platform_use_case,
     get_link_github_account_use_case,
     get_principal,
 )
@@ -38,45 +49,52 @@ async def connect_oauth(
     provider: str,
     body: ConnectOAuthRequest,
     principal: Annotated[Principal, Depends(get_principal)],
-    use_case: Annotated[LinkGitHubAccountUseCase, Depends(get_link_github_account_use_case)],
+    github_use_case: Annotated[LinkGitHubAccountUseCase, Depends(get_link_github_account_use_case)],
+    railway_use_case: Annotated[LinkDeploymentPlatformUseCase, Depends(get_link_deployment_platform_use_case)],
 ) -> IntegrationStatusResponse:
-    if provider.lower() != "github":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Proveedor de integración '{provider}' no soportado.",
-        )
+    provider_clean = provider.lower().strip()
 
-    try:
-        cmd = LinkGitHubAccountCommand(
-            code=body.code,
-        )
-        integration = await use_case.execute(principal, cmd)
-    except GitHubAuthenticationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    except GitHubPermissionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
-        ) from exc
-    except GitHubApiError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
+    if provider_clean == "github":
+        try:
+            cmd = LinkGitHubAccountCommand(code=body.code)
+            github_integration = await github_use_case.execute(principal, cmd)
+            return IntegrationStatusResponse(
+                provider="github",
+                is_connected=True,
+                username=github_integration.github_username,
+                connected_at=github_integration.updated_at,
+            )
+        except GitHubAuthenticationError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except GitHubPermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        except GitHubApiError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return IntegrationStatusResponse(
-        provider=provider.lower(),
-        is_connected=True,
-        username=integration.github_username,
-        connected_at=integration.updated_at,
+    elif provider_clean == "railway":
+        try:
+            cmd_railway = LinkDeploymentPlatformCommand(code=body.code, provider=DeploymentProvider.RAILWAY)
+            railway_integration = await railway_use_case.execute(principal, cmd_railway)
+            return IntegrationStatusResponse(
+                provider="railway",
+                is_connected=True,
+                username=railway_integration.provider_username,
+                connected_at=railway_integration.updated_at,
+            )
+        except DeploymentAuthenticationError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except DeploymentPermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        except DeploymentApiError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Proveedor de integración '{provider}' no soportado.",
     )
 
 
@@ -91,29 +109,49 @@ async def get_integration_status(
     request: Request,
     principal: Annotated[Principal, Depends(get_principal)],
 ) -> IntegrationStatusResponse:
-    if provider.lower() != "github":
+    provider_clean = provider.lower().strip()
+    container = get_container(request)
+    user_id = UserId(principal.subject)
+
+    if provider_clean == "github":
+        integration = await container.repos.user_github_integrations.get_by_user_id(user_id)
+        if integration is None:
+            return IntegrationStatusResponse(
+                provider="github",
+                is_connected=False,
+                username=None,
+                connected_at=None,
+            )
         return IntegrationStatusResponse(
-            provider=provider.lower(),
-            is_connected=False,
-            username=None,
-            connected_at=None,
+            provider="github",
+            is_connected=True,
+            username=integration.github_username,
+            connected_at=integration.updated_at,
         )
 
-    container = get_container(request)
-    integration = await container.repos.user_github_integrations.get_by_user_id(UserId(principal.subject))
-    if integration is None:
+    elif provider_clean == "railway":
+        deployment_integration = await container.repos.user_deployment_integrations.get_by_user_id(
+            user_id, DeploymentProvider.RAILWAY
+        )
+        if deployment_integration is None:
+            return IntegrationStatusResponse(
+                provider="railway",
+                is_connected=False,
+                username=None,
+                connected_at=None,
+            )
         return IntegrationStatusResponse(
-            provider=provider.lower(),
-            is_connected=False,
-            username=None,
-            connected_at=None,
+            provider="railway",
+            is_connected=True,
+            username=deployment_integration.provider_username,
+            connected_at=deployment_integration.updated_at,
         )
 
     return IntegrationStatusResponse(
-        provider=provider.lower(),
-        is_connected=True,
-        username=integration.github_username,
-        connected_at=integration.updated_at,
+        provider=provider_clean,
+        is_connected=False,
+        username=None,
+        connected_at=None,
     )
 
 
@@ -128,20 +166,33 @@ async def disconnect_integration(
     request: Request,
     principal: Annotated[Principal, Depends(get_principal)],
 ) -> Response:
-    if provider.lower() != "github":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"La integración '{provider}' no se encuentra vinculada",
-        )
-
+    provider_clean = provider.lower().strip()
     container = get_container(request)
     user_id = UserId(principal.subject)
-    existing = await container.repos.user_github_integrations.get_by_user_id(user_id)
-    if existing is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="La integración no se encuentra vinculada",
-        )
 
-    await container.repos.user_github_integrations.delete_by_user_id(user_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    if provider_clean == "github":
+        existing_github = await container.repos.user_github_integrations.get_by_user_id(user_id)
+        if existing_github is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La integración no se encuentra vinculada",
+            )
+        await container.repos.user_github_integrations.delete_by_user_id(user_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    elif provider_clean == "railway":
+        existing_railway = await container.repos.user_deployment_integrations.get_by_user_id(
+            user_id, DeploymentProvider.RAILWAY
+        )
+        if existing_railway is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La integración no se encuentra vinculada",
+            )
+        await container.repos.user_deployment_integrations.delete_by_user_id(user_id, DeploymentProvider.RAILWAY)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"La integración '{provider}' no se encuentra vinculada",
+    )

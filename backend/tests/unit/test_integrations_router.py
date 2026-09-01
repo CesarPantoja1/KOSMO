@@ -6,13 +6,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException, Request
 
+from kosmo.application.integrations.link_deployment_provider import (
+    LinkDeploymentPlatformCommand,
+    LinkDeploymentPlatformUseCase,
+)
 from kosmo.application.integrations.link_github_account import (
     LinkGitHubAccountCommand,
     LinkGitHubAccountUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.integrations.deployment import (
+    DeploymentApiError,
+    DeploymentProvider,
+    UserDeploymentIntegration,
+)
 from kosmo.contracts.integrations.github import (
-    GitHubApiError,
     GitHubAuthenticationError,
     UserGitHubIntegration,
 )
@@ -30,13 +38,22 @@ def _principal(subject: str = "usr_123") -> Principal:
     return Principal(subject=subject, scopes=frozenset({"*"}))
 
 
-def _mock_request(user_integration: UserGitHubIntegration | None = None) -> Request:
+def _mock_request(
+    user_integration: UserGitHubIntegration | None = None,
+    deployment_integration: UserDeploymentIntegration | None = None,
+) -> Request:
     req = MagicMock(spec=Request)
     container = MagicMock(spec=AppContainer)
     user_repo = AsyncMock()
     user_repo.get_by_user_id.return_value = user_integration
     user_repo.delete_by_user_id.return_value = True
     container.repos.user_github_integrations = user_repo
+
+    deploy_repo = AsyncMock()
+    deploy_repo.get_by_user_id.return_value = deployment_integration
+    deploy_repo.delete_by_user_id.return_value = True
+    container.repos.user_deployment_integrations = deploy_repo
+
     req.app.state.container = container
     return req
 
@@ -46,6 +63,7 @@ def _mock_request(user_integration: UserGitHubIntegration | None = None) -> Requ
 async def test_connect_oauth_github_success_200() -> None:
     # Arrange
     use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
+    railway_use_case = AsyncMock(spec=LinkDeploymentPlatformUseCase)
     now = datetime.now(UTC)
     use_case.execute.return_value = UserGitHubIntegration(
         user_id=UserId("usr_123"),
@@ -60,7 +78,8 @@ async def test_connect_oauth_github_success_200() -> None:
         provider="github",
         body=body,
         principal=_principal("usr_123"),
-        use_case=use_case,
+        github_use_case=use_case,
+        railway_use_case=railway_use_case,
     )
 
     # Assert
@@ -76,9 +95,46 @@ async def test_connect_oauth_github_success_200() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_connect_oauth_railway_success_200() -> None:
+    # Arrange
+    github_use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
+    railway_use_case = AsyncMock(spec=LinkDeploymentPlatformUseCase)
+    now = datetime.now(UTC)
+    railway_use_case.execute.return_value = UserDeploymentIntegration(
+        user_id=UserId("usr_123"),
+        provider=DeploymentProvider.RAILWAY,
+        provider_username="railway_user",
+        encrypted_token="encrypted_railway_token",
+        updated_at=now,
+    )
+    body = ConnectOAuthRequest(code="rw_code_123")
+
+    # Act
+    response = await connect_oauth(
+        provider="railway",
+        body=body,
+        principal=_principal("usr_123"),
+        github_use_case=github_use_case,
+        railway_use_case=railway_use_case,
+    )
+
+    # Assert
+    assert response.provider == "railway"
+    assert response.is_connected is True
+    assert response.username == "railway_user"
+    assert response.connected_at == now
+    railway_use_case.execute.assert_called_once_with(
+        _principal("usr_123"),
+        LinkDeploymentPlatformCommand(code="rw_code_123", provider=DeploymentProvider.RAILWAY),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_connect_oauth_unsupported_provider_400() -> None:
     # Arrange
-    use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
+    github_use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
+    railway_use_case = AsyncMock(spec=LinkDeploymentPlatformUseCase)
     body = ConnectOAuthRequest(code="code123")
 
     # Act & Assert
@@ -87,7 +143,8 @@ async def test_connect_oauth_unsupported_provider_400() -> None:
             provider="unsupported_provider",
             body=body,
             principal=_principal(),
-            use_case=use_case,
+            github_use_case=github_use_case,
+            railway_use_case=railway_use_case,
         )
 
     assert exc_info.value.status_code == 400
@@ -99,6 +156,7 @@ async def test_connect_oauth_unsupported_provider_400() -> None:
 async def test_connect_oauth_github_auth_error_400() -> None:
     # Arrange
     use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
+    railway_use_case = AsyncMock(spec=LinkDeploymentPlatformUseCase)
     use_case.execute.side_effect = GitHubAuthenticationError("Código de autorización OAuth inválido o expirado")
     body = ConnectOAuthRequest(code="gho_expired_code")
 
@@ -108,7 +166,8 @@ async def test_connect_oauth_github_auth_error_400() -> None:
             provider="github",
             body=body,
             principal=_principal(),
-            use_case=use_case,
+            github_use_case=use_case,
+            railway_use_case=railway_use_case,
         )
 
     assert exc_info.value.status_code == 400
@@ -117,19 +176,21 @@ async def test_connect_oauth_github_auth_error_400() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_connect_oauth_github_api_error_502() -> None:
+async def test_connect_oauth_railway_api_error_502() -> None:
     # Arrange
-    use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
-    use_case.execute.side_effect = GitHubApiError("Error de comunicación con GitHub API")
-    body = ConnectOAuthRequest(code="gho_code_fail")
+    github_use_case = AsyncMock(spec=LinkGitHubAccountUseCase)
+    railway_use_case = AsyncMock(spec=LinkDeploymentPlatformUseCase)
+    railway_use_case.execute.side_effect = DeploymentApiError("Error de comunicación con Railway API")
+    body = ConnectOAuthRequest(code="rw_bad_code")
 
     # Act & Assert
     with pytest.raises(HTTPException) as exc_info:
         await connect_oauth(
-            provider="github",
+            provider="railway",
             body=body,
             principal=_principal(),
-            use_case=use_case,
+            github_use_case=github_use_case,
+            railway_use_case=railway_use_case,
         )
 
     assert exc_info.value.status_code == 502
@@ -137,7 +198,7 @@ async def test_connect_oauth_github_api_error_502() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_get_integration_status_connected_200() -> None:
+async def test_get_integration_status_github_connected_200() -> None:
     # Arrange
     now = datetime.now(UTC)
     integration = UserGitHubIntegration(
@@ -159,6 +220,34 @@ async def test_get_integration_status_connected_200() -> None:
     assert response.provider == "github"
     assert response.is_connected is True
     assert response.username == "octocat"
+    assert response.connected_at == now
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_integration_status_railway_connected_200() -> None:
+    # Arrange
+    now = datetime.now(UTC)
+    deployment_int = UserDeploymentIntegration(
+        user_id=UserId("usr_123"),
+        provider=DeploymentProvider.RAILWAY,
+        provider_username="railway_user",
+        encrypted_token="enc_token",
+        updated_at=now,
+    )
+    request = _mock_request(deployment_integration=deployment_int)
+
+    # Act
+    response = await get_integration_status(
+        provider="railway",
+        request=request,
+        principal=_principal("usr_123"),
+    )
+
+    # Assert
+    assert response.provider == "railway"
+    assert response.is_connected is True
+    assert response.username == "railway_user"
     assert response.connected_at == now
 
 
@@ -184,7 +273,7 @@ async def test_get_integration_status_not_connected_200() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_disconnect_integration_success_204() -> None:
+async def test_disconnect_integration_github_success_204() -> None:
     # Arrange
     integration = UserGitHubIntegration(
         user_id=UserId("usr_123"),
@@ -203,6 +292,31 @@ async def test_disconnect_integration_success_204() -> None:
     assert response.status_code == 204
     request.app.state.container.repos.user_github_integrations.delete_by_user_id.assert_called_once_with(
         UserId("usr_123")
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_disconnect_integration_railway_success_204() -> None:
+    # Arrange
+    deployment_int = UserDeploymentIntegration(
+        user_id=UserId("usr_123"),
+        provider=DeploymentProvider.RAILWAY,
+        provider_username="rw_user",
+        encrypted_token="enc_token",
+    )
+    request = _mock_request(deployment_integration=deployment_int)
+
+    # Act
+    response = await disconnect_integration(
+        provider="railway",
+        request=request,
+        principal=_principal("usr_123"),
+    )
+
+    assert response.status_code == 204
+    request.app.state.container.repos.user_deployment_integrations.delete_by_user_id.assert_called_once_with(
+        UserId("usr_123"), DeploymentProvider.RAILWAY
     )
 
 

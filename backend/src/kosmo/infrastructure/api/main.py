@@ -19,6 +19,7 @@ from kosmo.infrastructure.api.routers.ai_config import router as ai_config_route
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.chat_sessions import router as chat_sessions_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
+from kosmo.infrastructure.api.routers.deployment import router as deployment_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.documents import router as documents_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
@@ -336,6 +337,7 @@ app.include_router(mcp_router)
 app.include_router(implementations_router)
 app.include_router(integrations_router)
 app.include_router(github_router)
+app.include_router(deployment_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)

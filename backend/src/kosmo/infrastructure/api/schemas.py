@@ -1041,3 +1041,45 @@ class PushGitHubRequest(BaseModel):
     commit_message: str | None = Field(
         default=None, max_length=300, description="Mensaje descriptivo para el commit de sincronización"
     )
+
+
+# ── Cloud Deployment (HU-24) ──
+
+
+class DeployStatusEnum(StrEnum):
+    """Estado del ciclo de vida del despliegue en la plataforma en la nube."""
+
+    idle = "idle"
+    pending = "pending"
+    building = "building"
+    ready = "ready"
+    failed = "failed"
+
+
+class ProjectDeployStatusResponse(BaseModel):
+    """Metadatos y estado actual de la publicación del proyecto en la nube."""
+
+    service_id: str | None = Field(default=None, description="Identificador único del servicio en Railway")
+    service_name: str | None = Field(default=None, description="Nombre del servicio desplegado en la plataforma")
+    deploy_url: str | None = Field(default=None, description="URL pública accesible en internet generada por Railway")
+    status: str = Field(description="Estado del ciclo de vida del despliegue en la plataforma en la nube")
+    last_deploy_at: datetime | None = Field(
+        default=None, description="Marca de tiempo ISO-8601 UTC del último despliegue disparado"
+    )
+    error_message: str | None = Field(
+        default=None, description="Mensaje de error si la construcción o arranque del servicio fallaron"
+    )
+    error_log_url: str | None = Field(
+        default=None, description="Enlace directo hacia la consola de registros de compilación en Railway"
+    )
+
+
+class DeployRailwayRequest(BaseModel):
+    """Parámetros opcionales para configurar o personalizar el despliegue en Railway."""
+
+    service_name: str | None = Field(
+        default=None, max_length=100, description="Nombre personalizado para el servicio en Railway"
+    )
+    environment_variables: dict[str, str] | None = Field(
+        default=None, description="Variables de entorno adicionales a configurar en el servicio"
+    )
