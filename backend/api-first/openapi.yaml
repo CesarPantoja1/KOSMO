@@ -2153,6 +2153,12 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Permisos insuficientes en la plataforma externa
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "502":
           description: Error al comunicarse con el servidor OAuth de la plataforma externa
           content:
@@ -2340,10 +2346,22 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Permisos insuficientes en la plataforma de despliegue
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
           description: "Precondición no cumplida: el proyecto no tiene repositorio en GitHub o la cuenta de Railway no está vinculada"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Límite de solicitudes de la API de despliegue excedido
           content:
             application/problem+json:
               schema:
