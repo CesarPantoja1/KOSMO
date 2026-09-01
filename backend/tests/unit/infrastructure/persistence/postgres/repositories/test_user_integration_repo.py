@@ -428,8 +428,8 @@ async def test_user_deployment_integration_repository_adapter() -> None:
         provider="railway",
         account_name="railway_dev",
         access_token_enc="encrypted_rw_token",
-        refresh_token_enc=None,
-        scopes=["project:read", "project:write"],
+        refresh_token_enc="encrypted_rw_refresh",
+        scopes=["openid", "workspace:admin"],
         created_at=now,
         updated_at=now,
     )
@@ -449,6 +449,8 @@ async def test_user_deployment_integration_repository_adapter() -> None:
     assert fetched.provider == DeploymentProvider.RAILWAY
     assert fetched.provider_username == "railway_dev"
     assert fetched.encrypted_token == "encrypted_rw_token"
+    assert fetched.encrypted_refresh_token == "encrypted_rw_refresh"
+    assert fetched.scopes == ("openid", "workspace:admin")
 
     # Act - Save
     new_integration = UserDeploymentIntegration(
@@ -456,6 +458,8 @@ async def test_user_deployment_integration_repository_adapter() -> None:
         provider=DeploymentProvider.RAILWAY,
         provider_username="railway_updated",
         encrypted_token="new_encrypted_rw_token",
+        encrypted_refresh_token="new_encrypted_refresh",
+        scopes=("workspace:admin",),
     )
     await repo.save(new_integration)
 

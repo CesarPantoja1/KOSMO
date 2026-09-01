@@ -75,7 +75,11 @@ async def connect_oauth(
 
     elif provider_clean == "railway":
         try:
-            cmd_railway = LinkDeploymentPlatformCommand(code=body.code, provider=DeploymentProvider.RAILWAY)
+            cmd_railway = LinkDeploymentPlatformCommand(
+                code=body.code,
+                provider=DeploymentProvider.RAILWAY,
+                redirect_uri=body.redirect_uri,
+            )
             railway_integration = await railway_use_case.execute(principal, cmd_railway)
             return IntegrationStatusResponse(
                 provider="railway",

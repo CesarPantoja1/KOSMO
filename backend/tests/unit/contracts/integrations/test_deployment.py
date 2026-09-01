@@ -118,6 +118,8 @@ def test_user_deployment_integration_defaults() -> None:
     assert integration.provider == DeploymentProvider.RAILWAY
     assert integration.encrypted_token == "enc_token_123"
     assert integration.provider_username is None
+    assert integration.encrypted_refresh_token is None
+    assert integration.scopes == ()
     assert isinstance(integration.updated_at, datetime)
 
 

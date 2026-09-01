@@ -239,6 +239,8 @@ class SqlAlchemyUserDeploymentIntegrationRepository(UserDeploymentIntegrationRep
             provider=DeploymentProvider(integration.provider.value),
             encrypted_token=integration.encrypted_access_token,
             provider_username=integration.account_name,
+            encrypted_refresh_token=integration.encrypted_refresh_token,
+            scopes=tuple(integration.scopes),
             updated_at=integration.updated_at,
         )
 
@@ -250,6 +252,8 @@ class SqlAlchemyUserDeploymentIntegrationRepository(UserDeploymentIntegrationRep
             provider=integration_provider,
             encrypted_access_token=integration.encrypted_token,
             account_name=integration.provider_username,
+            encrypted_refresh_token=integration.encrypted_refresh_token,
+            scopes=list(integration.scopes),
             updated_at=integration.updated_at,
         )
         await self._delegate.save(user_int)

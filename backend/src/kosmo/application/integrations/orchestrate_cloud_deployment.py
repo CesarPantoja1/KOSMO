@@ -17,6 +17,7 @@ from kosmo.contracts.integrations.deployment import (
     PortSpec,
     ProjectDeployment,
     ProjectDeploymentRepository,
+    UserDeploymentIntegration,
     UserDeploymentIntegrationRepository,
     VolumeConfig,
 )
@@ -56,6 +57,44 @@ class OrchestrateCloudDeploymentUseCase:
         self._project_github_repo = project_github_repo
         self._deployment_client = deployment_client
         self._cipher = cipher
+
+    async def _refresh_user_token(self, user_integration: UserDeploymentIntegration) -> str:
+        """Renueva el token de acceso utilizando el refresh token cifrado del usuario y actualiza la base de datos."""
+        if not user_integration.encrypted_refresh_token:
+            raise DeploymentAuthenticationError(
+                "La sesión de despliegue expiró y no hay un refresh token disponible. Reconecta tu cuenta de Railway."
+            )
+        try:
+            raw_rt_bytes = base64.b64decode(user_integration.encrypted_refresh_token.encode("utf-8"))
+            decrypted_rt = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_rt_bytes)).decode("utf-8")
+        except Exception as exc:
+            raise DeploymentAuthenticationError("Error al descifrar el refresh token del usuario.") from exc
+
+        new_token_dto = await self._deployment_client.refresh_access_token(decrypted_rt)
+        if not new_token_dto.access_token:
+            raise DeploymentAuthenticationError("Fallo al renovar el token de acceso con Railway.")
+
+        new_enc_access = base64.b64encode(
+            self._cipher.encrypt(new_token_dto.access_token.encode("utf-8")).ciphertext
+        ).decode("utf-8")
+
+        new_enc_refresh = user_integration.encrypted_refresh_token
+        if new_token_dto.refresh_token:
+            new_enc_refresh = base64.b64encode(
+                self._cipher.encrypt(new_token_dto.refresh_token.encode("utf-8")).ciphertext
+            ).decode("utf-8")
+
+        updated_integration = UserDeploymentIntegration(
+            user_id=user_integration.user_id,
+            provider=user_integration.provider,
+            encrypted_token=new_enc_access,
+            provider_username=user_integration.provider_username,
+            encrypted_refresh_token=new_enc_refresh,
+            scopes=user_integration.scopes,
+            updated_at=datetime.now(UTC),
+        )
+        await self._user_deployment_repo.save(updated_integration)
+        return new_token_dto.access_token
 
     @traced("deployment.orchestrate")
     async def execute(
@@ -107,30 +146,45 @@ class OrchestrateCloudDeploymentUseCase:
         volume_config = VolumeConfig(mount_path="/data", size_mb=512)
         port_spec = PortSpec(port=3000, protocol="http")
 
-        # 5. Crear o reutilizar servicio remoto
+        # 5. Crear o reutilizar servicio remoto y aprovisionar con auto-renovación si el token expiró
         existing_deployment = await self._project_deployment_repo.get_by_project_id(cmd.project_id)
         now = datetime.now(UTC)
+        is_redeploy = bool(existing_deployment and existing_deployment.service_id)
 
-        if existing_deployment and existing_deployment.service_id:
-            service_id = existing_deployment.service_id
-        else:
-            service_id = await self._deployment_client.create_service(
-                token=token,
-                repo_url=github_integration.repo_url,
-                env_vars=all_env_vars,
-                ports=[port_spec],
+        async def _provision_remote(current_token: str) -> str:
+            if is_redeploy:
+                # Reutilizar el servicio existente: no crear ni reconfigurar el volumen
+                # existing_deployment y service_id no son None cuando is_redeploy es True
+                assert existing_deployment is not None and existing_deployment.service_id is not None
+                sid: str = existing_deployment.service_id
+            else:
+                sid = await self._deployment_client.create_service(
+                    token=current_token,
+                    repo_url=github_integration.repo_url,  # type: ignore[arg-type]
+                    env_vars=all_env_vars,
+                    ports=[port_spec],
+                )
+                # Configurar volumen solo en el primer despliegue
+                await self._deployment_client.configure_volume(
+                    token=current_token,
+                    service_id=sid,
+                    volume=volume_config,
+                )
+
+            await self._deployment_client.trigger_deployment(
+                token=current_token,
+                service_id=sid,
             )
+            return sid
 
-        # 6. Aprovisionar volumen persistente SQLite y disparar construcción
-        await self._deployment_client.configure_volume(
-            token=token,
-            service_id=service_id,
-            volume=volume_config,
-        )
-        await self._deployment_client.trigger_deployment(
-            token=token,
-            service_id=service_id,
-        )
+        try:
+            service_id = await _provision_remote(token)
+        except DeploymentAuthenticationError:
+            if user_integration.encrypted_refresh_token:
+                token = await self._refresh_user_token(user_integration)
+                service_id = await _provision_remote(token)
+            else:
+                raise
 
         # 7. Actualizar y persistir el estado de despliegue del proyecto
         deployment = ProjectDeployment(

@@ -71,7 +71,7 @@ async def test_link_deployment_platform_success(
     result = await use_case.execute(principal, cmd)
 
     # Assert
-    mock_deployment_client.exchange_oauth_code.assert_called_once_with("temp-oauth-code")
+    mock_deployment_client.exchange_oauth_code.assert_called_once_with("temp-oauth-code", None)
     mock_cipher.encrypt.assert_called_once_with(b"rw_token_xyz")
     mock_repo.save.assert_called_once()
     saved_integration: UserDeploymentIntegration = mock_repo.save.call_args[0][0]
@@ -79,6 +79,53 @@ async def test_link_deployment_platform_success(
     assert saved_integration.provider == DeploymentProvider.RAILWAY
     assert saved_integration.encrypted_token == "ZW5jcnlwdGVkLWRlcGxveW1lbnQtdG9rZW4="
     assert result == saved_integration
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_link_deployment_platform_with_redirect_uri_and_refresh_token(
+    use_case: LinkDeploymentPlatformUseCase,
+    mock_deployment_client: AsyncMock,
+    mock_cipher: MagicMock,
+    mock_repo: AsyncMock,
+    principal: Principal,
+):
+    # Arrange
+    cmd = LinkDeploymentPlatformCommand(
+        code="auth-code-abc",
+        redirect_uri="https://kosmo.app/perfil",
+    )
+    mock_deployment_client.exchange_oauth_code.return_value = DeploymentOAuthToken(
+        access_token="access_123",
+        refresh_token="refresh_456",
+        scope="openid email profile workspace:admin",
+    )
+    mock_deployment_client.get_authenticated_user.return_value = {
+        "name": "Jane Developer",
+        "email": "jane@example.com",
+    }
+    mock_cipher.encrypt.side_effect = [
+        EncryptedSecret(ciphertext=b"enc_access"),
+        EncryptedSecret(ciphertext=b"enc_refresh"),
+    ]
+
+    # Act
+    result = await use_case.execute(principal, cmd)
+
+    # Assert
+    mock_deployment_client.exchange_oauth_code.assert_called_once_with(
+        "auth-code-abc",
+        "https://kosmo.app/perfil",
+    )
+    mock_deployment_client.get_authenticated_user.assert_called_once_with("access_123")
+    mock_repo.save.assert_called_once()
+    saved: UserDeploymentIntegration = mock_repo.save.call_args[0][0]
+    assert saved.provider_username == "Jane Developer"
+    assert saved.encrypted_refresh_token is not None
+    assert "workspace:admin" in saved.scopes
+    assert result.provider_username == "Jane Developer"
+    assert result.encrypted_refresh_token is not None
+    assert "workspace:admin" in result.scopes
 
 
 @pytest.mark.unit
@@ -128,6 +175,7 @@ async def test_link_deployment_platform_with_fernet_and_in_memory_repo():
     repo = InMemoryUserDeploymentIntegrationRepository()
     mock_client = AsyncMock()
     mock_client.exchange_oauth_code.return_value = DeploymentOAuthToken(access_token="secret-token-12345")
+    mock_client.get_authenticated_user.return_value = {"name": "Test User", "email": "test@user.com"}
 
     use_case = LinkDeploymentProviderUseCase(
         deployment_client=mock_client,

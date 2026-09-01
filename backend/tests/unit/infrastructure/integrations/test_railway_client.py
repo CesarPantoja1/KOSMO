@@ -81,6 +81,38 @@ async def test_exchange_oauth_code_success() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_exchange_oauth_code_long_code_exchanges_normally() -> None:
+    # Arrange: Código largo de 64 caracteres típico de OAuth2
+    long_code = "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        content_str = request.content.decode("utf-8")
+        body = dict(urllib.parse.parse_qsl(content_str))
+        assert body["code"] == long_code
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "rw_real_access_token_from_exchange",
+                "token_type": "bearer",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    railway_client = RailwayHttpClient(
+        client=mock_client,
+        client_id="rw_client_1",
+        client_secret="rw_secret_1",
+    )
+
+    # Act
+    token = await railway_client.exchange_oauth_code(long_code)
+
+    # Assert: Se intercambió mediante HTTP y no se devolvió el código crudo
+    assert token.access_token == "rw_real_access_token_from_exchange"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_exchange_oauth_code_raises_on_error_payload() -> None:
     # Arrange
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -169,6 +201,154 @@ async def test_exchange_oauth_code_raises_on_network_error() -> None:
         await railway_client.exchange_oauth_code("net_err_code")
 
     assert "Error de red al conectar con Railway OAuth" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_exchange_oauth_code_with_redirect_uri() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        content_str = request.content.decode("utf-8")
+        body = dict(urllib.parse.parse_qsl(content_str))
+        assert body["code"] == "auth_code_with_uri"
+        assert body["redirect_uri"] == "https://kosmo.app/perfil"
+        assert body["grant_type"] == "authorization_code"
+
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "rw_access_123",
+                "token_type": "bearer",
+                "refresh_token": "rw_refresh_456",
+                "expires_in": 3600,
+                "scope": "openid email profile workspace:admin",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    railway_client = RailwayHttpClient(
+        client=mock_client,
+        client_id="rw_client_1",
+        client_secret="rw_secret_1",
+    )
+
+    # Act
+    token: DeploymentOAuthToken = await railway_client.exchange_oauth_code(
+        "auth_code_with_uri",
+        redirect_uri="https://kosmo.app/perfil",
+    )
+
+    # Assert
+    assert token.access_token == "rw_access_123"
+    assert token.refresh_token == "rw_refresh_456"
+    assert token.expires_in == 3600
+    assert "workspace:admin" in token.scope
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_authenticated_user_success() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).endswith("/oauth/me")
+        assert request.headers.get("authorization") == "Bearer valid_token"
+        return httpx.Response(
+            200,
+            json={
+                "sub": "user_railway_123",
+                "name": "Jane Developer",
+                "email": "jane@example.com",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act
+    user_info = await railway_client.get_authenticated_user("valid_token")
+
+    # Assert
+    assert user_info["sub"] == "user_railway_123"
+    assert user_info["name"] == "Jane Developer"
+    assert user_info["email"] == "jane@example.com"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_authenticated_user_unauthorized() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "unauthorized"})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act & Assert
+    with pytest.raises(DeploymentAuthenticationError) as exc_info:
+        await railway_client.get_authenticated_user("expired_token")
+
+    assert "Token de Railway inválido o expirado" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_refresh_access_token_success() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "https://backboard.railway.com/oauth/token"
+        content_str = request.content.decode("utf-8")
+        body = dict(urllib.parse.parse_qsl(content_str))
+        assert body["grant_type"] == "refresh_token"
+        assert body["refresh_token"] == "valid_refresh_token"
+
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "new_access_token",
+                "token_type": "bearer",
+                "refresh_token": "rotated_refresh_token",
+                "expires_in": 3600,
+                "scope": "openid email profile workspace:admin",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    railway_client = RailwayHttpClient(
+        client=mock_client,
+        client_id="rw_client_1",
+        client_secret="rw_secret_1",
+    )
+
+    # Act
+    new_token = await railway_client.refresh_access_token("valid_refresh_token")
+
+    # Assert
+    assert new_token.access_token == "new_access_token"
+    assert new_token.refresh_token == "rotated_refresh_token"
+    assert new_token.expires_in == 3600
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_refresh_access_token_raises_on_invalid_token() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={
+                "error": "invalid_grant",
+                "error_description": "Refresh token is expired or revoked",
+            },
+        )
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act & Assert
+    with pytest.raises(DeploymentAuthenticationError) as exc_info:
+        await railway_client.refresh_access_token("revoked_refresh_token")
+
+    assert "Fallo al renovar token de Railway" in str(exc_info.value)
 
 
 # ══════════════════════════════ 2. create_service ══════════════════════════════

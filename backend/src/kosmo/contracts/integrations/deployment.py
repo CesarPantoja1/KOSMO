@@ -107,12 +107,14 @@ class DeploymentOAuthToken:
 
 @dataclass(frozen=True, slots=True)
 class UserDeploymentIntegration:
-    """ConfiguraciÃ³n de integraciÃ³n con la plataforma de despliegue a nivel de usuario."""
+    """Configuración de integración con la plataforma de despliegue a nivel de usuario."""
 
     user_id: UserId
     provider: DeploymentProvider
     encrypted_token: str
     provider_username: str | None = None
+    encrypted_refresh_token: str | None = None
+    scopes: tuple[str, ...] = field(default_factory=tuple)
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -154,7 +156,19 @@ class ProjectDeploymentRepository(Protocol):
 class DeploymentProviderPort(Protocol):
     """Puerto para la interacción con la API de la plataforma de despliegue (Ej: Railway)."""
 
-    async def exchange_oauth_code(self, code: str) -> DeploymentOAuthToken: ...
+    async def exchange_oauth_code(
+        self,
+        code: str,
+        redirect_uri: str | None = None,
+    ) -> DeploymentOAuthToken: ...
+
+    async def get_authenticated_user(self, token: str) -> dict[str, str]:
+        """Consulta el perfil del usuario autenticado en la plataforma (sub, name, email)."""
+        ...
+
+    async def refresh_access_token(self, refresh_token: str) -> DeploymentOAuthToken:
+        """Renueva el token de acceso utilizando un refresh token rotado."""
+        ...
 
     async def create_service(
         self,

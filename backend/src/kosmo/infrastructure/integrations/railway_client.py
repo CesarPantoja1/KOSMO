@@ -52,6 +52,7 @@ class RailwayHttpClient(DeploymentProviderPort):
         self,
         base_url: str = "https://backboard.railway.com",
         oauth_url: str = "https://backboard.railway.com/oauth/token",
+        userinfo_url: str = "https://backboard.railway.com/oauth/me",
         client_id: str | None = None,
         client_secret: str | None = None,
         timeout_seconds: float = 15.0,
@@ -59,6 +60,7 @@ class RailwayHttpClient(DeploymentProviderPort):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._oauth_url = oauth_url
+        self._userinfo_url = userinfo_url
         self._client_id = client_id
         self._client_secret = client_secret
         self._timeout_seconds = timeout_seconds
@@ -135,10 +137,14 @@ class RailwayHttpClient(DeploymentProviderPort):
     ) -> None:
         await self.aclose()
 
-    async def exchange_oauth_code(self, code: str) -> DeploymentOAuthToken:
+    async def exchange_oauth_code(
+        self,
+        code: str,
+        redirect_uri: str | None = None,
+    ) -> DeploymentOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso o usa el token directo."""
         cleaned_code = code.strip()
-        if cleaned_code.startswith(("rly_", "railway_", "rw_")) or len(cleaned_code) >= 32:
+        if cleaned_code.startswith(("rly_", "railway_")):
             return DeploymentOAuthToken(
                 access_token=cleaned_code,
                 token_type="bearer",
@@ -153,14 +159,32 @@ class RailwayHttpClient(DeploymentProviderPort):
             "code": cleaned_code,
             "grant_type": "authorization_code",
         }
+        if redirect_uri:
+            payload["redirect_uri"] = redirect_uri
         if self._client_id:
             payload["client_id"] = self._client_id
         if self._client_secret:
             payload["client_secret"] = self._client_secret
 
         try:
-            response = await self._client.post(self._oauth_url, data=payload, headers=headers)
+            response = await self._client.post(
+                self._oauth_url,
+                data=payload,
+                headers=headers,
+            )
             if not response.is_success:
+                try:
+                    data = cast(dict[str, object], response.json())
+                    if "error" in data:
+                        error_code = str(data.get("error") or "error_oauth")
+                        error_desc = str(data.get("error_description") or error_code)
+                        raise DeploymentAuthenticationError(
+                            f"Fallo en autorización OAuth de Railway: {error_desc} ({error_code})"
+                        )
+                except DeploymentAuthenticationError:
+                    raise
+                except Exception:
+                    pass
                 self._handle_response_error(response, "intercambiar código OAuth")
 
             data = cast(dict[str, object], response.json())
@@ -181,12 +205,14 @@ class RailwayHttpClient(DeploymentProviderPort):
             raw_expires_in = data.get("expires_in")
             expires_in = int(str(raw_expires_in)) if raw_expires_in is not None else None
             refresh_token = str(data["refresh_token"]) if data.get("refresh_token") is not None else None
+            scope = str(data.get("scope") or "")
 
             return DeploymentOAuthToken(
                 access_token=access_token,
                 token_type=str(data.get("token_type") or "bearer"),
                 refresh_token=refresh_token,
                 expires_in=expires_in,
+                scope=scope,
             )
         except (DeploymentApiError, DeploymentAuthenticationError):
             raise
@@ -195,13 +221,115 @@ class RailwayHttpClient(DeploymentProviderPort):
         except httpx.RequestError as exc:
             raise DeploymentApiError(f"Error de red al conectar con Railway OAuth: {exc}") from exc
 
+    async def get_authenticated_user(self, token: str) -> dict[str, str]:
+        """Consulta el perfil del usuario autenticado en Railway a través del endpoint OIDC userinfo (/oauth/me)."""
+        headers = self._headers_for_token(token)
+        try:
+            response = await self._client.get(self._userinfo_url, headers=headers)
+            if response.status_code == 401:
+                raise DeploymentAuthenticationError(
+                    "Token de Railway inválido o expirado al consultar datos de usuario."
+                )
+            if not response.is_success:
+                logger.warning("No se pudo obtener información del usuario de Railway (%s)", response.status_code)
+                return {}
+
+            data = cast(dict[str, object], response.json())
+            return {
+                "sub": str(data.get("sub") or ""),
+                "name": str(data.get("name") or ""),
+                "email": str(data.get("email") or ""),
+            }
+        except DeploymentAuthenticationError:
+            raise
+        except Exception as exc:
+            logger.warning("Fallo no bloqueante al consultar usuario en Railway: %s", exc)
+            return {}
+
+    async def refresh_access_token(self, refresh_token: str) -> DeploymentOAuthToken:
+        """Renueva el token de acceso de Railway utilizando un refresh token rotado."""
+        cleaned_rt = refresh_token.strip()
+        if not cleaned_rt:
+            raise DeploymentAuthenticationError("El refresh token de Railway no puede estar vacío.")
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": _DEFAULT_USER_AGENT,
+        }
+        payload: dict[str, str] = {
+            "grant_type": "refresh_token",
+            "refresh_token": cleaned_rt,
+        }
+        if self._client_id:
+            payload["client_id"] = self._client_id
+        if self._client_secret:
+            payload["client_secret"] = self._client_secret
+
+        try:
+            response = await self._client.post(
+                self._oauth_url,
+                data=payload,
+                headers=headers,
+            )
+            if not response.is_success:
+                try:
+                    data = cast(dict[str, object], response.json())
+                    if "error" in data:
+                        error_code = str(data.get("error") or "error_refresh")
+                        error_desc = str(data.get("error_description") or error_code)
+                        raise DeploymentAuthenticationError(
+                            f"Fallo al renovar token de Railway: {error_desc} ({error_code})"
+                        )
+                except DeploymentAuthenticationError:
+                    raise
+                except Exception:
+                    pass
+                self._handle_response_error(response, "renovar token de acceso")
+
+            data = cast(dict[str, object], response.json())
+            if "error" in data:
+                error_code = str(data.get("error") or "error_refresh")
+                error_desc = str(data.get("error_description") or error_code)
+                raise DeploymentAuthenticationError(f"Fallo al renovar token de Railway: {error_desc} ({error_code})")
+
+            access_token = str(data.get("access_token") or "")
+            if not access_token:
+                raise DeploymentAuthenticationError("Railway no devolvió un access_token válido al renovar el token.")
+
+            raw_expires_in = data.get("expires_in")
+            expires_in = int(str(raw_expires_in)) if raw_expires_in is not None else None
+            new_refresh_token = str(data["refresh_token"]) if data.get("refresh_token") is not None else cleaned_rt
+            scope = str(data.get("scope") or "")
+
+            return DeploymentOAuthToken(
+                access_token=access_token,
+                token_type=str(data.get("token_type") or "bearer"),
+                refresh_token=new_refresh_token,
+                expires_in=expires_in,
+                scope=scope,
+            )
+        except (DeploymentApiError, DeploymentAuthenticationError):
+            raise
+        except httpx.TimeoutException as exc:
+            raise DeploymentApiError(f"Tiempo de espera agotado al renovar token con Railway: {exc}") from exc
+        except httpx.RequestError as exc:
+            raise DeploymentApiError(f"Error de red al renovar token con Railway: {exc}") from exc
+
     async def _execute_graphql(
         self,
         token: str,
         query: str,
         variables: dict[str, object] | None = None,
     ) -> dict[str, object] | None:
-        """Ejecuta una operación GraphQL contra la API de Railway si está disponible."""
+        """Ejecuta una operación GraphQL contra la API de Railway si está disponible.
+
+        Retorna:
+          - dict con los datos de respuesta si la operación tuvo éxito.
+          - dict vacío {} si la operación tuvo éxito pero devolvió un escalar/null.
+          - None si el endpoint GraphQL no está disponible (HTTP 404).
+          - Lanza DeploymentAuthenticationError o DeploymentApiError en errores de dominio.
+        """
         headers = self._headers_for_token(token)
         payload = {"query": query, "variables": variables or {}}
         try:
@@ -209,7 +337,7 @@ class RailwayHttpClient(DeploymentProviderPort):
             if response.status_code == 404:
                 response = await self._client.post("/graphql", json=payload, headers=headers)
             if response.status_code == 404:
-                return None
+                return None  # GraphQL no disponible en este servidor
             if not response.is_success:
                 return None
             data = cast(dict[str, object], response.json())
@@ -225,12 +353,23 @@ class RailwayHttpClient(DeploymentProviderPort):
                             err_msg = str(typed_err["message"])
                 if "Not Authorized" in err_msg or "unauthorized" in err_msg.lower():
                     raise DeploymentAuthenticationError(
-                        "No autorizado en Railway para realizar esta operación. "
-                        "Verifica que tu cuenta de Railway tenga un plan activo o permisos para crear proyectos."
+                        f"No autorizado en Railway para realizar esta operación ({err_msg}). "
+                        "Verifica en tu panel de Railway si tienes un aviso de 'Acción necesaria' pendiente "
+                        "o si alcanzaste el límite de proyectos de tu plan Trial (elimina proyectos no utilizados si es necesario)."
+                    )
+                if "not found or is not accessible" in err_msg.lower():
+                    raise DeploymentPermissionError(
+                        f"Railway no puede acceder al repositorio de GitHub: {err_msg}. "
+                        "Si el repositorio es privado, cámbialo a público en GitHub (Settings > General > Danger Zone) "
+                        "o instala/autoriza la aplicación de Railway en tu cuenta de GitHub."
                     )
                 raise DeploymentApiError(f"Error de Railway GraphQL: {err_msg}")
-            if "data" in data and isinstance(data["data"], dict):
-                return cast(dict[str, object], data["data"])
+            if "data" in data:
+                inner = data["data"]
+                if isinstance(inner, dict):
+                    return cast(dict[str, object], inner)
+                # Escalar/booleano/null: la operación fue aceptada; devolver dict vacío
+                return {}
             return None
         except (DeploymentAuthenticationError, DeploymentApiError):
             raise
@@ -482,25 +621,69 @@ class RailwayHttpClient(DeploymentProviderPort):
             raise DeploymentApiError(f"Error de red al conectar con Railway: {exc}") from exc
 
     async def trigger_deployment(self, token: str, service_id: str) -> None:
-        """Dispara la construcción y despliegue del servicio en Railway."""
-        gql_deploy_mutation = """
-        mutation ServiceInstanceDeploy($serviceId: String!) {
-            serviceInstanceDeploy(serviceId: $serviceId)
+        """Dispara la construcción y despliegue del servicio en Railway.
+
+        Primero consulta el environmentId del servicio (requerido por la API de Railway).
+        Los errores de dominio GraphQL se propagan directamente sin degradar al REST.
+        El fallback REST solo se activa cuando GraphQL no está disponible (HTTP 404).
+        """
+        # Obtener environmentId del servicio — lo requiere la mutation en Railway API real
+        gql_env_query = """
+        query GetServiceEnvironment($id: String!) {
+            service(id: $id) {
+                serviceInstances {
+                    edges {
+                        node {
+                            environmentId
+                        }
+                    }
+                }
+            }
         }
         """
+        environment_id: str | None = None
         try:
-            gql_res = await self._execute_graphql(
-                token,
-                gql_deploy_mutation,
-                {"serviceId": service_id},
-            )
-            if gql_res:
-                return
+            env_res = await self._execute_graphql(token, gql_env_query, {"id": service_id})
+            if env_res and "service" in env_res and isinstance(env_res["service"], dict):
+                srv = cast(dict[str, object], env_res["service"])
+                inst_node = _extract_first_edge_node(srv, "serviceInstances")
+                if inst_node and inst_node.get("environmentId"):
+                    environment_id = str(inst_node["environmentId"])
         except Exception as exc:
-            logger.debug("GraphQL deploy fallback a REST: %s", exc)
+            logger.debug("No se pudo obtener environmentId para trigger: %s", exc)
 
+        if environment_id:
+            gql_deploy_mutation = """
+            mutation ServiceInstanceDeploy($serviceId: String!, $environmentId: String!) {
+                serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)
+            }
+            """
+            variables: dict[str, object] = {"serviceId": service_id, "environmentId": environment_id}
+        else:
+            gql_deploy_mutation = """
+            mutation ServiceInstanceDeploy($serviceId: String!) {
+                serviceInstanceDeploy(serviceId: $serviceId)
+            }
+            """
+            variables = {"serviceId": service_id}
+
+        try:
+            gql_res = await self._execute_graphql(token, gql_deploy_mutation, variables)
+            # None solo ocurre cuando GraphQL no está disponible (HTTP 404) → hacer fallback.
+            # Un dict (incluyendo vacío) indica que la mutation fue aceptada.
+            # Los errores de dominio son lanzados por _execute_graphql directamente.
+            if gql_res is not None:
+                return
+        except (DeploymentAuthenticationError, DeploymentApiError):
+            raise  # Propagar errores de dominio; no degradar silenciosamente
+        except Exception as exc:
+            logger.debug("GraphQL deploy no disponible, intentando REST: %s", exc)
+
+        # Fallback REST — solo cuando GraphQL no está disponible (HTTP 404 en /graphql/v2 y /graphql)
         headers = self._headers_for_token(token)
-        payload = {"service_id": service_id}
+        payload: dict[str, object] = {"service_id": service_id}
+        if environment_id:
+            payload["environment_id"] = environment_id
 
         try:
             response = await self._client.post(
@@ -509,7 +692,8 @@ class RailwayHttpClient(DeploymentProviderPort):
                 headers=headers,
             )
             if response.status_code == 404 and self._owns_client:
-                logger.info("Railway inicia el despliegue automáticamente al crear el servicio.")
+                # Railway conecta el repo al crear el servicio y arranca el primer build solo
+                logger.info("Railway no expone endpoint REST de deploy; primer build iniciado automáticamente.")
                 return
 
             if not response.is_success:

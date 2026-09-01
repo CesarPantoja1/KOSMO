@@ -14,6 +14,7 @@ from kosmo.contracts.auth.secrets import EncryptedSecret
 from kosmo.contracts.integrations.deployment import (
     DeploymentAccountNotLinkedError,
     DeploymentAuthenticationError,
+    DeploymentOAuthToken,
     DeploymentProvider,
     DeploymentRepositoryMissingError,
     DeploymentStatus,
@@ -205,11 +206,9 @@ async def test_orchestrate_deployment_reuses_existing_service_id(
     # Assert
     # No vuelve a llamar create_service, reutiliza srv_already_existing_123
     mock_deployment_client.create_service.assert_not_called()
-    mock_deployment_client.configure_volume.assert_called_once_with(
-        token="decrypted_token",
-        service_id="srv_already_existing_123",
-        volume=VolumeConfig(mount_path="/data", size_mb=512),
-    )
+    # No reconfigura el volumen en un re-deploy (ya está configurado del primer despliegue)
+    mock_deployment_client.configure_volume.assert_not_called()
+    # Sí dispara un nuevo despliegue
     mock_deployment_client.trigger_deployment.assert_called_once_with(
         token="decrypted_token",
         service_id="srv_already_existing_123",
@@ -367,3 +366,81 @@ async def test_orchestrate_deployment_full_integration_with_fakes():
     assert persisted is not None
     assert persisted.service_id == "srv_live_123"
     assert persisted.status == DeploymentStatus.BUILDING
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_orchestrate_deployment_auto_refreshes_token_on_auth_error():
+    # Arrange
+    master_key = FernetSecretCipher.generate_master_key()
+    cipher = FernetSecretCipher(master_key)
+    project_repo = InMemoryProjectDeploymentRepository()
+    user_repo = InMemoryUserDeploymentIntegrationRepository()
+    github_repo = InMemoryProjectGitHubIntegrationRepository()
+
+    principal = Principal(subject="usr_refresh_test")
+    project_id = ProjectId("prj_refresh_test")
+
+    # Seed user integration with access token and refresh token
+    enc_access = base64.b64encode(cipher.encrypt(b"expired-access-token").ciphertext).decode("utf-8")
+    enc_refresh = base64.b64encode(cipher.encrypt(b"valid-refresh-token").ciphertext).decode("utf-8")
+    await user_repo.save(
+        UserDeploymentIntegration(
+            user_id=UserId("usr_refresh_test"),
+            provider=DeploymentProvider.RAILWAY,
+            encrypted_token=enc_access,
+            encrypted_refresh_token=enc_refresh,
+            provider_username="Jane Developer",
+        )
+    )
+
+    await github_repo.save(
+        ProjectGitHubIntegration(
+            project_id=project_id,
+            repo_name="refresh-app",
+            repo_url="https://github.com/octocat/refresh-app",
+            sync_status=GitHubSyncStatus.SYNCED,
+        )
+    )
+
+    mock_client = AsyncMock()
+    # First create_service fails with DeploymentAuthenticationError, then on second attempt succeeds
+    mock_client.create_service.side_effect = [
+        DeploymentAuthenticationError("Token expired"),
+        "srv_new_refreshed_123",
+    ]
+    mock_client.refresh_access_token.return_value = DeploymentOAuthToken(
+        access_token="new-refreshed-token",
+        refresh_token="rotated-refresh-token",
+        expires_in=3600,
+    )
+
+    use_case = OrchestrateCloudDeploymentUseCase(
+        project_deployment_repo=project_repo,
+        user_deployment_repo=user_repo,
+        project_github_repo=github_repo,
+        deployment_client=mock_client,
+        cipher=cipher,
+    )
+
+    # Act
+    cmd = OrchestrateCloudDeploymentCommand(project_id=project_id)
+    deployment = await use_case.execute(principal, cmd)
+
+    # Assert
+    assert deployment.service_id == "srv_new_refreshed_123"
+    assert deployment.status == DeploymentStatus.BUILDING
+    mock_client.refresh_access_token.assert_called_once_with("valid-refresh-token")
+
+    # Verify that the new access token and rotated refresh token were persisted
+    updated_user_int = await user_repo.get_by_user_id(UserId("usr_refresh_test"), DeploymentProvider.RAILWAY)
+    assert updated_user_int is not None
+    assert updated_user_int.encrypted_refresh_token is not None
+    decrypted_new_token = cipher.decrypt(
+        EncryptedSecret(ciphertext=base64.b64decode(updated_user_int.encrypted_token.encode("utf-8")))
+    ).decode("utf-8")
+    assert decrypted_new_token == "new-refreshed-token"
+    decrypted_new_rt = cipher.decrypt(
+        EncryptedSecret(ciphertext=base64.b64decode(updated_user_int.encrypted_refresh_token.encode("utf-8")))
+    ).decode("utf-8")
+    assert decrypted_new_rt == "rotated-refresh-token"

@@ -1,6 +1,7 @@
 import asyncio
 import base64
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 
 from kosmo.contracts.auth.secrets import EncryptedSecret, SecretCipher
 from kosmo.contracts.integrations.deployment import (
@@ -8,6 +9,7 @@ from kosmo.contracts.integrations.deployment import (
     DeploymentProviderPort,
     DeploymentStatus,
     ProjectDeploymentRepository,
+    UserDeploymentIntegration,
     UserDeploymentIntegrationRepository,
 )
 from kosmo.contracts.sdd.ids import ProjectId, UserId
@@ -23,7 +25,7 @@ class MonitorDeploymentStatusCommand:
 
 
 class MonitorDeploymentStatusUseCase:
-    """Caso de uso para monitorear periÃ³dicamente el estado de un despliegue en la nube."""
+    """Caso de uso para monitorear periodicamente el estado de un despliegue en la nube."""
 
     def __init__(
         self,
@@ -44,7 +46,7 @@ class MonitorDeploymentStatusUseCase:
         if not deployment or not deployment.service_id:
             return  # No hay nada que monitorear
 
-        # Si ya alcanzÃ³ un estado terminal, terminar de inmediato
+        # Si ya alcanzo un estado terminal, terminar de inmediato
         if deployment.status in (DeploymentStatus.PUBLISHED, DeploymentStatus.FAILED):
             return
 
@@ -60,13 +62,55 @@ class MonitorDeploymentStatusUseCase:
         except Exception as exc:
             raise DeploymentAuthenticationError("Error al descifrar el token de despliegue.") from exc
 
-        # 3. Bucle de polling periÃ³dico
+        # 3. Bucle de polling periodico con auto-renovacion de token
+        token_refreshed = False  # Solo un intento de renovacion por sesion de monitoreo
         attempts = 0
         while attempts < cmd.max_attempts:
-            status, public_url, logs_or_error = await self._deployment_client.get_service_status(
-                token=token,
-                service_id=str(deployment.service_id),
-            )
+            try:
+                status, public_url, logs_or_error = await self._deployment_client.get_service_status(
+                    token=token,
+                    service_id=str(deployment.service_id),
+                )
+            except DeploymentAuthenticationError:
+                # Token expirado mid-polling: renovar una sola vez y continuar
+                if token_refreshed or not user_integration.encrypted_refresh_token:
+                    raise
+                try:
+                    raw_rt = base64.b64decode(user_integration.encrypted_refresh_token.encode("utf-8"))
+                    decrypted_rt = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_rt)).decode("utf-8")
+                    new_token_dto = await self._deployment_client.refresh_access_token(decrypted_rt)
+                    if not new_token_dto.access_token:
+                        raise DeploymentAuthenticationError("Fallo al renovar el token de acceso con Railway.")
+
+                    new_enc_access = base64.b64encode(
+                        self._cipher.encrypt(new_token_dto.access_token.encode("utf-8")).ciphertext
+                    ).decode("utf-8")
+                    new_enc_refresh = user_integration.encrypted_refresh_token
+                    if new_token_dto.refresh_token:
+                        new_enc_refresh = base64.b64encode(
+                            self._cipher.encrypt(new_token_dto.refresh_token.encode("utf-8")).ciphertext
+                        ).decode("utf-8")
+
+                    user_integration = UserDeploymentIntegration(
+                        user_id=user_integration.user_id,
+                        provider=user_integration.provider,
+                        encrypted_token=new_enc_access,
+                        provider_username=user_integration.provider_username,
+                        encrypted_refresh_token=new_enc_refresh,
+                        scopes=user_integration.scopes,
+                        updated_at=datetime.now(UTC),
+                    )
+                    await self._user_deployment_repo.save(user_integration)
+                    token = new_token_dto.access_token
+                    token_refreshed = True
+                except DeploymentAuthenticationError:
+                    raise
+                except Exception as exc:
+                    raise DeploymentAuthenticationError(
+                        "Error al renovar el token de despliegue durante el monitoreo."
+                    ) from exc
+                # Reintentar el intento actual con el token nuevo (no incrementar attempts)
+                continue
 
             # Detectar cambios de estado o URL
             has_changed = (
@@ -87,7 +131,20 @@ class MonitorDeploymentStatusUseCase:
 
             # Salir si el estado es terminal
             if status in (DeploymentStatus.PUBLISHED, DeploymentStatus.FAILED):
-                break
+                return
 
             await asyncio.sleep(cmd.delay_seconds)
             attempts += 1
+
+        # Timeout: el despliegue no alcanzo un estado terminal - marcarlo como FAILED
+        if deployment.status not in (DeploymentStatus.PUBLISHED, DeploymentStatus.FAILED):
+            timeout_msg = (
+                f"El despliegue supero el tiempo maximo de espera "
+                f"({cmd.max_attempts * cmd.delay_seconds}s) sin completarse."
+            )
+            deployment = replace(
+                deployment,
+                status=DeploymentStatus.FAILED,
+                error_message=timeout_msg,
+            )
+            await self._project_deployment_repo.save(deployment)
