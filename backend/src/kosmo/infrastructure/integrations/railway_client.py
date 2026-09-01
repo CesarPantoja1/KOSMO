@@ -118,8 +118,10 @@ class RailwayHttpClient(DeploymentProviderPort):
     async def exchange_oauth_code(self, code: str) -> DeploymentOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso o usa el token directo."""
         cleaned_code = code.strip()
-        if not self._client_id and not self._client_secret and (
-            cleaned_code.startswith(("rly_", "railway_", "rw_")) or len(cleaned_code) >= 20
+        if (
+            not self._client_id
+            and not self._client_secret
+            and (cleaned_code.startswith(("rly_", "railway_", "rw_")) or len(cleaned_code) >= 20)
         ):
             return DeploymentOAuthToken(
                 access_token=cleaned_code,
