@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.parse
 from typing import Any
 
 import httpx
@@ -40,7 +41,11 @@ async def test_exchange_oauth_code_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://backboard.railway.com/oauth/token"
         assert request.method == "POST"
-        body = json.loads(request.content.decode("utf-8"))
+        content_str = request.content.decode("utf-8")
+        if request.headers.get("content-type", "").startswith("application/x-www-form-urlencoded"):
+            body = dict(urllib.parse.parse_qsl(content_str))
+        else:
+            body = json.loads(content_str)
         assert body["code"] == "auth_code_123"
         assert body["client_id"] == "rw_client_1"
         assert body["client_secret"] == "rw_secret_1"

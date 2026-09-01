@@ -1,6 +1,6 @@
 """add deployment fields to project_integrations table
 
-Revision ID: 0019_add_deployment_fields_to_project_integrations
+Revision ID: 0019_add_deployment_fields
 Revises: 0018_add_name_avatar_to_users
 Create Date: 2026-08-31
 """
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql as pg
 
 from alembic import op
 
-revision: str = "0019_add_deployment_fields_to_project_integrations"
+revision: str = "0019_add_deployment_fields"
 down_revision: str | None = "0018_add_name_avatar_to_users"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

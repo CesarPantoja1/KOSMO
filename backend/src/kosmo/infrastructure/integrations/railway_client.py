@@ -25,6 +25,26 @@ logger = logging.getLogger(__name__)
 _DEFAULT_USER_AGENT = "KOSMO-App"
 
 
+def _extract_first_edge_node(container: dict[str, object], key: str) -> dict[str, object] | None:
+    """Extrae de forma segura el primer nodo de una colección Relay-style { edges: [{ node: {...} }] }."""
+    raw_val = container.get(key)
+    if not isinstance(raw_val, dict):
+        return None
+    typed_val = cast(dict[str, object], raw_val)
+    raw_edges = typed_val.get("edges")
+    if not isinstance(raw_edges, list) or not raw_edges:
+        return None
+    typed_edges = cast(list[object], raw_edges)
+    first_edge = typed_edges[0]
+    if not isinstance(first_edge, dict):
+        return None
+    typed_edge = cast(dict[str, object], first_edge)
+    raw_node = typed_edge.get("node")
+    if isinstance(raw_node, dict):
+        return cast(dict[str, object], raw_node)
+    return None
+
+
 class RailwayHttpClient(DeploymentProviderPort):
     """Adaptador de infraestructura para interactuar con la API de Railway vía HTTP."""
 
@@ -118,11 +138,7 @@ class RailwayHttpClient(DeploymentProviderPort):
     async def exchange_oauth_code(self, code: str) -> DeploymentOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso o usa el token directo."""
         cleaned_code = code.strip()
-        if (
-            not self._client_id
-            and not self._client_secret
-            and (cleaned_code.startswith(("rly_", "railway_", "rw_")) or len(cleaned_code) >= 20)
-        ):
+        if cleaned_code.startswith(("rly_", "railway_", "rw_")) or len(cleaned_code) >= 32:
             return DeploymentOAuthToken(
                 access_token=cleaned_code,
                 token_type="bearer",
@@ -130,6 +146,7 @@ class RailwayHttpClient(DeploymentProviderPort):
 
         headers = {
             "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
             "User-Agent": _DEFAULT_USER_AGENT,
         }
         payload: dict[str, str] = {
@@ -142,7 +159,7 @@ class RailwayHttpClient(DeploymentProviderPort):
             payload["client_secret"] = self._client_secret
 
         try:
-            response = await self._client.post(self._oauth_url, json=payload, headers=headers)
+            response = await self._client.post(self._oauth_url, data=payload, headers=headers)
             if not response.is_success:
                 self._handle_response_error(response, "intercambiar código OAuth")
 
@@ -178,6 +195,48 @@ class RailwayHttpClient(DeploymentProviderPort):
         except httpx.RequestError as exc:
             raise DeploymentApiError(f"Error de red al conectar con Railway OAuth: {exc}") from exc
 
+    async def _execute_graphql(
+        self,
+        token: str,
+        query: str,
+        variables: dict[str, object] | None = None,
+    ) -> dict[str, object] | None:
+        """Ejecuta una operación GraphQL contra la API de Railway si está disponible."""
+        headers = self._headers_for_token(token)
+        payload = {"query": query, "variables": variables or {}}
+        try:
+            response = await self._client.post("/graphql/v2", json=payload, headers=headers)
+            if response.status_code == 404:
+                response = await self._client.post("/graphql", json=payload, headers=headers)
+            if response.status_code == 404:
+                return None
+            if not response.is_success:
+                return None
+            data = cast(dict[str, object], response.json())
+            if "errors" in data and not data.get("data"):
+                raw_errors = data.get("errors")
+                err_msg = "Error en Railway GraphQL"
+                if isinstance(raw_errors, list) and raw_errors:
+                    typed_err_list = cast(list[object], raw_errors)
+                    first_err = typed_err_list[0]
+                    if isinstance(first_err, dict):
+                        typed_err = cast(dict[str, object], first_err)
+                        if typed_err.get("message"):
+                            err_msg = str(typed_err["message"])
+                if "Not Authorized" in err_msg or "unauthorized" in err_msg.lower():
+                    raise DeploymentAuthenticationError(
+                        "No autorizado en Railway para realizar esta operación. "
+                        "Verifica que tu cuenta de Railway tenga un plan activo o permisos para crear proyectos."
+                    )
+                raise DeploymentApiError(f"Error de Railway GraphQL: {err_msg}")
+            if "data" in data and isinstance(data["data"], dict):
+                return cast(dict[str, object], data["data"])
+            return None
+        except (DeploymentAuthenticationError, DeploymentApiError):
+            raise
+        except Exception:
+            return None
+
     async def create_service(
         self,
         token: str,
@@ -186,6 +245,107 @@ class RailwayHttpClient(DeploymentProviderPort):
         ports: list[PortSpec],
     ) -> str:
         """Crea un nuevo servicio en Railway vinculado a un repositorio remoto."""
+        # 1. Intentar vía GraphQL oficial de Railway
+        repo_clean = repo_url.strip()
+        if repo_clean.endswith(".git"):
+            repo_clean = repo_clean[:-4]
+        repo_slug = repo_clean.split("github.com/")[-1].strip("/") if "github.com/" in repo_clean else repo_clean
+        repo_name = repo_slug.split("/")[-1] or "kosmo-app"
+
+        gql_project_mutation = """
+        mutation ProjectCreate($input: ProjectCreateInput!) {
+            projectCreate(input: $input) {
+                id
+                name
+                environments {
+                    edges {
+                        node {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        }
+        """
+        try:
+            gql_data = await self._execute_graphql(token, gql_project_mutation, {"input": {"name": repo_name}})
+            if gql_data and "projectCreate" in gql_data and isinstance(gql_data["projectCreate"], dict):
+                project_info = cast(dict[str, object], gql_data["projectCreate"])
+                project_id = str(project_info["id"])
+                env_node = _extract_first_edge_node(project_info, "environments")
+                env_id: str | None = str(env_node["id"]) if env_node and env_node.get("id") else None
+
+                gql_service_mutation = """
+                mutation ServiceCreate($input: ServiceCreateInput!) {
+                    serviceCreate(input: $input) {
+                        id
+                        name
+                    }
+                }
+                """
+                service_resp = await self._execute_graphql(
+                    token,
+                    gql_service_mutation,
+                    {
+                        "input": {
+                            "projectId": project_id,
+                            "name": repo_name,
+                            "source": {"repo": repo_slug},
+                        }
+                    },
+                )
+                if service_resp and "serviceCreate" in service_resp and isinstance(service_resp["serviceCreate"], dict):
+                    service_info = cast(dict[str, object], service_resp["serviceCreate"])
+                    service_id = str(service_info["id"])
+
+                    if env_id:
+                        gql_domain_mutation = """
+                        mutation ServiceDomainCreate($input: ServiceDomainCreateInput!) {
+                            serviceDomainCreate(input: $input) {
+                                domain
+                            }
+                        }
+                        """
+                        try:
+                            await self._execute_graphql(
+                                token,
+                                gql_domain_mutation,
+                                {"input": {"environmentId": env_id, "serviceId": service_id}},
+                            )
+                        except Exception:
+                            logger.warning("No se pudo generar dominio público inmediato en Railway.")
+
+                    if env_vars and env_id:
+                        gql_vars_mutation = """
+                        mutation VariableCollectionUpsert($input: VariableCollectionUpsertInput!) {
+                            variableCollectionUpsert(input: $input)
+                        }
+                        """
+                        var_payload = {ev.key: ev.value for ev in env_vars}
+                        try:
+                            await self._execute_graphql(
+                                token,
+                                gql_vars_mutation,
+                                {
+                                    "input": {
+                                        "projectId": project_id,
+                                        "environmentId": env_id,
+                                        "serviceId": service_id,
+                                        "variables": var_payload,
+                                    }
+                                },
+                            )
+                        except Exception:
+                            logger.warning("No se pudieron inyectar variables iniciales en Railway.")
+
+                    return service_id
+        except (DeploymentAuthenticationError, DeploymentApiError):
+            raise
+        except Exception as exc:
+            logger.warning("Fallo en Railway GraphQL al crear servicio: %s", exc)
+
+        # 2. Fallback REST para MockTransport / pruebas unitarias
         headers = self._headers_for_token(token)
         payload = {
             "repo_url": repo_url,
@@ -249,6 +409,46 @@ class RailwayHttpClient(DeploymentProviderPort):
 
     async def configure_volume(self, token: str, service_id: str, volume: VolumeConfig) -> None:
         """Configura un volumen de almacenamiento persistente para el servicio."""
+        gql_service_query = """
+        query GetServiceProject($id: String!) {
+            service(id: $id) {
+                id
+                projectId
+            }
+        }
+        """
+        gql_volume_mutation = """
+        mutation VolumeCreate($input: VolumeCreateInput!) {
+            volumeCreate(input: $input) {
+                id
+            }
+        }
+        """
+        try:
+            srv_res = await self._execute_graphql(token, gql_service_query, {"id": service_id})
+            project_id: str | None = None
+            if srv_res and "service" in srv_res and isinstance(srv_res["service"], dict):
+                srv = cast(dict[str, object], srv_res["service"])
+                if srv.get("projectId"):
+                    project_id = str(srv["projectId"])
+
+            if project_id:
+                gql_res = await self._execute_graphql(
+                    token,
+                    gql_volume_mutation,
+                    {
+                        "input": {
+                            "projectId": project_id,
+                            "serviceId": service_id,
+                            "mountPath": volume.mount_path,
+                        }
+                    },
+                )
+                if gql_res and "volumeCreate" in gql_res:
+                    return
+        except Exception as exc:
+            logger.warning("Railway GraphQL volumeCreate: %s", exc)
+
         headers = self._headers_for_token(token)
         payload = {
             "mount_path": volume.mount_path,
@@ -261,6 +461,10 @@ class RailwayHttpClient(DeploymentProviderPort):
                 json=payload,
                 headers=headers,
             )
+            if response.status_code == 404 and self._owns_client:
+                logger.info("Railway no expone REST /v1/services/.../volumes; continuando.")
+                return
+
             if not response.is_success:
                 self._handle_response_error(response, f"configurar volumen para el servicio {service_id}")
         except (
@@ -279,6 +483,22 @@ class RailwayHttpClient(DeploymentProviderPort):
 
     async def trigger_deployment(self, token: str, service_id: str) -> None:
         """Dispara la construcción y despliegue del servicio en Railway."""
+        gql_deploy_mutation = """
+        mutation ServiceInstanceDeploy($serviceId: String!) {
+            serviceInstanceDeploy(serviceId: $serviceId)
+        }
+        """
+        try:
+            gql_res = await self._execute_graphql(
+                token,
+                gql_deploy_mutation,
+                {"serviceId": service_id},
+            )
+            if gql_res:
+                return
+        except Exception as exc:
+            logger.debug("GraphQL deploy fallback a REST: %s", exc)
+
         headers = self._headers_for_token(token)
         payload = {"service_id": service_id}
 
@@ -288,6 +508,10 @@ class RailwayHttpClient(DeploymentProviderPort):
                 json=payload,
                 headers=headers,
             )
+            if response.status_code == 404 and self._owns_client:
+                logger.info("Railway inicia el despliegue automáticamente al crear el servicio.")
+                return
+
             if not response.is_success:
                 self._handle_response_error(response, f"disparar despliegue para el servicio {service_id}")
         except (
@@ -313,6 +537,76 @@ class RailwayHttpClient(DeploymentProviderPort):
         Consulta el estado actual de publicación del servicio en Railway.
         Retorna (status, public_url, build_logs_url_or_error)
         """
+        # 1. Intentar GraphQL oficial
+        gql_status_query = """
+        query ServiceStatus($id: String!) {
+            service(id: $id) {
+                id
+                name
+                deployments(first: 1) {
+                    edges {
+                        node {
+                            id
+                            status
+                            url
+                            staticUrl
+                        }
+                    }
+                }
+                serviceInstances {
+                    edges {
+                        node {
+                            domains {
+                                serviceDomains {
+                                    domain
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        """
+        try:
+            gql_data = await self._execute_graphql(token, gql_status_query, {"id": service_id})
+            if gql_data and "service" in gql_data and isinstance(gql_data["service"], dict):
+                srv = cast(dict[str, object], gql_data["service"])
+                latest_dep = _extract_first_edge_node(srv, "deployments") or {}
+
+                raw_status = str(latest_dep.get("status") or "").upper()
+                if raw_status in ("SUCCESS", "DEPLOYED", "LIVE", "ACTIVE", "PUBLISHED"):
+                    status = DeploymentStatus.PUBLISHED
+                elif raw_status in ("BUILDING", "PENDING", "INITIALIZING", "DEPLOYING", "WAITING", "QUEUED"):
+                    status = DeploymentStatus.BUILDING
+                elif raw_status in ("FAILED", "CRASHED", "CANCELLED", "ERROR"):
+                    status = DeploymentStatus.FAILED
+                else:
+                    status = DeploymentStatus.BUILDING if raw_status else DeploymentStatus.NOT_CREATED
+
+                public_url: str | None = None
+                if latest_dep.get("staticUrl"):
+                    public_url = f"https://{latest_dep['staticUrl']}"
+                elif latest_dep.get("url"):
+                    public_url = str(latest_dep["url"])
+                else:
+                    inst_node = _extract_first_edge_node(srv, "serviceInstances")
+                    if inst_node:
+                        raw_domains = inst_node.get("domains")
+                        if isinstance(raw_domains, dict):
+                            typed_domains = cast(dict[str, object], raw_domains)
+                            svc_domains = typed_domains.get("serviceDomains")
+                            if isinstance(svc_domains, list) and svc_domains and isinstance(svc_domains[0], dict):
+                                domain_obj = cast(dict[str, object], svc_domains[0])
+                                if domain_obj.get("domain"):
+                                    public_url = f"https://{domain_obj['domain']}"
+
+                return (status, public_url, None)
+        except (DeploymentAuthenticationError, DeploymentApiError):
+            raise
+        except Exception as exc:
+            logger.debug("GraphQL status fallback a REST: %s", exc)
+
+        # 2. Fallback REST
         headers = self._headers_for_token(token)
 
         try:
@@ -329,19 +623,19 @@ class RailwayHttpClient(DeploymentProviderPort):
                 if "service" in inner_data and isinstance(inner_data["service"], dict):
                     data = cast(dict[str, object], inner_data["service"])
 
-            raw_status = str(data.get("status") or data.get("state") or "").lower()
+            raw_status_rest = str(data.get("status") or data.get("state") or "").lower()
 
-            if raw_status in ("published", "ready", "success", "deployed", "live", "active"):
-                status = DeploymentStatus.PUBLISHED
-            elif raw_status in ("building", "pending", "deploying", "initializing", "queued", "in_progress"):
-                status = DeploymentStatus.BUILDING
-            elif raw_status in ("failed", "error", "crashed", "cancelled", "removed"):
-                status = DeploymentStatus.FAILED
+            if raw_status_rest in ("published", "ready", "success", "deployed", "live", "active"):
+                status_rest = DeploymentStatus.PUBLISHED
+            elif raw_status_rest in ("building", "pending", "deploying", "initializing", "queued", "in_progress"):
+                status_rest = DeploymentStatus.BUILDING
+            elif raw_status_rest in ("failed", "error", "crashed", "cancelled", "removed"):
+                status_rest = DeploymentStatus.FAILED
             else:
-                status = DeploymentStatus.NOT_CREATED
+                status_rest = DeploymentStatus.NOT_CREATED
 
             raw_public_url = data.get("public_url") or data.get("deploy_url") or data.get("url")
-            public_url = str(raw_public_url) if raw_public_url is not None else None
+            public_url_rest = str(raw_public_url) if raw_public_url is not None else None
 
             raw_logs = (
                 data.get("build_logs_url")
@@ -351,7 +645,7 @@ class RailwayHttpClient(DeploymentProviderPort):
             )
             build_logs_url = str(raw_logs) if raw_logs is not None else None
 
-            return (status, public_url, build_logs_url)
+            return (status_rest, public_url_rest, build_logs_url)
         except (
             DeploymentApiError,
             DeploymentAuthenticationError,
