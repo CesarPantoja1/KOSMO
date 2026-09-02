@@ -1,6 +1,6 @@
 'use client';
 
-import type { ProjectDeployStatusResponse } from '../model/deploy-types';
+import type { ProjectDeployStatusResponse } from '@/entities/deploy';
 import {
 	Clock,
 	ComputerDesktop,

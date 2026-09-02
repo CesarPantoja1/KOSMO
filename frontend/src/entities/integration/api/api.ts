@@ -13,7 +13,12 @@ const mockStatuses: Record<string, IntegrationStatus> = {
 		username: 'mock-user',
 		connected_at: new Date().toISOString(),
 	},
-	railway: { provider: 'railway', is_connected: false },
+	railway: {
+		provider: 'railway',
+		is_connected: true,
+		username: 'mock-railway-user',
+		connected_at: new Date().toISOString(),
+	},
 };
 
 // --- Mock implementations ---

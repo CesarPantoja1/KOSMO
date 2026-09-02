@@ -1,6 +1,6 @@
 'use client';
 
-import type { PreconditionState } from '../model/deploy-types';
+import type { PreconditionState } from '@/entities/deploy';
 import {
 	GitHub,
 	InfoCircleIcon,

@@ -1,10 +1,10 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
-import type { ProjectDeployStatusResponse, DeployRailwayRequest } from './deploy-types';
+import type { ProjectDeployStatusResponse, DeployRailwayRequest } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const mockStatus: ProjectDeployStatusResponse = {
+let mockDeployStatus: ProjectDeployStatusResponse = {
 	service_id: null,
 	service_name: null,
 	deploy_url: null,
@@ -16,8 +16,8 @@ const mockStatus: ProjectDeployStatusResponse = {
 
 const mockGetStatus = async (projectId: string): Promise<ProjectDeployStatusResponse> => {
 	void projectId;
-	await delay(400);
-	return { ...mockStatus };
+	await delay(300);
+	return { ...mockDeployStatus };
 };
 
 const mockStartRailway = async (
@@ -25,12 +25,24 @@ const mockStartRailway = async (
 	_body?: DeployRailwayRequest,
 ): Promise<ProjectDeployStatusResponse> => {
 	void projectId;
-	await delay(1200);
-	mockStatus.status = 'building';
-	mockStatus.service_id = 'srv_mock_123';
-	mockStatus.service_name = 'kosmo-app';
-	mockStatus.last_deploy_at = new Date().toISOString();
-	return { ...mockStatus };
+	await delay(800);
+	mockDeployStatus = {
+		service_id: 'srv_mock_123',
+		service_name: 'kosmo-app',
+		deploy_url: null,
+		status: 'building',
+		last_deploy_at: new Date().toISOString(),
+		error_message: null,
+		error_log_url: null,
+	};
+	setTimeout(() => {
+		mockDeployStatus = {
+			...mockDeployStatus,
+			status: 'ready',
+			deploy_url: 'https://kosmo-app.up.railway.app',
+		};
+	}, 6_000);
+	return { ...mockDeployStatus };
 };
 
 const realGetStatus = (projectId: string): Promise<ProjectDeployStatusResponse> =>

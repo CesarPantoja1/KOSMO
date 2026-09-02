@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ProjectDeployStatusResponse, DeployRailwayRequest } from './deploy-types';
-import { getDeployStatus, startDeployRailway } from './deploy-api';
+import type { ProjectDeployStatusResponse, DeployRailwayRequest } from './types';
+import { getDeployStatus, startDeployRailway } from '../api/api';
 import { formatApiError } from '@/shared/api';
 
 const POLL_INTERVAL_MS = 5_000;

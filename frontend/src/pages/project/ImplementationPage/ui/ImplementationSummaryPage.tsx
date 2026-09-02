@@ -26,8 +26,8 @@ import { GestionRepositorioGitHub } from '@/widgets';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import type { PreconditionState } from '../model/deploy-types';
-import { useDeployStatus } from '../model/useDeployStatus';
+import type { PreconditionState } from '@/entities/deploy';
+import { useDeployStatus } from '@/entities/deploy';
 import { DeployPreconditionPanel } from './DeployPreconditionPanel';
 import { DeployResultPanel } from './DeployResultPanel';
 
