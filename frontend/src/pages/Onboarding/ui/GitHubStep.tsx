@@ -39,12 +39,6 @@ export function GitHubStep({ onStatusChange }: GitHubStepProps) {
 				onConnect={github.handleConnect}
 				onDisconnect={github.handleDisconnect}
 			/>
-			{github.isConnected && (
-				<p className='text-success-600 text-sm font-medium flex items-center gap-1'>
-					<span className='inline-block w-2 h-2 rounded-full bg-success-500' />
-					GitHub conectado correctamente
-				</p>
-			)}
 		</div>
 	);
 }

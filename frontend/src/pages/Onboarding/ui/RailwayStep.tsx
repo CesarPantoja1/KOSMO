@@ -1,8 +1,23 @@
 'use client';
 
-import { Railway } from '@/shared/ui';
+import { useCallback } from 'react';
+import { useRailwayOAuth } from '@/entities/integration';
+import { Railway, OAuthIntegration } from '@/shared/ui';
 
-export function RailwayStep() {
+interface RailwayStepProps {
+	onStatusChange?: (connected: boolean) => void;
+}
+
+export function RailwayStep({ onStatusChange }: RailwayStepProps) {
+	const handleStatusChange = useCallback(
+		(status: { is_connected: boolean }) => {
+			onStatusChange?.(status.is_connected);
+		},
+		[onStatusChange],
+	);
+
+	const railway = useRailwayOAuth({ onStatusChange: handleStatusChange });
+
 	return (
 		<div className='flex flex-col gap-4'>
 			<div>
@@ -10,23 +25,19 @@ export function RailwayStep() {
 					Conecta tu cuenta de Railway
 				</h3>
 				<p className='text-neutral-500 text-sm mt-1'>
-					Opcional. Railway estará disponible próximamente para desplegar tus proyectos.
+					Opcional. Conecta Railway para desplegar tus proyectos en la nube.
 				</p>
 			</div>
-			<div className='flex items-center justify-between py-3'>
-				<div className='flex items-center gap-3'>
-					<div className='flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-100'>
-						<Railway size={20} color='text-neutral-500' />
-					</div>
-					<div>
-						<p className='text-neutral-800 font-medium'>Railway</p>
-						<p className='text-neutral-400 text-sm'>Próximamente disponible</p>
-					</div>
-				</div>
-				<span className='text-xs font-medium px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-500'>
-					Pendiente
-				</span>
-			</div>
+			<OAuthIntegration
+				label='Railway'
+				icon={<Railway size={24} color='text-neutral-800' />}
+				loading={railway.loading}
+				actionLoading={railway.actionLoading}
+				isConnected={railway.isConnected}
+				username={railway.username}
+				onConnect={railway.handleConnect}
+				onDisconnect={railway.handleDisconnect}
+			/>
 		</div>
 	);
 }

@@ -12,19 +12,28 @@ import { StepIndicator } from './StepIndicator';
 const STEPS = [
 	{ key: 'apikey', label: 'API Key', required: false },
 	{ key: 'github', label: 'GitHub', required: true },
-	{ key: 'railway', label: 'Railway', required: false },
+	{ key: 'railway', label: 'Railway', required: true },
 ] as const;
 
 function OnboardingPage() {
 	const router = useRouter();
-	const { github, hasApiKey, refresh } = useOnboardingStatus();
+	const { github, railway, hasApiKey, refresh } = useOnboardingStatus();
 	const [currentStep, setCurrentStep] = useState(0);
 	const [githubConnected, setGithubConnected] = useState(github?.is_connected ?? false);
+	const [railwayConnected, setRailwayConnected] = useState(
+		railway?.is_connected ?? false,
+	);
 
 	const steps = STEPS.map((step) => ({
 		...step,
 		completed:
-			step.key === 'apikey' ? hasApiKey : step.key === 'github' ? githubConnected : false,
+			step.key === 'apikey'
+				? hasApiKey
+				: step.key === 'github'
+					? githubConnected
+					: step.key === 'railway'
+						? railwayConnected
+						: false,
 	}));
 
 	const handleNext = useCallback(() => {
@@ -47,6 +56,10 @@ function OnboardingPage() {
 
 	const handleGitHubStatusChange = useCallback((connected: boolean) => {
 		setGithubConnected(connected);
+	}, []);
+
+	const handleRailwayStatusChange = useCallback((connected: boolean) => {
+		setRailwayConnected(connected);
 	}, []);
 
 	return (
@@ -72,7 +85,9 @@ function OnboardingPage() {
 				<div className='bg-neutral-0 border border-neutral-200 rounded-2xl shadow-sm p-8 mb-6'>
 					{currentStep === 0 && <ApiKeyStep />}
 					{currentStep === 1 && <GitHubStep onStatusChange={handleGitHubStatusChange} />}
-					{currentStep === 2 && <RailwayStep />}
+					{currentStep === 2 && (
+						<RailwayStep onStatusChange={handleRailwayStatusChange} />
+					)}
 				</div>
 
 				<div className='flex items-center justify-between'>
