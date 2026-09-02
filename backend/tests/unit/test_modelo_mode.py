@@ -31,3 +31,41 @@ def test_modelo_prompt_includes_simplification_strategy() -> None:
     assert "8 requisitos" in prompt
     assert "criterios de aceptación" in prompt
     assert "agrupa" in prompt
+
+
+@pytest.mark.unit
+def test_modelo_prompt_includes_monochromatic_gray_palette() -> None:
+    # Arrange
+    mode = ModeloMode()
+
+    # Act
+    prompt = mode.system_prompt
+
+    # Assert
+    assert "Monocromático gris" in prompt
+    assert "#f1f5f9" in prompt
+    assert "#e2e8f0" in prompt
+    assert "#f8fafc" in prompt
+    assert "#cbd5e1" in prompt
+    assert "PROHIBIDO usar colores cromáticos" in prompt
+
+
+@pytest.mark.unit
+def test_modelo_retry_prompt_reinforces_monochromatic_gray_palette() -> None:
+    # Arrange
+    mode = ModeloMode()
+
+    # Act
+    retry_prompt = mode.build_retry_prompt(
+        original_prompt="Genera el diagrama",
+        errors=["Falta carril de registros"],
+        retry_count=1,
+    )
+
+    # Assert
+    assert "Correcciones y refinamiento necesarios" in retry_prompt
+    assert "paleta monocromática gris" in retry_prompt
+    assert "#f1f5f9" in retry_prompt
+    assert "#e2e8f0" in retry_prompt
+    assert "#f8fafc" in retry_prompt
+    assert "#cbd5e1" in retry_prompt
