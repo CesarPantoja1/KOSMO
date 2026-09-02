@@ -857,12 +857,22 @@ class GenerateFeatureImplementationUseCase:
                 if traceability_edges == 0:
                     traceability_edges = max(1, requirements_count + len(generated_files))
 
+                features_count = 1
+                try:
+                    project_impls = await self._implementation_repo.list_by_project(feature.project_id)
+                    features_count = (
+                        sum(1 for f in project_impls if getattr(f.status, "value", f.status) == "implemented") or 1
+                    )
+                except Exception:
+                    features_count = 1
+
                 done_event = OpenCodeEvent(
                     event_type=OpenCodeEventType.DONE,
                     session_id=session_id,
                     data={
                         "status": "implemented",
                         "generated_files": list(generated_files),
+                        "features_count": features_count,
                         "screens_count": screens_count,
                         "requirements_count": requirements_count,
                         "validations_passed": validations_passed,

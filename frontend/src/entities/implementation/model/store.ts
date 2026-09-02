@@ -87,6 +87,7 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 				featureDisplayId,
 				{
 					generated_files: record.generatedFiles,
+					features_count: record.featuresCount,
 					screens_count: record.screensCount,
 					requirements_count: record.requirementsCount,
 					validations_passed: record.validationsPassed,

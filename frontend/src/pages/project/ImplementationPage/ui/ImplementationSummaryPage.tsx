@@ -35,6 +35,7 @@ import { DeployPreconditionPanel } from './DeployPreconditionPanel';
 import { DeployResultPanel } from './DeployResultPanel';
 
 const iconMap: Record<ImplementationMetric['icon'], React.ReactNode> = {
+	features: <SparkleIcon color='text-ai-600' />,
 	screens: <ScreensIcon color='text-ai-600' />,
 	entities: <EntitiesIcon color='text-primary-600' />,
 	rules: <RulesIcon color='text-warning-600' />,

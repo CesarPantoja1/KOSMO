@@ -22,7 +22,7 @@ const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => 
 		}, 10000);
 
 		return () => clearInterval(interval);
-	}, [messages]);
+	}, [messages, messagesArray.length]);
 
 	const currentMessage = messagesArray[messageIndex] ?? messagesArray[0] ?? '';
 

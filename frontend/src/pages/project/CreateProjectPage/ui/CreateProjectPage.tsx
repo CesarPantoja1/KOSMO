@@ -2,14 +2,12 @@
 
 import { getProjects, type Project } from '@/entities/project';
 import { useIntegrationGate } from '@/shared/lib/useIntegrationGate';
-import { VideoIntro } from '@/shared/ui/VideoIntro';
 import { useEffect, useState } from 'react';
 import { CreateProjectForm } from './CreateProjectForm';
 
 const CreateProjectPage = () => {
 	const { isReady } = useIntegrationGate();
 	const [projects, setProjects] = useState<Project[]>([]);
-	const [showForm, setShowForm] = useState(false);
 	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {

@@ -44,7 +44,7 @@ describe('buildSummary', () => {
 		expect(summary.featureDisplayId).toBe('F-01');
 		expect(summary.status).toBe('completed');
 		expect(summary.metrics).toHaveLength(4);
-		expect(summary.metrics[0]).toMatchObject({ value: '1', label: 'Pantallas y componentes' });
+		expect(summary.metrics[0]).toMatchObject({ value: '1', label: 'Funcionalidades implementadas' });
 		expect(summary.metrics[1]).toMatchObject({ value: '2', label: 'Requisitos de negocio' });
 		expect(summary.metrics[2]).toMatchObject({
 			value: '4',
@@ -68,7 +68,7 @@ describe('buildSummary', () => {
 
 		// Assert
 		expect(summary.metrics).toHaveLength(4);
-		expect(summary.metrics[0].label).toBe('Pantallas y componentes');
+		expect(summary.metrics[0].label).toBe('Funcionalidades implementadas');
 		expect(summary.metrics[1].label).toBe('Requisitos de negocio');
 		expect(summary.metrics[2].label).toBe('Enlaces de trazabilidad');
 		expect(summary.metrics[3].label).toBe('Calidad verificada');
