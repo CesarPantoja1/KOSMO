@@ -3,6 +3,7 @@
 import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
+import { getIntegrationStatus } from '@/entities/integration';
 import type { ProjectGithubViewState } from '@/entities/project';
 import { useProjectGithubRepo, useProjectStore } from '@/entities/project';
 import {
@@ -12,9 +13,7 @@ import {
 	EntitiesIcon,
 	FlowIcon,
 	GitHub,
-	InfoCircleIcon,
 	Load,
-	PlusSmallIcon,
 	RulesIcon,
 	ScreensIcon,
 	ShieldCheckIcon,
@@ -27,6 +26,10 @@ import { GestionRepositorioGitHub } from '@/widgets';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import type { PreconditionState } from '../model/deploy-types';
+import { useDeployStatus } from '../model/useDeployStatus';
+import { DeployPreconditionPanel } from './DeployPreconditionPanel';
+import { DeployResultPanel } from './DeployResultPanel';
 
 const iconMap: Record<ImplementationMetric['icon'], React.ReactNode> = {
 	screens: <ScreensIcon color='text-ai-600' />,
@@ -96,9 +99,11 @@ const ImplementationSummaryPage = () => {
 	const summary = useImplementationStore((s) => s.summary);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
+	const [railwayConnected, setRailwayConnected] = useState<boolean | null>(null);
 
 	const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
 	const github = useProjectGithubRepo(currentProjectId);
+	const deploy = useDeployStatus(currentProjectId);
 
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 	const selectedCharacteristic = useCharacteristicStore(
@@ -132,6 +137,30 @@ const ImplementationSummaryPage = () => {
 			cancelled = true;
 		};
 	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		getIntegrationStatus('railway')
+			.then((s) => {
+				if (!cancelled) setRailwayConnected(s.is_connected);
+			})
+			.catch(() => {
+				if (!cancelled) setRailwayConnected(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	const precondition: PreconditionState = (() => {
+		if (github.loading || railwayConnected === null) return 'loading';
+		if (!github.status?.has_repository) {
+			if (github.viewState === 'not-linked') return 'github-not-linked';
+			return 'github-not-synced';
+		}
+		if (!railwayConnected) return 'railway-not-linked';
+		return 'ready';
+	})();
 
 	if (!summary) {
 		return (
@@ -291,22 +320,16 @@ const ImplementationSummaryPage = () => {
 							/>
 						)}
 
-						<div className='rounded-xl border border-ai-100 bg-neutral-0 p-4 text-left shadow-xs'>
-							<div className='flex gap-3 items-start'>
-								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ai-50 mt-0.5'>
-									<InfoCircleIcon size={16} color='text-ai-600' />
-								</div>
-								<div>
-									<p className='text-sm font-semibold text-neutral-800'>
-										¿Qué hemos generado?
-									</p>
-									<p className='mt-1 text-xs leading-5 text-neutral-500'>
-										La estructura, datos, reglas y lógica necesarios para que puedas
-										continuar construyendo tu aplicación.
-									</p>
-								</div>
-							</div>
-						</div>
+						{currentProjectId &&
+							(deploy.status && deploy.status.status !== 'idle' ? (
+								<DeployResultPanel status={deploy.status} error={deploy.error} />
+							) : (
+								<DeployPreconditionPanel
+									precondition={precondition}
+									onDeploy={() => deploy.deploy()}
+									deploying={deploy.deploying}
+								/>
+							))}
 					</div>
 				</div>
 			</div>
