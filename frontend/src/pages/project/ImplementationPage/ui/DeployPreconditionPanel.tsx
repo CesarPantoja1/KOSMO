@@ -14,10 +14,16 @@ const DeployPreconditionPanel = ({
 	precondition,
 	onDeploy,
 	deploying,
+	onConnectRailway,
+	connectingRailway,
+	deployError,
 }: {
 	precondition: PreconditionState;
 	onDeploy: () => void;
 	deploying: boolean;
+	onConnectRailway?: () => void;
+	connectingRailway?: boolean;
+	deployError?: string | null;
 }) => {
 	if (precondition === 'loading') {
 		return (
@@ -101,9 +107,27 @@ const DeployPreconditionPanel = ({
 							</p>
 						</div>
 					</div>
-					<Link href='/perfil' className='btn btn-primary btn-sm self-start'>
-						Conectar Railway
-					</Link>
+					{onConnectRailway ? (
+						<button
+							type='button'
+							onClick={onConnectRailway}
+							disabled={connectingRailway}
+							className='btn btn-primary btn-sm self-start'
+						>
+							{connectingRailway ? (
+								<>
+									<Load size={16} />
+									Conectando...
+								</>
+							) : (
+								'Conectar Railway'
+							)}
+						</button>
+					) : (
+						<Link href='/perfil' className='btn btn-primary btn-sm self-start'>
+							Conectar Railway
+						</Link>
+					)}
 				</div>
 			</div>
 		);
@@ -121,6 +145,34 @@ const DeployPreconditionPanel = ({
 				Publica tu aplicación en Railway con un clic. Se creará un servicio con tu código
 				sincronizado.
 			</p>
+			{deployError && (
+				<div className='flex items-start gap-3 rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 mb-4'>
+					<WarningIcon size={20} color='text-danger-600' />
+					<div className='flex flex-col gap-2'>
+						<p className='text-sm font-semibold text-danger-700'>
+							Error al iniciar el despliegue
+						</p>
+						<p className='text-sm text-danger-700/80'>{deployError}</p>
+						{onConnectRailway && (
+							<button
+								type='button'
+								onClick={onConnectRailway}
+								disabled={connectingRailway}
+								className='btn btn-secondary btn-sm self-start mt-1'
+							>
+								{connectingRailway ? (
+									<>
+										<Load size={16} />
+										Reconectando...
+									</>
+								) : (
+									'Reconectar Railway con nuevos permisos'
+								)}
+							</button>
+						)}
+					</div>
+				</div>
+			)}
 			<button
 				type='button'
 				onClick={onDeploy}

@@ -366,8 +366,9 @@ paths:
       tags: [projects]
       summary: Eliminar proyecto
       description: >-
-        Elimina el proyecto y todos sus artefactos en cascada: descubrimiento, caracteristicas,
-        requisitos, modelos, chat y evaluaciones de consistencia. Requiere Bearer token.
+        Elimina el proyecto y todos sus artefactos en cascada global: servicio y despliegue
+        en Railway, repositorio remoto en GitHub, workspace local de codigo, descubrimiento,
+        caracteristicas, requisitos, modelos, chat y evaluaciones de consistencia. Requiere Bearer token.
       operationId: project_delete
       parameters:
         - $ref: "#/components/parameters/ProjectId"

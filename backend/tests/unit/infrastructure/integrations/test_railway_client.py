@@ -1255,3 +1255,301 @@ async def test_client_context_manager_and_aclose() -> None:
     async with RailwayHttpClient() as client:
         # Assert
         assert client is not None
+
+
+# ══════════════════════════════ 7. delete_service ══════════════════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_service_success_rest() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/services/srv_delete_123"
+        assert request.method == "DELETE"
+        assert request.headers.get("authorization") == "Bearer rw_token_del"
+        return httpx.Response(204)
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act
+    deleted = await railway_client.delete_service(token="rw_token_del", service_id="srv_delete_123")
+
+    # Assert
+    assert deleted is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_service_404_idempotent() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/services/srv_not_found"
+        assert request.method == "DELETE"
+        return httpx.Response(404, json={"error": "Service not found"})
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act
+    deleted = await railway_client.delete_service(token="rw_token", service_id="srv_not_found")
+
+    # Assert
+    assert deleted is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_service_graphql_project_delete() -> None:
+    # Arrange
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        content = json.loads(request.content.decode("utf-8"))
+        query = content.get("query", "")
+        if "query ServiceProject" in query:
+            calls.append("query_project")
+            return httpx.Response(
+                200,
+                json={"data": {"service": {"id": "srv_gql_1", "projectId": "prj_rw_1"}}},
+            )
+        if "mutation ProjectDelete" in query:
+            calls.append("delete_project")
+            return httpx.Response(200, json={"data": {"projectDelete": True}})
+        return httpx.Response(400)
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act
+    deleted = await railway_client.delete_service(token="rw_token", service_id="srv_gql_1")
+
+    # Assert
+    assert deleted is True
+    assert calls == ["query_project", "delete_project"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_service_graphql_service_delete_fallback() -> None:
+    # Arrange
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        content = json.loads(request.content.decode("utf-8"))
+        query = content.get("query", "")
+        if "query ServiceProject" in query:
+            calls.append("query_project")
+            return httpx.Response(
+                200,
+                json={"data": {"service": {"id": "srv_gql_2", "projectId": None}}},
+            )
+        if "mutation ServiceDelete" in query:
+            calls.append("delete_service")
+            return httpx.Response(200, json={"data": {"serviceDelete": True}})
+        return httpx.Response(400)
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act
+    deleted = await railway_client.delete_service(token="rw_token", service_id="srv_gql_2")
+
+    # Assert
+    assert deleted is True
+    assert calls == ["query_project", "delete_service"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_service_raises_on_auth_error() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"message": "Unauthorized"})
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act & Assert
+    with pytest.raises(DeploymentAuthenticationError):
+        await railway_client.delete_service(token="bad_token", service_id="srv_1")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_service_raises_on_network_error() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.RequestError("Network connection reset")
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    # Act & Assert
+    with pytest.raises(DeploymentApiError) as exc_info:
+        await railway_client.delete_service(token="rw_token", service_id="srv_net_err")
+
+    assert "Error de red al conectar con Railway" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_create_service_graphql_full_flow() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/graphql/v2"
+        body = json.loads(request.content.decode("utf-8"))
+        query = body.get("query", "")
+        if "mutation ProjectCreate" in query:
+            calls.append("projectCreate")
+            assert "baseEnvironmentId" in query
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "projectCreate": {
+                            "id": "prj_gql_123",
+                            "name": "my-app",
+                            "baseEnvironmentId": "env_base_456",
+                        }
+                    }
+                },
+            )
+        if "mutation ServiceCreate" in query:
+            calls.append("serviceCreate")
+            assert body["variables"]["input"]["projectId"] == "prj_gql_123"
+            return httpx.Response(
+                200,
+                json={"data": {"serviceCreate": {"id": "srv_gql_789", "name": "my-app"}}},
+            )
+        if "mutation ServiceDomainCreate" in query:
+            calls.append("serviceDomainCreate")
+            assert body["variables"]["input"]["environmentId"] == "env_base_456"
+            assert body["variables"]["input"]["serviceId"] == "srv_gql_789"
+            return httpx.Response(200, json={"data": {"serviceDomainCreate": {"domain": "myapp.up.railway.app"}}})
+        if "mutation VariableCollectionUpsert" in query:
+            calls.append("variableCollectionUpsert")
+            return httpx.Response(200, json={"data": {"variableCollectionUpsert": True}})
+        return httpx.Response(400, json={"message": "Unknown query"})
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    service_id = await railway_client.create_service(
+        token="rw_token_live",
+        repo_url="https://github.com/my-org/my-app",
+        env_vars=[EnvironmentVariable(key="PORT", value="8000", is_secret=False)],
+        ports=[PortSpec(port=8000, protocol="HTTP")],
+    )
+
+    assert service_id == "srv_gql_789"
+    assert "projectCreate" in calls
+    assert "serviceCreate" in calls
+    assert "serviceDomainCreate" in calls
+    assert "variableCollectionUpsert" in calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_create_service_graphql_error_does_not_fall_back_to_rest() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Nunca debería llamar a /v1/services
+        assert request.url.path == "/graphql/v2"
+        return httpx.Response(
+            400,
+            json={
+                "errors": [
+                    {
+                        "message": "Project limit reached for Trial plan",
+                    }
+                ]
+            },
+        )
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    with pytest.raises(DeploymentApiError) as exc_info:
+        await railway_client.create_service(
+            token="rw_token_limit",
+            repo_url="https://github.com/my-org/my-app",
+            env_vars=[],
+            ports=[],
+        )
+
+    assert "Project limit reached" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_trigger_deployment_graphql_flow() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/graphql/v2"
+        body = json.loads(request.content.decode("utf-8"))
+        query = body.get("query", "")
+        if "query GetServiceEnvironment" in query:
+            calls.append("get_env")
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "service": {
+                            "id": "srv_123",
+                            "projectId": "prj_123",
+                            "serviceInstances": {
+                                "edges": [{"node": {"environmentId": "env_prod_999"}}],
+                            },
+                        }
+                    }
+                },
+            )
+        if "mutation ServiceInstanceDeploy" in query:
+            calls.append("deploy")
+            assert body["variables"]["serviceId"] == "srv_123"
+            assert body["variables"]["environmentId"] == "env_prod_999"
+            return httpx.Response(200, json={"data": {"serviceInstanceDeploy": True}})
+        return httpx.Response(400)
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    await railway_client.trigger_deployment(token="rw_token", service_id="srv_123")
+    assert calls == ["get_env", "deploy"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_configure_volume_graphql_flow() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/graphql/v2"
+        body = json.loads(request.content.decode("utf-8"))
+        query = body.get("query", "")
+        if "query GetServiceProject" in query:
+            calls.append("get_project")
+            return httpx.Response(
+                200,
+                json={"data": {"service": {"id": "srv_123", "projectId": "prj_abc"}}},
+            )
+        if "mutation VolumeCreate" in query:
+            calls.append("volume_create")
+            assert body["variables"]["input"]["projectId"] == "prj_abc"
+            assert body["variables"]["input"]["serviceId"] == "srv_123"
+            assert body["variables"]["input"]["mountPath"] == "/data"
+            return httpx.Response(200, json={"data": {"volumeCreate": {"id": "vol_123"}}})
+        return httpx.Response(400)
+
+    mock_client = _create_mock_client(handler)
+    railway_client = RailwayHttpClient(client=mock_client)
+
+    await railway_client.configure_volume(
+        token="rw_token",
+        service_id="srv_123",
+        volume=VolumeConfig(mount_path="/data", size_mb=1024),
+    )
+    assert calls == ["get_project", "volume_create"]

@@ -144,6 +144,10 @@ class UserDeploymentIntegrationRepository(Protocol):
 
     async def save(self, integration: UserDeploymentIntegration) -> None: ...
 
+    async def delete_by_user_id(
+        self, user_id: UserId, provider: DeploymentProvider = DeploymentProvider.RAILWAY
+    ) -> bool: ...
+
 
 class ProjectDeploymentRepository(Protocol):
     async def get_by_project_id(self, project_id: ProjectId) -> ProjectDeployment | None: ...
@@ -190,6 +194,10 @@ class DeploymentProviderPort(Protocol):
         """
         Retorna (status, public_url, build_logs_url_or_error)
         """
+        ...
+
+    async def delete_service(self, token: str, service_id: str) -> bool:
+        """Elimina el servicio o despliegue remoto en la plataforma de nube."""
         ...
 
 

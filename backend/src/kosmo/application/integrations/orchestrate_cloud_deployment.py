@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -27,6 +28,8 @@ from kosmo.contracts.integrations.github import (
 )
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.contracts.telemetry import traced
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,8 +185,23 @@ class OrchestrateCloudDeploymentUseCase:
         except DeploymentAuthenticationError:
             if user_integration.encrypted_refresh_token:
                 token = await self._refresh_user_token(user_integration)
-                service_id = await _provision_remote(token)
+                try:
+                    service_id = await _provision_remote(token)
+                except DeploymentAuthenticationError:
+                    logger.warning(
+                        "Token de Railway para el usuario %s no autorizado tras renovar. Eliminando integración.",
+                        user_integration.user_id,
+                    )
+                    await self._user_deployment_repo.delete_by_user_id(
+                        user_integration.user_id, user_integration.provider
+                    )
+                    raise
             else:
+                logger.warning(
+                    "Token de Railway para el usuario %s no autorizado y sin refresh token. Eliminando integración.",
+                    user_integration.user_id,
+                )
+                await self._user_deployment_repo.delete_by_user_id(user_integration.user_id, user_integration.provider)
                 raise
 
         # 7. Actualizar y persistir el estado de despliegue del proyecto

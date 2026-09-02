@@ -3,7 +3,9 @@
 import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
-import { getIntegrationStatus } from '@/entities/integration';
+import { connectIntegration, getIntegrationStatus } from '@/entities/integration';
+import { buildRailwayAuthUrl, DEFAULT_REDIRECT_URI } from '@/entities/integration/model/oauth-config';
+import { formatApiError } from '@/shared/api';
 import type { ProjectGithubViewState } from '@/entities/project';
 import { useProjectGithubRepo, useProjectStore } from '@/entities/project';
 import {
@@ -20,12 +22,13 @@ import {
 	SmallCheckIcon,
 	SparkleIcon,
 	StarIcon,
+	toast,
 	WarningIcon,
 } from '@/shared/ui';
 import { GestionRepositorioGitHub } from '@/widgets';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { PreconditionState } from '@/entities/deploy';
 import { useDeployStatus } from '@/entities/deploy';
 import { DeployPreconditionPanel } from './DeployPreconditionPanel';
@@ -138,19 +141,67 @@ const ImplementationSummaryPage = () => {
 		};
 	}, []);
 
-	useEffect(() => {
-		let cancelled = false;
+	const [connectingRailway, setConnectingRailway] = useState(false);
+
+	const refreshRailwayStatus = useCallback(() => {
 		getIntegrationStatus('railway')
-			.then((s) => {
-				if (!cancelled) setRailwayConnected(s.is_connected);
-			})
-			.catch(() => {
-				if (!cancelled) setRailwayConnected(false);
-			});
-		return () => {
-			cancelled = true;
-		};
+			.then((s) => setRailwayConnected(s.is_connected))
+			.catch(() => setRailwayConnected(false));
 	}, []);
+
+	const handleConnectRailway = useCallback(() => {
+		setConnectingRailway(true);
+		const popup = window.open(
+			buildRailwayAuthUrl(DEFAULT_REDIRECT_URI),
+			'oauth-railway',
+			'width=600,height=700',
+		);
+		if (!popup) {
+			router.push('/perfil');
+		}
+	}, [router]);
+
+	useEffect(() => {
+		refreshRailwayStatus();
+
+		const handleFocus = () => refreshRailwayStatus();
+		window.addEventListener('focus', handleFocus);
+		document.addEventListener('visibilitychange', handleFocus);
+
+		const handleMessage = (event: MessageEvent) => {
+			if (event.origin !== window.location.origin) return;
+			if (event.data?.type === 'railway-oauth-code') {
+				const code = event.data.code as string;
+				if (code) {
+					connectIntegration('railway', {
+						code,
+						redirect_uri: DEFAULT_REDIRECT_URI,
+					})
+						.then((result) => {
+							setRailwayConnected(result.is_connected);
+							toast.success(
+								`Cuenta de Railway vinculada como @${result.username ?? 'desconocido'}.`,
+							);
+						})
+						.catch((err) => {
+							toast.error(
+								formatApiError(err, 'Error al vincular la cuenta de Railway.'),
+							);
+						})
+						.finally(() => {
+							setConnectingRailway(false);
+						});
+				}
+			}
+		};
+		window.addEventListener('message', handleMessage);
+
+		return () => {
+			window.removeEventListener('focus', handleFocus);
+			document.removeEventListener('visibilitychange', handleFocus);
+			window.removeEventListener('message', handleMessage);
+		};
+	}, [refreshRailwayStatus]);
 
 	const precondition: PreconditionState = (() => {
 		if (github.loading || railwayConnected === null) return 'loading';
@@ -328,6 +379,9 @@ const ImplementationSummaryPage = () => {
 									precondition={precondition}
 									onDeploy={() => deploy.deploy()}
 									deploying={deploy.deploying}
+									onConnectRailway={handleConnectRailway}
+									connectingRailway={connectingRailway}
+									deployError={deploy.error}
 								/>
 							))}
 					</div>
