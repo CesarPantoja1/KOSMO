@@ -6,7 +6,7 @@ import {
 	useProjectStore,
 	type Project,
 } from '@/entities/project';
-import { ConfirmacionVisibilidadRepositorio, Send } from '@/shared/ui';
+import { ConfirmacionVisibilidadRepositorio, InfoCircleIcon, Railway, Send, WarningIcon } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
 import { CharacterCounter, GitHub, toast } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -292,6 +292,36 @@ const CreateProjectForm = () => {
 								</button>
 							</div>
 						</div>
+
+						{/* Railway deployment notice */}
+						{!isPublic ? (
+							<div className='flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 mt-2'>
+								<WarningIcon size={20} color='text-warning-600' />
+								<div className='flex flex-col gap-1'>
+									<p className='text-sm font-semibold text-warning-700'>
+										No podrás desplegar en Railway
+									</p>
+									<p className='text-sm text-warning-700/80'>
+										Los repositorios privados no son compatibles con el despliegue en Railway.
+										Si deseas publicar tu aplicación, selecciona la visibilidad{' '}
+										<span className='font-semibold'>Pública</span>.
+									</p>
+								</div>
+							</div>
+						) : (
+							<div className='flex items-start gap-3 rounded-lg border border-info-200 bg-info-50 px-4 py-3 mt-2'>
+								<InfoCircleIcon size={20} color='text-info-600' />
+								<div className='flex flex-col gap-1'>
+									<p className='text-sm font-semibold text-info-700'>
+										Despliegue en Railway disponible
+									</p>
+									<p className='text-sm text-info-700/80'>
+										Con un repositorio público podrás publicar tu aplicación en Railway directamente
+										desde la plataforma.
+									</p>
+								</div>
+							</div>
+						)}
 					</div>
 
 					{/* Actions — al final del formulario */}

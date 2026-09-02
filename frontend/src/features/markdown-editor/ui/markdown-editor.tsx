@@ -64,6 +64,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 		useEffect(() => {
 			if (markdown !== prevMarkdownRef.current) {
 				setLocalMarkdown(markdown);
+				setHeadingsMarkdown(markdown);
 				prevMarkdownRef.current = markdown;
 				mdxEditorRef.current?.setMarkdown(markdown);
 			}
@@ -127,6 +128,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 			});
 
 			const elements = headings
+				.filter((heading) => heading.id)
 				.map((heading) => editor.querySelector(`#${CSS.escape(heading.id)}`))
 				.filter((el): el is HTMLElement => el !== null);
 
