@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import structlog
 
@@ -16,6 +18,7 @@ from kosmo.contracts.integrations.deployment import (
     DeploymentProviderPort,
     DeploymentWorkerPort,
     ProjectDeploymentRepository,
+    UserDeploymentIntegration,
     UserDeploymentIntegrationRepository,
 )
 from kosmo.contracts.integrations.github import (
@@ -114,7 +117,14 @@ class DeleteProjectUseCase:
         await self._cleanup_github_repository(input_data.project_id, input_data.owner_id)
 
         if self._workspace_manager is not None:
-            await self._workspace_manager.delete_workspace(input_data.project_id)
+            try:
+                await self._workspace_manager.delete_workspace(input_data.project_id)
+            except Exception:
+                _log.warning(
+                    "delete_project.workspace_cleanup_failed",
+                    project_id=str(input_data.project_id),
+                    exc_info=True,
+                )
 
         features = await self._feature_repo.list_by_project(input_data.project_id)
         for feature in features:
@@ -157,19 +167,67 @@ class DeleteProjectUseCase:
                 if user_integration is not None and user_integration.encrypted_token:
                     raw_bytes = base64.b64decode(user_integration.encrypted_token.encode("utf-8"))
                     token = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_bytes)).decode("utf-8")
-                    await self._deployment_client.delete_service(token, deployment.service_id)
-                    _log.info(
-                        "delete_project.railway_deployment_deleted",
-                        project_id=str(project_id),
-                        service_id=deployment.service_id,
-                    )
-            await self._project_deployment_repo.delete_by_project_id(project_id)
+                    try:
+                        await self._deployment_client.delete_service(token, deployment.service_id)
+                        _log.info(
+                            "delete_project.railway_deployment_deleted",
+                            project_id=str(project_id),
+                            service_id=deployment.service_id,
+                        )
+                    except Exception:
+                        if user_integration.encrypted_refresh_token:
+                            try:
+                                raw_rt = base64.b64decode(user_integration.encrypted_refresh_token.encode("utf-8"))
+                                rt = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_rt)).decode("utf-8")
+                                new_dto = await self._deployment_client.refresh_access_token(rt)
+                                if new_dto.access_token:
+                                    token = new_dto.access_token
+                                    enc_acc = base64.b64encode(
+                                        self._cipher.encrypt(token.encode("utf-8")).ciphertext
+                                    ).decode("utf-8")
+                                    enc_ref = user_integration.encrypted_refresh_token
+                                    if new_dto.refresh_token:
+                                        enc_ref = base64.b64encode(
+                                            self._cipher.encrypt(new_dto.refresh_token.encode("utf-8")).ciphertext
+                                        ).decode("utf-8")
+                                    await self._user_deployment_repo.save(
+                                        UserDeploymentIntegration(
+                                            user_id=user_integration.user_id,
+                                            provider=user_integration.provider,
+                                            encrypted_token=enc_acc,
+                                            provider_username=user_integration.provider_username,
+                                            encrypted_refresh_token=enc_ref,
+                                            scopes=user_integration.scopes,
+                                            updated_at=datetime.now(UTC),
+                                        )
+                                    )
+                                    await self._deployment_client.delete_service(token, deployment.service_id)
+                                    _log.info(
+                                        "delete_project.railway_deployment_deleted",
+                                        project_id=str(project_id),
+                                        service_id=deployment.service_id,
+                                    )
+                            except Exception:
+                                _log.warning(
+                                    "delete_project.railway_cleanup_failed",
+                                    project_id=str(project_id),
+                                    exc_info=True,
+                                )
+                        else:
+                            _log.warning(
+                                "delete_project.railway_cleanup_failed",
+                                project_id=str(project_id),
+                                exc_info=True,
+                            )
         except Exception:
             _log.warning(
                 "delete_project.railway_cleanup_failed",
                 project_id=str(project_id),
                 exc_info=True,
             )
+        finally:
+            with contextlib.suppress(Exception):
+                await self._project_deployment_repo.delete_by_project_id(project_id)
 
     async def _cleanup_github_repository(self, project_id: ProjectId, owner_id: UserId) -> None:
         if self._project_github_repo is None:
@@ -199,20 +257,29 @@ class DeleteProjectUseCase:
                             repo_name = parts[-1]
 
                     if owner and repo_name:
-                        await self._github_client.delete_repository(token, owner, repo_name)
-                        _log.info(
-                            "delete_project.github_repo_deleted",
-                            project_id=str(project_id),
-                            owner=owner,
-                            repo_name=repo_name,
-                        )
-            await self._project_github_repo.delete_by_project_id(project_id)
+                        try:
+                            await self._github_client.delete_repository(token, owner, repo_name)
+                            _log.info(
+                                "delete_project.github_repo_deleted",
+                                project_id=str(project_id),
+                                owner=owner,
+                                repo_name=repo_name,
+                            )
+                        except Exception:
+                            _log.warning(
+                                "delete_project.github_cleanup_failed",
+                                project_id=str(project_id),
+                                exc_info=True,
+                            )
         except Exception:
             _log.warning(
                 "delete_project.github_cleanup_failed",
                 project_id=str(project_id),
                 exc_info=True,
             )
+        finally:
+            with contextlib.suppress(Exception):
+                await self._project_github_repo.delete_by_project_id(project_id)
 
     async def _delete_traceability(self, entity_id: str) -> None:
         if self._traceability_repo is None:

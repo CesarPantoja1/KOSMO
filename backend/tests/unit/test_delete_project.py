@@ -96,10 +96,13 @@ class _DeploymentClientSpy:
 
 
 class _WorkspaceManagerSpy:
-    def __init__(self) -> None:
+    def __init__(self, should_fail: bool = False) -> None:
         self.deleted_projects: list[str] = []
+        self.should_fail = should_fail
 
     async def delete_workspace(self, project_id: ProjectId) -> None:
+        if self.should_fail:
+            raise OSError(39, "Directory not empty")
         self.deleted_projects.append(str(project_id))
 
 
@@ -577,4 +580,33 @@ async def test_delete_project_resilient_when_railway_cleanup_fails() -> None:
 
     # Assert — GitHub y el proyecto sí se eliminaron
     assert github_client.deleted_repos == [("token_gh", "octocat", "success-repo")]
+    assert await project_repo.by_id(project.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_project_resilient_when_workspace_cleanup_fails() -> None:
+    # Arrange — Si la limpieza del directorio local en disco falla con OSError, el proyecto en DB se elimina igual
+    project = _a_project("prj_resilient_ws")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    workspace_manager = _WorkspaceManagerSpy(should_fail=True)
+
+    use_case = _make_uc(
+        project_repo,
+        InMemoryFeatureRepository(),
+        InMemoryRequirementRepository(),
+        InMemoryActivityDiagramRepository(),
+        InMemoryDocumentRepository(),
+        InMemoryChatRepository(),
+        InMemoryConsistencyEvaluationRepository(),
+        InMemoryTraceabilityRepository(),
+        workspace_manager=workspace_manager,
+    )
+
+    # Act — No debe lanzar excepción
+    await use_case.execute(DeleteProjectInput(project_id=project.id, owner_id=_OWNER))
+
+    # Assert — El proyecto sí se eliminó de la base de datos
     assert await project_repo.by_id(project.id) is None

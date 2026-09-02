@@ -4,7 +4,7 @@ import { PUBLIC_APP_DOMAIN } from '@/shared/api';
 const GITHUB_AUTH_URL = 'https://github.com/login/oauth/authorize';
 export const GITHUB_CLIENT_ID = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || '';
 export const GITHUB_SCOPES =
-	process.env.NEXT_PUBLIC_GITHUB_SCOPES || 'repo';
+	process.env.NEXT_PUBLIC_GITHUB_SCOPES || 'repo delete_repo';
 
 // RAILWAY
 const RAILWAY_AUTH_URL = 'https://backboard.railway.com/oauth/auth';

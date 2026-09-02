@@ -7,6 +7,7 @@ import functools
 import json
 import os
 import shutil
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -451,7 +452,15 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             pass
 
         if target_dir.exists():
-            shutil.rmtree(target_dir)
+            for attempt in range(4):
+                try:
+                    shutil.rmtree(target_dir)
+                    break
+                except OSError:
+                    if attempt < 3:
+                        time.sleep(0.3)
+                    else:
+                        shutil.rmtree(target_dir, ignore_errors=True)
 
     async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None:
         """Consolida los cambios del workspace en un commit de git y actualiza el manifiesto.

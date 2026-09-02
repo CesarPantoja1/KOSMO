@@ -86,6 +86,7 @@ export async function deleteExpense(id: string): Promise<void> {
 2. **Tipos Exportados:** Siempre exporta los tipos inferidos `$inferSelect` y `$inferInsert` junto a la definición de la tabla.
 3. **Claves Primarias y Fechas:** Usa identificadores unívocos (`text("id").primaryKey()`) y marcas de tiempo estándar (`integer(..., { mode: "timestamp" })`).
 4. **Relaciones Explícitas:** Cuando existan referencias entre tablas, utiliza `references(() => otherTable.id)`.
+5. **Inicialización Resiliente:** En el módulo de acceso a datos o seeding (`ensureSeedData`), ejecuta `sqlite.exec("CREATE TABLE IF NOT EXISTS ...")` antes de consultar para asegurar que las tablas existan en despliegues con archivos SQLite nuevos.
 
 ---
 

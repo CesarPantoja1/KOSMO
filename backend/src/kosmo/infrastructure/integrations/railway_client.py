@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Self, cast
 
@@ -868,8 +869,8 @@ class RailwayHttpClient(DeploymentProviderPort):
 
                 if environment_id:
                     gql_deploy = """
-                    mutation ServiceInstanceDeploy($serviceId: String!, $environmentId: String!) {
-                        serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)
+                    mutation ServiceInstanceDeployV2($serviceId: String!, $environmentId: String!) {
+                        serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId)
                     }
                     """
                     variables: dict[str, object] = {"serviceId": service_id, "environmentId": environment_id}
@@ -888,6 +889,15 @@ class RailwayHttpClient(DeploymentProviderPort):
                     if "already" in exc_str and ("deploy" in exc_str or "progress" in exc_str or "building" in exc_str):
                         logger.info("Railway ya inició el despliegue automáticamente: %s", exc)
                         return
+                    if "serviceinstancedeployv2" in gql_deploy.lower() and environment_id:
+                        gql_fallback = """
+                        mutation ServiceInstanceDeploy($serviceId: String!, $environmentId: String!) {
+                            serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)
+                        }
+                        """
+                        with contextlib.suppress(Exception):
+                            await self._execute_graphql(token, gql_fallback, variables)
+                            return
                     raise
                 return
         except (
@@ -1110,6 +1120,31 @@ class RailwayHttpClient(DeploymentProviderPort):
                 del_resp = await self._execute_graphql(token, gql_del_service, {"id": service_id})
                 if del_resp and del_resp.get("serviceDelete") is True:
                     return True
+
+            # Si no se encontró como servicio, intentar borrar directamente como proyecto o servicio
+            try:
+                del_proj_direct = """
+                mutation ProjectDelete($id: String!) {
+                    projectDelete(id: $id)
+                }
+                """
+                del_proj_resp = await self._execute_graphql(token, del_proj_direct, {"id": service_id})
+                if del_proj_resp and del_proj_resp.get("projectDelete") is True:
+                    return True
+            except Exception:
+                pass
+
+            try:
+                del_srv_direct = """
+                mutation ServiceDelete($id: String!) {
+                    serviceDelete(id: $id)
+                }
+                """
+                del_resp = await self._execute_graphql(token, del_srv_direct, {"id": service_id})
+                if del_resp and del_resp.get("serviceDelete") is True:
+                    return True
+            except Exception:
+                pass
         except (DeploymentAuthenticationError, DeploymentPermissionError, DeploymentRateLimitError):
             raise
         except Exception as exc:
