@@ -93,9 +93,8 @@ describe('useOAuthIntegration', () => {
 		await waitFor(() => expect(result.current.loading).toBe(false));
 
 		// Act
-		await act(async () => {
+		act(() => {
 			result.current.handleConnect();
-			await Promise.resolve();
 		});
 
 		// Assert
@@ -104,8 +103,12 @@ describe('useOAuthIntegration', () => {
 			'oauth-github',
 			'width=600,height=700',
 		);
-		expect(assign).toHaveBeenCalledWith(
-			expect.stringContaining('https://auth.example.com?redirect=https://app.example.com/perfil&state=github.'),
+		await waitFor(() =>
+			expect(assign).toHaveBeenCalledWith(
+				expect.stringContaining(
+					'https://auth.example.com?redirect=https://app.example.com/perfil&state=github.',
+				),
+			),
 		);
 	});
 

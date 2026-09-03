@@ -210,9 +210,7 @@ class OrchestrateCloudDeploymentUseCase:
             project_id=cmd.project_id,
             provider=cmd.provider,
             service_id=service_id,
-            service_name=(
-                existing_deployment.service_name if existing_deployment else cmd.service_name
-            ),
+            service_name=(existing_deployment.service_name if existing_deployment else cmd.service_name),
             public_url=existing_deployment.public_url if existing_deployment else None,
             status=DeploymentStatus.BUILDING,
             build_logs_url=existing_deployment.build_logs_url if existing_deployment else None,

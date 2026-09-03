@@ -373,9 +373,7 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
     git_workspace.remote_add_or_update.assert_called_once_with(
         "/tmp/ws-initial", "origin", "https://github.com/octocat/custom-repo-name.git"
     )
-    git_workspace.push.assert_called_once_with(
-        "/tmp/ws-initial", "origin", branch="main", token="token"
-    )
+    git_workspace.push.assert_called_once_with("/tmp/ws-initial", "origin", branch="main", token="token")
 
     assert result.sync_status == GitHubSyncStatus.SYNCED
     assert result.repo_url == "https://github.com/octocat/custom-repo-name.git"

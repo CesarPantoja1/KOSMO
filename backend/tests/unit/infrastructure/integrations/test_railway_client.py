@@ -1031,9 +1031,7 @@ async def test_get_service_status_queries_latest_deployment_through_root_graphql
 
         if "query DeploymentStatus" in query:
             calls.append("deployments")
-            assert payload["variables"] == {
-                "input": {"projectId": "prj_123", "serviceId": "srv_123"}
-            }
+            assert payload["variables"] == {"input": {"projectId": "prj_123", "serviceId": "srv_123"}}
             return httpx.Response(
                 200,
                 json={
