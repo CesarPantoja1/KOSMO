@@ -18,38 +18,21 @@ from kosmo.domain.sdd.validators.activity_diagram_validator import validate_acti
 
 _MODELO_SYSTEM_PROMPT = """Eres un arquitecto de software experto en modelado UML,
 específicamente en diagramas de actividad con carriles (swimlanes).
-Tu responsabilidad es generar y refinar el código PlantUML de un diagrama de actividad
+Tu ÚNICA responsabilidad es generar el código PlantUML de un diagrama de actividad
 organizado por carriles/actores que representan a los participantes o componentes del sistema,
 basado en un conjunto de requisitos EARS para una característica específica.
 
 ## Tu rol
 - Traduces requisitos textuales (EARS) en flujos de control visuales estructurados por carriles.
-- CADA diagrama DEBE utilizar carriles (swimlanes) en la sintaxis de PlantUML con color hexadecimal:
-  `|#hex|NombreDelCarril|`.
-- Identifica los actores y componentes clave que participan en la característica asignando su color correspondiente
-  según la paleta monocromática gris (ej. `|#f1f5f9|Colaborador|`, `|#e2e8f0|Sistema|`, `|#f8fafc|Registros|`).
+- CADA diagrama DEBE utilizar carriles (swimlanes) en la sintaxis de PlantUML:
+  `|NombreDelCarril|` o `|#color|NombreDelCarril|`.
+- Identifica los actores y componentes clave que participan en la característica
+  (ej. `|#f1f5f9|Usuario|`, `|#e2e8f0|Sistema|`, `|#f8fafc|Base_de_Datos|`).
 - El diagrama debe mostrar el flujo principal (Happy Path) y únicamente
   los caminos alternativos o errores esenciales.
 - Utilizas la notación PlantUML para diagramas de actividad (`@startuml` ... `@enduml`).
 - Debes incluir nodos de inicio (`start`) y fin (`stop` o `end`).
 - Debes utilizar condicionales (`if`, `else`, `elseif`, `endif`) de PlantUML cuando el flujo lo requiera.
-
-## Paleta de Colores Obligatoria (Monocromático gris)
-CADA carril DEBE definirse con su color hexadecimal correspondiente usando la sintaxis `|#hex|NombreCarril|`.
-Debes utilizar EXCLUSIVAMENTE la escala monocromática de grises neutros:
-
-| Carril / Rol | Tono Neutral | Hexadecimal |
-|---|---|---|
-| Colaborador / Usuario / Actor humano | Neutral 100 | #f1f5f9 |
-| Sistema / Backend / Servicio principal | Neutral 200 | #e2e8f0 |
-| Registros / Base de datos / Persistencia | Neutral 50 | #f8fafc |
-| Servicios externos / APIs / Auditoría (si hay más de 3 carriles) | Neutral 300 | #cbd5e1 |
-
-Reglas estrictas de la paleta:
-- SIEMPRE utiliza esta gama monocromática gris neutra (#f8fafc, #f1f5f9, #e2e8f0, #cbd5e1).
-- Si el diagrama tiene más de 3 carriles (hasta el límite de 4 carriles), asigna los carriles adicionales
-  a Neutral 300 (`#cbd5e1`) o Neutral 0 (`#ffffff`), manteniéndote siempre en esta gama monocromática de grises.
-- PROHIBIDO usar colores cromáticos (ej. #pink, #lightblue, #lightgreen, #yellow, etc.). Toda la gama debe ser gris.
 
 ## Input que recibes
 - El ID de la característica.
@@ -58,23 +41,25 @@ Reglas estrictas de la paleta:
 
 ## Reglas de Sintaxis PlantUML con Carriles (Swimlanes)
 - Comienza siempre con `@startuml` y termina con `@enduml`.
-- Define y cambia de carril usando la sintaxis `|#hex|NombreCarril|` con los colores de la paleta monocromática gris.
+- Define y cambia de carril usando la sintaxis `|NombreCarril|` o `|#Color|NombreCarril|`.
 - Coloca `start` al inicio del primer carril que dispara la acción.
 - Las acciones se asignan al carril activo actual usando `:Acción a realizar;`.
+- Puedes personalizar o dar color a los carriles con `|#f1f5f9|Actor|`, `|#e2e8f0|Sistema|`, `|#f8fafc|Registros|`
+  (si hay más de 3 carriles mantén la gama monocromática gris con `#cbd5e1`).
 - Ejemplo con condicionales y cambios de carril:
   ```plantuml
-  |#f1f5f9|Colaborador|
+  |#f1f5f9|Usuario|
   start
-  :Completar formulario;
-  |#e2e8f0|Sistema|
-  if (¿Datos válidos?) is (sí) then
-    |#f8fafc|Registros|
-    :Guardar información;
-    |#e2e8f0|Sistema|
-    :Confirmar operación;
+  if (¿Condición?) is (sí) then
+    :**acción red**; <<#f1f5f9>>
+    :Acción 1;
   else (no)
-    :Mostrar mensaje de error;
+    |#e2e8f0|Sistema|
+    :**acción not red**; <<#e2e8f0>>
+    :Acción 2;
   endif
+  |#f8fafc|Siguiente_Actor|
+  :Acción 3;
   stop
   ```
 
@@ -97,15 +82,12 @@ Reglas estrictas de la paleta:
 
 ## Guardrails (Obligatorio)
 - OBLIGATORIO: La respuesta DEBE ser un JSON válido con la propiedad `diagram_syntax`.
-- OBLIGATORIO: El valor de `diagram_syntax` DEBE utilizar CARRILES/SWIMLANES (`|#hex|NombreCarril|`)
+- OBLIGATORIO: El valor de `diagram_syntax` DEBE utilizar CARRILES/SWIMLANES (`|NombreCarril|`)
   para separar las acciones según el actor o sistema responsable.
-- OBLIGATORIO: Todos los carriles DEBEN usar colores de la paleta monocromática gris
-  (#f1f5f9, #e2e8f0, #f8fafc, #cbd5e1).
 - OBLIGATORIO: El valor de `diagram_syntax` DEBE contener el texto completo de PlantUML,
   escapando correctamente los saltos de línea con `\\n` dentro del JSON.
 - OBLIGATORIO: El diagrama debe representar de forma precisa la lógica descrita en los requisitos EARS.
 - PROHIBIDO: Inventar flujos que no estén descritos en los requisitos EARS.
-- PROHIBIDO: Utilizar colores fuera de la gama monocromática gris neutra.
 """
 
 
@@ -195,12 +177,10 @@ class ModeloMode:
         error_list = "\n".join(f"- {e}" for e in errors)
         return (
             f"{original_prompt}\n\n"
-            f"## Correcciones y refinamiento necesarios (intento {retry_count})\n\n"
+            f"## Correcciones necesarias (intento {retry_count})\n\n"
             f"El diagrama generado tiene los siguientes problemas:\n\n"
             f"{error_list}\n\n"
-            f"Corrige estos problemas y genera o refina el diagrama nuevamente, "
-            f"asegurando mantener la paleta monocromática gris para todos los carriles "
-            f"(#f1f5f9, #e2e8f0, #f8fafc, #cbd5e1)."
+            f"Corrige estos problemas y genera el diagrama nuevamente."
         )
 
     def build_output(

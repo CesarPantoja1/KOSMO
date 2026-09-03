@@ -749,3 +749,108 @@ async def test_client_context_manager_and_aclose() -> None:
     async with GitHubHttpClient() as client:
         # Assert
         assert client is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_grant_app_installation_access_success_selected() -> None:
+    # Arrange
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url.path}")
+        if request.url.path == "/user/installations":
+            return httpx.Response(
+                200,
+                json={
+                    "total_count": 1,
+                    "installations": [
+                        {
+                            "id": 12345,
+                            "app_slug": "railway",
+                            "repository_selection": "selected",
+                        }
+                    ],
+                },
+            )
+        if request.url.path == "/user/installations/12345/repositories/999":
+            return httpx.Response(204)
+        return httpx.Response(404)
+
+    mock_client = _create_mock_client(handler)
+    github_client = GitHubHttpClient(client=mock_client)
+
+    # Act
+    result = await github_client.grant_app_installation_access("gho_token", 999, "railway")
+
+    # Assert
+    assert result is True
+    assert "GET /user/installations" in calls
+    assert "PUT /user/installations/12345/repositories/999" in calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_grant_app_installation_access_all_repositories() -> None:
+    # Arrange
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url.path}")
+        if request.url.path == "/user/installations":
+            return httpx.Response(
+                200,
+                json={
+                    "total_count": 1,
+                    "installations": [
+                        {
+                            "id": 12345,
+                            "app_slug": "railway",
+                            "repository_selection": "all",
+                        }
+                    ],
+                },
+            )
+        return httpx.Response(404)
+
+    mock_client = _create_mock_client(handler)
+    github_client = GitHubHttpClient(client=mock_client)
+
+    # Act
+    result = await github_client.grant_app_installation_access("gho_token", 999, "railway")
+
+    # Assert
+    assert result is True
+    assert "GET /user/installations" in calls
+    assert len(calls) == 1  # No necesita PUT
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_grant_app_installation_access_app_not_found() -> None:
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/user/installations":
+            return httpx.Response(
+                200,
+                json={
+                    "total_count": 1,
+                    "installations": [
+                        {
+                            "id": 99999,
+                            "app_slug": "other-app",
+                            "repository_selection": "selected",
+                        }
+                    ],
+                },
+            )
+        return httpx.Response(404)
+
+    mock_client = _create_mock_client(handler)
+    github_client = GitHubHttpClient(client=mock_client)
+
+    # Act
+    result = await github_client.grant_app_installation_access("gho_token", 999, "railway")
+
+    # Assert
+    assert result is False
