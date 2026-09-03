@@ -62,7 +62,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # Copiar el output standalone de Next.js
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chown=root:root docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod 0555 /app/docker-entrypoint.sh
 
 USER nextjs

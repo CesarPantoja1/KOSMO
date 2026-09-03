@@ -7,7 +7,6 @@ import functools
 import json
 import os
 import shutil
-import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -458,7 +457,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                     break
                 except OSError:
                     if attempt < 3:
-                        time.sleep(0.3)
+                        await asyncio.sleep(0.3)
                     else:
                         shutil.rmtree(target_dir, ignore_errors=True)
 

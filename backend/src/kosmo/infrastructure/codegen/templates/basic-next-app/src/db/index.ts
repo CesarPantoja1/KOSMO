@@ -5,28 +5,22 @@ import path from "node:path";
 import * as schema from "./schema";
 
 function openSqliteDatabase(): Database.Database {
-  const rawPath = process.env.DATABASE_URL || process.env.DATABASE_PATH || "sqlite.db";
+  const rawPath =
+    process.env.DATABASE_URL ||
+    process.env.DATABASE_PATH ||
+    path.join(process.cwd(), ".data", "sqlite.db");
   const cleanPath = rawPath.replace(/^file:\/\//, "").replace(/^file:/, "");
 
-  const candidates = [
-    cleanPath,
-    path.join(process.cwd(), "sqlite.db"),
-    "/tmp/sqlite.db",
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      const dir = path.dirname(candidate);
-      if (dir && dir !== "." && !fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      return new Database(candidate);
-    } catch (err) {
-      console.warn(`[db] No se pudo abrir base de datos en '${candidate}':`, err);
+  try {
+    const dir = path.dirname(cleanPath);
+    if (dir && dir !== "." && !fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
+    return new Database(cleanPath);
+  } catch (err) {
+    console.warn(`[db] No se pudo abrir base de datos en '${cleanPath}':`, err);
+    return new Database(":memory:");
   }
-
-  return new Database(":memory:");
 }
 
 export const sqlite = openSqliteDatabase();
