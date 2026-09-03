@@ -542,7 +542,8 @@ que fue marcado como afectado por cambios aplicados en una fase anterior.
      EARS (enunciado, clausula o bloque de requisito). Copia el texto exacto tal como
      aparece en el artefacto. Manten los codigos REQ-X.Y y el formato original.
    - ActivityDiagram: fragmentos PlantUML. Preserva la sintaxis: @startuml/@enduml,
-     balance de if/endif y fork/end merge.
+     balance de if/endif y fork/end merge, y la paleta monocromática gris de carriles
+     (#f1f5f9, #e2e8f0, #f8fafc, #cbd5e1).
    - DiscoveryDocument: 'suggested_field' es el titulo de la seccion
      (ej. '## Vision'). 'suggested_before'/'suggested_after' son el contenido
      de la seccion a modificar.
