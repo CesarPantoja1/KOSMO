@@ -107,22 +107,19 @@ jobs:
       contents: read
       packages: write
     outputs:
-      web_image: ${{ steps.images.outputs.web }}
+      web_image_amd64: ${{ steps.images.outputs.web }}
 
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4
 
-      - name: Define immutable Web image reference
+      - name: Define immutable AMD64 Web image reference
         id: images
         shell: bash
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}-amd64" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -139,7 +136,7 @@ jobs:
         with:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.images.outputs.web }}
           build-args: |
@@ -148,6 +145,94 @@ jobs:
             NEXT_PUBLIC_APP_ENV=deployment
             NEXT_PUBLIC_AUTH_DISABLED=false
             NEXT_PUBLIC_USE_MOCKS=false
+
+  build-frontend-arm64:
+    name: Build Web image (ARM64)
+    needs: wait-for-ci
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      web_image_arm64: ${{ steps.images.outputs.web }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Define immutable ARM64 Web image reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}-arm64" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish ARM64 frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.images.outputs.web }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=
+            NEXT_PUBLIC_APP_NAME=KOSMO
+            NEXT_PUBLIC_APP_ENV=deployment
+            NEXT_PUBLIC_AUTH_DISABLED=false
+            NEXT_PUBLIC_USE_MOCKS=false
+
+  publish-frontend-manifest:
+    name: Publish Web multi-architecture manifest
+    needs:
+      - build-frontend
+      - build-frontend-arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    outputs:
+      web_image: ${{ steps.images.outputs.web }}
+
+    steps:
+      - name: Define immutable Web manifest reference
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the manifest list
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${{ steps.images.outputs.web }}" \
+            "${{ needs.build-frontend.outputs.web_image_amd64 }}" \
+            "${{ needs.build-frontend-arm64.outputs.web_image_arm64 }}"
 
   build-opencode:
     name: Build OpenCode image
@@ -223,6 +308,8 @@ jobs:
     needs:
       - build-backend
       - build-frontend
+      - build-frontend-arm64
+      - publish-frontend-manifest
       - build-opencode
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -327,7 +414,7 @@ jobs:
           printf '%s\n' "$STAGING_ENV_FILE" > "$work_dir/application.env"
           printf '%s\n' "$STAGING_CODEGEN_ENV_FILE" >> "$work_dir/application.env"
           printf '%s\n' \
-            "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
+            "KOSMO_WEB_IMAGE=${{ needs.publish-frontend-manifest.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
             "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
             "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" \
