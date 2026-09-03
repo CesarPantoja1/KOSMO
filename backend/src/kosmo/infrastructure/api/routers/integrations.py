@@ -56,7 +56,11 @@ async def connect_oauth(
 
     if provider_clean == "github":
         try:
-            cmd = LinkGitHubAccountCommand(code=body.code)
+            cmd = LinkGitHubAccountCommand(
+                code=body.code,
+                redirect_uri=body.redirect_uri,
+                code_verifier=body.code_verifier,
+            )
             github_integration = await github_use_case.execute(principal, cmd)
             return IntegrationStatusResponse(
                 provider="github",
@@ -79,6 +83,7 @@ async def connect_oauth(
                 code=body.code,
                 provider=DeploymentProvider.RAILWAY,
                 redirect_uri=body.redirect_uri,
+                code_verifier=body.code_verifier,
             )
             railway_integration = await railway_use_case.execute(principal, cmd_railway)
             return IntegrationStatusResponse(

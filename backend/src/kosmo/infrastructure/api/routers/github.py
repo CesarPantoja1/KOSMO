@@ -31,6 +31,15 @@ from kosmo.infrastructure.api.schemas import (
 router = APIRouter(prefix="/api/v1/projects/{project_id}/github", tags=["github"])
 
 
+def _require_project_owner(project: object, principal: Principal, project_id: str) -> None:
+    """Mantiene los proyectos ajenos indistinguibles de proyectos inexistentes."""
+    if project is None or str(getattr(project, "owner_id", "")) != principal.subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proyecto '{project_id}' no encontrado.",
+        )
+
+
 @router.get(
     "",
     response_model=ProjectGitHubResponse,
@@ -40,17 +49,14 @@ router = APIRouter(prefix="/api/v1/projects/{project_id}/github", tags=["github"
 async def get_project_github_status(
     project_id: str,
     request: Request,
-    principal: Annotated[Principal, Depends(get_principal)],  # noqa: ARG001
+    principal: Annotated[Principal, Depends(get_principal)],
 ) -> ProjectGitHubResponse:
     container = get_container(request)
     proj_id = ProjectId(project_id)
 
     project = await container.repos.projects.by_id(proj_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Proyecto '{project_id}' no encontrado.",
-        )
+    _require_project_owner(project, principal, project_id)
+    assert project is not None
 
     suggested_repo_name = f"kosmo-{project.slug}" if getattr(project, "slug", None) else f"kosmo-{project_id}"
 
@@ -98,11 +104,8 @@ async def push_to_github(
     proj_id = ProjectId(project_id)
 
     project = await container.repos.projects.by_id(proj_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Proyecto '{project_id}' no encontrado.",
-        )
+    _require_project_owner(project, principal, project_id)
+    assert project is not None
 
     cmd = SyncGitHubRepositoryCommand(
         project_id=proj_id,

@@ -170,15 +170,16 @@ class SyncGitHubRepositoryUseCase:
                     )
                     raise EphemeralValidationError(error_msg, step=val_res.failed_step, errors=val_res.error_summary)
 
-            # Configurar Git local y pushear (push inicial o incremental)
-            auth_url = self._git_workspace.build_authenticated_url(repo_url, token)
-            self._git_workspace.remote_add_or_update(workspace.workspace_dir, "origin", auth_url)
+            # La URL persistida del remoto nunca debe contener el token OAuth.
+            # El adaptador usa el token exclusivamente para este push.
+            self._git_workspace.remote_add_or_update(workspace.workspace_dir, "origin", repo_url)
 
             branch = project_integration.default_branch or "main"
             commit_hash = self._git_workspace.push(
                 workspace.workspace_dir,
                 "origin",
                 branch=branch,
+                token=token,
             )
 
             # Log y Estado Final (SUCCESS)

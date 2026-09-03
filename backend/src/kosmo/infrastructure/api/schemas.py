@@ -1005,6 +1005,7 @@ class ConnectOAuthRequest(BaseModel):
 
     code: str = Field(min_length=1, max_length=500, description="Código de autorización temporal devuelto por OAuth")
     redirect_uri: str | None = Field(default=None, description="URI de redirección utilizada")
+    code_verifier: str | None = Field(default=None, min_length=43, max_length=128)
 
 
 class IntegrationStatusResponse(BaseModel):

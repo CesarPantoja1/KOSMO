@@ -293,6 +293,13 @@ class LocalGitWorkspaceAdapter:
         """Construye una URL HTTPS autenticada utilizando el token provisto."""
         return git_build_authenticated_url(repo_url, token)
 
-    def push(self, workspace_path: str, remote: str = "origin", branch: str | None = None) -> str:
-        """Ejecuta git push hacia el repositorio remoto, validando commits."""
-        return git_push(workspace_path, remote=remote, branch=branch)
+    def push(
+        self,
+        workspace_path: str,
+        remote: str = "origin",
+        branch: str | None = None,
+        *,
+        token: str | None = None,
+    ) -> str:
+        """Ejecuta git push sin persistir credenciales en el remoto local."""
+        return git_push(workspace_path, remote=remote, branch=branch, token=token)

@@ -71,7 +71,11 @@ async def test_connect_oauth_github_success_200() -> None:
         encrypted_token="encrypted_secret_token",
         updated_at=now,
     )
-    body = ConnectOAuthRequest(code="gho_valid_code_123", redirect_uri="http://localhost:3000")
+    body = ConnectOAuthRequest(
+        code="gho_valid_code_123",
+        redirect_uri="http://localhost:3000",
+        code_verifier="v" * 64,
+    )
 
     # Act
     response = await connect_oauth(
@@ -89,7 +93,11 @@ async def test_connect_oauth_github_success_200() -> None:
     assert response.connected_at == now
     use_case.execute.assert_called_once_with(
         _principal("usr_123"),
-        LinkGitHubAccountCommand(code="gho_valid_code_123"),
+        LinkGitHubAccountCommand(
+            code="gho_valid_code_123",
+            redirect_uri="http://localhost:3000",
+            code_verifier="v" * 64,
+        ),
     )
 
 
@@ -107,7 +115,7 @@ async def test_connect_oauth_railway_success_200() -> None:
         encrypted_token="encrypted_railway_token",
         updated_at=now,
     )
-    body = ConnectOAuthRequest(code="rw_code_123")
+    body = ConnectOAuthRequest(code="rw_code_123", code_verifier="v" * 64)
 
     # Act
     response = await connect_oauth(
@@ -125,7 +133,11 @@ async def test_connect_oauth_railway_success_200() -> None:
     assert response.connected_at == now
     railway_use_case.execute.assert_called_once_with(
         _principal("usr_123"),
-        LinkDeploymentPlatformCommand(code="rw_code_123", provider=DeploymentProvider.RAILWAY),
+        LinkDeploymentPlatformCommand(
+            code="rw_code_123",
+            provider=DeploymentProvider.RAILWAY,
+            code_verifier="v" * 64,
+        ),
     )
 
 

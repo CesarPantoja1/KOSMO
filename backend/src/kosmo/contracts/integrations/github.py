@@ -107,6 +107,7 @@ class GitHubClientPort(Protocol):
         client_secret: str,
         code: str,
         redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> GitHubOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso."""
         ...

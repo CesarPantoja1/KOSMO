@@ -61,7 +61,7 @@ async def test_link_github_account_success(
     mock_user_repo: AsyncMock,
     principal: Principal,
 ):
-    cmd = LinkGitHubAccountCommand(code="temp-code")
+    cmd = LinkGitHubAccountCommand(code="temp-code", redirect_uri="https://staging-kosmo.cespan.dev/perfil")
     mock_oauth_client.exchange_oauth_code.return_value = GitHubOAuthToken(
         access_token="gho_test_token", scope="read:user,repo"
     )
@@ -79,6 +79,8 @@ async def test_link_github_account_success(
         client_id="test-client-id",
         client_secret="test-client-secret",
         code="temp-code",
+        redirect_uri="https://staging-kosmo.cespan.dev/perfil",
+        code_verifier=None,
     )
     mock_oauth_client.get_authenticated_user.assert_called_once_with("gho_test_token")
     mock_cipher.encrypt.assert_called_once_with(b"gho_test_token")

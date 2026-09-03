@@ -4065,6 +4065,13 @@ components:
           nullable: true
           description: URI de redirección utilizada durante el flujo de autorización
           example: "http://localhost:3000/settings"
+        code_verifier:
+          type: string
+          nullable: true
+          minLength: 43
+          maxLength: 128
+          description: Verificador PKCE generado por el navegador para este intercambio OAuth
+          example: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
       required: [code]
 
     IntegrationStatusResponse:

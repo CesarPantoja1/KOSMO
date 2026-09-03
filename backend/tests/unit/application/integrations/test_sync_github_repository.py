@@ -127,9 +127,6 @@ async def test_sync_github_repository_incremental_push_success(
         workspace_dir="/tmp/workspaces/proj-existing",
     )
 
-    git_workspace.build_authenticated_url.return_value = (
-        "https://x-access-token:ghp_real_decrypted_token@github.com/octocat/kosmo-crm-app.git"
-    )
     git_workspace.push.return_value = "new_commit_hash_v2"
 
     cmd = SyncGitHubRepositoryCommand(project_id=project_id)
@@ -142,16 +139,17 @@ async def test_sync_github_repository_incremental_push_success(
     github_client.create_repository.assert_not_called()
     github_client.check_repository_exists.assert_not_called()
 
-    # 2. Debe configurar remote con token fresco y pushear
+    # 2. El remoto persistido queda limpio; el token se entrega solo al push.
     git_workspace.remote_add_or_update.assert_called_once_with(
         "/tmp/workspaces/proj-existing",
         "origin",
-        "https://x-access-token:ghp_real_decrypted_token@github.com/octocat/kosmo-crm-app.git",
+        "https://github.com/octocat/kosmo-crm-app.git",
     )
     git_workspace.push.assert_called_once_with(
         "/tmp/workspaces/proj-existing",
         "origin",
         branch="main",
+        token="ghp_real_decrypted_token",
     )
 
     # 3. Metadatos y timestamps actualizados
@@ -353,7 +351,6 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
         owner="octocat",
         is_private=True,
     )
-    git_workspace.build_authenticated_url.return_value = "https://auth-url"
     git_workspace.push.return_value = "initial_hash_001"
 
     cmd = SyncGitHubRepositoryCommand(
@@ -373,8 +370,12 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
         description="Repositorio sincronizado automáticamente desde KOSMO para proyecto proj-initial",
         is_private=True,
     )
-    git_workspace.remote_add_or_update.assert_called_once_with("/tmp/ws-initial", "origin", "https://auth-url")
-    git_workspace.push.assert_called_once_with("/tmp/ws-initial", "origin", branch="main")
+    git_workspace.remote_add_or_update.assert_called_once_with(
+        "/tmp/ws-initial", "origin", "https://github.com/octocat/custom-repo-name.git"
+    )
+    git_workspace.push.assert_called_once_with(
+        "/tmp/ws-initial", "origin", branch="main", token="token"
+    )
 
     assert result.sync_status == GitHubSyncStatus.SYNCED
     assert result.repo_url == "https://github.com/octocat/custom-repo-name.git"

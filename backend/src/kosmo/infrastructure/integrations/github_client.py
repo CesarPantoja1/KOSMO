@@ -284,6 +284,7 @@ class GitHubHttpClient(GitHubClientPort):
         client_secret: str,
         code: str,
         redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> GitHubOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso."""
         headers = {
@@ -297,6 +298,8 @@ class GitHubHttpClient(GitHubClientPort):
         }
         if redirect_uri:
             payload["redirect_uri"] = redirect_uri
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
 
         try:
             response = await self._client.post(self._oauth_url, json=payload, headers=headers)

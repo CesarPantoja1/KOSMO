@@ -11,4 +11,12 @@ export type {
 export { useOAuthIntegration } from './model/useOAuthIntegration';
 export type { UseOAuthIntegrationParams } from './model/useOAuthIntegration';
 export { useGithubOAuth, useRailwayOAuth } from './model/useOAuthProviders';
-export { buildRailwayAuthUrl, DEFAULT_REDIRECT_URI } from './model/oauth-config';
+export {
+	buildRailwayAuthUrl,
+	consumeOAuthCodeVerifier,
+	consumeOAuthState,
+	createOAuthAuthorization,
+	createOAuthState,
+	getDefaultRedirectUri,
+	DEFAULT_REDIRECT_URI,
+} from './model/oauth-config';

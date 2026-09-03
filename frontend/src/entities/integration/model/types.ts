@@ -10,4 +10,5 @@ export interface IntegrationStatus {
 export interface ConnectOAuthRequest {
 	code: string;
 	redirect_uri?: string | null;
+	code_verifier?: string | null;
 }

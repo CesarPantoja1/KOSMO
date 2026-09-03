@@ -135,6 +135,21 @@ async def test_get_project_github_status_project_not_found_404() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_get_project_github_status_hides_project_of_another_owner() -> None:
+    request = _mock_request(project=_mock_project("proj-private"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_project_github_status(
+            project_id="proj-private",
+            request=request,
+            principal=_principal("usr_other"),
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_push_to_github_success_200() -> None:
     # Arrange
     project = _mock_project("proj-1", "crm-app")

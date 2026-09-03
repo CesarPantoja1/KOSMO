@@ -9,6 +9,7 @@ vi.mock('../api/api', () => ({
 
 vi.mock('@/shared/api', () => ({
 	authApi: { getMe: vi.fn() },
+	PUBLIC_APP_DOMAIN: 'http://localhost:3000',
 	formatApiError: (_err: unknown, fallback: string) => fallback,
 }));
 
@@ -35,7 +36,8 @@ const baseParams = {
 	provider: 'github' as const,
 	label: 'GitHub',
 	messageType: 'github-oauth-code',
-	buildAuthUrl: (redirectUri: string) => `https://auth.example.com?redirect=${redirectUri}`,
+	buildAuthUrl: (redirectUri: string, state: string, codeChallenge: string) =>
+		`https://auth.example.com?redirect=${redirectUri}&state=${state}&challenge=${codeChallenge}`,
 	redirectUri: 'https://app.example.com/perfil',
 };
 
@@ -84,20 +86,26 @@ describe('useOAuthIntegration', () => {
 	it('handleConnect abre un popup con la URL de autorización', async () => {
 		// Arrange
 		api.getIntegrationStatus.mockResolvedValue({ provider: 'github', is_connected: false });
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+		const assign = vi.fn();
+		const popup = { location: { assign }, close: vi.fn() } as unknown as Window;
+		const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup);
 		const { result } = renderHook(() => useOAuthIntegration(baseParams));
 		await waitFor(() => expect(result.current.loading).toBe(false));
 
 		// Act
-		act(() => {
+		await act(async () => {
 			result.current.handleConnect();
+			await Promise.resolve();
 		});
 
 		// Assert
 		expect(openSpy).toHaveBeenCalledWith(
-			'https://auth.example.com?redirect=https://app.example.com/perfil',
+			'',
 			'oauth-github',
 			'width=600,height=700',
+		);
+		expect(assign).toHaveBeenCalledWith(
+			expect.stringContaining('https://auth.example.com?redirect=https://app.example.com/perfil&state=github.'),
 		);
 	});
 
@@ -129,6 +137,8 @@ describe('useOAuthIntegration', () => {
 			is_connected: true,
 			username: 'octocat',
 		});
+		window.sessionStorage.setItem('kosmo.oauth.github.state', 'github.test-state');
+		window.sessionStorage.setItem('kosmo.oauth.github.verifier', 'v'.repeat(64));
 		vi.mocked(authApi.getMe).mockResolvedValue({ subject: 'usr_1' } as never);
 		const { result } = renderHook(() => useOAuthIntegration(baseParams));
 		await waitFor(() => expect(result.current.loading).toBe(false));
@@ -138,7 +148,7 @@ describe('useOAuthIntegration', () => {
 			window.dispatchEvent(
 				new MessageEvent('message', {
 					origin: window.location.origin,
-					data: { type: 'github-oauth-code', code: 'abc123' },
+					data: { type: 'github-oauth-code', code: 'abc123', state: 'github.test-state' },
 				}),
 			);
 		});
@@ -148,6 +158,7 @@ describe('useOAuthIntegration', () => {
 		expect(api.connectIntegration).toHaveBeenCalledWith('github', {
 			code: 'abc123',
 			redirect_uri: baseParams.redirectUri,
+			code_verifier: 'v'.repeat(64),
 		});
 		expect(vi.mocked(toast.success)).toHaveBeenCalled();
 	});

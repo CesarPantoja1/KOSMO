@@ -366,6 +366,7 @@ async def test_exchange_oauth_code_success() -> None:
         assert body["client_secret"] == "secret_456"
         assert body["code"] == "code_789"
         assert body["redirect_uri"] == "https://kosmo.dev/callback"
+        assert body["code_verifier"] == "v" * 64
 
         return httpx.Response(
             200,
@@ -385,6 +386,7 @@ async def test_exchange_oauth_code_success() -> None:
         client_secret="secret_456",
         code="code_789",
         redirect_uri="https://kosmo.dev/callback",
+        code_verifier="v" * 64,
     )
 
     # Assert

@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Script from 'next/script';
 import { ToasterProvider } from '@/shared/ui';
 import localFont from 'next/font/local';
 import { SessionExpiredListener } from './session-expired-listener';
@@ -35,6 +36,9 @@ const geistSans = localFont({
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
 		<html lang='es' className={`${geistSans.variable} h-full`}>
+			<head>
+				<Script src='/runtime-config.js' strategy='beforeInteractive' />
+			</head>
 			<body className='h-full'>
 				{children}
 				<ToasterProvider />
