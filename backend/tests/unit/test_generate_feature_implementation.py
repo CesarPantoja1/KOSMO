@@ -12,8 +12,10 @@ from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationUseCase,
     MissingDiagramError,
     MissingRequirementsError,
+    OpenCodeGenerationError,
     OpenCodeUnavailableError,
     _normalize_generated_file_path,
+    _raise_for_opencode_error,
 )
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.codegen import (
@@ -341,6 +343,18 @@ class ExplodingOpenCodeClient(FakeOpenCodeClient):
             raise RuntimeError(f"OpenCode failed during {agent} phase")
         async for ev in super().send_prompt(session_id, prompt, agent=agent):
             yield ev
+
+
+@pytest.mark.unit
+def test_opencode_error_event_stops_the_current_generation() -> None:
+    event = OpenCodeEvent(
+        event_type=OpenCodeEventType.ERROR,
+        session_id="session-1",
+        data={"error": "Tiempo de espera agotado al comunicar con OpenCode"},
+    )
+
+    with pytest.raises(OpenCodeGenerationError, match="Tiempo de espera agotado"):
+        _raise_for_opencode_error(event)
 
 
 @pytest.mark.asyncio
@@ -1578,10 +1592,12 @@ async def test_generate_emits_error_event_si_trazabilidad_falla() -> None:
     # Assert
     assert output.success is True
     assert output.status == FeatureImplementationStatus.IMPLEMENTED
-    error_events = [
-        e for e in output.events if e.event_type == OpenCodeEventType.ERROR and "traceability" in str(e.data)
+    warning_events = [
+        e
+        for e in output.events
+        if e.event_type == OpenCodeEventType.BUILD_PROGRESS and e.data.get("stage") == "traceability_warning"
     ]
-    assert len(error_events) == 1
+    assert len(warning_events) == 1
 
 
 @pytest.mark.asyncio
