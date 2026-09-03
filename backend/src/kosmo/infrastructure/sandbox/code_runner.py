@@ -178,13 +178,16 @@ class SubprocessCodeRunner(CodeRunnerPort):
         """Termina de forma forzada el árbol de procesos para evitar procesos huérfanos."""
         with contextlib.suppress(Exception):
             if os.name == "nt" and proc.pid:
-                import subprocess
-
-                subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                    capture_output=True,
-                    check=False,
+                kill_proc = await asyncio.create_subprocess_exec(
+                    "taskkill",
+                    "/F",
+                    "/T",
+                    "/PID",
+                    str(proc.pid),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
                 )
+                await kill_proc.wait()
             else:
                 proc.kill()
         with contextlib.suppress(Exception):

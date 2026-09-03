@@ -44,10 +44,10 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         server_username: str = "opencode",
         server_password: str | None = None,
         model: str | None = None,
-        timeout_seconds: float = 600.0,
-        connect_timeout_seconds: float = 10.0,
-        read_timeout_seconds: float = 300.0,
-        write_timeout_seconds: float = 30.0,
+        timeout_seconds: float = 900.0,
+        connect_timeout_seconds: float = 15.0,
+        read_timeout_seconds: float = 900.0,
+        write_timeout_seconds: float = 60.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")

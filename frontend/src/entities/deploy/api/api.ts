@@ -14,17 +14,15 @@ let mockDeployStatus: ProjectDeployStatusResponse = {
 	error_log_url: null,
 };
 
-const mockGetStatus = async (projectId: string): Promise<ProjectDeployStatusResponse> => {
-	void projectId;
+const mockGetStatus = async (_projectId: string): Promise<ProjectDeployStatusResponse> => {
 	await delay(300);
 	return { ...mockDeployStatus };
 };
 
 const mockStartRailway = async (
-	projectId: string,
+	_projectId: string,
 	_body?: DeployRailwayRequest,
 ): Promise<ProjectDeployStatusResponse> => {
-	void projectId;
 	await delay(800);
 	mockDeployStatus = {
 		service_id: 'srv_mock_123',

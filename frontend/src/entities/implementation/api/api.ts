@@ -179,7 +179,7 @@ export function buildSummary(
 			'Continúa con la siguiente funcionalidad de tu proyecto',
 		],
 		generatedAt: timestamp || new Date().toISOString(),
-		generatedFiles: files.map(String).slice().sort(),
+		generatedFiles: files.map(String).slice().sort((a, b) => a.localeCompare(b)),
 	};
 }
 

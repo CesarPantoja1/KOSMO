@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     opencode_server_username: str = "opencode"
     opencode_server_password: SecretStr | None = None
     opencode_model: str | None = None
+    opencode_timeout_seconds: float = 900.0
+    opencode_read_timeout_seconds: float = 900.0
+    opencode_connect_timeout_seconds: float = 15.0
+    opencode_write_timeout_seconds: float = 60.0
     kosmo_workspaces_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "kosmo-workspaces")
     kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
     code_runner_base_url: str | None = None

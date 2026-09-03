@@ -83,6 +83,10 @@ async def test_run_step_timeout_handling() -> None:
     with (
         patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)),
         patch("subprocess.run") as mock_sub_run,
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=AsyncMock(wait=AsyncMock(return_value=0))),
+        ) as mock_sub_exec,
     ):
         # Act
         result = await runner.run_step("/tmp/workspace", ValidationStep.TESTS, timeout_seconds=1)
@@ -92,7 +96,7 @@ async def test_run_step_timeout_handling() -> None:
         assert result.success is False
         assert result.exit_code == -1
         assert "timed out" in result.raw_output
-        assert mock_proc.kill.called or mock_sub_run.called
+        assert mock_proc.kill.called or mock_sub_run.called or mock_sub_exec.called
 
 
 @pytest.mark.unit
