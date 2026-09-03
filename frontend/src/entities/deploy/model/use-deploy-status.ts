@@ -47,7 +47,10 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 		let cancelled = false;
 
 		async function init() {
-			if (!projectId) return;
+			if (!projectId) {
+				setLoading(false);
+				return;
+			}
 			try {
 				const data = await getDeployStatus(projectId);
 				if (!cancelled && mountedRef.current) {

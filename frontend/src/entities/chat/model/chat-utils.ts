@@ -1,27 +1,7 @@
-import type { ChatMessage } from './types';
-
-export function createUserMessage(content: string): ChatMessage {
-	return {
-		id: crypto.randomUUID(),
-		role: 'user',
-		content,
-		created_at: new Date().toISOString(),
-		change_suggestions: null,
-		modification: null,
-	};
-}
-
-export function createAssistantError(content: string): ChatMessage {
-	return {
-		id: crypto.randomUUID(),
-		role: 'assistant',
-		content,
-		created_at: new Date().toISOString(),
-		change_suggestions: null,
-		modification: null,
-	};
-}
-
-export function appendMessage(messages: ChatMessage[], message: ChatMessage): ChatMessage[] {
-	return [...messages, message];
-}
+// Utilidades puras de mensaje: viven en `shared` (ver shared/model/chat-message.ts)
+// y se re-exportan aquí para mantener compatibilidad con los consumidores de esta entidad.
+export {
+	createUserMessage,
+	createAssistantError,
+	appendMessage,
+} from '@/shared/model/chat-message';

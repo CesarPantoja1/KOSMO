@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import type { ProjectGitHubStatus, ProjectGithubViewState } from '@/entities/project';
+import type { ProjectGitHubStatus } from '@/entities/project';
+import type { ProjectGithubViewState } from '@/features/github-sync';
 import { FormularioCreacionRepositorio } from '@/shared/ui';
 import {
 	ArrowRight,

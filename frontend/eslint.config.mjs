@@ -16,10 +16,11 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
-    ".next/**",
-    ".vercel/**",
-    "out/**",
-    "build/**",
+		".next/**",
+		".vercel/**",
+		"out/**",
+		"build/**",
+		"coverage/**",
     "next-env.d.ts",
     "public/mockServiceWorker.js",
   ]),

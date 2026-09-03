@@ -1,12 +1,14 @@
+'use client';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getIntegrationStatus } from '@/entities/integration';
 import type { IntegrationStatus } from '@/entities/integration';
-import { formatApiError } from '@/shared/api';
 import {
 	getProjectGitHubStatus,
 	pushProjectToGitHub,
-} from '../api/api';
-import type { ProjectGitHubStatus, PushGitHubRequest } from './types';
+} from '@/entities/project';
+import type { ProjectGitHubStatus, PushGitHubRequest } from '@/entities/project';
+import { formatApiError } from '@/shared/api';
 
 export type ProjectGithubViewState =
 	| 'loading'
@@ -35,6 +37,12 @@ const isNoCodeError = (err: unknown): boolean => {
 	return message.includes(NO_CODE_MARKER) || (err as { status?: number })?.status === 409;
 };
 
+/**
+ * Orquesta las entidades `project` e `integration` para gestionar el estado
+ * de sincronización de un proyecto con GitHub. Vive en `features` (y no en
+ * `entities/project`) precisamente porque necesita conocer dos entidades a
+ * la vez, algo que FSD no permite hacer a una entidad sobre otra.
+ */
 export function useProjectGithubRepo(projectId: string | null): ProjectGithubRepoState {
 	const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
 	const [status, setStatus] = useState<ProjectGitHubStatus | null>(null);
@@ -55,10 +63,13 @@ export function useProjectGithubRepo(projectId: string | null): ProjectGithubRep
 	}, [projectId]);
 
 	useEffect(() => {
-		if (!projectId) return;
 		let cancelled = false;
 
 		async function load() {
+			if (!projectId) {
+				setLoading(false);
+				return;
+			}
 			setLoading(true);
 			try {
 				await refresh();

@@ -8,12 +8,12 @@ import {
 	deleteRequirements as deleteRequirementsApi,
 	sendRequirementChatMessage as sendRequirementChatMessageApi,
 } from '../api/api';
-import type { ChatMessage, ChatResponse } from '@/entities/chat';
+import type { ChatMessage, ChatResponse } from '@/shared/model/chat-message';
 import {
 	appendMessage,
 	createAssistantError,
 	createUserMessage,
-} from '@/entities/chat';
+} from '@/shared/model/chat-message';
 
 interface RequirementsStore {
 	currentRequirements: Record<string, string>;

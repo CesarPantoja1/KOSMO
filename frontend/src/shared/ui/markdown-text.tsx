@@ -72,7 +72,11 @@ function renderGherkinLine(line: string, lineKey: number): ReactNode {
 		{ regex: /^(Entonces|Then)\b/, color: 'text-amber-700 font-semibold' },
 		{ regex: /^(Y|And)\b/, color: 'text-purple-700 font-semibold' },
 		{ regex: /^(Pero|But)\b/, color: 'text-rose-700 font-semibold' },
-		{ regex: /^(Escenario|Scenario|Característica|Feature|Esquema del escenario|Scenario Outline|Ejemplos|Examples):/, color: 'text-primary-100 font-bold' },
+		{
+			regex:
+				/^(Escenario|Scenario|Característica|Feature|Esquema del escenario|Scenario Outline|Ejemplos|Examples):/,
+			color: 'text-primary-100 font-bold',
+		},
 	];
 
 	for (const { regex, color } of gherkinKeywords) {
@@ -81,7 +85,7 @@ function renderGherkinLine(line: string, lineKey: number): ReactNode {
 			const keyword = match[0];
 			const rest = trimmed.slice(keyword.length);
 			return (
-				<div key={lineKey} className='whitespace-pre-wrap break-words'>
+				<div key={lineKey} className='whitespace-pre-wrap wrap-break-word'>
 					{indent}
 					<span className={color}>{keyword}</span>
 					{rest}
@@ -90,7 +94,11 @@ function renderGherkinLine(line: string, lineKey: number): ReactNode {
 		}
 	}
 
-	return <div key={lineKey} className='whitespace-pre-wrap break-words'>{line}</div>;
+	return (
+		<div key={lineKey} className='whitespace-pre-wrap wrap-break-word'>
+			{line}
+		</div>
+	);
 }
 
 function renderCodeBlock(value: string, lang?: string | null, key?: number): ReactNode {
@@ -101,15 +109,20 @@ function renderCodeBlock(value: string, lang?: string | null, key?: number): Rea
 	if (isGherkin) {
 		const lines = value.split('\n');
 		return (
-			<pre key={key} className='rounded bg-black/5 p-2 text-xs font-mono text-stone-800 whitespace-pre-wrap break-words max-w-full overflow-hidden'>
-
+			<pre
+				key={key}
+				className='rounded bg-black/5 p-2 text-xs font-mono text-stone-800 whitespace-pre-wrap wrap-break-word max-w-full overflow-hidden'
+			>
 				<code>{lines.map((line, i) => renderGherkinLine(line, i))}</code>
 			</pre>
 		);
 	}
 
 	return (
-		<pre key={key} className='rounded bg-black/5 p-2 text-xs font-mono whitespace-pre-wrap break-words max-w-full overflow-hidden'>
+		<pre
+			key={key}
+			className='rounded bg-black/5 p-2 text-xs font-mono whitespace-pre-wrap wrap-break-word max-w-full overflow-hidden'
+		>
 			<code>{value}</code>
 		</pre>
 	);
