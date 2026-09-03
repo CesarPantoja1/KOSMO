@@ -63,10 +63,13 @@ export function useProjectGithubRepo(projectId: string | null): ProjectGithubRep
 	}, [projectId]);
 
 	useEffect(() => {
-		if (!projectId) return;
 		let cancelled = false;
 
 		async function load() {
+			if (!projectId) {
+				setLoading(false);
+				return;
+			}
 			setLoading(true);
 			try {
 				await refresh();
