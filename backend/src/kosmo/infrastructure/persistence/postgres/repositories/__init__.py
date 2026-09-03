@@ -17,6 +17,7 @@ from kosmo.infrastructure.persistence.postgres.repositories.feature_repo import 
 )
 from kosmo.infrastructure.persistence.postgres.repositories.project_integration_repo import (
     SqlAlchemyCodeSyncLogRepository,
+    SqlAlchemyProjectDeploymentRepository,
     SqlAlchemyProjectGitHubIntegrationRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.project_repo import (
@@ -32,6 +33,7 @@ from kosmo.infrastructure.persistence.postgres.repositories.user_ai_config_repo 
     SqlAlchemyUserAiConfigRepository,
 )
 from kosmo.infrastructure.persistence.postgres.repositories.user_integration_repo import (
+    SqlAlchemyUserDeploymentIntegrationRepository,
     SqlAlchemyUserGitHubIntegrationRepository,
     SqlAlchemyUserIntegrationRepository,
 )
@@ -49,11 +51,13 @@ __all__ = [
     "SqlAlchemyDocumentRepository",
     "SqlAlchemyFeatureImplementationRepository",
     "SqlAlchemyFeatureRepository",
+    "SqlAlchemyProjectDeploymentRepository",
     "SqlAlchemyProjectGitHubIntegrationRepository",
     "SqlAlchemyProjectRepository",
     "SqlAlchemyRequirementRepository",
     "SqlAlchemyTraceabilityRepository",
     "SqlAlchemyUserAiConfigRepository",
+    "SqlAlchemyUserDeploymentIntegrationRepository",
     "SqlAlchemyUserGitHubIntegrationRepository",
     "SqlAlchemyUserIntegrationRepository",
     "SqlAlchemyUserRepository",

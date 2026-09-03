@@ -107,12 +107,24 @@ class GitHubClientPort(Protocol):
         client_secret: str,
         code: str,
         redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> GitHubOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso."""
         ...
 
     async def delete_repository(self, token: str, owner: str, repo_name: str) -> bool:
         """Elimina un repositorio remoto si existe."""
+        ...
+
+    async def grant_app_installation_access(
+        self,
+        token: str,
+        repo_id: int,
+        app_slug: str = "railway",
+    ) -> bool:
+        """Asocia un repositorio a la instalación de una GitHub App (ej. Railway)
+        si existe y está en modo de repositorios seleccionados.
+        """
         ...
 
 

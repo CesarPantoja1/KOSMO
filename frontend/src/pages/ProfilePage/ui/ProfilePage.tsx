@@ -19,16 +19,17 @@ function ProfilePage() {
 		const params = new URLSearchParams(window.location.search);
 		const code = params.get('code');
 		const error = params.get('error') || params.get('error_description');
-		const state = (params.get('state') || params.get('provider') || '').toLowerCase();
+		const state = params.get('state') || params.get('provider') || '';
+		const provider = state.toLowerCase().startsWith('railway') ? 'railway' : 'github';
 
 		if (code || error) {
-			const type = state === 'railway' ? 'railway-oauth-code' : 'github-oauth-code';
+			const type = provider === 'railway' ? 'railway-oauth-code' : 'github-oauth-code';
 			try {
 				if (code) {
-					window.opener.postMessage({ type, code }, window.location.origin);
+					window.opener.postMessage({ type, code, state }, window.location.origin);
 				} else if (error) {
 					window.opener.postMessage(
-						{ type: 'oauth-error', error },
+						{ type: 'oauth-error', error, state },
 						window.location.origin,
 					);
 				}

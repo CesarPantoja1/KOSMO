@@ -1,11 +1,7 @@
-import { useDiscoveryStore } from '@/entities/discovery';
-import { getDiscovery } from '@/entities/discovery/api/api';
-import { useCharacteristicStore } from '@/entities/characteristic';
-import { getCharacteristics } from '@/entities/characteristic/api/api';
-import { useModelingStore } from '@/entities/modeling';
-import { getDiagram } from '@/entities/modeling/api/api';
-import { useRequirementsStore } from '@/entities/requirements';
-import { getRequirements } from '@/entities/requirements/api/api';
+import { useDiscoveryStore, getDiscovery } from '@/entities/discovery';
+import { useCharacteristicStore, getCharacteristics } from '@/entities/characteristic';
+import { useModelingStore, getDiagram } from '@/entities/modeling';
+import { useRequirementsStore, getRequirements } from '@/entities/requirements';
 import { ApiError } from '@/shared/api';
 
 export const initializeProject = async (projectId: string): Promise<void> => {

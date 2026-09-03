@@ -1,23 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
-import { AsideCharacteristic } from '@/widgets';
-import { Implementation, toast } from '@/shared/ui';
+import { formatApiError } from '@/shared/api';
 import {
 	Ai,
 	ArrowLeft,
 	CursorClickFill,
+	Implementation,
+	Loading,
 	SuccessCheckIcon,
+	toast,
 	WarningIcon,
 } from '@/shared/ui';
-import { formatApiError } from '@/shared/api';
-import { ImplementationLiveProgress } from './ImplementationLiveProgress';
+import { AsideCharacteristic } from '@/widgets';
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -91,7 +92,13 @@ const ImplementationPage = () => {
 
 	return (
 		<>
-			{isGenerating && <ImplementationLiveProgress progress={progress} />}
+			{isGenerating && (
+				<Loading
+					title='Generando implementación'
+					description='Transformando requisitos y modelo en código funcional.'
+					messages={progress}
+				/>
+			)}
 
 			{status === 'failed' && errorMessage && (
 				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
@@ -123,7 +130,7 @@ const ImplementationPage = () => {
 						)}
 					</div>
 
-				{!hasCharacteristics ? (
+					{!hasCharacteristics ? (
 						<div className='w-full my-auto min-h-105 flex flex-col items-center justify-center'>
 							<div className='flex flex-col items-center gap-5 text-center px-6 max-w-lg'>
 								<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-neutral-100'>
@@ -198,9 +205,8 @@ const ImplementationPage = () => {
 														Falta diagrama de actividad
 													</h3>
 													<p className='text-neutral-500 text-sm'>
-														Esta funcionalidad no tiene diagrama de actividad
-														generado. Genera el diagrama antes de continuar con la
-														implementación.
+														Esta funcionalidad no tiene diagrama de actividad generado.
+														Genera el diagrama antes de continuar con la implementación.
 													</p>
 												</div>
 												<Link href='/proyecto/modelo' className='btn btn-secondary'>
@@ -218,9 +224,8 @@ const ImplementationPage = () => {
 														Aún no hay implementación generada
 													</h3>
 													<p className='text-neutral-500 text-sm'>
-														Esta funcionalidad aún no tiene código generado. El
-														asistente creará la estructura de implementación
-														automáticamente.
+														Esta funcionalidad aún no tiene código generado. El asistente
+														creará la estructura de implementación automáticamente.
 													</p>
 												</div>
 												<button onClick={handleGenerate} className='btn btn-ai'>

@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -812,6 +812,39 @@ async def test_delete_workspace_removes_code_preview_marker_and_port_mapping() -
         assert not Path(workspace.workspace_dir).exists()
         assert not (marker_dir / str(project_id)).exists()
         assert json.loads((root / ".preview-ports.json").read_text(encoding="utf-8")) == {"prj_other": 3002}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_workspace_waits_asynchronously_before_retrying_rmtree() -> None:
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_delete_workspace_retry")
+        workspace = await manager.ensure_workspace(project_id)
+        assert workspace.workspace_dir is not None
+
+        real_rmtree = __import__("shutil").rmtree
+        attempts = 0
+
+        def rmtree_with_transient_failure(path: Path) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise OSError("locked")
+            real_rmtree(path)
+
+        async_sleep = AsyncMock()
+        with (
+            patch(
+                "kosmo.infrastructure.codegen.workspace.shutil.rmtree",
+                side_effect=rmtree_with_transient_failure,
+            ) as rmtree,
+            patch("kosmo.infrastructure.codegen.workspace.asyncio.sleep", async_sleep),
+        ):
+            await manager.delete_workspace(project_id)
+
+        assert rmtree.call_count == 2
+        async_sleep.assert_awaited_once_with(0.3)
 
 
 @pytest.mark.unit

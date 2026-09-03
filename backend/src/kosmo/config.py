@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     # Integraciones
     github_client_id: str | None = None
     github_client_secret: SecretStr | None = None
+    railway_client_id: str | None = None
+    railway_client_secret: SecretStr | None = None
 
     # API
     api_version: str = "v1"

@@ -88,6 +88,7 @@ class AppContainer:
         await self.codegen.opencode_client.aclose()
         if isinstance(self.codegen.code_runner, RemoteCodeRunner):
             await self.codegen.code_runner.aclose()
+        await self.integrations.deployment_worker.shutdown()
         await self.db_engine.dispose()
 
 
@@ -114,7 +115,6 @@ def build_app_components(settings: Settings) -> AppContainer:
     requirements = build_requirements_components(repos, pipeline, uow)
     modelo = build_modelo_components(repos, pipeline)
     codegen = build_codegen_components(settings, repos)
-    projects = build_project_components(repos, pipeline, workspace_manager=codegen.workspace_manager)
     consistency = build_consistency_components(repos, discovery.consistency_evaluator, uow)
 
     cipher = (
@@ -134,6 +134,16 @@ def build_app_components(settings: Settings) -> AppContainer:
         code_runner=codegen.code_runner,
     )
     codegen.generate_feature_implementation.set_sync_github_repository(integrations.sync_github_repository)
+
+    projects = build_project_components(
+        repos,
+        pipeline,
+        workspace_manager=codegen.workspace_manager,
+        github_client=integrations.github_client,
+        railway_client=integrations.railway_client,
+        deployment_worker=integrations.deployment_worker,
+        cipher=cipher,
+    )
 
     return AppContainer(
         settings=settings,

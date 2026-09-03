@@ -7,15 +7,21 @@ import {
 	disconnectIntegration,
 	getIntegrationStatus,
 } from '../api/api';
-import { authApi, useAuthStore } from '@/entities/user';
+import { authApi } from '@/shared/api';
+import { useAuthStore } from '@/shared/model';
 import { formatApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/ui/toast/toast';
+import {
+	consumeOAuthCodeVerifier,
+	consumeOAuthState,
+	createOAuthAuthorization,
+} from './oauth-config';
 
 export interface UseOAuthIntegrationParams {
 	provider: IntegrationProvider;
 	label: string;
 	messageType: string;
-	buildAuthUrl: (redirectUri: string) => string;
+	buildAuthUrl: (redirectUri: string, state: string, codeChallenge: string) => string;
 	redirectUri: string;
 	onStatusChange?: (status: IntegrationStatus) => void;
 }
@@ -75,6 +81,19 @@ export function useOAuthIntegration({
 				return;
 			}
 			if (event.data?.type !== messageType) return;
+			if (!consumeOAuthState(provider, event.data?.state)) {
+				toast.error(`La respuesta de autorización de ${label} no es válida. Intenta de nuevo.`);
+				popupRef.current?.close();
+				popupRef.current = null;
+				return;
+			}
+			const codeVerifier = consumeOAuthCodeVerifier(provider);
+			if (!codeVerifier) {
+				toast.error(`La respuesta de autorización de ${label} no es válida. Intenta de nuevo.`);
+				popupRef.current?.close();
+				popupRef.current = null;
+				return;
+			}
 
 			const code = event.data.code as string;
 			if (!code || processingCodeRef.current === code) return;
@@ -84,6 +103,7 @@ export function useOAuthIntegration({
 			connectIntegration(provider, {
 				code,
 				redirect_uri: redirectUri,
+				code_verifier: codeVerifier,
 			})
 				.then(async (result) => {
 					setStatus(result);
@@ -123,12 +143,24 @@ export function useOAuthIntegration({
 	}, [handleOAuthMessage]);
 
 	const handleConnect = useCallback(() => {
-		popupRef.current = window.open(
-			buildAuthUrl(redirectUri),
+		const popup = window.open(
+			'',
 			`oauth-${provider}`,
 			'width=600,height=700',
 		);
-	}, [buildAuthUrl, redirectUri, provider]);
+		if (!popup) {
+			toast.error(`El navegador bloqueó la ventana de autorización de ${label}.`);
+			return;
+		}
+		popupRef.current = popup;
+		void createOAuthAuthorization(provider)
+			.then(({ state, codeChallenge }) => popup.location.assign(buildAuthUrl(redirectUri, state, codeChallenge)))
+			.catch(() => {
+				popup.close();
+				popupRef.current = null;
+				toast.error(`No se pudo iniciar la autorización de ${label}. Intenta de nuevo.`);
+			});
+	}, [buildAuthUrl, redirectUri, provider, label]);
 
 	const handleDisconnect = useCallback(() => {
 		setActionLoading(true);

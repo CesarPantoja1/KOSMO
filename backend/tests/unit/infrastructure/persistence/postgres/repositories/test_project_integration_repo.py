@@ -5,6 +5,14 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ulid import ULID
 
+from kosmo.contracts.integrations.deployment import (
+    DeploymentProvider,
+    DeploymentStatus,
+    EnvironmentVariable,
+    PortSpec,
+    ProjectDeployment,
+    VolumeConfig,
+)
 from kosmo.contracts.integrations.github import (
     CodeSyncLog,
     CodeSyncStatus,
@@ -18,6 +26,7 @@ from kosmo.infrastructure.persistence.postgres.models import (
 )
 from kosmo.infrastructure.persistence.postgres.repositories.project_integration_repo import (
     SqlAlchemyCodeSyncLogRepository,
+    SqlAlchemyProjectDeploymentRepository,
     SqlAlchemyProjectGitHubIntegrationRepository,
 )
 
@@ -381,3 +390,257 @@ async def test_in_memory_project_github_integration_repository() -> None:
     assert len(logs) == 2
     assert logs[0] == log1
     assert logs[1] == log2
+
+
+def _make_project_deployment(
+    project_id: str = "prj_01J00000000000000000000001",
+    provider: DeploymentProvider = DeploymentProvider.RAILWAY,
+    service_id: str | None = "srv_railway_123",
+    public_url: str | None = "https://app.up.railway.app",
+    status: DeploymentStatus = DeploymentStatus.BUILDING,
+    build_logs_url: str | None = "https://railway.com/logs/123",
+    last_deployed_at: datetime | None = None,
+    error_message: str | None = None,
+    volumes: tuple[VolumeConfig, ...] = (VolumeConfig(mount_path="/data"),),
+    ports: tuple[PortSpec, ...] = (PortSpec(port=3000),),
+    env_vars: tuple[EnvironmentVariable, ...] = (EnvironmentVariable(key="NODE_ENV", value="production"),),
+) -> ProjectDeployment:
+    now = datetime.now(UTC)
+    return ProjectDeployment(
+        project_id=ProjectId(project_id),
+        provider=provider,
+        service_id=service_id,
+        public_url=public_url,
+        status=status,
+        build_logs_url=build_logs_url,
+        last_deployed_at=last_deployed_at or now,
+        error_message=error_message,
+        volumes=volumes,
+        ports=ports,
+        env_vars=env_vars,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_init_raises_without_session_or_factory() -> None:
+    # Arrange & Act & Assert
+    with pytest.raises(ValueError, match="Se requiere session_factory o session"):
+        SqlAlchemyProjectDeploymentRepository(session_factory=None, session=None)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_save_inserts_when_none_exists() -> None:
+    # Arrange
+    deployment = _make_project_deployment(
+        project_id="prj_01DEPLOY",
+        service_id="srv_01NEW",
+        public_url="https://new-app.up.railway.app",
+        status=DeploymentStatus.BUILDING,
+    )
+    mock_session = _make_async_session_mock(returned_model=None)
+    mock_session_factory = MagicMock(spec=async_sessionmaker)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    repo = SqlAlchemyProjectDeploymentRepository(session_factory=mock_session_factory)
+
+    # Act
+    result = await repo.save(deployment)
+
+    # Assert
+    assert result == deployment
+    mock_session.add.assert_called_once()
+    added_model: ProjectIntegrationModel = mock_session.add.call_args[0][0]
+    assert added_model.project_id == "prj_01DEPLOY"
+    assert added_model.provider == "railway"
+    assert added_model.service_id == "srv_01NEW"
+    assert added_model.service_name is None
+    assert added_model.public_url == "https://new-app.up.railway.app"
+    assert added_model.deploy_status == "building"
+    assert len(added_model.volumes) == 1
+    assert added_model.volumes[0]["mount_path"] == "/data"
+    assert len(added_model.ports) == 1
+    assert added_model.ports[0]["port"] == 3000
+    assert len(added_model.env_vars) == 1
+    assert added_model.env_vars[0]["key"] == "NODE_ENV"
+    mock_session.commit.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_save_updates_existing_deployment() -> None:
+    # Arrange
+    now = datetime.now(UTC)
+    updated_deployment = _make_project_deployment(
+        project_id="prj_01DEPLOY",
+        service_id="srv_01UPDATED",
+        public_url="https://updated-app.up.railway.app",
+        status=DeploymentStatus.PUBLISHED,
+    )
+    existing_model = ProjectIntegrationModel(
+        id="pint_deploy_01",
+        project_id="prj_01DEPLOY",
+        provider="railway",
+        service_id="srv_01OLD",
+        public_url=None,
+        deploy_status="building",
+        build_logs_url="https://railway.com/oldlogs",
+        last_deployed_at=now,
+        error_message=None,
+        volumes=[],
+        ports=[],
+        env_vars=[],
+        created_at=now,
+        updated_at=now,
+    )
+    mock_session = _make_async_session_mock(returned_model=existing_model)
+    mock_session_factory = MagicMock(spec=async_sessionmaker)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    repo = SqlAlchemyProjectDeploymentRepository(session_factory=mock_session_factory)
+
+    # Act
+    result = await repo.save(updated_deployment)
+
+    # Assert
+    assert result == updated_deployment
+    assert existing_model.service_id == "srv_01UPDATED"
+    assert existing_model.service_name is None
+    assert existing_model.public_url == "https://updated-app.up.railway.app"
+    assert existing_model.deploy_status == "published"
+    assert len(existing_model.volumes) == 1
+    mock_session.commit.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_get_by_project_id_returns_entity() -> None:
+    # Arrange
+    now = datetime.now(UTC)
+    existing_model = ProjectIntegrationModel(
+        id="pint_deploy_02",
+        project_id="prj_01DEPLOY_FOUND",
+        provider="railway",
+        service_id="srv_found_123",
+        public_url="https://found.up.railway.app",
+        deploy_status="published",
+        build_logs_url="https://railway.com/logs/found",
+        last_deployed_at=now,
+        error_message=None,
+        volumes=[{"mount_path": "/data", "size_mb": 1024}],
+        ports=[{"port": 3000, "protocol": "http"}],
+        env_vars=[{"key": "NODE_ENV", "value": "production", "is_secret": False}],
+        created_at=now,
+        updated_at=now,
+    )
+    mock_session = _make_async_session_mock(returned_model=existing_model)
+    mock_session_factory = MagicMock(spec=async_sessionmaker)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    repo = SqlAlchemyProjectDeploymentRepository(session_factory=mock_session_factory)
+
+    # Act
+    result = await repo.get_by_project_id(ProjectId("prj_01DEPLOY_FOUND"))
+
+    # Assert
+    assert result is not None
+    assert result.project_id == ProjectId("prj_01DEPLOY_FOUND")
+    assert result.provider == DeploymentProvider.RAILWAY
+    assert result.service_id == "srv_found_123"
+    assert result.service_name is None
+    assert result.public_url == "https://found.up.railway.app"
+    assert result.status == DeploymentStatus.PUBLISHED
+    assert result.build_logs_url == "https://railway.com/logs/found"
+    assert len(result.volumes) == 1
+    assert result.volumes[0].mount_path == "/data"
+    assert result.volumes[0].size_mb == 1024
+    assert len(result.ports) == 1
+    assert result.ports[0].port == 3000
+    assert len(result.env_vars) == 1
+    assert result.env_vars[0].key == "NODE_ENV"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_get_by_project_id_returns_none() -> None:
+    # Arrange
+    mock_session = _make_async_session_mock(returned_model=None)
+    mock_session_factory = MagicMock(spec=async_sessionmaker)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    repo = SqlAlchemyProjectDeploymentRepository(session_factory=mock_session_factory)
+
+    # Act
+    result = await repo.get_by_project_id(ProjectId("prj_missing"))
+
+    # Assert
+    assert result is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_delete_by_project_id() -> None:
+    # Arrange
+    mock_session = _make_async_session_mock(rowcount=1)
+    mock_session_factory = MagicMock(spec=async_sessionmaker)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    repo = SqlAlchemyProjectDeploymentRepository(session_factory=mock_session_factory)
+
+    # Act
+    deleted = await repo.delete_by_project_id(ProjectId("prj_del"))
+
+    # Assert
+    assert deleted is True
+    mock_session.commit.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_deployment_repository_with_direct_session_delegates_commit() -> None:
+    # Arrange
+    mock_session = _make_async_session_mock(returned_model=None)
+    repo = SqlAlchemyProjectDeploymentRepository(session=mock_session)
+    deployment = _make_project_deployment(project_id="prj_trans_deploy")
+
+    # Act
+    await repo.save(deployment)
+
+    # Assert
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_in_memory_project_deployment_repository() -> None:
+    # Arrange
+    from tests.unit.fakes import InMemoryProjectDeploymentRepository
+
+    repo = InMemoryProjectDeploymentRepository()
+    prj_1 = ProjectId("prj_dp_1")
+    prj_2 = ProjectId("prj_dp_2")
+
+    dep_1 = _make_project_deployment(project_id=str(prj_1), service_id="srv-1")
+    dep_2 = _make_project_deployment(project_id=str(prj_2), service_id="srv-2")
+
+    # Act - Save
+    await repo.save(dep_1)
+    await repo.save(dep_2)
+
+    # Assert - Retrieval
+    assert await repo.get_by_project_id(prj_1) == dep_1
+    assert await repo.get_by_project_id(prj_2) == dep_2
+
+    # Act - Delete
+    assert await repo.delete_by_project_id(prj_1) is True
+    assert await repo.get_by_project_id(prj_1) is None
+    assert await repo.delete_by_project_id(prj_1) is False

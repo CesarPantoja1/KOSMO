@@ -7,11 +7,9 @@ export type {
 } from './model/types';
 
 // STORE
-export { useProjectStore, clearProjectStore } from './model/store';
+export { useProjectStore, clearProjectStore, clearProjectStoreExceptProjects } from './model/store';
 
 // GITHUB SYNC
-export { useProjectGithubRepo } from './model/use-github-repo';
-export type { ProjectGithubViewState } from './model/use-github-repo';
 export { getProjectGitHubStatus, pushProjectToGitHub } from './api/api';
 
 // API

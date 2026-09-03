@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api';
 import { API_BASE_URL, USE_MOCKS } from '@/shared/api/config';
 import { parseApiError } from '@/shared/api/errors';
-import { authHeaders } from '@/entities/user';
+import { authHeaders } from '@/shared/api';
 import { consumeSse } from '@/shared/lib';
 import type { SseEventHandler } from '@/shared/lib';
 import type { ImplementationLog, ImplementationSummary } from '../model/types';
@@ -91,14 +91,12 @@ export function buildSummary(
 ): ImplementationSummary {
 	const files = Array.isArray(data.generated_files) ? data.generated_files : [];
 	const filesCount = files.length;
-	const screensCount =
-		typeof data.screens_count === 'number'
-			? data.screens_count
-			: files.filter(
-					(f) =>
-						typeof f === 'string' &&
-						(f.endsWith('page.tsx') || f.includes('/components/') || f.startsWith('src/components/')),
-				).length || (filesCount > 0 ? Math.max(1, Math.floor(filesCount / 2)) : 0);
+	const featuresCount =
+		typeof data.features_count === 'number'
+			? data.features_count
+			: typeof data.featuresCount === 'number'
+				? data.featuresCount
+				: 1;
 
 	const reqsCount =
 		typeof data.requirements_count === 'number'
@@ -146,9 +144,9 @@ export function buildSummary(
 		status: 'completed',
 		metrics: [
 			{
-				value: String(screensCount || filesCount),
-				label: 'Pantallas y componentes',
-				icon: 'screens',
+				value: String(featuresCount),
+				label: 'Funcionalidades implementadas',
+				icon: 'features',
 				iconBg: 'bg-ai-50',
 				iconColor: 'text-ai-600',
 			},
@@ -209,6 +207,7 @@ export interface ImplementationRecord {
 	projectId: string;
 	status: string;
 	generatedFiles: string[];
+	featuresCount?: number;
 	screensCount?: number;
 	requirementsCount?: number;
 	validationsPassed?: number;
@@ -224,6 +223,7 @@ const toRecord = (data: {
 	project_id: string;
 	status: string;
 	generated_files?: string[];
+	features_count?: number;
 	screens_count?: number;
 	requirements_count?: number;
 	validations_passed?: number;
@@ -237,6 +237,7 @@ const toRecord = (data: {
 	projectId: data.project_id,
 	status: data.status,
 	generatedFiles: Array.isArray(data.generated_files) ? data.generated_files : [],
+	featuresCount: typeof data.features_count === 'number' ? data.features_count : undefined,
 	screensCount: typeof data.screens_count === 'number' ? data.screens_count : undefined,
 	requirementsCount: typeof data.requirements_count === 'number' ? data.requirements_count : undefined,
 	validationsPassed: typeof data.validations_passed === 'number' ? data.validations_passed : undefined,

@@ -98,6 +98,25 @@ class OpenCodeUnavailableError(ValueError):
         super().__init__(message)
 
 
+class OpenCodeGenerationError(RuntimeError):
+    """Un error del stream de OpenCode que debe detener la generación actual."""
+
+
+def _raise_for_opencode_error(event: OpenCodeEvent) -> None:
+    """Convierte errores emitidos por OpenCode en una terminación inequívoca.
+
+    Antes el evento se reenviaba al navegador, pero el pipeline continuaba y podía
+    terminar como exitoso. Eso producía un mensaje de error seguido de código
+    generado. Un timeout o error de conexión ya no puede considerarse un avance
+    recuperable de esta misma ejecución.
+    """
+    if event.event_type != OpenCodeEventType.ERROR:
+        return
+    detail = event.data.get("error")
+    message = str(detail).strip() if detail is not None else "OpenCode devolvió un error sin detalle."
+    raise OpenCodeGenerationError(message)
+
+
 def _normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | None:
     """Normaliza y valida una ruta de archivo generada para asegurar que sea relativa y segura."""
     raw_str = raw_path.strip()
@@ -490,6 +509,7 @@ class GenerateFeatureImplementationUseCase:
 
             plan_operations: list[FileOperation] = []
             async for ev in self._opencode_client.send_prompt(session_id, plan_prompt, agent="plan"):
+                _raise_for_opencode_error(ev)
                 await _emit(ev)
                 if ev.event_type == OpenCodeEventType.PLAN_COMPLETE:
                     ops_raw: object = ev.data.get("operations")
@@ -604,6 +624,7 @@ class GenerateFeatureImplementationUseCase:
 
             generated_files: set[str] = set()
             async for ev in self._opencode_client.send_prompt(session_id, build_prompt, agent="build"):
+                _raise_for_opencode_error(ev)
                 await _emit(ev)
                 if ev.event_type == OpenCodeEventType.FILE_EDIT:
                     file_path: object = ev.data.get("path") or ev.data.get("file")
@@ -783,6 +804,7 @@ class GenerateFeatureImplementationUseCase:
                             )
                             sync_cmd = SyncGitHubRepositoryCommand(
                                 project_id=feature.project_id,
+                                project_name=proj.name if proj else None,
                                 commit_message=commit_msg,
                             )
                             sync_res = await self._sync_github_repository.execute(sync_cmd, proj.owner_id)
@@ -832,9 +854,13 @@ class GenerateFeatureImplementationUseCase:
                 except Exception as exc:
                     await _emit(
                         OpenCodeEvent(
-                            event_type=OpenCodeEventType.ERROR,
+                            event_type=OpenCodeEventType.BUILD_PROGRESS,
                             session_id=session_id,
-                            data={"error": "traceability", "detail": str(exc)},
+                            data={
+                                "delta": "La implementación se completó, pero no se pudo actualizar la trazabilidad.",
+                                "stage": "traceability_warning",
+                                "detail": str(exc),
+                            },
                         )
                     )
 
@@ -857,12 +883,22 @@ class GenerateFeatureImplementationUseCase:
                 if traceability_edges == 0:
                     traceability_edges = max(1, requirements_count + len(generated_files))
 
+                features_count = 1
+                try:
+                    project_impls = await self._implementation_repo.list_by_project(feature.project_id)
+                    features_count = (
+                        sum(1 for f in project_impls if getattr(f.status, "value", f.status) == "implemented") or 1
+                    )
+                except Exception:
+                    features_count = 1
+
                 done_event = OpenCodeEvent(
                     event_type=OpenCodeEventType.DONE,
                     session_id=session_id,
                     data={
                         "status": "implemented",
                         "generated_files": list(generated_files),
+                        "features_count": features_count,
                         "screens_count": screens_count,
                         "requirements_count": requirements_count,
                         "validations_passed": validations_passed,
@@ -909,6 +945,7 @@ class GenerateFeatureImplementationUseCase:
                         "error": "Validación fallida tras agotar reintentos",
                         "status": "requires_review",
                         "retry_history": [list(errs) for errs in retry_history],
+                        "fatal": True,
                     },
                 )
                 await _emit(error_event)

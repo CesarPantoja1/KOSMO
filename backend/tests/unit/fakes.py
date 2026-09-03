@@ -728,3 +728,51 @@ class InMemoryCodeSyncLogRepository:
     async def get_logs_by_project(self, project_id: Any) -> list[Any]:
         project_str = str(project_id)
         return [log for log in self.logs if str(log.project_id) == project_str]
+
+
+class InMemoryProjectDeploymentRepository:
+    """Implementa ProjectDeploymentRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.deployment import ProjectDeployment
+
+        self.deployments: dict[str, ProjectDeployment] = {}
+
+    async def get_by_project_id(self, project_id: Any) -> Any:
+        return self.deployments.get(str(project_id))
+
+    async def list_by_status(self, status: Any) -> list[Any]:
+        return [deployment for deployment in self.deployments.values() if deployment.status == status]
+
+    async def save(self, deployment: Any) -> Any:
+        self.deployments[str(deployment.project_id)] = deployment
+        return deployment
+
+    async def delete_by_project_id(self, project_id: Any) -> bool:
+        existed = str(project_id) in self.deployments
+        self.deployments.pop(str(project_id), None)
+        return existed
+
+
+class InMemoryUserDeploymentIntegrationRepository:
+    """Implementa UserDeploymentIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.deployment import UserDeploymentIntegration
+
+        self.integrations: dict[tuple[str, str], UserDeploymentIntegration] = {}
+
+    async def get_by_user_id(self, user_id: Any, provider: Any = None) -> Any:
+        provider_val = getattr(provider, "value", str(provider)) if provider is not None else "railway"
+        return self.integrations.get((str(user_id), provider_val))
+
+    async def save(self, integration: Any) -> None:
+        provider_val = getattr(integration.provider, "value", str(integration.provider))
+        self.integrations[(str(integration.user_id), provider_val)] = integration
+
+    async def delete_by_user_id(self, user_id: Any, provider: Any = None) -> bool:
+        provider_val = getattr(provider, "value", str(provider)) if provider is not None else "railway"
+        key = (str(user_id), provider_val)
+        existed = key in self.integrations
+        self.integrations.pop(key, None)
+        return existed

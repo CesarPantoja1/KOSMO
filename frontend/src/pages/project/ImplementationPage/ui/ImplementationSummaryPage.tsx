@@ -3,8 +3,17 @@
 import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
-import type { ProjectGithubViewState } from '@/entities/project';
-import { useProjectGithubRepo, useProjectStore } from '@/entities/project';
+import { connectIntegration, getIntegrationStatus } from '@/entities/integration';
+import {
+	buildRailwayAuthUrl,
+	consumeOAuthCodeVerifier,
+	consumeOAuthState,
+	createOAuthAuthorization,
+	getDefaultRedirectUri,
+} from '@/entities/integration';
+import { formatApiError } from '@/shared/api';
+import { useProjectStore } from '@/entities/project';
+import { useProjectGithubRepo, type ProjectGithubViewState } from '@/features/github-sync';
 import {
 	AiOrbCenterIcon,
 	ArrowLeft,
@@ -12,23 +21,27 @@ import {
 	EntitiesIcon,
 	FlowIcon,
 	GitHub,
-	InfoCircleIcon,
 	Load,
-	PlusSmallIcon,
 	RulesIcon,
 	ScreensIcon,
 	ShieldCheckIcon,
 	SmallCheckIcon,
 	SparkleIcon,
 	StarIcon,
+	toast,
 	WarningIcon,
 } from '@/shared/ui';
 import { GestionRepositorioGitHub } from '@/widgets';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { PreconditionState } from '@/entities/deploy';
+import { useDeployStatus } from '@/entities/deploy';
+import { DeployPreconditionPanel } from './DeployPreconditionPanel';
+import { DeployResultPanel } from './DeployResultPanel';
 
 const iconMap: Record<ImplementationMetric['icon'], React.ReactNode> = {
+	features: <SparkleIcon color='text-ai-600' />,
 	screens: <ScreensIcon color='text-ai-600' />,
 	entities: <EntitiesIcon color='text-primary-600' />,
 	rules: <RulesIcon color='text-warning-600' />,
@@ -96,9 +109,11 @@ const ImplementationSummaryPage = () => {
 	const summary = useImplementationStore((s) => s.summary);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
+	const [railwayConnected, setRailwayConnected] = useState<boolean | null>(null);
 
 	const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
 	const github = useProjectGithubRepo(currentProjectId);
+	const deploy = useDeployStatus(currentProjectId);
 
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 	const selectedCharacteristic = useCharacteristicStore(
@@ -132,6 +147,102 @@ const ImplementationSummaryPage = () => {
 			cancelled = true;
 		};
 	}, []);
+
+	const [connectingRailway, setConnectingRailway] = useState(false);
+
+	const refreshRailwayStatus = useCallback(() => {
+		getIntegrationStatus('railway')
+			.then((s) => setRailwayConnected(s.is_connected))
+			.catch(() => setRailwayConnected(false));
+	}, []);
+
+	const handleConnectRailway = useCallback(() => {
+		setConnectingRailway(true);
+		const redirectUri = getDefaultRedirectUri();
+		const popup = window.open(
+			'',
+			'oauth-railway',
+			'width=600,height=700',
+		);
+		if (!popup) {
+			setConnectingRailway(false);
+			router.push('/perfil');
+			return;
+		}
+		void createOAuthAuthorization('railway')
+			.then(({ state, codeChallenge }) =>
+				popup.location.assign(buildRailwayAuthUrl(redirectUri, state, codeChallenge)),
+			)
+			.catch(() => {
+				popup.close();
+				setConnectingRailway(false);
+				toast.error('No se pudo iniciar la autorización de Railway. Intenta de nuevo.');
+			});
+	}, [router]);
+
+	useEffect(() => {
+		refreshRailwayStatus();
+
+		const handleFocus = () => refreshRailwayStatus();
+		window.addEventListener('focus', handleFocus);
+		document.addEventListener('visibilitychange', handleFocus);
+
+		const handleMessage = (event: MessageEvent) => {
+			if (event.origin !== window.location.origin) return;
+			if (event.data?.type === 'railway-oauth-code') {
+				if (!consumeOAuthState('railway', event.data.state)) {
+					setConnectingRailway(false);
+					toast.error('La respuesta de autorización de Railway no es válida. Intenta de nuevo.');
+					return;
+				}
+				const codeVerifier = consumeOAuthCodeVerifier('railway');
+				if (!codeVerifier) {
+					setConnectingRailway(false);
+					toast.error('La respuesta de autorización de Railway no es válida. Intenta de nuevo.');
+					return;
+				}
+				const code = event.data.code as string;
+				if (code) {
+					connectIntegration('railway', {
+						code,
+						redirect_uri: getDefaultRedirectUri(),
+						code_verifier: codeVerifier,
+					})
+						.then((result) => {
+							setRailwayConnected(result.is_connected);
+							toast.success(
+								`Cuenta de Railway vinculada como @${result.username ?? 'desconocido'}.`,
+							);
+						})
+						.catch((err) => {
+							toast.error(
+								formatApiError(err, 'Error al vincular la cuenta de Railway.'),
+							);
+						})
+						.finally(() => {
+							setConnectingRailway(false);
+						});
+				}
+			}
+		};
+		window.addEventListener('message', handleMessage);
+
+		return () => {
+			window.removeEventListener('focus', handleFocus);
+			document.removeEventListener('visibilitychange', handleFocus);
+			window.removeEventListener('message', handleMessage);
+		};
+	}, [refreshRailwayStatus]);
+
+	const precondition: PreconditionState = (() => {
+		if (github.loading || railwayConnected === null) return 'loading';
+		if (!github.status?.has_repository) {
+			if (github.viewState === 'not-linked') return 'github-not-linked';
+			return 'github-not-synced';
+		}
+		if (!railwayConnected) return 'railway-not-linked';
+		return 'ready';
+	})();
 
 	if (!summary) {
 		return (
@@ -291,22 +402,24 @@ const ImplementationSummaryPage = () => {
 							/>
 						)}
 
-						<div className='rounded-xl border border-ai-100 bg-neutral-0 p-4 text-left shadow-xs'>
-							<div className='flex gap-3 items-start'>
-								<div className='flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ai-50 mt-0.5'>
-									<InfoCircleIcon size={16} color='text-ai-600' />
-								</div>
-								<div>
-									<p className='text-sm font-semibold text-neutral-800'>
-										¿Qué hemos generado?
-									</p>
-									<p className='mt-1 text-xs leading-5 text-neutral-500'>
-										La estructura, datos, reglas y lógica necesarios para que puedas
-										continuar construyendo tu aplicación.
-									</p>
-								</div>
-							</div>
-						</div>
+						{currentProjectId &&
+							(deploy.status && deploy.status.status !== 'idle' ? (
+								<DeployResultPanel
+									status={deploy.status}
+									error={deploy.error}
+									onRedeploy={() => deploy.deploy()}
+									deploying={deploy.deploying}
+								/>
+							) : (
+								<DeployPreconditionPanel
+									precondition={precondition}
+									onDeploy={() => deploy.deploy()}
+									deploying={deploy.deploying}
+									onConnectRailway={handleConnectRailway}
+									connectingRailway={connectingRailway}
+									deployError={deploy.error}
+								/>
+							))}
 					</div>
 				</div>
 			</div>

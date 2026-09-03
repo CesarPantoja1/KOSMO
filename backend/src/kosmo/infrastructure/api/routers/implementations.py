@@ -157,6 +157,13 @@ async def get_implementation_by_feature(
     if traceability_edges_count == 0 and (requirements_count > 0 or impl.generated_files):
         traceability_edges_count = max(1, requirements_count + len(impl.generated_files))
 
+    features_count = 1
+    try:
+        project_impls = await container.repos.implementations.list_by_project(impl.project_id)
+        features_count = sum(1 for i in project_impls if getattr(i.status, "value", i.status) == "implemented") or 1
+    except Exception:
+        features_count = 1
+
     technologies = ["Next.js", "TypeScript", "Bootstrap 5", "Vitest"]
 
     return ImplementationRecordResponse(
@@ -165,6 +172,7 @@ async def get_implementation_by_feature(
         project_id=str(impl.project_id),
         status=str(getattr(impl.status, "value", impl.status)),
         generated_files=list(impl.generated_files),
+        features_count=features_count,
         screens_count=screens_count,
         requirements_count=requirements_count,
         validations_passed=validations_passed,

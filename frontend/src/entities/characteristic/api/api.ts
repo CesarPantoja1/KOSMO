@@ -1,4 +1,4 @@
-import type { ChatHistory, ChatResponse } from '@/entities/chat';
+import type { ChatHistory, ChatResponse } from '@/shared/model/chat-message';
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type {

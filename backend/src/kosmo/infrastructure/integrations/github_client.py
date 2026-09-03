@@ -284,6 +284,7 @@ class GitHubHttpClient(GitHubClientPort):
         client_secret: str,
         code: str,
         redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> GitHubOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso."""
         headers = {
@@ -297,6 +298,8 @@ class GitHubHttpClient(GitHubClientPort):
         }
         if redirect_uri:
             payload["redirect_uri"] = redirect_uri
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
 
         try:
             response = await self._client.post(self._oauth_url, json=payload, headers=headers)
@@ -351,3 +354,64 @@ class GitHubHttpClient(GitHubClientPort):
             raise GitHubApiError(f"Tiempo de espera agotado al conectar con GitHub: {exc}") from exc
         except httpx.RequestError as exc:
             raise GitHubApiError(f"Error de red al conectar con GitHub: {exc}") from exc
+
+    async def grant_app_installation_access(
+        self,
+        token: str,
+        repo_id: int,
+        app_slug: str = "railway",
+    ) -> bool:
+        """Asocia un repositorio a la instalación de una GitHub App (ej. Railway)
+        si existe y está en modo de repositorios seleccionados.
+        """
+        headers = self._headers_for_token(token)
+        try:
+            response = await self._client.get("/user/installations", headers=headers)
+            if not response.is_success:
+                logger.debug(
+                    "No se pudieron consultar instalaciones de GitHub Apps (%s): %s",
+                    response.status_code,
+                    response.text[:120],
+                )
+                return False
+
+            data = cast(dict[str, object], response.json())
+            installations = data.get("installations")
+            if not isinstance(installations, list):
+                return False
+
+            target_slug = app_slug.strip().lower()
+            for inst_item in cast(list[object], installations):
+                if not isinstance(inst_item, dict):
+                    continue
+                inst = cast(dict[str, object], inst_item)
+                current_slug = str(inst.get("app_slug") or "").strip().lower()
+                if current_slug == target_slug or target_slug in current_slug:
+                    inst_id = inst.get("id")
+                    selection = str(inst.get("repository_selection") or "").strip().lower()
+                    if selection == "all":
+                        logger.info("GitHub App %s ya cuenta con acceso global a todos los repositorios.", app_slug)
+                        return True
+                    if inst_id:
+                        put_resp = await self._client.put(
+                            f"/user/installations/{inst_id}/repositories/{repo_id}",
+                            headers=headers,
+                        )
+                        if put_resp.status_code in (200, 204):
+                            logger.info(
+                                "Repositorio %s concedido exitosamente a la instalación %s (%s).",
+                                repo_id,
+                                inst_id,
+                                app_slug,
+                            )
+                            return True
+                        logger.warning(
+                            "GitHub rechazó asociar repo %s a instalación %s: %s",
+                            repo_id,
+                            inst_id,
+                            put_resp.status_code,
+                        )
+            return False
+        except Exception as exc:
+            logger.warning("Error al autorizar repositorio con la GitHub App de %s: %s", app_slug, exc)
+            return False

@@ -13,11 +13,13 @@ from kosmo.infrastructure.persistence.postgres.repositories import (
     SqlAlchemyDocumentRepository,
     SqlAlchemyFeatureImplementationRepository,
     SqlAlchemyFeatureRepository,
+    SqlAlchemyProjectDeploymentRepository,
     SqlAlchemyProjectGitHubIntegrationRepository,
     SqlAlchemyProjectRepository,
     SqlAlchemyRequirementRepository,
     SqlAlchemyTraceabilityRepository,
     SqlAlchemyUserAiConfigRepository,
+    SqlAlchemyUserDeploymentIntegrationRepository,
     SqlAlchemyUserGitHubIntegrationRepository,
     SqlAlchemyUserIntegrationRepository,
     SqlAlchemyUserRepository,
@@ -43,9 +45,11 @@ class RepositoryRegistry:
     implementations: SqlAlchemyFeatureImplementationRepository
     user_ai_configs: SqlAlchemyUserAiConfigRepository
     project_integrations: SqlAlchemyProjectGitHubIntegrationRepository
+    project_deployments: SqlAlchemyProjectDeploymentRepository
     sync_logs: SqlAlchemyCodeSyncLogRepository
     user_integrations: SqlAlchemyUserIntegrationRepository
     user_github_integrations: SqlAlchemyUserGitHubIntegrationRepository
+    user_deployment_integrations: SqlAlchemyUserDeploymentIntegrationRepository
 
     @classmethod
     def build(cls, session_factory: async_sessionmaker[AsyncSession]) -> RepositoryRegistry:
@@ -64,7 +68,9 @@ class RepositoryRegistry:
             implementations=SqlAlchemyFeatureImplementationRepository(session_factory),
             user_ai_configs=SqlAlchemyUserAiConfigRepository(session_factory),
             project_integrations=SqlAlchemyProjectGitHubIntegrationRepository(session_factory),
+            project_deployments=SqlAlchemyProjectDeploymentRepository(session_factory),
             sync_logs=SqlAlchemyCodeSyncLogRepository(session_factory),
             user_integrations=SqlAlchemyUserIntegrationRepository(session_factory),
             user_github_integrations=SqlAlchemyUserGitHubIntegrationRepository(session_factory),
+            user_deployment_integrations=SqlAlchemyUserDeploymentIntegrationRepository(session_factory),
         )

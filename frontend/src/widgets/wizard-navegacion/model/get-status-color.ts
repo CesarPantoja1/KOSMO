@@ -1,4 +1,4 @@
-import { ProjectStatus } from '../types/status';
+import { ProjectStatus } from './status';
 
 type styles = {
 	iconContainer: string;

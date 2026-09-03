@@ -9,6 +9,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from kosmo.contracts.integrations.deployment import (
+    DeploymentProvider,
+    UserDeploymentIntegration,
+    UserDeploymentIntegrationRepository,
+)
 from kosmo.contracts.integrations.github import (
     UserGitHubIntegration,
     UserGitHubIntegrationRepository,
@@ -201,3 +206,63 @@ class SqlAlchemyUserGitHubIntegrationRepository(UserGitHubIntegrationRepository)
     async def delete_by_user_id(self, user_id: UserId) -> bool:
         """Elimina la integración de GitHub del usuario."""
         return await self._delegate.delete(user_id, IntegrationProvider.GITHUB)
+
+
+class SqlAlchemyUserDeploymentIntegrationRepository(UserDeploymentIntegrationRepository):
+    """Adaptador de persistencia PostgreSQL específico para integraciones de despliegue (Railway)."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        session: AsyncSession | None = None,
+    ) -> None:
+        self._delegate = SqlAlchemyUserIntegrationRepository(
+            session_factory=session_factory,
+            session=session,
+        )
+
+    async def get_by_user_id(
+        self,
+        user_id: UserId,
+        provider: DeploymentProvider = DeploymentProvider.RAILWAY,
+    ) -> UserDeploymentIntegration | None:
+        """Obtiene la configuración de despliegue asociada a un usuario."""
+        integration_provider = IntegrationProvider(provider.value)
+        integration = await self._delegate.get_by_user_and_provider(
+            user_id=user_id,
+            provider=integration_provider,
+        )
+        if integration is None:
+            return None
+        return UserDeploymentIntegration(
+            user_id=integration.user_id,
+            provider=DeploymentProvider(integration.provider.value),
+            encrypted_token=integration.encrypted_access_token,
+            provider_username=integration.account_name,
+            encrypted_refresh_token=integration.encrypted_refresh_token,
+            scopes=tuple(integration.scopes),
+            updated_at=integration.updated_at,
+        )
+
+    async def save(self, integration: UserDeploymentIntegration) -> None:
+        """Persiste la configuración de despliegue del usuario."""
+        integration_provider = IntegrationProvider(integration.provider.value)
+        user_int = UserIntegration(
+            user_id=integration.user_id,
+            provider=integration_provider,
+            encrypted_access_token=integration.encrypted_token,
+            account_name=integration.provider_username,
+            encrypted_refresh_token=integration.encrypted_refresh_token,
+            scopes=list(integration.scopes),
+            updated_at=integration.updated_at,
+        )
+        await self._delegate.save(user_int)
+
+    async def delete_by_user_id(
+        self,
+        user_id: UserId,
+        provider: DeploymentProvider = DeploymentProvider.RAILWAY,
+    ) -> bool:
+        """Elimina la integración de despliegue del usuario."""
+        integration_provider = IntegrationProvider(provider.value)
+        return await self._delegate.delete(user_id, integration_provider)

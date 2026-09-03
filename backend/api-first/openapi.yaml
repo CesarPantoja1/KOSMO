@@ -366,8 +366,9 @@ paths:
       tags: [projects]
       summary: Eliminar proyecto
       description: >-
-        Elimina el proyecto y todos sus artefactos en cascada: descubrimiento, caracteristicas,
-        requisitos, modelos, chat y evaluaciones de consistencia. Requiere Bearer token.
+        Elimina el proyecto y todos sus artefactos en cascada global: servicio y despliegue
+        en Railway, repositorio remoto en GitHub, workspace local de codigo, descubrimiento,
+        caracteristicas, requisitos, modelos, chat y evaluaciones de consistencia. Requiere Bearer token.
       operationId: project_delete
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -2153,6 +2154,12 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Permisos insuficientes en la plataforma externa
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "502":
           description: Error al comunicarse con el servidor OAuth de la plataforma externa
           content:
@@ -2311,11 +2318,12 @@ paths:
       tags: [deploy]
       summary: Iniciar despliegue del proyecto en Railway
       description: >-
-        Orquesta la publicación de la aplicación en la nube mediante Railway:
+        Orquesta la publicación de la aplicación en la nube mediante Railway de forma idempotente:
         1. Valida que el proyecto cuente con un repositorio GitHub sincronizado y que la cuenta de Railway esté vinculada.
-        2. Crea o actualiza el servicio en Railway conectado al repositorio remoto.
-        3. Configura el volumen persistente para SQLite (/data/db.sqlite) y variables de entorno requeridas.
-        4. Dispara la construcción del contenedor a partir del Dockerfile de producción y actualiza el estado a 'building'.
+        2. En el primer despliegue: crea el servicio en Railway conectado al repositorio remoto y configura el volumen persistente (/data/db.sqlite) con variables de entorno.
+        3. En redespliegues: reutiliza el servicio remoto existente de forma idempotente sin duplicar servicios ni reconfigurar volúmenes.
+        4. Dispara la construcción en Railway a través de GraphQL/REST y actualiza el estado a 'building'.
+        5. Inicia el worker de monitoreo asíncrono en segundo plano con auto-renovación de credenciales OAuth y persistencia de estado terminal (ready/failed).
       operationId: project_deploy_railway_start
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -2340,10 +2348,22 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Permisos insuficientes en la plataforma de despliegue
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
           description: "Precondición no cumplida: el proyecto no tiene repositorio en GitHub o la cuenta de Railway no está vinculada"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Límite de solicitudes de la API de despliegue excedido
           content:
             application/problem+json:
               schema:
@@ -4045,6 +4065,13 @@ components:
           nullable: true
           description: URI de redirección utilizada durante el flujo de autorización
           example: "http://localhost:3000/settings"
+        code_verifier:
+          type: string
+          nullable: true
+          minLength: 43
+          maxLength: 128
+          description: Verificador PKCE generado por el navegador para este intercambio OAuth
+          example: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
       required: [code]
 
     IntegrationStatusResponse:

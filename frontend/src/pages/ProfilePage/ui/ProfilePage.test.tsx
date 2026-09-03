@@ -94,7 +94,9 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 			is_connected: false,
 		});
 
-		const windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+		const assign = vi.fn();
+		const popup = { location: { assign }, close: vi.fn() } as unknown as Window;
+		const windowOpenSpy = vi.spyOn(window, 'open').mockReturnValue(popup);
 
 		render(<CuentaTab user={{ subject: 'usr_1', scopes: [] }} />);
 
@@ -106,7 +108,8 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 		fireEvent.click(connectButtons[0]);
 
 		expect(windowOpenSpy).toHaveBeenCalledTimes(1);
-		const openedUrl = windowOpenSpy.mock.calls[0][0] as string;
+		await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+		const openedUrl = assign.mock.calls[0][0] as string;
 		expect(openedUrl).toContain('https://github.com/login/oauth/authorize');
 		expect(openedUrl).toContain('state=github');
 		expect(openedUrl).toContain('scope=repo');
@@ -132,20 +135,24 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 		});
 
 		// Simulamos el postMessage emitido por el popup
+		window.sessionStorage.setItem('kosmo.oauth.github.state', 'github.test-state');
+		window.sessionStorage.setItem('kosmo.oauth.github.verifier', 'v'.repeat(64));
 		window.dispatchEvent(
 			new MessageEvent('message', {
 				origin: window.location.origin,
 				data: {
 					type: 'github-oauth-code',
 					code: 'fake-oauth-auth-code-123',
+					state: 'github.test-state',
 				},
 			}),
 		);
 
 		await waitFor(() => {
 			expect(connectSpy).toHaveBeenCalledWith('github', {
-				code: 'fake-oauth-auth-code-123',
-				redirect_uri: expect.stringContaining('/perfil'),
+			code: 'fake-oauth-auth-code-123',
+			redirect_uri: expect.stringContaining('/perfil'),
+			code_verifier: 'v'.repeat(64),
 			});
 		});
 
@@ -168,7 +175,7 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 		});
 
 		delete (window as { location?: unknown }).location;
-		window.location = new URL('http://localhost:3000/perfil?code=github_code_abc&state=github') as unknown as Location;
+		window.location = new URL('http://localhost:3000/perfil?code=github_code_abc&state=github.test-state') as unknown as Location;
 
 		render(<ProfilePage />);
 
@@ -176,6 +183,7 @@ describe('ProfilePage and CuentaTab OAuth flow', () => {
 			{
 				type: 'github-oauth-code',
 				code: 'github_code_abc',
+				state: 'github.test-state',
 			},
 			'http://localhost:3000',
 		);

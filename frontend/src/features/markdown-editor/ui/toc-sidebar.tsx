@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 
-import { HeadingItem } from '../types/heading';
+import { HeadingItem } from '../model/heading';
 import { CloseMarkdownContent, OpenMarkdownContent } from '@/shared/ui';
 
 interface Props {

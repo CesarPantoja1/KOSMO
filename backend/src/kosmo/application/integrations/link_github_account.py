@@ -17,6 +17,8 @@ from kosmo.contracts.sdd.ids import UserId
 @dataclass(frozen=True, slots=True)
 class LinkGitHubAccountCommand:
     code: str
+    redirect_uri: str | None = None
+    code_verifier: str | None = None
 
 
 class LinkGitHubAccountUseCase:
@@ -49,6 +51,8 @@ class LinkGitHubAccountUseCase:
             client_id=self._client_id,
             client_secret=self._client_secret,
             code=cmd.code,
+            redirect_uri=cmd.redirect_uri,
+            code_verifier=cmd.code_verifier,
         )
 
         scopes = [s.strip() for s in token.scope.split(",") if s.strip()]

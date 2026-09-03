@@ -9,7 +9,7 @@ import {
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
 import { useRequirementsStore } from '@/entities/requirements';
-import { preloadPlantUmlEngine } from '@/features/plantuml-viewer/lib/engine-loader';
+import { preloadPlantUmlEngine } from '@/features/plantuml-viewer';
 import { formatApiError } from '@/shared/api';
 import { ArrowLeft, ModalConfirm, toast } from '@/shared/ui';
 import Link from 'next/link';

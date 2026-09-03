@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -23,11 +24,15 @@ from kosmo.contracts.integrations.github import (
 )
 from kosmo.contracts.sdd.codegen import WorkspaceManagerPort
 from kosmo.contracts.sdd.ids import ProjectId, UserId
+from kosmo.contracts.sdd.repositories import ProjectRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
 class SyncGitHubRepositoryCommand:
     project_id: ProjectId
+    project_name: str | None = None
     repo_name: str | None = None
     is_public: bool = False
     commit_message: str | None = None
@@ -46,6 +51,7 @@ class SyncGitHubRepositoryUseCase:
         cipher: SecretCipher,
         sync_log_repo: CodeSyncLogRepository,
         ephemeral_validator: ExecuteEphemeralValidationUseCase | None = None,
+        project_repo: ProjectRepository | None = None,
     ) -> None:
         self._project_repo = project_github_repo
         self._user_repo = user_github_repo
@@ -55,6 +61,7 @@ class SyncGitHubRepositoryUseCase:
         self._cipher = cipher
         self._sync_log_repo = sync_log_repo
         self._ephemeral_validator = ephemeral_validator
+        self._sdd_project_repo = project_repo
 
     async def execute(
         self,
@@ -108,20 +115,37 @@ class SyncGitHubRepositoryUseCase:
 
                 exists = await self._github_client.check_repository_exists(token, user.login, repo_name)
                 if not exists:
+                    project_display = cmd.project_name
+                    if not project_display and self._sdd_project_repo is not None:
+                        proj = await self._sdd_project_repo.by_id(cmd.project_id)
+                        if proj is not None and proj.name:
+                            project_display = proj.name
+                    project_display = project_display or str(cmd.project_id)
+
                     github_repo = await self._github_client.create_repository(
                         token=token,
                         name=repo_name,
                         description=(
-                            f"Repositorio sincronizado automáticamente desde KOSMO para proyecto {cmd.project_id}"
+                            f"Repositorio sincronizado automáticamente desde KOSMO para proyecto {project_display}"
                         ),
                         is_private=not is_public,
                     )
                     repo_url = github_repo.clone_url
+                    if github_repo.id:
+                        try:
+                            await self._github_client.grant_app_installation_access(token, github_repo.id)
+                        except Exception as exc:
+                            logger.debug("No se pudo otorgar acceso a Railway para nuevo repositorio: %s", exc)
                 else:
                     repo = await self._github_client.get_repository(token, user.login, repo_name)
                     if repo is None:
                         raise ValueError(f"No se pudo recuperar el repositorio {repo_name}.")
                     repo_url = repo.clone_url
+                    if repo.id:
+                        try:
+                            await self._github_client.grant_app_installation_access(token, repo.id)
+                        except Exception as exc:
+                            logger.debug("No se pudo otorgar acceso a Railway para repositorio existente: %s", exc)
 
                 project_integration = replace(
                     project_integration,
@@ -146,15 +170,16 @@ class SyncGitHubRepositoryUseCase:
                     )
                     raise EphemeralValidationError(error_msg, step=val_res.failed_step, errors=val_res.error_summary)
 
-            # Configurar Git local y pushear (push inicial o incremental)
-            auth_url = self._git_workspace.build_authenticated_url(repo_url, token)
-            self._git_workspace.remote_add_or_update(workspace.workspace_dir, "origin", auth_url)
+            # La URL persistida del remoto nunca debe contener el token OAuth.
+            # El adaptador usa el token exclusivamente para este push.
+            self._git_workspace.remote_add_or_update(workspace.workspace_dir, "origin", repo_url)
 
             branch = project_integration.default_branch or "main"
             commit_hash = self._git_workspace.push(
                 workspace.workspace_dir,
                 "origin",
                 branch=branch,
+                token=token,
             )
 
             # Log y Estado Final (SUCCESS)
