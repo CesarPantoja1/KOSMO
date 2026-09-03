@@ -15,9 +15,13 @@ import { useCallback, useState } from 'react';
 const DeployResultPanel = ({
 	status,
 	error,
+	onRedeploy,
+	deploying = false,
 }: {
 	status: ProjectDeployStatusResponse;
 	error: string | null;
+	onRedeploy?: () => void;
+	deploying?: boolean;
 }) => {
 	const [copied, setCopied] = useState(false);
 
@@ -135,6 +139,31 @@ const DeployResultPanel = ({
 							</span>
 						</div>
 					)}
+					{onRedeploy && (
+						<div className='pt-3 mt-1 border-t border-neutral-100 flex items-center justify-between gap-3'>
+							<span className='text-xs text-neutral-500'>
+								¿Subiste nuevos cambios a GitHub?
+							</span>
+							<button
+								type='button'
+								onClick={onRedeploy}
+								disabled={deploying}
+								className='btn btn-secondary btn-sm inline-flex items-center gap-1.5'
+							>
+								{deploying ? (
+									<>
+										<Load size={14} />
+										Actualizando...
+									</>
+								) : (
+									<>
+										<Railway size={14} color='text-railway-700' />
+										Actualizar despliegue
+									</>
+								)}
+							</button>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -153,16 +182,40 @@ const DeployResultPanel = ({
 							</p>
 						</div>
 					</div>
-					{status.error_log_url && (
-						<a
-							href={status.error_log_url}
-							target='_blank'
-							rel='noopener noreferrer'
-							className='inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline transition-colors'
-						>
-							Ver registros de compilación
-						</a>
-					)}
+					<div className='flex items-center justify-between gap-3'>
+						{status.error_log_url ? (
+							<a
+								href={status.error_log_url}
+								target='_blank'
+								rel='noopener noreferrer'
+								className='inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 hover:text-primary-700 hover:underline transition-colors'
+							>
+								Ver registros de compilación
+							</a>
+						) : (
+							<div />
+						)}
+						{onRedeploy && (
+							<button
+								type='button'
+								onClick={onRedeploy}
+								disabled={deploying}
+								className='btn btn-secondary btn-sm inline-flex items-center gap-1.5'
+							>
+								{deploying ? (
+									<>
+										<Load size={14} />
+										Reintentando...
+									</>
+								) : (
+									<>
+										<Railway size={14} color='text-railway-700' />
+										Reintentar despliegue
+									</>
+								)}
+							</button>
+						)}
+					</div>
 				</div>
 			)}
 		</div>

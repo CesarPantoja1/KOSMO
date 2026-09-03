@@ -374,7 +374,12 @@ const ImplementationSummaryPage = () => {
 
 						{currentProjectId &&
 							(deploy.status && deploy.status.status !== 'idle' ? (
-								<DeployResultPanel status={deploy.status} error={deploy.error} />
+								<DeployResultPanel
+									status={deploy.status}
+									error={deploy.error}
+									onRedeploy={() => deploy.deploy()}
+									deploying={deploy.deploying}
+								/>
 							) : (
 								<DeployPreconditionPanel
 									precondition={precondition}
