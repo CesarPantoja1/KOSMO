@@ -63,7 +63,7 @@ function OnboardingPage() {
 	}, []);
 
 	return (
-		<div className='min-h-screen bg-neutral-50 flex items-center justify-center p-6'>
+		<div className='min-h-screen flex items-center justify-center p-6'>
 			<div className='w-full max-w-2xl'>
 				<div className='mb-8 flex flex-col items-center gap-3'>
 					<Logo size={40} />
