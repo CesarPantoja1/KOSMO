@@ -36,6 +36,15 @@ from kosmo.infrastructure.integrations.deployment_worker import DeploymentPollin
 router = APIRouter(prefix="/api/v1/projects/{project_id}/deploy", tags=["deploy"])
 
 
+def _require_project_owner(project: object, principal: Principal, project_id: str) -> None:
+    """No expone el estado ni permite operar despliegues de otros usuarios."""
+    if project is None or str(getattr(project, "owner_id", "")) != principal.subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proyecto '{project_id}' no encontrado.",
+        )
+
+
 def _map_deploy_status(status: DeploymentStatus) -> str:
     match status:
         case DeploymentStatus.NOT_CREATED:
@@ -59,17 +68,13 @@ def _map_deploy_status(status: DeploymentStatus) -> str:
 async def get_project_deploy_status(
     project_id: str,
     request: Request,
-    principal: Annotated[Principal, Depends(get_principal)],  # noqa: ARG001
+    principal: Annotated[Principal, Depends(get_principal)],
 ) -> ProjectDeployStatusResponse:
     container = get_container(request)
     proj_id = ProjectId(project_id)
 
     project = await container.repos.projects.by_id(proj_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Proyecto '{project_id}' no encontrado.",
-        )
+    _require_project_owner(project, principal, project_id)
 
     deployment = await container.repos.project_deployments.get_by_project_id(proj_id)
     if deployment is None or deployment.status == DeploymentStatus.NOT_CREATED:
@@ -85,7 +90,7 @@ async def get_project_deploy_status(
 
     return ProjectDeployStatusResponse(
         service_id=deployment.service_id,
-        service_name=None,
+        service_name=deployment.service_name,
         deploy_url=deployment.public_url,
         status=_map_deploy_status(deployment.status),
         last_deploy_at=deployment.last_deployed_at,
@@ -113,11 +118,7 @@ async def deploy_to_railway(
     proj_id = ProjectId(project_id)
 
     project = await container.repos.projects.by_id(proj_id)
-    if project is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Proyecto '{project_id}' no encontrado.",
-        )
+    _require_project_owner(project, principal, project_id)
 
     cmd = OrchestrateCloudDeploymentCommand(
         project_id=proj_id,
@@ -173,7 +174,7 @@ async def deploy_to_railway(
 
     return ProjectDeployStatusResponse(
         service_id=deployment.service_id,
-        service_name=body.service_name if body else None,
+        service_name=deployment.service_name or (body.service_name if body else None),
         deploy_url=deployment.public_url,
         status=DeployStatusEnum.building.value,
         last_deploy_at=deployment.last_deployed_at,

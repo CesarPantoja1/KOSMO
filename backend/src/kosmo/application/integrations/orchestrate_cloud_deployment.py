@@ -166,6 +166,7 @@ class OrchestrateCloudDeploymentUseCase:
                     repo_url=github_integration.repo_url,  # type: ignore[arg-type]
                     env_vars=all_env_vars,
                     ports=[port_spec],
+                    service_name=cmd.service_name,
                 )
                 # Configurar volumen solo en el primer despliegue
                 await self._deployment_client.configure_volume(
@@ -209,6 +210,9 @@ class OrchestrateCloudDeploymentUseCase:
             project_id=cmd.project_id,
             provider=cmd.provider,
             service_id=service_id,
+            service_name=(
+                existing_deployment.service_name if existing_deployment else cmd.service_name
+            ),
             public_url=existing_deployment.public_url if existing_deployment else None,
             status=DeploymentStatus.BUILDING,
             build_logs_url=existing_deployment.build_logs_url if existing_deployment else None,

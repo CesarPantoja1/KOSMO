@@ -97,6 +97,7 @@ async def test_orchestrate_deployment_success_initial(
     project_id = ProjectId("prj_inventory_01")
     cmd = OrchestrateCloudDeploymentCommand(
         project_id=project_id,
+        service_name="inventario-produccion",
         environment_variables={"CUSTOM_VAR": "custom_val"},
     )
 
@@ -139,6 +140,7 @@ async def test_orchestrate_deployment_success_initial(
     create_call_args = mock_deployment_client.create_service.call_args[1]
     assert create_call_args["token"] == "decrypted_railway_token"
     assert create_call_args["repo_url"] == "https://github.com/octocat/inventory-app"
+    assert create_call_args["service_name"] == "inventario-produccion"
     assert any(ev.key == "CUSTOM_VAR" and ev.value == "custom_val" for ev in create_call_args["env_vars"])
     assert any(ev.key == "DATABASE_URL" and ev.value == "file:/data/db.sqlite" for ev in create_call_args["env_vars"])
 
@@ -158,6 +160,7 @@ async def test_orchestrate_deployment_success_initial(
     assert saved.project_id == project_id
     assert saved.provider == DeploymentProvider.RAILWAY
     assert saved.service_id == "srv_railway_999"
+    assert saved.service_name == "inventario-produccion"
     assert saved.status == DeploymentStatus.BUILDING
     assert result == saved
 

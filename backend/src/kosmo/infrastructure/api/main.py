@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
+from kosmo.application.integrations.recover_pending_deployments import recover_pending_deployments
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
@@ -261,6 +262,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             implementation_repo=components.repos.implementations,
             opencode_client=components.codegen.opencode_client,
             workspace_manager=components.codegen.workspace_manager,
+        )
+
+    # El estado de despliegue persiste en PostgreSQL, pero las tareas de sondeo no.
+    # Reanudarlas evita que un reinicio durante una publicación deje la UI en BUILDING.
+    with contextlib.suppress(Exception):
+        await recover_pending_deployments(
+            project_deployment_repo=components.repos.project_deployments,
+            project_repo=components.repos.projects,
+            deployment_worker=components.integrations.deployment_worker,
         )
 
     instrument_app(settings, app=app, db_engine=components.db_engine)

@@ -125,6 +125,7 @@ class ProjectDeployment:
     project_id: ProjectId
     provider: DeploymentProvider
     service_id: str | None = None
+    service_name: str | None = None
     public_url: str | None = None
     status: DeploymentStatus = DeploymentStatus.NOT_CREATED
     build_logs_url: str | None = None
@@ -152,6 +153,8 @@ class UserDeploymentIntegrationRepository(Protocol):
 class ProjectDeploymentRepository(Protocol):
     async def get_by_project_id(self, project_id: ProjectId) -> ProjectDeployment | None: ...
 
+    async def list_by_status(self, status: DeploymentStatus) -> list[ProjectDeployment]: ...
+
     async def save(self, deployment: ProjectDeployment) -> ProjectDeployment: ...
 
     async def delete_by_project_id(self, project_id: ProjectId) -> bool: ...
@@ -164,6 +167,7 @@ class DeploymentProviderPort(Protocol):
         self,
         code: str,
         redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> DeploymentOAuthToken: ...
 
     async def get_authenticated_user(self, token: str) -> dict[str, str]:
@@ -180,6 +184,7 @@ class DeploymentProviderPort(Protocol):
         repo_url: str,
         env_vars: list[EnvironmentVariable],
         ports: list[PortSpec],
+        service_name: str | None = None,
     ) -> str: ...
 
     async def configure_volume(self, token: str, service_id: str, volume: VolumeConfig) -> None: ...

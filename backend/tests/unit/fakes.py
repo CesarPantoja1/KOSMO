@@ -741,6 +741,9 @@ class InMemoryProjectDeploymentRepository:
     async def get_by_project_id(self, project_id: Any) -> Any:
         return self.deployments.get(str(project_id))
 
+    async def list_by_status(self, status: Any) -> list[Any]:
+        return [deployment for deployment in self.deployments.values() if deployment.status == status]
+
     async def save(self, deployment: Any) -> Any:
         self.deployments[str(deployment.project_id)] = deployment
         return deployment

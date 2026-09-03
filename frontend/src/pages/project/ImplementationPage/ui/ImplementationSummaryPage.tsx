@@ -4,7 +4,13 @@ import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
 import { connectIntegration, getIntegrationStatus } from '@/entities/integration';
-import { buildRailwayAuthUrl, DEFAULT_REDIRECT_URI } from '@/entities/integration';
+import {
+	buildRailwayAuthUrl,
+	consumeOAuthCodeVerifier,
+	consumeOAuthState,
+	createOAuthAuthorization,
+	getDefaultRedirectUri,
+} from '@/entities/integration';
 import { formatApiError } from '@/shared/api';
 import { useProjectStore } from '@/entities/project';
 import { useProjectGithubRepo, type ProjectGithubViewState } from '@/features/github-sync';
@@ -152,14 +158,26 @@ const ImplementationSummaryPage = () => {
 
 	const handleConnectRailway = useCallback(() => {
 		setConnectingRailway(true);
+		const redirectUri = getDefaultRedirectUri();
 		const popup = window.open(
-			buildRailwayAuthUrl(DEFAULT_REDIRECT_URI),
+			'',
 			'oauth-railway',
 			'width=600,height=700',
 		);
 		if (!popup) {
+			setConnectingRailway(false);
 			router.push('/perfil');
+			return;
 		}
+		void createOAuthAuthorization('railway')
+			.then(({ state, codeChallenge }) =>
+				popup.location.assign(buildRailwayAuthUrl(redirectUri, state, codeChallenge)),
+			)
+			.catch(() => {
+				popup.close();
+				setConnectingRailway(false);
+				toast.error('No se pudo iniciar la autorización de Railway. Intenta de nuevo.');
+			});
 	}, [router]);
 
 	useEffect(() => {
@@ -172,11 +190,23 @@ const ImplementationSummaryPage = () => {
 		const handleMessage = (event: MessageEvent) => {
 			if (event.origin !== window.location.origin) return;
 			if (event.data?.type === 'railway-oauth-code') {
+				if (!consumeOAuthState('railway', event.data.state)) {
+					setConnectingRailway(false);
+					toast.error('La respuesta de autorización de Railway no es válida. Intenta de nuevo.');
+					return;
+				}
+				const codeVerifier = consumeOAuthCodeVerifier('railway');
+				if (!codeVerifier) {
+					setConnectingRailway(false);
+					toast.error('La respuesta de autorización de Railway no es válida. Intenta de nuevo.');
+					return;
+				}
 				const code = event.data.code as string;
 				if (code) {
 					connectIntegration('railway', {
 						code,
-						redirect_uri: DEFAULT_REDIRECT_URI,
+						redirect_uri: getDefaultRedirectUri(),
+						code_verifier: codeVerifier,
 					})
 						.then((result) => {
 							setRailwayConnected(result.is_connected);

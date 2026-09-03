@@ -22,6 +22,7 @@ class LinkDeploymentPlatformCommand:
     code: str
     provider: DeploymentProvider = DeploymentProvider.RAILWAY
     redirect_uri: str | None = None
+    code_verifier: str | None = None
 
 
 LinkDeploymentProviderCommand = LinkDeploymentPlatformCommand
@@ -49,7 +50,11 @@ class LinkDeploymentPlatformUseCase:
         if not cmd.code or not cmd.code.strip():
             raise DeploymentAuthenticationError("El código de autorización OAuth no puede estar vacío.")
 
-        token = await self._deployment_client.exchange_oauth_code(cmd.code.strip(), cmd.redirect_uri)
+        token = await self._deployment_client.exchange_oauth_code(
+            cmd.code.strip(),
+            cmd.redirect_uri,
+            cmd.code_verifier,
+        )
         if not token.access_token or not token.access_token.strip():
             raise DeploymentAuthenticationError("No se recibió un access_token válido de la plataforma de despliegue.")
 

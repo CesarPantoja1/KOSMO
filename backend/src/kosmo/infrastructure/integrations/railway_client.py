@@ -142,6 +142,7 @@ class RailwayHttpClient(DeploymentProviderPort):
         self,
         code: str,
         redirect_uri: str | None = None,
+        code_verifier: str | None = None,
     ) -> DeploymentOAuthToken:
         """Intercambia un código de autorización OAuth por un token de acceso o usa el token directo."""
         cleaned_code = code.strip()
@@ -162,6 +163,8 @@ class RailwayHttpClient(DeploymentProviderPort):
         }
         if redirect_uri:
             payload["redirect_uri"] = redirect_uri
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
         if self._client_id:
             payload["client_id"] = self._client_id
         if self._client_secret:
@@ -426,6 +429,7 @@ class RailwayHttpClient(DeploymentProviderPort):
         repo_url: str,
         env_vars: list[EnvironmentVariable],
         ports: list[PortSpec],
+        service_name: str | None = None,
     ) -> str:
         """Crea un nuevo servicio en Railway vinculado a un repositorio remoto."""
         # 1. Intentar vía GraphQL oficial de Railway
@@ -434,6 +438,7 @@ class RailwayHttpClient(DeploymentProviderPort):
             repo_clean = repo_clean[:-4]
         repo_slug = repo_clean.split("github.com/")[-1].strip("/") if "github.com/" in repo_clean else repo_clean
         repo_name = repo_slug.split("/")[-1] or "kosmo-app"
+        requested_service_name = service_name.strip() if service_name and service_name.strip() else repo_name
 
         project_id: str | None = None
         env_id: str | None = None
@@ -595,7 +600,7 @@ class RailwayHttpClient(DeploymentProviderPort):
                         {
                             "input": {
                                 "projectId": project_id,
-                                "name": repo_name,
+                                "name": requested_service_name,
                                 "source": {"repo": repo_slug},
                             }
                         },
@@ -951,21 +956,12 @@ class RailwayHttpClient(DeploymentProviderPort):
         Retorna (status, public_url, build_logs_url_or_error)
         """
         # 1. Intentar GraphQL oficial
-        gql_status_query = """
+        gql_service_query = """
         query ServiceStatus($id: String!) {
             service(id: $id) {
                 id
                 name
-                deployments(first: 1) {
-                    edges {
-                        node {
-                            id
-                            status
-                            url
-                            staticUrl
-                        }
-                    }
-                }
+                projectId
                 serviceInstances {
                     edges {
                         node {
@@ -980,12 +976,34 @@ class RailwayHttpClient(DeploymentProviderPort):
             }
         }
         """
+        gql_deployments_query = """
+        query DeploymentStatus($input: DeploymentListInput!) {
+            deployments(input: $input, first: 1) {
+                edges {
+                    node {
+                        id
+                        status
+                        url
+                        staticUrl
+                    }
+                }
+            }
+        }
+        """
         try:
-            gql_data = await self._execute_graphql(token, gql_status_query, {"id": service_id})
+            gql_data = await self._execute_graphql(token, gql_service_query, {"id": service_id})
             if gql_data is not None:
                 if "service" in gql_data and isinstance(gql_data["service"], dict):
                     srv = cast(dict[str, object], gql_data["service"])
-                    latest_dep = _extract_first_edge_node(srv, "deployments") or {}
+                    project_id = str(srv.get("projectId") or "")
+                    if not project_id:
+                        raise DeploymentApiError("Railway no devolvió el proyecto asociado al servicio.")
+                    deployments_data = await self._execute_graphql(
+                        token,
+                        gql_deployments_query,
+                        {"input": {"projectId": project_id, "serviceId": service_id}},
+                    )
+                    latest_dep = _extract_first_edge_node(deployments_data or {}, "deployments") or {}
 
                     raw_status = str(latest_dep.get("status") or "").upper()
                     if raw_status in ("SUCCESS", "DEPLOYED", "LIVE", "ACTIVE", "PUBLISHED"):

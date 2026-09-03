@@ -71,7 +71,7 @@ async def test_link_deployment_platform_success(
     result = await use_case.execute(principal, cmd)
 
     # Assert
-    mock_deployment_client.exchange_oauth_code.assert_called_once_with("temp-oauth-code", None)
+    mock_deployment_client.exchange_oauth_code.assert_called_once_with("temp-oauth-code", None, None)
     mock_cipher.encrypt.assert_called_once_with(b"rw_token_xyz")
     mock_repo.save.assert_called_once()
     saved_integration: UserDeploymentIntegration = mock_repo.save.call_args[0][0]
@@ -94,6 +94,7 @@ async def test_link_deployment_platform_with_redirect_uri_and_refresh_token(
     cmd = LinkDeploymentPlatformCommand(
         code="auth-code-abc",
         redirect_uri="https://kosmo.app/perfil",
+        code_verifier="v" * 64,
     )
     mock_deployment_client.exchange_oauth_code.return_value = DeploymentOAuthToken(
         access_token="access_123",
@@ -116,6 +117,7 @@ async def test_link_deployment_platform_with_redirect_uri_and_refresh_token(
     mock_deployment_client.exchange_oauth_code.assert_called_once_with(
         "auth-code-abc",
         "https://kosmo.app/perfil",
+        "v" * 64,
     )
     mock_deployment_client.get_authenticated_user.assert_called_once_with("access_123")
     mock_repo.save.assert_called_once()

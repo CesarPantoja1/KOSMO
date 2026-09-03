@@ -392,6 +392,7 @@ class ProjectIntegrationModel(Base):
 
     # Campos de despliegue en la nube (HU-24)
     service_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    service_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     public_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     deploy_status: Mapped[str] = mapped_column(
         String(32),

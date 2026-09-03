@@ -324,6 +324,7 @@ class SqlAlchemyProjectDeploymentRepository(ProjectDeploymentRepository):
             project_id=ProjectId(model.project_id),
             provider=provider,
             service_id=model.service_id,
+            service_name=model.service_name,
             public_url=model.public_url,
             status=status,
             build_logs_url=model.build_logs_url,
@@ -353,6 +354,16 @@ class SqlAlchemyProjectDeploymentRepository(ProjectDeploymentRepository):
             if model is None:
                 return None
             return self._to_entity(model)
+
+    async def list_by_status(self, status: DeploymentStatus) -> list[ProjectDeployment]:
+        """Lista despliegues Railway que necesitan recuperar su monitoreo."""
+        async with self._session_ctx() as session:
+            stmt = select(ProjectIntegrationModel).where(
+                ProjectIntegrationModel.provider == DeploymentProvider.RAILWAY.value,
+                ProjectIntegrationModel.deploy_status == status.value,
+            )
+            result = await session.execute(stmt)
+            return [self._to_entity(model) for model in result.scalars().all()]
 
     async def save(
         self,
@@ -386,6 +397,7 @@ class SqlAlchemyProjectDeploymentRepository(ProjectDeploymentRepository):
                     project_id=project_id_str,
                     provider=provider_str,
                     service_id=deployment.service_id,
+                    service_name=deployment.service_name,
                     public_url=deployment.public_url,
                     deploy_status=deploy_status_str,
                     build_logs_url=deployment.build_logs_url,
@@ -400,6 +412,7 @@ class SqlAlchemyProjectDeploymentRepository(ProjectDeploymentRepository):
                 session.add(model)
             else:
                 model.service_id = deployment.service_id
+                model.service_name = deployment.service_name
                 model.public_url = deployment.public_url
                 model.deploy_status = deploy_status_str
                 model.build_logs_url = deployment.build_logs_url

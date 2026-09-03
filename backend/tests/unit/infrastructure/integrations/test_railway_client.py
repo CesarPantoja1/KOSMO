@@ -212,6 +212,7 @@ async def test_exchange_oauth_code_with_redirect_uri() -> None:
         body = dict(urllib.parse.parse_qsl(content_str))
         assert body["code"] == "auth_code_with_uri"
         assert body["redirect_uri"] == "https://kosmo.app/perfil"
+        assert body["code_verifier"] == "v" * 64
         assert body["grant_type"] == "authorization_code"
 
         return httpx.Response(
@@ -236,6 +237,7 @@ async def test_exchange_oauth_code_with_redirect_uri() -> None:
     token: DeploymentOAuthToken = await railway_client.exchange_oauth_code(
         "auth_code_with_uri",
         redirect_uri="https://kosmo.app/perfil",
+        code_verifier="v" * 64,
     )
 
     # Assert
@@ -1002,6 +1004,72 @@ async def test_get_service_status_graphql_service_support() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_get_service_status_queries_latest_deployment_through_root_graphql_field() -> None:
+    """Railway exposes deployments at the GraphQL root, not below Service."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/graphql/v2"
+        payload = json.loads(request.content.decode("utf-8"))
+        query = payload["query"]
+
+        if "query ServiceStatus" in query:
+            calls.append("service")
+            assert payload["variables"] == {"id": "srv_123"}
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "service": {
+                            "id": "srv_123",
+                            "projectId": "prj_123",
+                            "serviceInstances": {"edges": []},
+                        }
+                    }
+                },
+            )
+
+        if "query DeploymentStatus" in query:
+            calls.append("deployments")
+            assert payload["variables"] == {
+                "input": {"projectId": "prj_123", "serviceId": "srv_123"}
+            }
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "deployments": {
+                            "edges": [
+                                {
+                                    "node": {
+                                        "id": "dep_123",
+                                        "status": "SUCCESS",
+                                        "staticUrl": "kosmo.up.railway.app",
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+            )
+
+        pytest.fail(f"Consulta GraphQL inesperada: {query}")
+
+    railway_client = RailwayHttpClient(client=_create_mock_client(handler))
+
+    status, public_url, logs_url = await railway_client.get_service_status(
+        token="rw_token_123",
+        service_id="srv_123",
+    )
+
+    assert calls == ["service", "deployments"]
+    assert status == DeploymentStatus.PUBLISHED
+    assert public_url == "https://kosmo.up.railway.app"
+    assert logs_url is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_service_status_building() -> None:
     # Arrange
     def handler(request: httpx.Request) -> httpx.Response:
@@ -1420,6 +1488,7 @@ async def test_create_service_graphql_full_flow() -> None:
         if "mutation ServiceCreate" in query:
             calls.append("serviceCreate")
             assert body["variables"]["input"]["projectId"] == "prj_gql_123"
+            assert body["variables"]["input"]["name"] == "my-app-production"
             return httpx.Response(
                 200,
                 json={"data": {"serviceCreate": {"id": "srv_gql_789", "name": "my-app"}}},
@@ -1442,6 +1511,7 @@ async def test_create_service_graphql_full_flow() -> None:
         repo_url="https://github.com/my-org/my-app",
         env_vars=[EnvironmentVariable(key="PORT", value="8000", is_secret=False)],
         ports=[PortSpec(port=8000, protocol="HTTP")],
+        service_name="my-app-production",
     )
 
     assert service_id == "srv_gql_789"

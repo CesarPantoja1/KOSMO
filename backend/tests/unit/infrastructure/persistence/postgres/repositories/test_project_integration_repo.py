@@ -458,6 +458,7 @@ async def test_deployment_repository_save_inserts_when_none_exists() -> None:
     assert added_model.project_id == "prj_01DEPLOY"
     assert added_model.provider == "railway"
     assert added_model.service_id == "srv_01NEW"
+    assert added_model.service_name is None
     assert added_model.public_url == "https://new-app.up.railway.app"
     assert added_model.deploy_status == "building"
     assert len(added_model.volumes) == 1
@@ -509,6 +510,7 @@ async def test_deployment_repository_save_updates_existing_deployment() -> None:
     # Assert
     assert result == updated_deployment
     assert existing_model.service_id == "srv_01UPDATED"
+    assert existing_model.service_name is None
     assert existing_model.public_url == "https://updated-app.up.railway.app"
     assert existing_model.deploy_status == "published"
     assert len(existing_model.volumes) == 1
@@ -551,6 +553,7 @@ async def test_deployment_repository_get_by_project_id_returns_entity() -> None:
     assert result.project_id == ProjectId("prj_01DEPLOY_FOUND")
     assert result.provider == DeploymentProvider.RAILWAY
     assert result.service_id == "srv_found_123"
+    assert result.service_name is None
     assert result.public_url == "https://found.up.railway.app"
     assert result.status == DeploymentStatus.PUBLISHED
     assert result.build_logs_url == "https://railway.com/logs/found"

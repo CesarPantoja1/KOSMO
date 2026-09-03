@@ -89,6 +89,21 @@ async def test_get_deploy_status_project_not_found_404() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_get_deploy_status_hides_project_of_another_owner() -> None:
+    req = _mock_request(project=_mock_project("prj_private"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_project_deploy_status(
+            project_id="prj_private",
+            request=req,
+            principal=_principal("usr_other"),
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_get_deploy_status_not_deployed_returns_idle() -> None:
     # Arrange
     req = _mock_request(project=_mock_project("prj_123"), deployment=None)
