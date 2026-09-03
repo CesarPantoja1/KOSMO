@@ -39,6 +39,10 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
             else None
         ),
         model=settings.opencode_model,
+        timeout_seconds=settings.opencode_timeout_seconds,
+        read_timeout_seconds=settings.opencode_read_timeout_seconds,
+        connect_timeout_seconds=settings.opencode_connect_timeout_seconds,
+        write_timeout_seconds=settings.opencode_write_timeout_seconds,
     )
     if settings.code_runner_base_url and settings.code_runner_token is not None:
         code_runner: CodeRunnerPort = RemoteCodeRunner(

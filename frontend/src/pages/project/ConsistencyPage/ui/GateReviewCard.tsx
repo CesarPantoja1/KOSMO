@@ -3,7 +3,7 @@
 import type { PanZoomState } from '@/features/plantuml-viewer';
 import type { ReviewCard } from '@/entities/consistency';
 import { PlantUmlViewer } from '@/features/plantuml-viewer';
-import { wrapPlantUmlSource } from '@/features/plantuml-viewer/lib/wrap-plantuml';
+import { wrapPlantUmlSource } from '@/features/plantuml-viewer';
 import { MarkdownText } from '@/shared/ui/markdown-text';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

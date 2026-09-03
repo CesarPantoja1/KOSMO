@@ -27,6 +27,13 @@ DEFAULT_STEP_COMMANDS: dict[ValidationStep, str] = {
     ValidationStep.BUILD: "npx next build",
 }
 
+DEFAULT_STEP_TIMEOUTS: dict[ValidationStep, int] = {
+    ValidationStep.TYPECHECK: 60,
+    ValidationStep.LINT: 60,
+    ValidationStep.TESTS: 90,
+    ValidationStep.BUILD: 180,
+}
+
 INSTALL_COMMAND: str = "npm install"
 INSTALL_TIMEOUT_SECONDS: int = 600
 
@@ -73,11 +80,15 @@ class SubprocessCodeRunner(CodeRunnerPort):
         self,
         step_commands: dict[ValidationStep, str] | None = None,
         allowed_prefixes: frozenset[str] = DEFAULT_ALLOWED_COMMAND_PREFIXES,
+        step_timeouts: dict[ValidationStep, int] | None = None,
     ) -> None:
         self._step_commands = dict(DEFAULT_STEP_COMMANDS)
         if step_commands:
             self._step_commands.update(step_commands)
         self._allowed_prefixes = allowed_prefixes
+        self._step_timeouts = dict(DEFAULT_STEP_TIMEOUTS)
+        if step_timeouts:
+            self._step_timeouts.update(step_timeouts)
 
     @staticmethod
     def _clean_env() -> dict[str, str]:
@@ -124,8 +135,7 @@ class SubprocessCodeRunner(CodeRunnerPort):
                 timeout=float(timeout_seconds),
             )
         except TimeoutError:
-            with contextlib.suppress(Exception):
-                proc.kill()
+            await self._kill_process_tree(proc)
 
             duration_ms = int((time.perf_counter() - start) * 1000)
             timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
@@ -163,20 +173,41 @@ class SubprocessCodeRunner(CodeRunnerPort):
             error_messages=error_msgs,
         )
 
+    @staticmethod
+    async def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
+        """Termina de forma forzada el árbol de procesos para evitar procesos huérfanos."""
+        with contextlib.suppress(Exception):
+            if os.name == "nt" and proc.pid:
+                kill_proc = await asyncio.create_subprocess_exec(
+                    "taskkill",
+                    "/F",
+                    "/T",
+                    "/PID",
+                    str(proc.pid),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await kill_proc.wait()
+            else:
+                proc.kill()
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(proc.wait(), timeout=2.0)
+
     async def run_step(
         self,
         workspace_dir: str,
         step: ValidationStep,
         *,
-        timeout_seconds: int = 300,
+        timeout_seconds: int | None = None,
     ) -> ValidationStepResult:
         """Ejecuta el paso de validación y parsea su salida determinísticamente."""
         command = self._step_commands[step]
+        timeout = timeout_seconds if timeout_seconds is not None else self._step_timeouts.get(step, 120)
         return await self._execute_command(
             workspace_dir=workspace_dir,
             command=command,
             step=step,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=timeout,
         )
 
     async def run_command(
@@ -207,8 +238,15 @@ class SubprocessCodeRunner(CodeRunnerPort):
             ValidationStep.BUILD,
         ),
         run_id: str = "",
+        step_timeouts: dict[ValidationStep, int] | None = None,
+        fail_fast: bool = False,
     ) -> ValidationRunResult:
-        """Ejecuta secuencialmente los pasos deteniéndose en el primer fallo (gate secuencial)."""
+        """Ejecuta los pasos de validación.
+
+        Por defecto (fail_fast=False), ejecuta los pasos de análisis estático y pruebas
+        para recopilar un diagnóstico integral, omitiendo únicamente el empaquetado (BUILD)
+        si se detectan errores previos.
+        """
         if not (Path(workspace_dir) / "node_modules").is_dir():
             install_result = await self.run_command(
                 workspace_dir,
@@ -235,7 +273,13 @@ class SubprocessCodeRunner(CodeRunnerPort):
         results: list[ValidationStepResult] = []
 
         for step in steps:
-            result = await self.run_step(workspace_dir, step)
+            if fail_fast and any(not r.success for r in results):
+                break
+            if step == ValidationStep.BUILD and any(not r.success for r in results):
+                break
+
+            timeout = (step_timeouts or self._step_timeouts).get(step, 120)
+            result = await self.run_step(workspace_dir, step, timeout_seconds=timeout)
             _log.info(
                 "code_runner.step_done",
                 run_id=run_id,
@@ -245,8 +289,6 @@ class SubprocessCodeRunner(CodeRunnerPort):
                 duration_ms=result.duration_ms,
             )
             results.append(result)
-            if not result.success:
-                break
 
         all_passed = len(results) == len(steps) and all(r.success for r in results)
         total_duration = sum(r.duration_ms for r in results)

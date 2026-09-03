@@ -3,7 +3,7 @@ import { useAuthStore } from '@/shared/model/auth.store';
 import { authHeaders } from './headers';
 import type { TokenPairResponse } from './auth.types';
 import { parseApiError } from './errors';
-import { clearAllStores } from '@/features/app-state';
+import { emitSessionExpired } from '@/shared/lib/session-events';
 
 let isRefreshing = false;
 let failedQueue: {
@@ -91,7 +91,7 @@ export const apiClient = async <T>(
 			res = await fetch(`${API_BASE_URL}${url}`, { ...config, headers });
 		} catch (err) {
 			processQueue(err as Error, null);
-			clearAllStores();
+			emitSessionExpired();
 			if (typeof window !== 'undefined') {
 				window.location.href = '/?session_expired=true';
 			}
@@ -108,7 +108,7 @@ export const apiClient = async <T>(
 			!url.includes('/auth/token') &&
 			!url.includes('/auth/authorize')
 		) {
-			clearAllStores();
+			emitSessionExpired();
 			if (typeof window !== 'undefined' && window.location.pathname !== '/') {
 				window.location.href = '/?session_expired=true';
 			}

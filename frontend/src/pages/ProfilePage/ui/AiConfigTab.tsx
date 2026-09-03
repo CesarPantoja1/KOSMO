@@ -12,7 +12,7 @@ export function AiConfigTab() {
 	}, [fetchConfig]);
 
 	return (
-		<div className='flex flex-col gap-6 animate-fade-in'>
+		<div className='flex flex-col gap-6'>
 			<AiConfigForm onSaved={fetchConfig} />
 		</div>
 	);

@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import (
 from kosmo.config import Settings
 from kosmo.infrastructure.api.composition.auth import AuthComponents, build_auth_components
 from kosmo.infrastructure.api.composition.codegen import CodegenComponents, build_codegen_components
+from kosmo.infrastructure.api.composition.integrations import (
+    IntegrationsComponents,
+    build_integrations_components,
+)
 from kosmo.infrastructure.api.composition.pipeline import PipelineComponents, build_pipeline_components
 from kosmo.infrastructure.api.composition.sdd import (
     ConsistencyComponents,
@@ -30,6 +34,7 @@ from kosmo.infrastructure.api.composition.sdd import (
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.persistence.postgres.uow import SqlAlchemyUnitOfWork
 from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
+from kosmo.infrastructure.security.fernet_vault import FernetSecretCipher
 
 __all__ = [
     "AppContainer",
@@ -38,6 +43,7 @@ __all__ = [
     "ConsistencyComponents",
     "DiscoveryComponents",
     "FeaturesComponents",
+    "IntegrationsComponents",
     "ModeloComponents",
     "PipelineComponents",
     "ProjectComponents",
@@ -48,6 +54,7 @@ __all__ = [
     "build_consistency_components",
     "build_discovery_components",
     "build_features_components",
+    "build_integrations_components",
     "build_modelo_components",
     "build_pipeline_components",
     "build_project_components",
@@ -69,6 +76,7 @@ class AppContainer:
     modelo: ModeloComponents
     consistency: ConsistencyComponents
     codegen: CodegenComponents
+    integrations: IntegrationsComponents
     repos: RepositoryRegistry
     uow: SqlAlchemyUnitOfWork
     db_engine: AsyncEngine
@@ -80,6 +88,7 @@ class AppContainer:
         await self.codegen.opencode_client.aclose()
         if isinstance(self.codegen.code_runner, RemoteCodeRunner):
             await self.codegen.code_runner.aclose()
+        await self.integrations.deployment_worker.shutdown()
         await self.db_engine.dispose()
 
 
@@ -106,8 +115,35 @@ def build_app_components(settings: Settings) -> AppContainer:
     requirements = build_requirements_components(repos, pipeline, uow)
     modelo = build_modelo_components(repos, pipeline)
     codegen = build_codegen_components(settings, repos)
-    projects = build_project_components(repos, pipeline, workspace_manager=codegen.workspace_manager)
     consistency = build_consistency_components(repos, discovery.consistency_evaluator, uow)
+
+    cipher = (
+        auth.secret_cipher
+        if auth is not None
+        else FernetSecretCipher(
+            settings.fernet_master_key.get_secret_value()
+            if settings.fernet_master_key is not None
+            else FernetSecretCipher.generate_master_key()
+        )
+    )
+    integrations = build_integrations_components(
+        settings,
+        repos,
+        codegen.workspace_manager,
+        cipher,
+        code_runner=codegen.code_runner,
+    )
+    codegen.generate_feature_implementation.set_sync_github_repository(integrations.sync_github_repository)
+
+    projects = build_project_components(
+        repos,
+        pipeline,
+        workspace_manager=codegen.workspace_manager,
+        github_client=integrations.github_client,
+        railway_client=integrations.railway_client,
+        deployment_worker=integrations.deployment_worker,
+        cipher=cipher,
+    )
 
     return AppContainer(
         settings=settings,
@@ -120,6 +156,7 @@ def build_app_components(settings: Settings) -> AppContainer:
         modelo=modelo,
         consistency=consistency,
         codegen=codegen,
+        integrations=integrations,
         repos=repos,
         uow=uow,
         db_engine=db_engine,

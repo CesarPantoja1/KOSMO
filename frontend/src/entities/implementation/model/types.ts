@@ -3,7 +3,7 @@ export type ImplementationStatus = 'idle' | 'generating' | 'completed' | 'failed
 export interface ImplementationMetric {
 	value: string;
 	label: string;
-	icon: 'screens' | 'entities' | 'rules' | 'integrations' | 'validations' | 'actions';
+	icon: 'features' | 'screens' | 'entities' | 'rules' | 'integrations' | 'validations' | 'actions';
 	iconBg: string;
 	iconColor: string;
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 type Props = {
 	title: string;
 	description: string;
-	messages?: string[];
+	messages?: string[] | string | null;
 };
 
 const DEFAULT_MESSAGES = ['Cargando'];
@@ -12,17 +12,19 @@ const DEFAULT_MESSAGES = ['Cargando'];
 const Loading = ({ title, description, messages = DEFAULT_MESSAGES }: Props) => {
 	const [messageIndex, setMessageIndex] = useState(0);
 
+	const messagesArray = Array.isArray(messages) ? messages : messages ? [messages] : [];
+
 	useEffect(() => {
-		if (messages.length <= 1) return;
+		if (messagesArray.length <= 1) return;
 
 		const interval = setInterval(() => {
-			setMessageIndex((prev) => (prev < messages.length - 1 ? prev + 1 : prev));
+			setMessageIndex((prev) => (prev < messagesArray.length - 1 ? prev + 1 : prev));
 		}, 10000);
 
 		return () => clearInterval(interval);
-	}, [messages]);
+	}, [messages, messagesArray.length]);
 
-	const currentMessage = messages[messageIndex] ?? messages[0] ?? '';
+	const currentMessage = messagesArray[messageIndex] ?? messagesArray[0] ?? '';
 
 	return (
 		<div className='warning-popup'>

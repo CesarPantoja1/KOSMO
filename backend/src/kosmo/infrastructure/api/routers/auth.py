@@ -138,13 +138,28 @@ async def register(
     use_case: Annotated[RegisterUser, Depends(_register)],
 ) -> UserPublic:
     try:
-        user = await use_case.execute(email=str(payload.email), password=payload.password)
+        user = await use_case.execute(
+            name=payload.name,
+            email=str(payload.email),
+            password=payload.password,
+        )
     except UserAlreadyExistsError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email ya registrado",
         ) from exc
-    return UserPublic(id=user.id, email=user.email, created_at=user.created_at)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return UserPublic(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        avatar_url=user.avatar_url,
+        created_at=user.created_at or datetime.now(UTC),
+    )
 
 
 # POST /authorize
@@ -484,8 +499,20 @@ async def refresh(
         },
     },
 )
-async def me(principal: Annotated[Principal, Depends(get_principal)]) -> PrincipalView:
-    return PrincipalView(subject=principal.subject, scopes=sorted(principal.scopes))
+async def me(
+    principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> PrincipalView:
+    auth_comp = _auth_components(request)
+    user_repo = getattr(auth_comp, "user_repository", None)
+    user = await user_repo.by_id(principal.subject) if user_repo else None
+    return PrincipalView(
+        subject=principal.subject,
+        name=user.name if user else None,
+        email=user.email if user else None,
+        avatar_url=user.avatar_url if user else None,
+        scopes=sorted(principal.scopes),
+    )
 
 
 # POST /logout

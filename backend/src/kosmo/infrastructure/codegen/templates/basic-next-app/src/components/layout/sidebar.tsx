@@ -50,7 +50,7 @@ export function Sidebar() {
       </nav>
       <div className="pt-3 border-top border-secondary-subtle px-2">
         <p className="small text-muted mb-0" style={{ fontSize: "0.75rem" }}>
-          KOSMO • Bootstrap UI
+          {siteConfig.name}
         </p>
       </div>
     </aside>

@@ -678,3 +678,71 @@ async def test_send_prompt_yields_thought_and_tool_events() -> None:
 
     assert events[3].event_type == OpenCodeEventType.BUILD_COMPLETE
     await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_opencode_http_client_initializes_with_granular_timeouts() -> None:
+    # Arrange & Act
+    client = OpenCodeHttpClient(
+        base_url="http://127.0.0.1:4096",
+        timeout_seconds=500.0,
+        connect_timeout_seconds=8.0,
+        read_timeout_seconds=200.0,
+        write_timeout_seconds=25.0,
+    )
+
+    # Assert
+    assert client._timeout_seconds == 500.0
+    assert client._connect_timeout_seconds == 8.0
+    assert client._read_timeout_seconds == 200.0
+    assert client._write_timeout_seconds == 25.0
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_handles_read_timeout_specifically() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("Read operation timed out after 300s")
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_timeout", "Prompt"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 1
+    assert events[0].event_type == OpenCodeEventType.ERROR
+    assert events[0].data.get("timeout") is True
+    assert "Tiempo de espera agotado" in str(events[0].data.get("error"))
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_send_prompt_handles_http_connection_error_specifically() -> None:
+    # Arrange
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Connection refused by host")
+
+    transport = httpx.MockTransport(handler)
+    http_client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
+    client = OpenCodeHttpClient(client=http_client)
+
+    # Act
+    events: list[OpenCodeEvent] = []
+    async for event in client.send_prompt("oc_sess_conn_err", "Prompt"):
+        events.append(event)
+
+    # Assert
+    assert len(events) == 1
+    assert events[0].event_type == OpenCodeEventType.ERROR
+    assert events[0].data.get("connection_error") is True
+    assert "Error de conexión HTTP" in str(events[0].data.get("error"))
+    await client.aclose()

@@ -13,11 +13,11 @@ import type {
 	ConsistencyStatusResponse,
 	ConsistencyTargetPhase,
 } from '@/entities/consistency';
-import { useConsistencyPolling } from '@/widgets/wizard-navegacion/hooks/useConsistencyPolling';
+import { useConsistencyPolling } from '../model/useConsistencyPolling';
 import { toast } from '@/shared/ui';
 
-import { getStyleIconStatus } from '../lib/get-status-color';
-import { ProjectStatus } from '../types/status';
+import { getStyleIconStatus } from '../model/get-status-color';
+import { ProjectStatus } from '../model/status';
 import WizardItem from './WizardItem';
 import { PhaseStatusBadge } from './PhaseStatusBadge';
 import { ConsistencyGateButton } from './ConsistencyGateButton';
@@ -49,7 +49,7 @@ const phaseItems: {
 		href: '/proyecto/caracteristicas',
 		Icon: Characteristics,
 		label: 'FUNCIONALIDADES',
-		subtitle: 'Que debe hacer',
+		subtitle: 'Qué debe hacer',
 		consistencyPhase: 'features',
 	},
 	{
@@ -138,7 +138,7 @@ export function WizardNavegacion() {
 
 	return (
 		<div>
-			<nav className='relative flex items-center justify-center gap-2 px-8 py-3 bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
+			<nav className='relative flex items-center justify-center gap-2 px-8 py-3  overflow-x-auto bg-linear-to-b from-neutral-50 to-neutral-0 border-b border-neutral-200'>
 				{phaseItems.map(({ href, Icon, label, subtitle, consistencyPhase }, index) => {
 					let status: ProjectStatus = 'disable';
 					if (activeIndex !== -1) {

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -9,7 +12,10 @@ from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationUseCase,
     MissingDiagramError,
     MissingRequirementsError,
+    OpenCodeGenerationError,
     OpenCodeUnavailableError,
+    _normalize_generated_file_path,
+    _raise_for_opencode_error,
 )
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.codegen import (
@@ -18,7 +24,6 @@ from kosmo.contracts.sdd.codegen import (
     FeatureImplementation,
     FeatureImplementationRepository,
     FeatureImplementationStatus,
-    FileAction,
     FileOperation,
     OpenCodeClientPort,
     OpenCodeEvent,
@@ -116,14 +121,35 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
 
 
 class FakeOpenCodeClient(OpenCodeClientPort):
-    def __init__(self) -> None:
+    def __init__(self, generated_files: tuple[str, ...] | None = None) -> None:
         self.closed_sessions: set[str] = set()
         self.created_sessions: list[OpenCodeSession] = []
         self.prompts_sent: list[tuple[str, str, str]] = []
-        self.plan_operations: tuple[FileOperation, ...] = (
-            FileOperation(path="src/calc.ts", action=FileAction.CREATE),
-            FileOperation(path="tests/calc.test.ts", action=FileAction.CREATE),
-        )
+        self._custom_files = list(generated_files) if generated_files is not None else None
+        self.plan_operations: tuple[FileOperation, ...] = ()
+
+    def _get_files(self, prompt: str) -> list[str]:
+        if self._custom_files is not None:
+            return self._custom_files
+        import re
+
+        slug_match = re.search(r"src/features/([a-zA-Z0-9_\-]+)/", prompt)
+        if slug_match and slug_match.group(1) != "slug":
+            slug = slug_match.group(1)
+        else:
+            title_match = re.search(r"feature '([^']+)'", prompt)
+            if title_match:
+                slug = re.sub(r"[^a-zA-Z0-9]+", "-", title_match.group(1).lower()).strip("-")
+            else:
+                slug = "registrar-gastos"
+
+        return [
+            f"src/app/{slug}/page.tsx",
+            f"src/features/{slug}/manifest.ts",
+            f"src/features/{slug}/logic.ts",
+            "src/lib/feature-registry.ts",
+            f"tests/{slug}.test.ts",
+        ]
 
     async def health_check(self) -> bool:
         return True
@@ -145,6 +171,7 @@ class FakeOpenCodeClient(OpenCodeClientPort):
         agent: str = "plan",
     ) -> AsyncIterator[OpenCodeEvent]:
         self.prompts_sent.append((session_id, prompt, agent))
+        files = self._get_files(prompt)
         if agent == "plan":
             yield OpenCodeEvent(
                 event_type=OpenCodeEventType.PLAN_PROGRESS,
@@ -155,11 +182,8 @@ class FakeOpenCodeClient(OpenCodeClientPort):
                 event_type=OpenCodeEventType.PLAN_COMPLETE,
                 session_id=session_id,
                 data={
-                    "plan": "CREATE src/calc.ts\nCREATE tests/calc.test.ts",
-                    "operations": [
-                        {"path": "src/calc.ts", "action": "create"},
-                        {"path": "tests/calc.test.ts", "action": "create"},
-                    ],
+                    "plan": "\n".join(f"CREATE {f}" for f in files),
+                    "operations": [{"path": f, "action": "create"} for f in files],
                 },
             )
         elif agent == "build":
@@ -168,15 +192,16 @@ class FakeOpenCodeClient(OpenCodeClientPort):
                 session_id=session_id,
                 data={"delta": "Generando archivos..."},
             )
-            yield OpenCodeEvent(
-                event_type=OpenCodeEventType.FILE_EDIT,
-                session_id=session_id,
-                data={"path": "src/calc.ts", "action": "create"},
-            )
+            for f in files:
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": f, "action": "create"},
+                )
             yield OpenCodeEvent(
                 event_type=OpenCodeEventType.BUILD_COMPLETE,
                 session_id=session_id,
-                data={"status": "success", "files": ["src/calc.ts", "tests/calc.test.ts"]},
+                data={"status": "success", "files": files},
             )
 
     async def close_session(self, session_id: str) -> None:
@@ -320,6 +345,18 @@ class ExplodingOpenCodeClient(FakeOpenCodeClient):
             yield ev
 
 
+@pytest.mark.unit
+def test_opencode_error_event_stops_the_current_generation() -> None:
+    event = OpenCodeEvent(
+        event_type=OpenCodeEventType.ERROR,
+        session_id="session-1",
+        data={"error": "Tiempo de espera agotado al comunicar con OpenCode"},
+    )
+
+    with pytest.raises(OpenCodeGenerationError, match="Tiempo de espera agotado"):
+        _raise_for_opencode_error(event)
+
+
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_generate_feature_implementation_success() -> None:
@@ -375,7 +412,7 @@ async def test_generate_feature_implementation_success() -> None:
     assert output.workspace is not None
     assert output.validation_result is not None
     assert output.validation_result.all_passed is True
-    assert "src/calc.ts" in output.generated_files
+    assert any("page.tsx" in f for f in output.generated_files)
     assert len(opencode_client.closed_sessions) == 1
     assert len(workspace_manager.commit_called_for) == 1
     assert workspace_manager.commit_called_for[0][0] == str(prj_id)
@@ -1382,7 +1419,7 @@ async def test_retry_history_accumulated() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
-async def test_build_prompt_excluye_requisitos() -> None:
+async def test_build_prompt_incluye_requisitos() -> None:
     # Arrange
     feature_repo = InMemoryFeatureRepository()
     requirement_repo = InMemoryRequirementRepository()
@@ -1427,14 +1464,15 @@ async def test_build_prompt_excluye_requisitos() -> None:
     # Act
     await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
 
-    # Assert — el plan aprobado ya sintetiza los requisitos; no se duplican en Build
+    # Assert — el build prompt contiene el plan, descripción, requisitos EARS y diagrama
     build_prompts = [prompt for (_, prompt, agent) in opencode_client.prompts_sent if agent == "build"]
     assert len(build_prompts) == 1
     build_prompt = build_prompts[0]
     assert "Plan aprobado" in build_prompt
-    assert "[create] src/calc.ts" in build_prompt
-    assert "[create] tests/calc.test.ts" in build_prompt
-    assert "# REQ-1.1" not in build_prompt
+    assert "[create] src/app/registrar-gastos/page.tsx" in build_prompt
+    assert "[create] tests/registrar-gastos.test.ts" in build_prompt
+    assert "# REQ-1.1: El sistema registrará los gastos" in build_prompt
+    assert "## Diagrama de Actividad" in build_prompt
 
 
 @pytest.mark.asyncio
@@ -1486,13 +1524,22 @@ async def test_generate_registers_traceability_post_commit() -> None:
 
     # Assert
     assert output.success is True
-    assert ("feature", str(feat_id), "code_file", "src/calc.ts", "codegen") in trace_repo.edges
-    assert ("feature", str(feat_id), "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
-    assert ("requirement", f"{feat_id}:REQ-1.1", "code_file", "src/calc.ts", "codegen") in trace_repo.edges
-    assert ("requirement", f"{feat_id}:REQ-1.1", "test_file", "tests/calc.test.ts", "codegen") in trace_repo.edges
+    assert ("feature", str(feat_id), "code_file", "src/app/registrar-gastos/page.tsx", "codegen") in trace_repo.edges
+    assert ("feature", str(feat_id), "test_file", "tests/registrar-gastos.test.ts", "codegen") in trace_repo.edges
+    assert (
+        "requirement",
+        f"{feat_id}:REQ-1.1",
+        "code_file",
+        "src/app/registrar-gastos/page.tsx",
+        "codegen",
+    ) in trace_repo.edges
     done_events = [e for e in output.events if e.event_type == OpenCodeEventType.DONE]
     assert len(done_events) == 1
-    assert done_events[0].data.get("traceability_edges") == 4
+    assert done_events[0].data.get("screens_count") is not None
+    assert done_events[0].data.get("requirements_count") is not None
+    assert done_events[0].data.get("validations_passed") is not None
+    assert done_events[0].data.get("validations_total") is not None
+    assert "Next.js" in done_events[0].data.get("technologies", [])
 
 
 @pytest.mark.asyncio
@@ -1545,10 +1592,12 @@ async def test_generate_emits_error_event_si_trazabilidad_falla() -> None:
     # Assert
     assert output.success is True
     assert output.status == FeatureImplementationStatus.IMPLEMENTED
-    error_events = [
-        e for e in output.events if e.event_type == OpenCodeEventType.ERROR and "traceability" in str(e.data)
+    warning_events = [
+        e
+        for e in output.events
+        if e.event_type == OpenCodeEventType.BUILD_PROGRESS and e.data.get("stage") == "traceability_warning"
     ]
-    assert len(error_events) == 1
+    assert len(warning_events) == 1
 
 
 @pytest.mark.asyncio
@@ -1602,3 +1651,747 @@ async def test_generate_raises_when_opencode_no_disponible() -> None:
     # Assert — falla rápido: sin lock ni sesión creada
     assert len(workspace_manager.locked_projects) == 0
     assert len(opencode_client.created_sessions) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_fails_when_structural_validation_fails() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    # Emite únicamente tests, omitiendo page.tsx y feature slice
+    opencode_client = FakeOpenCodeClient(
+        generated_files=("tests/registrar-gastos.test.ts", "src/lib/feature-registry.ts")
+    )
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=2))
+
+    # Assert
+    assert output.success is False
+    assert output.status == FeatureImplementationStatus.REQUIRES_REVIEW
+    assert output.validation_result is not None
+    assert output.validation_result.all_passed is False
+    structure_step = next(s for s in output.validation_result.steps if s.step == ValidationStep.STRUCTURE)
+    assert structure_step.success is False
+    assert any("page.tsx" in msg for msg in structure_step.error_messages)
+    assert any("src/features/registrar-gastos/" in msg for msg in structure_step.error_messages)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_includes_implemented_features_in_context() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    prj_id = ProjectId("prj_01HT_APP")
+
+    # Feature 1 ya implementada previamente
+    feat1_id = FeatureId("feat_01HT_AUTH")
+    feature1 = Feature(
+        id=feat1_id,
+        number=1,
+        title="Autenticación de usuarios",
+        slug="auth",
+        description="Login y registro",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature1)
+    await impl_repo.save(
+        FeatureImplementation(
+            id=ImplementationId("impl_01"),
+            project_id=prj_id,
+            feature_id=feat1_id,
+            status=FeatureImplementationStatus.IMPLEMENTED,
+            generated_files=("src/app/auth/page.tsx", "src/features/auth/logic.ts"),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+
+    # Feature 2 a generar ahora
+    feat2_id = FeatureId("feat_02HT_GASTOS")
+    feature2 = Feature(
+        id=feat2_id,
+        number=2,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Registro de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature2)
+    await requirement_repo.save(feat2_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_02"),
+            feature_id=feat2_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat2_id))
+
+    # Assert
+    assert output.success is True
+    # Verificar que el prompt contenga la sección de funcionalidades ya implementadas
+    plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
+    assert "### Funcionalidades ya implementadas en el proyecto" in plan_prompt
+    assert "Autenticación de usuarios" in plan_prompt
+    assert "slug: `auth`" in plan_prompt
+    assert "src/app/auth/page.tsx" in plan_prompt
+
+    build_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "build")
+    assert "### Funcionalidades ya implementadas en el proyecto" in build_prompt
+    assert "Autenticación de usuarios" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_omits_implemented_features_section_when_none_exist() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    prj_id = ProjectId("prj_01HT_APP")
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará los gastos")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar gasto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
+    assert "### Funcionalidades ya implementadas en el proyecto" not in plan_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_includes_ears_and_diagram_in_build_prompt() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    prj_id = ProjectId("prj_01HT_APP")
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará el monto del gasto")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Ingresar monto;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    build_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "build")
+    assert "## Descripción\nPermite registrar transacciones de gastos" in build_prompt
+    assert "## Requisitos EARS\n# REQ-1.1: El sistema registrará el monto del gasto" in build_prompt
+    assert "## Diagrama de Actividad\n@startuml" in build_prompt
+    assert "## Plan aprobado" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_plan_and_build_prompts_include_drizzle_database_directives() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_GASTOS")
+    prj_id = ProjectId("prj_01HT_APP")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Registrar gastos",
+        slug="registrar-gastos",
+        description="Permite registrar transacciones de gastos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: El sistema registrará el gasto")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_01"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\n:Registrar;\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    plan_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "plan")
+    assert "src/db/schema.ts" in plan_prompt
+    assert "kosmo-drizzle" in plan_prompt
+
+    build_prompt = next(prompt for _, prompt, agent in opencode_client.prompts_sent if agent == "build")
+    assert "src/db/schema.ts" in build_prompt
+    assert "drizzle-orm/sqlite-core" in build_prompt
+    assert "src/db/index.ts" in build_prompt
+
+
+@pytest.mark.unit
+def test_normalize_generated_file_path_relative_and_absolute() -> None:
+    # Arrange
+    ws_dir = "/tmp/workspace/project_123"
+
+    # Act & Assert
+    assert _normalize_generated_file_path("src/app/page.tsx", ws_dir) == "src/app/page.tsx"
+    assert _normalize_generated_file_path("./src/features/logic.ts", ws_dir) == "src/features/logic.ts"
+    assert _normalize_generated_file_path("src\\components\\Button.tsx", ws_dir) == "src/components/Button.tsx"
+    assert _normalize_generated_file_path("../../etc/passwd", ws_dir) is None
+    assert _normalize_generated_file_path("", ws_dir) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_filters_unsafe_and_normalizes_generated_file_paths() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+
+    class MaliciousPathsOpenCodeClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if agent == "plan":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_COMPLETE,
+                    session_id=session_id,
+                    data={"operations": [{"path": "src/features/gastos-seguros/logic.ts", "action": "create"}]},
+                )
+            elif agent == "build":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": "./src/app/gastos-seguros/page.tsx", "content": "export default function() {}"},
+                )
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": "src/lib/feature-registry.ts", "content": "export const features = [];"},
+                )
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.FILE_EDIT,
+                    session_id=session_id,
+                    data={"path": "../../outside.txt", "content": "malicious"},
+                )
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.BUILD_COMPLETE,
+                    session_id=session_id,
+                    data={"files": ["src\\features\\gastos-seguros\\manifest.ts", "../escaped.ts"]},
+                )
+
+    opencode_client = MaliciousPathsOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_SAFE")
+    prj_id = ProjectId("prj_01HT_SAFE")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Gastos seguros",
+        slug="gastos-seguros",
+        description="Feature segura",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Requisito")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_safe"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert "src/app/gastos-seguros/page.tsx" in output.generated_files
+    assert "src/features/gastos-seguros/manifest.ts" in output.generated_files
+    assert "src/lib/feature-registry.ts" in output.generated_files
+    assert "../../outside.txt" not in output.generated_files
+    assert "../escaped.ts" not in output.generated_files
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_handles_unexpected_exception_marks_failed_and_releases_lock() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+
+    class CrashingOpenCodeClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            raise RuntimeError("Fatal unhandled crash inside generator")
+            yield  # unreachable
+
+    opencode_client = CrashingOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_CRASH")
+    prj_id = ProjectId("prj_01HT_CRASH")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Gastos crash",
+        slug="gastos-crash",
+        description="Feature crash",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Requisito")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_crash"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act & Assert
+    with pytest.raises(RuntimeError, match="Fatal unhandled crash inside generator"):
+        await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert: Lock liberado, sesión cerrada y estado en base de datos marcado como FAILED
+    assert str(prj_id) not in workspace_manager.locked_projects
+    saved_impl = await impl_repo.by_feature_id(feat_id)
+    assert saved_impl is not None
+    assert saved_impl.status == FeatureImplementationStatus.FAILED
+    assert len(opencode_client.closed_sessions) >= 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_uses_canonical_slice_operations_when_plan_agent_returns_no_operations() -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager()
+
+    class EmptyPlanOpenCodeClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if agent == "plan":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.PLAN_COMPLETE,
+                    session_id=session_id,
+                    data={"operations": []},  # Empty operations -> triggers fallback
+                )
+            elif agent == "build":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.BUILD_COMPLETE,
+                    session_id=session_id,
+                    data={
+                        "files": [
+                            "src/features/inventario/logic.ts",
+                            "src/features/inventario/manifest.ts",
+                            "src/app/inventario/page.tsx",
+                            "src/lib/feature-registry.ts",
+                            "tests/inventario.test.ts",
+                        ]
+                    },
+                )
+
+    opencode_client = EmptyPlanOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_FALLBACK")
+    prj_id = ProjectId("prj_01HT_FALLBACK")
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Inventario",
+        slug="inventario",
+        description="Feature inventario",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Requisito")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_fallback"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert output.implementation is not None
+    assert output.implementation.plan is not None
+
+    paths = [op.path for op in output.implementation.plan.operations]
+    assert "src/features/inventario/logic.ts" in paths
+    assert "src/features/inventario/manifest.ts" in paths
+    assert "src/app/inventario/page.tsx" in paths
+    assert "src/lib/feature-registry.ts" in paths
+    assert "tests/inventario.test.ts" in paths
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_generate_injects_existing_db_schema_into_prompts_when_present(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(tmp_path))
+    opencode_client = FakeOpenCodeClient()
+    code_runner = FakeCodeRunner(should_pass=True)
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_01HT_DBSCHEMA")
+    prj_id = ProjectId("prj_01HT_DBSCHEMA")
+
+    # Crear el workspace con src/db/schema.ts previo
+    db_dir = tmp_path / "src" / "db"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    schema_file = db_dir / "schema.ts"
+    schema_file.write_text("export const products = sqliteTable('products', { id: text('id').primaryKey() });\n")
+
+    feature = Feature(
+        id=feat_id,
+        number=1,
+        title="Gestión de Categorías",
+        slug="categorias",
+        description="Categorías de productos",
+        project_id=prj_id,
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Categorías")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_schema"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    # Act
+    await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert len(opencode_client.prompts_sent) >= 2
+    plan_prompt = opencode_client.prompts_sent[0][1]
+    build_prompt = opencode_client.prompts_sent[1][1]
+
+    assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in plan_prompt
+    assert "export const products = sqliteTable('products'" in plan_prompt
+    assert "sin eliminar las features previas" in plan_prompt
+    assert "### Esquema de base de datos actual (`src/db/schema.ts`)" in build_prompt
+    assert "export const products = sqliteTable('products'" in build_prompt
+    assert "sin borrar ni sobrescribir las entradas de features anteriores" in build_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_auto_sync_github_ejecuta_push_tras_commit_exitoso(tmp_path: Path) -> None:
+    # Arrange
+    workspace_dir = tmp_path / "prj_github_test"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    page_file = workspace_dir / "src" / "app" / "iniciar-sesion" / "page.tsx"
+    page_file.parent.mkdir(parents=True, exist_ok=True)
+    page_file.write_text("export default function Page() { return <div>Login</div>; }", encoding="utf-8")
+
+    slice_file = workspace_dir / "src" / "features" / "iniciar-sesion" / "logic.ts"
+    slice_file.parent.mkdir(parents=True, exist_ok=True)
+    slice_file.write_text("export function login() { return true; }", encoding="utf-8")
+
+    registry_file = workspace_dir / "src" / "lib" / "feature-registry.ts"
+    registry_file.parent.mkdir(parents=True, exist_ok=True)
+    registry_file.write_text("export const features = [{ slug: 'iniciar-sesion' }];", encoding="utf-8")
+
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+    project_repo = InMemoryProjectRepository()
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(workspace_dir))
+    opencode_client = FakeOpenCodeClient(
+        generated_files=(
+            "src/app/iniciar-sesion/page.tsx",
+            "src/features/iniciar-sesion/logic.ts",
+            "src/lib/feature-registry.ts",
+        )
+    )
+    code_runner = FakeCodeRunner(should_pass=True)
+
+    proj_id = ProjectId("prj_gh_1")
+    owner_id = UserId("usr_gh_1")
+    await project_repo.save(
+        Project(
+            id=proj_id,
+            name="Test GH",
+            slug="test-gh",
+            description="",
+            owner_id=owner_id,
+        )
+    )
+
+    feat_id = FeatureId("feat_gh_1")
+    await feature_repo.save(
+        Feature(
+            id=feat_id,
+            project_id=proj_id,
+            number=1,
+            title="Iniciar sesión",
+            slug="iniciar-sesion",
+            description="Login feature",
+        )
+    )
+    await requirement_repo.save(feat_id, "# REQ-1")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_gh"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    mock_sync_use_case = AsyncMock()
+    mock_sync_use_case.execute.return_value = MagicMock(
+        repo_url="https://github.com/user/test-gh",
+        last_commit_hash="abc123456",
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+        project_repo=project_repo,
+        sync_github_repository=mock_sync_use_case,
+    )
+
+    # Act
+    output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert
+    assert output.success is True
+    assert mock_sync_use_case.execute.called
+    call_args = mock_sync_use_case.execute.call_args
+    assert call_args[0][0].project_id == proj_id
+    assert call_args[0][1] == owner_id

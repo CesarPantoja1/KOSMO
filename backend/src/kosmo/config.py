@@ -9,17 +9,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="forbid",
+        extra="ignore",
     )
 
     # Runtime
     env: Literal["development", "staging", "production"]
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
-    # Secretos criptográficos — contenido PEM (prioridad) o rutas como fallback
+    # Secretos criptogrÃ¡ficos â€” contenido PEM (prioridad) o rutas como fallback
     jwt_private_key_pem: SecretStr | None = None
     jwt_public_key_pem: SecretStr | None = None
     jwt_private_key_path: str | None = None
@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     opencode_server_username: str = "opencode"
     opencode_server_password: SecretStr | None = None
     opencode_model: str | None = None
+    opencode_timeout_seconds: float = 900.0
+    opencode_read_timeout_seconds: float = 900.0
+    opencode_connect_timeout_seconds: float = 15.0
+    opencode_write_timeout_seconds: float = 60.0
     kosmo_workspaces_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "kosmo-workspaces")
     kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
     code_runner_base_url: str | None = None
@@ -64,6 +68,12 @@ class Settings(BaseSettings):
     cloudflare_preview_account_id: str | None = None
     cloudflare_preview_zone_id: str | None = None
     cloudflare_preview_tunnel_id: str | None = None
+
+    # Integraciones
+    github_client_id: str | None = None
+    github_client_secret: SecretStr | None = None
+    railway_client_id: str | None = None
+    railway_client_secret: SecretStr | None = None
 
     # API
     api_version: str = "v1"
@@ -109,7 +119,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:
-        """Resuelve el contenido PEM: variable de entorno → lectura de archivo."""
+        """Resuelve el contenido PEM: variable de entorno â†’ lectura de archivo."""
         cloudflare_preview_values = (
             self.cloudflare_preview_api_token,
             self.cloudflare_preview_account_id,

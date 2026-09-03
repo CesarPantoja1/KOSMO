@@ -10,9 +10,11 @@ import { ApiKeySection } from './ApiKeySection';
 import { CtaSection } from './CtaSection';
 import { AuthModal } from './AuthModal';
 import { SessionExpiredWatcher } from './SessionExpiredWatcher';
+import { VideoIntro } from '@/shared/ui/VideoIntro';
 
 export function RootPage() {
 	const [showAuthModal, setShowAuthModal] = useState(false);
+	const [showVideo, setShowVideo] = useState(false);
 	const [sessionExpired, setSessionExpired] = useState(false);
 
 	const handleSessionExpired = () => {
@@ -27,7 +29,7 @@ export function RootPage() {
 	return (
 		<div className='min-h-screen bg-neutral-0 text-neutral-800'>
 			<RootNavbar onComenzar={handleComenzar} />
-			<Hero onComenzar={handleComenzar} />
+			<Hero onComenzar={handleComenzar} onVerVideo={() => setShowVideo(true)} />
 			<Features />
 			<FlowSteps />
 			<SddSection />
@@ -41,6 +43,13 @@ export function RootPage() {
 			<Suspense fallback={null}>
 				<SessionExpiredWatcher onDetected={handleSessionExpired} />
 			</Suspense>
+			{showVideo && (
+				<VideoIntro
+					overlay
+					src='/kosmo_intruduction.mp4'
+					onEnded={() => setShowVideo(false)}
+				/>
+			)}
 		</div>
 	);
 }

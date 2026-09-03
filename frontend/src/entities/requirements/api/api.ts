@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api';
 import { USE_MOCKS } from '@/shared/api/config';
 import type { RequirementsResponse } from '../model/types';
-import type { ChatHistory, ChatMessage, ChatResponse } from '@/entities/chat';
+import type { ChatHistory, ChatMessage, ChatResponse } from '@/shared/model/chat-message';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

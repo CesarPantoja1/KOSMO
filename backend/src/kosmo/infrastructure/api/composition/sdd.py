@@ -52,6 +52,9 @@ from kosmo.application.requirements import (
 )
 from kosmo.application.requirements.get_requirement_chat_history import GetRequirementChatHistoryUseCase
 from kosmo.contracts.ai.consistency import ConsistencyEvaluator
+from kosmo.contracts.auth.secrets import SecretCipher
+from kosmo.contracts.integrations.deployment import DeploymentProviderPort, DeploymentWorkerPort
+from kosmo.contracts.integrations.github import GitHubClientPort
 from kosmo.contracts.sdd.codegen import WorkspaceManagerPort
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -76,6 +79,10 @@ def build_project_components(
     repos: RepositoryRegistry,
     pipeline: PipelineComponents,
     workspace_manager: WorkspaceManagerPort | None = None,
+    github_client: GitHubClientPort | None = None,
+    railway_client: DeploymentProviderPort | None = None,
+    deployment_worker: DeploymentWorkerPort | None = None,
+    cipher: SecretCipher | None = None,
 ) -> ProjectComponents:
     return ProjectComponents(
         create_project=CreateProjectUseCase(project_repository=repos.projects),
@@ -92,6 +99,14 @@ def build_project_components(
             traceability_repo=repos.traceability,
             agent_memory=pipeline.agent_memory,
             workspace_manager=workspace_manager,
+            project_github_repo=repos.project_integrations,
+            user_github_repo=repos.user_github_integrations,
+            github_client=github_client,
+            project_deployment_repo=repos.project_deployments,
+            user_deployment_repo=repos.user_deployment_integrations,
+            deployment_client=railway_client,
+            deployment_worker=deployment_worker,
+            cipher=cipher,
         ),
     )
 

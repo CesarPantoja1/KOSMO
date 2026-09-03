@@ -12,6 +12,8 @@ services:
     image: ${KOSMO_WEB_IMAGE:?KOSMO_WEB_IMAGE must be set}
     container_name: kosmo-staging-frontend
     init: true
+    env_file:
+      - .env
     environment:
       PORT: "3000"
     restart: unless-stopped

@@ -7,7 +7,7 @@ import { clearImplementationStore } from '@/entities/implementation';
 import { useChatSessionsStore } from '@/entities/chat';
 import { clearProjectStore } from '@/entities/project';
 import { create } from 'zustand';
-import { clearProjectStoreExceptProjects } from '@/entities/project/model/store';
+import { clearProjectStoreExceptProjects } from '@/entities/project';
 import { initializeProject } from '@/features/initialize';
 
 interface AppState {

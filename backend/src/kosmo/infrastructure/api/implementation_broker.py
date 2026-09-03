@@ -76,6 +76,7 @@ class ImplementationEventBroker:
                         "error": str(exc),
                         "error_type": type(exc).__name__,
                         "implementation_id": implementation_id,
+                        "fatal": True,
                     },
                 ),
             )

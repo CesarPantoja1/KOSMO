@@ -12,9 +12,12 @@ import {
 	Requirements,
 } from '@/shared/ui';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/shared/model';
 
 interface HeroProps {
 	onComenzar: () => void;
+	onVerVideo: () => void;
 }
 
 const sidebarItems = [
@@ -128,7 +131,9 @@ const appReservations = [
 	{ sala: 'Sala B - Piso 2', fecha: '18 Mar, 09:00', estado: 'Confirmada' },
 ];
 
-export function Hero({ onComenzar }: HeroProps) {
+export function Hero({ onComenzar, onVerVideo }: HeroProps) {
+	const router = useRouter();
+	const user = useAuthStore((s) => s.user);
 	const [activeStep, setActiveStep] = useState(0);
 	const [typedText, setTypedText] = useState('');
 	const [visibleDiagramNodes, setVisibleDiagramNodes] = useState(0);
@@ -215,16 +220,27 @@ export function Hero({ onComenzar }: HeroProps) {
 					</p>
 
 					<div className='mt-8 flex flex-wrap gap-4'>
-						<button
-							type='button'
-							onClick={onComenzar}
-							className='btn btn-primary btn-lg'
-						>
-							Comenzar ahora
-							<ArrowRight size={16} color='text-neutral-0' />
-						</button>
+						{user ? (
+							<button
+								type='button'
+								onClick={() => router.push('/proyecto')}
+								className='btn btn-primary btn-lg'
+							>
+								Mis Proyectos
+								<ArrowRight size={16} color='text-neutral-0' />
+							</button>
+						) : (
+							<button
+								type='button'
+								onClick={onComenzar}
+								className='btn btn-primary btn-lg'
+							>
+								Comenzar ahora
+								<ArrowRight size={16} color='text-neutral-0' />
+							</button>
+						)}
 
-						<button className='btn btn-secondary btn-lg'>
+						<button className='btn btn-secondary btn-lg' onClick={onVerVideo}>
 							Ver cómo funciona
 							<ArrowRight size={16} color='text-neutral-0' />
 						</button>
@@ -251,7 +267,7 @@ export function Hero({ onComenzar }: HeroProps) {
 						<div className='grid grid-cols-[145px_1fr]'>
 							{/* SIDEBAR */}
 							<div className='border-r border-neutral-200 p-3'>
-								<div className='mb-5 px-3 text-[10px] uppercase tracking-wider text-neutral-500'>
+								<div className='mb-5 px-1 text-[10px] uppercase tracking-wider text-neutral-500'>
 									Proyecto
 								</div>
 
@@ -259,13 +275,13 @@ export function Hero({ onComenzar }: HeroProps) {
 									<button
 										key={item.label}
 										onClick={() => goToStep(index)}
-										className={`mb-1 w-full rounded-lg px-3 py-2 text-left text-xs transition-colors ${
+										className={`inline-flex items-center mb-1 w-full rounded-lg px-1 py-2 text-left text-xs transition-colors ${
 											activeStep === index
-												? 'bg-ai-50 text-ai-600'
+												? 'bg-ai-50'
 												: 'text-neutral-500 hover:bg-neutral-50'
 										}`}
 									>
-										<span className='mr-2 inline-flex items-center'>{item.icon}</span>
+										<span className='mr-1 inline-flex items-center'>{item.icon}</span>
 										{item.label}
 									</button>
 								))}
@@ -586,8 +602,11 @@ export function Hero({ onComenzar }: HeroProps) {
 								</button>
 							)}
 							{activeStep === 6 && (
-								<button onClick={onComenzar} className='btn btn-primary btn-sm'>
-									Comenzar ahora
+								<button
+									onClick={user ? () => router.push('/proyecto') : onComenzar}
+									className='btn btn-primary btn-sm'
+								>
+									{user ? 'Mis Proyectos' : 'Comenzar ahora'}
 									<ArrowRight size={14} color='text-neutral-0' />
 								</button>
 							)}

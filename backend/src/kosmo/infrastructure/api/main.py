@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
+from kosmo.application.integrations.recover_pending_deployments import recover_pending_deployments
 from kosmo.config import settings
 from kosmo.contracts.sdd.errors import SpecError
 from kosmo.infrastructure.api.composition import AppContainer, build_app_components
@@ -19,11 +20,14 @@ from kosmo.infrastructure.api.routers.ai_config import router as ai_config_route
 from kosmo.infrastructure.api.routers.auth import router as auth_router
 from kosmo.infrastructure.api.routers.chat_sessions import router as chat_sessions_router
 from kosmo.infrastructure.api.routers.consistency import router as consistency_router
+from kosmo.infrastructure.api.routers.deployment import router as deployment_router
 from kosmo.infrastructure.api.routers.discovery import router as discovery_router
 from kosmo.infrastructure.api.routers.documents import router as documents_router
 from kosmo.infrastructure.api.routers.feature_chat import router as feature_chat_router
 from kosmo.infrastructure.api.routers.features import router as features_router
+from kosmo.infrastructure.api.routers.github import router as github_router
 from kosmo.infrastructure.api.routers.implementations import router as implementations_router
+from kosmo.infrastructure.api.routers.integrations import router as integrations_router
 from kosmo.infrastructure.api.routers.knowledge import router as knowledge_router
 from kosmo.infrastructure.api.routers.mcp import router as mcp_router
 from kosmo.infrastructure.api.routers.modelo import router as modelo_router
@@ -260,6 +264,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             workspace_manager=components.codegen.workspace_manager,
         )
 
+    # El estado de despliegue persiste en PostgreSQL, pero las tareas de sondeo no.
+    # Reanudarlas evita que un reinicio durante una publicación deje la UI en BUILDING.
+    with contextlib.suppress(Exception):
+        await recover_pending_deployments(
+            project_deployment_repo=components.repos.project_deployments,
+            project_repo=components.repos.projects,
+            deployment_worker=components.integrations.deployment_worker,
+        )
+
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
         yield
@@ -332,6 +345,9 @@ app.include_router(documents_router)
 app.include_router(traceability_router)
 app.include_router(mcp_router)
 app.include_router(implementations_router)
+app.include_router(integrations_router)
+app.include_router(github_router)
+app.include_router(deployment_router)
 
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)

@@ -1,17 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
-import { AsideCharacteristic } from '@/widgets';
-import { Implementation, toast } from '@/shared/ui';
-import { Ai, ArrowLeft, CursorClickFill, SuccessCheckIcon, WarningIcon } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
-import { ImplementationLiveProgress } from './ImplementationLiveProgress';
+import {
+	Ai,
+	ArrowLeft,
+	CursorClickFill,
+	Implementation,
+	Loading,
+	SuccessCheckIcon,
+	toast,
+	WarningIcon,
+} from '@/shared/ui';
+import { AsideCharacteristic } from '@/widgets';
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -85,11 +92,17 @@ const ImplementationPage = () => {
 
 	return (
 		<>
-			{isGenerating && <ImplementationLiveProgress progress={progress} />}
+			{isGenerating && (
+				<Loading
+					title='Generando implementación'
+					description='Transformando requisitos y modelo en código funcional.'
+					messages={progress}
+				/>
+			)}
 
 			{status === 'failed' && errorMessage && (
 				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
-				<WarningIcon size={20} color='text-warning-600' />
+					<WarningIcon size={20} color='text-warning-600' />
 					<p className='text-sm text-warning-700'>{errorMessage}</p>
 				</div>
 			)}
@@ -242,7 +255,7 @@ const ImplementationPage = () => {
 
 										<div className='flex flex-col my-auto items-center gap-5 px-12'>
 											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-success-50'>
-											<SuccessCheckIcon size={40} color='text-success-600' />
+												<SuccessCheckIcon size={40} color='text-success-600' />
 											</div>
 											<div className='flex flex-col items-center gap-2 text-center max-w-md'>
 												<h3 className='text-neutral-800 text-lg font-semibold'>

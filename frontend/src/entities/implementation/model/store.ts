@@ -85,7 +85,16 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 				featureId,
 				featureTitle,
 				featureDisplayId,
-				{ generated_files: record.generatedFiles, traceability_edges: 0 },
+				{
+					generated_files: record.generatedFiles,
+					features_count: record.featuresCount,
+					screens_count: record.screensCount,
+					requirements_count: record.requirementsCount,
+					validations_passed: record.validationsPassed,
+					validations_total: record.validationsTotal,
+					traceability_edges: record.traceabilityEdgesCount,
+					technologies: record.technologies,
+				},
 				record.updatedAt,
 			);
 			set((state) => ({

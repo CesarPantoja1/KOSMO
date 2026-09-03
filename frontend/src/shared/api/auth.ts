@@ -1,6 +1,5 @@
 import { apiClient } from './client';
 import { generateCodeVerifier, generateCodeChallenge } from '@/shared/lib/pkce';
-import { clearAllStores } from '@/features/app-state';
 import { useAuthStore } from '@/shared/model/auth.store';
 import type {
 	UserPublic,
@@ -10,11 +9,11 @@ import type {
 } from './auth.types';
 
 export const authApi = {
-	async register(email: string, password: string): Promise<UserPublic> {
+	async register(name: string, email: string, password: string): Promise<UserPublic> {
 		return apiClient<UserPublic>('/api/v1/auth/register', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ email, password }),
+			body: JSON.stringify({ name, email, password }),
 		});
 	},
 
@@ -82,6 +81,5 @@ export const authApi = {
 		}
 		
 		clearAuth();
-		clearAllStores();
 	},
 };

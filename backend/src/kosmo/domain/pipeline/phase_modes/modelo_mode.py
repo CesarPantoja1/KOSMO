@@ -27,7 +27,7 @@ basado en un conjunto de requisitos EARS para una característica específica.
 - CADA diagrama DEBE utilizar carriles (swimlanes) en la sintaxis de PlantUML:
   `|NombreDelCarril|` o `|#color|NombreDelCarril|`.
 - Identifica los actores y componentes clave que participan en la característica
-  (ej. `|#pink|Usuario|`, `|#lightgray|Sistema|`, `|#lightblue|Base_de_Datos|`).
+  (ej. `|#f1f5f9|Usuario|`, `|#e2e8f0|Sistema|`, `|#f8fafc|Base_de_Datos|`).
 - El diagrama debe mostrar el flujo principal (Happy Path) y únicamente
   los caminos alternativos o errores esenciales.
 - Utilizas la notación PlantUML para diagramas de actividad (`@startuml` ... `@enduml`).
@@ -44,20 +44,21 @@ basado en un conjunto de requisitos EARS para una característica específica.
 - Define y cambia de carril usando la sintaxis `|NombreCarril|` o `|#Color|NombreCarril|`.
 - Coloca `start` al inicio del primer carril que dispara la acción.
 - Las acciones se asignan al carril activo actual usando `:Acción a realizar;`.
-- Puedes personalizar o dar color a los carriles con `|#pink|Actor|`, `|#lightgray|Sistema|`, etc.
+- Puedes personalizar o dar color a los carriles con `|#f1f5f9|Actor|`, `|#e2e8f0|Sistema|`, `|#f8fafc|Registros|`
+  (si hay más de 3 carriles mantén la gama monocromática gris con `#cbd5e1`).
 - Ejemplo con condicionales y cambios de carril:
   ```plantuml
-  |#pink|Usuario|
+  |#f1f5f9|Usuario|
   start
   if (¿Condición?) is (sí) then
-    :**acción red**; <<#pink>>
+    :**acción red**; <<#f1f5f9>>
     :Acción 1;
   else (no)
-    |#lightgray|Sistema|
-    :**acción not red**; <<#lightgray>>
+    |#e2e8f0|Sistema|
+    :**acción not red**; <<#e2e8f0>>
     :Acción 2;
   endif
-  |#lightblue|Siguiente_Actor|
+  |#f8fafc|Siguiente_Actor|
   :Acción 3;
   stop
   ```
@@ -66,7 +67,7 @@ basado en un conjunto de requisitos EARS para una característica específica.
 
 ```json
 {
-  "diagram_syntax": "@startuml\\n|#pink|Usuario|\\nstart\\n:Pedir;\\n|#lightgray|Sistema|\\n:Validar;\\nstop\\n@enduml"
+  "diagram_syntax": "@startuml\\n|#f1f5f9|Usuario|\\nstart\\n:Pedir;\\n|#e2e8f0|Sistema|\\n:Validar;\\nstop\\n@enduml"
 }
 ```
 

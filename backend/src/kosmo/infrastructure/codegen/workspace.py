@@ -14,6 +14,10 @@ from typing import cast
 
 import structlog
 
+from kosmo.application.codegen.analyze_ux_context import (
+    THEME_TOKENS_BY_ARCHETYPE,
+    classify_archetype,
+)
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
@@ -24,9 +28,12 @@ from kosmo.contracts.sdd.codegen import (
 )
 from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
 from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectRepository
+from kosmo.domain.codegen.site_config import format_site_config
+from kosmo.domain.sdd.document_converters import document_to_markdown
 from kosmo.infrastructure.git import (
     git_add,
     git_commit,
+    git_has_commits,
     git_head_hash,
     git_init,
     git_revert_commit,
@@ -228,25 +235,29 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 encoding="utf-8",
             )
 
-        # Actualizar site.ts con el nombre y descripción del proyecto
+        # Actualizar site.ts con el nombre, descripción y arquetipo reales del proyecto
         site_file = target_dir / "src" / "lib" / "site.ts"
         if site_file.exists() and self._project_repo:
             with contextlib.suppress(Exception):
                 proj = await self._project_repo.by_id(project_id)
                 if proj and proj.name:
                     desc = proj.description or "Aplicación generada con KOSMO."
-                    content = (
-                        "export const siteConfig = {\n"
-                        f'  name: "{proj.name}",\n'
-                        f'  description: "{desc}",\n'
-                        '  archetype: "saas_tool" as\n'
-                        '    | "storefront"\n'
-                        '    | "dashboard"\n'
-                        '    | "workflow"\n'
-                        '    | "saas_tool"\n'
-                        '    | "content",\n'
-                        '  primaryColor: "#0f766e",\n'
-                        "} as const;\n"
+                    archetype_val = "saas_tool"
+                    primary_color = "#0f766e"
+                    if self._document_repo is not None:
+                        discovery_doc = await self._document_repo.get_discovery(project_id)
+                        if discovery_doc is not None:
+                            discovery_md = document_to_markdown(discovery_doc)
+                            arch = classify_archetype(discovery_md)
+                            archetype_val = arch.value
+                            tokens = THEME_TOKENS_BY_ARCHETYPE.get(arch)
+                            if tokens:
+                                primary_color = tokens.primary_color
+                    content = format_site_config(
+                        name=proj.name,
+                        description=desc,
+                        archetype=archetype_val,
+                        primary_color=primary_color,
                     )
                     site_file.write_text(content, encoding="utf-8")
 
@@ -266,10 +277,12 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
                 skill_file.parent.mkdir(parents=True, exist_ok=True)
                 skill_file.write_text(skill_content, encoding="utf-8")
 
-        if self._git_init and created_new:
+        if self._git_init:
             with contextlib.suppress(Exception):
-                git_add(target_dir)
-                git_commit(target_dir, "chore: initialize workspace template and configurations")
+                git_init(target_dir)
+                if not git_has_commits(target_dir):
+                    git_add(target_dir)
+                    git_commit(target_dir, "chore: initialize workspace template and configurations")
 
         # Pre-instalar dependencias al crear el workspace para que la primera
         # validación no consuma el timeout de npm install dentro del pipeline.
@@ -373,7 +386,6 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             if self._workspace_repo:
                 updated = await self._workspace_repo.update_lock(project_id, is_locked=True)
                 if updated is None:
-                    # El CAS/INSERT de la DB decidió que otro proceso tiene el lock
                     raise WorkspaceLockedError(
                         f"Workspace for project '{project_id}' is currently locked by another process."
                     )
@@ -439,7 +451,15 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             pass
 
         if target_dir.exists():
-            shutil.rmtree(target_dir)
+            for attempt in range(4):
+                try:
+                    shutil.rmtree(target_dir)
+                    break
+                except OSError:
+                    if attempt < 3:
+                        await asyncio.sleep(0.3)
+                    else:
+                        shutil.rmtree(target_dir, ignore_errors=True)
 
     async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None:
         """Consolida los cambios del workspace en un commit de git y actualiza el manifiesto.
