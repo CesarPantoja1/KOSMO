@@ -783,6 +783,7 @@ class GenerateFeatureImplementationUseCase:
                             )
                             sync_cmd = SyncGitHubRepositoryCommand(
                                 project_id=feature.project_id,
+                                project_name=proj.name if proj else None,
                                 commit_message=commit_msg,
                             )
                             sync_res = await self._sync_github_repository.execute(sync_cmd, proj.owner_id)

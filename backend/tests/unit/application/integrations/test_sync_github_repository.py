@@ -523,3 +523,135 @@ async def test_sync_github_repository_proceeds_when_ephemeral_validation_passes(
     git_workspace.push.assert_called_once()
     assert result.sync_status == GitHubSyncStatus.SYNCED
     assert result.last_commit_hash == "valid_commit_hash_789"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_uses_project_name_in_description(
+    use_case: SyncGitHubRepositoryUseCase,
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    github_client: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+) -> None:
+    # Arrange
+    user_id = UserId("usr-name-test")
+    project_id = ProjectId("prj_01M181HX5KGENR176BKY1FJY13")
+
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"ciphertext").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-name"),
+        project_id=project_id,
+        workspace_dir="/tmp/ws-name",
+    )
+    project_repo.get_by_project_id.return_value = None
+    github_client.get_authenticated_user.return_value = GitHubUser(id=12345, login="octocat", name="The Octocat")
+    github_client.check_repository_exists.return_value = False
+    github_client.create_repository.return_value = GitHubRepository(
+        id=999,
+        name="project-prj_01M181HX5KGENR176BKY1FJY13",
+        full_name="octocat/project-prj_01M181HX5KGENR176BKY1FJY13",
+        clone_url="https://github.com/octocat/repo.git",
+        html_url="https://github.com/octocat/repo",
+        owner="octocat",
+        is_private=True,
+    )
+    git_workspace.build_authenticated_url.return_value = "https://auth-url"
+    git_workspace.push.return_value = "hash123"
+
+    cmd = SyncGitHubRepositoryCommand(
+        project_id=project_id,
+        project_name="Sistema de Gestión Hospitalaria",
+    )
+
+    # Act
+    await use_case.execute(cmd, user_id)
+
+    # Assert
+    github_client.create_repository.assert_called_once_with(
+        token="token",
+        name=f"project-{project_id}",
+        description=(
+            "Repositorio sincronizado automáticamente desde KOSMO para proyecto Sistema de Gestión Hospitalaria"
+        ),
+        is_private=True,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_resolves_project_name_from_sdd_project_repo(
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    github_client: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+    sync_log_repo: AsyncMock,
+) -> None:
+    # Arrange
+    user_id = UserId("usr-resolve-test")
+    project_id = ProjectId("prj_999")
+
+    sdd_project_repo = AsyncMock()
+    mock_sdd_project = MagicMock()
+    mock_sdd_project.name = "Plataforma Educativa"
+    sdd_project_repo.by_id.return_value = mock_sdd_project
+
+    use_case = SyncGitHubRepositoryUseCase(
+        project_github_repo=project_repo,
+        user_github_repo=user_repo,
+        github_client=github_client,
+        git_workspace=git_workspace,
+        workspace_manager=workspace_manager,
+        cipher=cipher,
+        sync_log_repo=sync_log_repo,
+        project_repo=sdd_project_repo,
+    )
+
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"ciphertext").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-resolve"),
+        project_id=project_id,
+        workspace_dir="/tmp/ws-resolve",
+    )
+    project_repo.get_by_project_id.return_value = None
+    github_client.get_authenticated_user.return_value = GitHubUser(id=12345, login="octocat", name="The Octocat")
+    github_client.check_repository_exists.return_value = False
+    github_client.create_repository.return_value = GitHubRepository(
+        id=999,
+        name=f"project-{project_id}",
+        full_name=f"octocat/project-{project_id}",
+        clone_url="https://github.com/octocat/repo.git",
+        html_url="https://github.com/octocat/repo",
+        owner="octocat",
+        is_private=True,
+    )
+    git_workspace.build_authenticated_url.return_value = "https://auth-url"
+    git_workspace.push.return_value = "hash123"
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+
+    # Act
+    await use_case.execute(cmd, user_id)
+
+    # Assert
+    sdd_project_repo.by_id.assert_called_once_with(project_id)
+    github_client.create_repository.assert_called_once_with(
+        token="token",
+        name=f"project-{project_id}",
+        description="Repositorio sincronizado automáticamente desde KOSMO para proyecto Plataforma Educativa",
+        is_private=True,
+    )

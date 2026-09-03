@@ -89,6 +89,7 @@ def build_integrations_components(
         cipher=cipher,
         sync_log_repo=repos.sync_logs,
         ephemeral_validator=ephemeral_validator,
+        project_repo=repos.projects,
     )
 
     railway_client_id = settings.railway_client_id or ""

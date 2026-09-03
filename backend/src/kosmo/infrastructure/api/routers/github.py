@@ -106,6 +106,7 @@ async def push_to_github(
 
     cmd = SyncGitHubRepositoryCommand(
         project_id=proj_id,
+        project_name=project.name,
         repo_name=body.repo_name if body else None,
         is_public=body.is_public if body else False,
         commit_message=body.commit_message if body else None,

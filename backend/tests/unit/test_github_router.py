@@ -175,6 +175,7 @@ async def test_push_to_github_success_200() -> None:
     use_case.execute.assert_called_once_with(
         SyncGitHubRepositoryCommand(
             project_id=ProjectId("proj-1"),
+            project_name="CRM App",
             repo_name="kosmo-crm-app",
             is_public=False,
             commit_message="feat: push inicial",

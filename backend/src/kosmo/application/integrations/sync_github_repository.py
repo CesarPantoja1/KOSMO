@@ -24,6 +24,7 @@ from kosmo.contracts.integrations.github import (
 )
 from kosmo.contracts.sdd.codegen import WorkspaceManagerPort
 from kosmo.contracts.sdd.ids import ProjectId, UserId
+from kosmo.contracts.sdd.repositories import ProjectRepository
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True, slots=True)
 class SyncGitHubRepositoryCommand:
     project_id: ProjectId
+    project_name: str | None = None
     repo_name: str | None = None
     is_public: bool = False
     commit_message: str | None = None
@@ -49,6 +51,7 @@ class SyncGitHubRepositoryUseCase:
         cipher: SecretCipher,
         sync_log_repo: CodeSyncLogRepository,
         ephemeral_validator: ExecuteEphemeralValidationUseCase | None = None,
+        project_repo: ProjectRepository | None = None,
     ) -> None:
         self._project_repo = project_github_repo
         self._user_repo = user_github_repo
@@ -58,6 +61,7 @@ class SyncGitHubRepositoryUseCase:
         self._cipher = cipher
         self._sync_log_repo = sync_log_repo
         self._ephemeral_validator = ephemeral_validator
+        self._sdd_project_repo = project_repo
 
     async def execute(
         self,
@@ -111,11 +115,18 @@ class SyncGitHubRepositoryUseCase:
 
                 exists = await self._github_client.check_repository_exists(token, user.login, repo_name)
                 if not exists:
+                    project_display = cmd.project_name
+                    if not project_display and self._sdd_project_repo is not None:
+                        proj = await self._sdd_project_repo.by_id(cmd.project_id)
+                        if proj is not None and proj.name:
+                            project_display = proj.name
+                    project_display = project_display or str(cmd.project_id)
+
                     github_repo = await self._github_client.create_repository(
                         token=token,
                         name=repo_name,
                         description=(
-                            f"Repositorio sincronizado automáticamente desde KOSMO para proyecto {cmd.project_id}"
+                            f"Repositorio sincronizado automáticamente desde KOSMO para proyecto {project_display}"
                         ),
                         is_private=not is_public,
                     )
