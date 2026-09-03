@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { createProjectSchema, type ProjectFormData } from '../model/types';
 
-const alphaRegex = /[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g;
+const alphaRegex = /[^a-zA-Z\s]/g;
 
 const CreateProjectForm = () => {
 	const router = useRouter();
