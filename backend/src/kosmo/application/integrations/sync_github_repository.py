@@ -100,6 +100,22 @@ class SyncGitHubRepositoryUseCase:
         await self._project_repo.save(project_integration)
 
         try:
+            # El workspace debe ser válido antes de provocar efectos externos. De este
+            # modo una plantilla rota no crea ni publica un repositorio remoto vacío.
+            if self._ephemeral_validator is not None:
+                val_res = await self._ephemeral_validator.execute(
+                    ExecuteEphemeralValidationCommand(
+                        workspace_path=workspace.workspace_dir,
+                        project_id=cmd.project_id,
+                    )
+                )
+                if not val_res.is_valid:
+                    error_msg = (
+                        f"Validación efímera fallida en el paso '{val_res.failed_step}': "
+                        f"{'; '.join(val_res.error_summary)}"
+                    )
+                    raise EphemeralValidationError(error_msg, step=val_res.failed_step, errors=val_res.error_summary)
+
             # Determinar si es sincronización incremental o creación inicial
             is_incremental = bool(
                 project_integration.repo_url and project_integration.sync_status != GitHubSyncStatus.NOT_CREATED
@@ -154,21 +170,6 @@ class SyncGitHubRepositoryUseCase:
                     is_public=is_public,
                 )
                 await self._project_repo.save(project_integration)
-
-            # Validación previa en contenedor efímero si se proveyó validador
-            if self._ephemeral_validator is not None:
-                val_res = await self._ephemeral_validator.execute(
-                    ExecuteEphemeralValidationCommand(
-                        workspace_path=workspace.workspace_dir,
-                        project_id=cmd.project_id,
-                    )
-                )
-                if not val_res.is_valid:
-                    error_msg = (
-                        f"Validación efímera fallida en el paso '{val_res.failed_step}': "
-                        f"{'; '.join(val_res.error_summary)}"
-                    )
-                    raise EphemeralValidationError(error_msg, step=val_res.failed_step, errors=val_res.error_summary)
 
             # La URL persistida del remoto nunca debe contener el token OAuth.
             # El adaptador usa el token exclusivamente para este push.

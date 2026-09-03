@@ -460,6 +460,59 @@ async def test_sync_github_repository_fails_when_ephemeral_validation_fails(
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_sync_github_repository_validates_before_creating_initial_repository(
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    github_client: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+    sync_log_repo: AsyncMock,
+) -> None:
+    # Arrange
+    project_id = ProjectId("proj-no-remote-side-effect")
+    user_id = UserId("usr-1")
+    project_repo.get_by_project_id.return_value = None
+    project_repo.save.side_effect = lambda integration: integration
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"enc").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"), project_id=project_id, workspace_dir="/tmp/ws-initial"
+    )
+    ephemeral_validator = AsyncMock()
+    ephemeral_validator.execute.return_value = ExecuteEphemeralValidationResult(
+        is_valid=False,
+        failed_step=ValidationStep.TYPECHECK,
+        error_summary=("src/lib/site.ts: Unterminated string literal",),
+        steps=(),
+    )
+    use_case = SyncGitHubRepositoryUseCase(
+        project_github_repo=project_repo,
+        user_github_repo=user_repo,
+        github_client=github_client,
+        git_workspace=git_workspace,
+        workspace_manager=workspace_manager,
+        cipher=cipher,
+        sync_log_repo=sync_log_repo,
+        ephemeral_validator=ephemeral_validator,
+    )
+
+    # Act & Assert
+    with pytest.raises(EphemeralValidationError):
+        await use_case.execute(SyncGitHubRepositoryCommand(project_id=project_id), user_id)
+
+    github_client.get_authenticated_user.assert_not_called()
+    github_client.create_repository.assert_not_called()
+    github_client.check_repository_exists.assert_not_called()
+    git_workspace.push.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_sync_github_repository_proceeds_when_ephemeral_validation_passes(
     project_repo: AsyncMock,
     user_repo: AsyncMock,
