@@ -3,7 +3,7 @@ import { unified } from 'unified';
 import { visit } from 'unist-util-visit';
 import type { Heading } from 'mdast';
 
-import { HeadingItem } from '../types/heading';
+import { HeadingItem } from '../model/heading';
 
 function slugify(text: string) {
 	return text

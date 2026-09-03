@@ -6,7 +6,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { EditorContent } from './editor-content';
 import { TocSidebar } from './toc-sidebar';
 
-import { useHeadings } from '../hooks/use-headings';
+import { useHeadings } from '../model/use-headings';
 import type { SaveStatus } from './save-indicator';
 
 export interface MarkdownEditorHandle {

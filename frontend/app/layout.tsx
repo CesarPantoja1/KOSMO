@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { ToasterProvider } from '@/shared/ui';
 import localFont from 'next/font/local';
+import { SessionExpiredListener } from './session-expired-listener';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			<body className='h-full'>
 				{children}
 				<ToasterProvider />
+				<SessionExpiredListener />
 			</body>
 		</html>
 	);

@@ -4,7 +4,7 @@ import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
 import { connectIntegration, getIntegrationStatus } from '@/entities/integration';
-import { buildRailwayAuthUrl, DEFAULT_REDIRECT_URI } from '@/entities/integration/model/oauth-config';
+import { buildRailwayAuthUrl, DEFAULT_REDIRECT_URI } from '@/entities/integration';
 import { formatApiError } from '@/shared/api';
 import type { ProjectGithubViewState } from '@/entities/project';
 import { useProjectGithubRepo, useProjectStore } from '@/entities/project';

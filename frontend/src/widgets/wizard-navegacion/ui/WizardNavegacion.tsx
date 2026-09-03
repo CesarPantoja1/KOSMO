@@ -13,11 +13,11 @@ import type {
 	ConsistencyStatusResponse,
 	ConsistencyTargetPhase,
 } from '@/entities/consistency';
-import { useConsistencyPolling } from '@/widgets/wizard-navegacion/hooks/useConsistencyPolling';
+import { useConsistencyPolling } from '../model/useConsistencyPolling';
 import { toast } from '@/shared/ui';
 
-import { getStyleIconStatus } from '../lib/get-status-color';
-import { ProjectStatus } from '../types/status';
+import { getStyleIconStatus } from '../model/get-status-color';
+import { ProjectStatus } from '../model/status';
 import WizardItem from './WizardItem';
 import { PhaseStatusBadge } from './PhaseStatusBadge';
 import { ConsistencyGateButton } from './ConsistencyGateButton';

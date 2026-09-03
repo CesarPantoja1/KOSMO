@@ -3,24 +3,28 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ReviewCard } from '@/entities/consistency';
 
-vi.mock('@/features/plantuml-viewer', () => ({
-	PlantUmlViewer: ({
-		source,
-		showControls,
-		fallbackContent,
-	}: {
-		source: string;
-		showControls?: boolean;
-		fallbackContent?: string;
-	}) => (
-		<div
-			data-testid='plantuml-viewer'
-			data-source={source}
-			data-controls={String(showControls ?? true)}
-			data-fallback={fallbackContent ?? ''}
-		/>
-	),
-}));
+vi.mock('@/features/plantuml-viewer', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@/features/plantuml-viewer')>();
+	return {
+		...actual,
+		PlantUmlViewer: ({
+			source,
+			showControls,
+			fallbackContent,
+		}: {
+			source: string;
+			showControls?: boolean;
+			fallbackContent?: string;
+		}) => (
+			<div
+				data-testid='plantuml-viewer'
+				data-source={source}
+				data-controls={String(showControls ?? true)}
+				data-fallback={fallbackContent ?? ''}
+			/>
+		),
+	};
+});
 
 import { GateReviewCard } from './GateReviewCard';
 

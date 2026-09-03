@@ -1,7 +1,7 @@
 'use client';
 
 import { getProjects, type Project } from '@/entities/project';
-import { useIntegrationGate } from '@/shared/lib/useIntegrationGate';
+import { useIntegrationGate } from '../model/useIntegrationGate';
 import { useEffect, useState } from 'react';
 import { CreateProjectForm } from './CreateProjectForm';
 

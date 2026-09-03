@@ -7,7 +7,7 @@ import { useAppStore } from '@/features/app-state';
 
 import { Project, useProjectStore } from '@/entities/project';
 import { useAuthStore } from '@/entities/user';
-import { WizardNavegacion } from '@/widgets/wizard-navegacion/ui/WizardNavegacion';
+import { WizardNavegacion } from '@/widgets/wizard-navegacion';
 
 import { ProjectNavigation } from './ProjectNavigation';
 import { SidebarBrand } from './SidebarBrand';
