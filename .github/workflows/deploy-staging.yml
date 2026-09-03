@@ -689,6 +689,27 @@ jobs:
                fi
              done
              docker login ghcr.io --username "${{ vars.STAGING_GHCR_USERNAME }}" --password-stdin
+             # Pulling a replacement image temporarily requires the old and new
+             # layers at once. Reclaim only Docker resources that are unused by
+             # every container; volumes and project workspaces are deliberately
+             # left intact.
+             disk_target=/var/lib/containerd
+             min_free_kb=$((7 * 1024 * 1024))
+             available_kb="$(df -Pk "$disk_target" | awk "NR == 2 { print \$4 }")"
+             if [ "$available_kb" -lt "$min_free_kb" ]; then
+               echo "Less than 7 GiB is free for Docker; reclaiming unused Docker resources."
+               docker container prune --force
+               docker image prune --all --force
+               docker builder prune --all --force
+             fi
+             echo "Disk state before pulling deployment images:"
+             df -h "$disk_target"
+             docker system df
+             available_kb="$(df -Pk "$disk_target" | awk "NR == 2 { print \$4 }")"
+             if [ "$available_kb" -lt "$min_free_kb" ]; then
+               echo "Insufficient disk space for a safe deployment after pruning (need at least 7 GiB free)." >&2
+               exit 1
+             fi
              install -d -m 0750 workspaces
              docker run --rm -v "$PWD/workspaces:/workspaces" alpine:3.22 chown -R 1000:1000 /workspaces
              docker network inspect kosmo-staging-network >/dev/null 2>&1 || docker network create kosmo-staging-network >/dev/null
