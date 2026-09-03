@@ -13,8 +13,8 @@ import type {
 	CreateCharacteristicResponse,
 	SuggestCharacteristic,
 } from './types';
-import { appendMessage, createUserMessage } from '@/entities/chat';
-import type { ChatMessage, ChatResponse } from '@/entities/chat';
+import { appendMessage, createUserMessage } from '@/shared/model/chat-message';
+import type { ChatMessage, ChatResponse } from '@/shared/model/chat-message';
 
 interface CharacteristicStore {
 	currentCharacteristics: CharacteristicResponse[];

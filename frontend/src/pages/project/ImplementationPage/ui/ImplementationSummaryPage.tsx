@@ -6,8 +6,8 @@ import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementati
 import { connectIntegration, getIntegrationStatus } from '@/entities/integration';
 import { buildRailwayAuthUrl, DEFAULT_REDIRECT_URI } from '@/entities/integration';
 import { formatApiError } from '@/shared/api';
-import type { ProjectGithubViewState } from '@/entities/project';
-import { useProjectGithubRepo, useProjectStore } from '@/entities/project';
+import { useProjectStore } from '@/entities/project';
+import { useProjectGithubRepo, type ProjectGithubViewState } from '@/features/github-sync';
 import {
 	AiOrbCenterIcon,
 	ArrowLeft,

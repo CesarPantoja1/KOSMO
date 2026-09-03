@@ -1,7 +1,7 @@
 import { apiClient } from '@/shared/api';
 import { API_BASE_URL, USE_MOCKS } from '@/shared/api/config';
 import { parseApiError } from '@/shared/api/errors';
-import { authHeaders } from '@/entities/user';
+import { authHeaders } from '@/shared/api';
 import { consumeSse } from '@/shared/lib';
 import type { SseEventHandler } from '@/shared/lib';
 import type { ImplementationLog, ImplementationSummary } from '../model/types';

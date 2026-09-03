@@ -15,3 +15,5 @@ export {
 export { PlantUmlViewer } from './plantuml-viewer';
 
 export { useAppStore, clearAppStore, useUnsavedChanges, clearAllStores } from './app-state';
+
+export { useProjectGithubRepo, type ProjectGithubViewState } from './github-sync';

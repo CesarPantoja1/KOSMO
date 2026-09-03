@@ -1,55 +1,14 @@
-export type ChatRole = 'user' | 'assistant' | 'system';
-
-export interface ChangeSuggestion {
-	id: string;
-	section: string;
-	description: string;
-	diff_before: string;
-	diff_after: string;
-	rationale: string | null;
-	applied: boolean;
-	not_applied_reason: string | null;
-}
-
-export interface ModificationResult {
-	applied: boolean;
-	modified_section: string | null;
-	change_description: string | null;
-	modified_document: string | null;
-	before: string | null;
-	after: string | null;
-	undo_version_id: string | null;
-	clarification_message: string | null;
-}
-
-export interface RedirectInfo {
-	target_phase: string;
-	redirect_message: string;
-}
-
-export interface ChatMessage {
-	id: string;
-	role: ChatRole;
-	content: string;
-	created_at: string;
-	change_suggestions: ChangeSuggestion[] | null;
-	modification: ModificationResult | null;
-}
-
-export interface ChatResponse {
-	message: ChatMessage;
-	modification: ModificationResult | null;
-	redirect: RedirectInfo | null;
-	consistency: Record<string, unknown>[] | null;
-}
-
-export interface ChatHistory {
-	phase: string;
-	context: string;
-	messages: ChatMessage[];
-	has_more: boolean;
-	next_cursor: string | null;
-}
+// Primitivas genéricas de mensaje: viven en `shared` (ver shared/model/chat-message.ts)
+// y se re-exportan aquí para mantener compatibilidad con los consumidores de esta entidad.
+export type {
+	ChatRole,
+	ChangeSuggestion,
+	ModificationResult,
+	RedirectInfo,
+	ChatMessage,
+	ChatResponse,
+	ChatHistory,
+} from '@/shared/model/chat-message';
 
 export type ChatPhase = 'discovery' | 'features' | 'requirements' | 'model';
 

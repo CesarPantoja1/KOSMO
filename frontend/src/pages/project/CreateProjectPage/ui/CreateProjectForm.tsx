@@ -6,9 +6,16 @@ import {
 	useProjectStore,
 	type Project,
 } from '@/entities/project';
-import { ConfirmacionVisibilidadRepositorio, InfoCircleIcon, Railway, Send, WarningIcon } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
-import { CharacterCounter, GitHub, toast } from '@/shared/ui';
+import {
+	CharacterCounter,
+	ConfirmacionVisibilidadRepositorio,
+	GitHub,
+	InfoCircleIcon,
+	Send,
+	toast,
+	WarningIcon,
+} from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -302,8 +309,8 @@ const CreateProjectForm = () => {
 										No podrás desplegar en Railway
 									</p>
 									<p className='text-sm text-warning-700/80'>
-										Los repositorios privados no son compatibles con el despliegue en Railway.
-										Si deseas publicar tu aplicación, selecciona la visibilidad{' '}
+										Los repositorios privados no son compatibles con el despliegue en
+										Railway. Si deseas publicar tu aplicación, selecciona la visibilidad{' '}
 										<span className='font-semibold'>Pública</span>.
 									</p>
 								</div>
@@ -316,8 +323,8 @@ const CreateProjectForm = () => {
 										Despliegue en Railway disponible
 									</p>
 									<p className='text-sm text-info-700/80'>
-										Con un repositorio público podrás publicar tu aplicación en Railway directamente
-										desde la plataforma.
+										Con un repositorio público podrás publicar tu aplicación en Railway
+										directamente desde la plataforma.
 									</p>
 								</div>
 							</div>

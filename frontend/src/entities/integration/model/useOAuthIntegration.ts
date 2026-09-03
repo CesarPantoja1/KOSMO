@@ -7,7 +7,8 @@ import {
 	disconnectIntegration,
 	getIntegrationStatus,
 } from '../api/api';
-import { authApi, useAuthStore } from '@/entities/user';
+import { authApi } from '@/shared/api';
+import { useAuthStore } from '@/shared/model';
 import { formatApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/ui/toast/toast';
 

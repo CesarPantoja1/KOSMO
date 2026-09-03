@@ -8,8 +8,8 @@ import {
 	sendChatMessage as sendChatMessageApi,
 } from '../api/api';
 import type { DiscoveryResponse } from './types';
-import { appendMessage, createUserMessage } from '@/entities/chat';
-import type { ChatMessage, ChatResponse } from '@/entities/chat';
+import { appendMessage, createUserMessage } from '@/shared/model/chat-message';
+import type { ChatMessage, ChatResponse } from '@/shared/model/chat-message';
 
 interface DiscoveryStore {
 	currentDiscovery: DiscoveryResponse | null;
