@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -23,6 +24,8 @@ from kosmo.contracts.integrations.github import (
 )
 from kosmo.contracts.sdd.codegen import WorkspaceManagerPort
 from kosmo.contracts.sdd.ids import ProjectId, UserId
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,11 +120,21 @@ class SyncGitHubRepositoryUseCase:
                         is_private=not is_public,
                     )
                     repo_url = github_repo.clone_url
+                    if github_repo.id:
+                        try:
+                            await self._github_client.grant_app_installation_access(token, github_repo.id)
+                        except Exception as exc:
+                            logger.debug("No se pudo otorgar acceso a Railway para nuevo repositorio: %s", exc)
                 else:
                     repo = await self._github_client.get_repository(token, user.login, repo_name)
                     if repo is None:
                         raise ValueError(f"No se pudo recuperar el repositorio {repo_name}.")
                     repo_url = repo.clone_url
+                    if repo.id:
+                        try:
+                            await self._github_client.grant_app_installation_access(token, repo.id)
+                        except Exception as exc:
+                            logger.debug("No se pudo otorgar acceso a Railway para repositorio existente: %s", exc)
 
                 project_integration = replace(
                     project_integration,

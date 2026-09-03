@@ -115,6 +115,17 @@ class GitHubClientPort(Protocol):
         """Elimina un repositorio remoto si existe."""
         ...
 
+    async def grant_app_installation_access(
+        self,
+        token: str,
+        repo_id: int,
+        app_slug: str = "railway",
+    ) -> bool:
+        """Asocia un repositorio a la instalación de una GitHub App (ej. Railway)
+        si existe y está en modo de repositorios seleccionados.
+        """
+        ...
+
 
 class GitHubSyncStatus(enum.StrEnum):
     """Estado del ciclo de vida y sincronización del repositorio remoto en GitHub."""
