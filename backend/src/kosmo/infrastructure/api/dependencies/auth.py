@@ -13,8 +13,8 @@ from kosmo.contracts.auth import (
     TokenExpiredError,
     TokenRevokedError,
 )
+from kosmo.contracts.auth.context import current_user_id
 from kosmo.infrastructure.api.dependencies.container import get_container
-from kosmo.infrastructure.llm.dynamic_llm_client import current_user_id
 
 _bearer_scheme = HTTPBearer(auto_error=False, description="JWT de acceso (RS256)")
 
