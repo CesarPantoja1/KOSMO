@@ -30,6 +30,7 @@ _SOURCE_LABEL: dict[SpecPhase, str] = {
     SpecPhase.CARACTERISTICAS: "Características",
     SpecPhase.REQUISITOS: "Requisitos",
     SpecPhase.MODELO: "Modelo",
+    SpecPhase.IMPLEMENTACION: "Implementación",
 }
 
 
@@ -170,8 +171,32 @@ async def enrich_impact_items(
                 continue
 
             current_reqs = parse_requirements_markdown(req_md, feature.id, feature.number)
+            current_by_id = {r.display_id: r for r in current_reqs}
 
-            if action and action.suggested_before and action.suggested_after:
+            if action and action.suggested_field and action.suggested_field in current_by_id:
+                target_req = current_by_id[action.suggested_field]
+                diff: dict[str, object] | None = None
+                if action.suggested_before and action.suggested_after:
+                    diff = {
+                        "field": "statement",
+                        "before": action.suggested_before,
+                        "after": action.suggested_after,
+                    }
+                items.append(
+                    ImpactItem(
+                        id=f"imp_{ULID().hex}",
+                        phase=SPEC_TO_API_PHASE[target_spec],
+                        target_id=fid_str,
+                        artifact_type="EARSRequirement",
+                        target_display_id=target_req.display_id,
+                        target_title=target_req.title,
+                        section="statement",
+                        rationale=per_rationale or f"El cambio en {source_label} afecta este requisito.",
+                        diff=diff,
+                        action=per_action,
+                    )
+                )
+            elif action and action.suggested_before and action.suggested_after:
                 before_reqs = parse_requirements_markdown(action.suggested_before, feature.id, feature.number)
                 after_reqs = parse_requirements_markdown(action.suggested_after, feature.id, feature.number)
                 if not before_reqs or not after_reqs:
@@ -356,6 +381,22 @@ async def enrich_impact_items(
                         action=per_action,
                     )
                 )
+        elif target_spec == SpecPhase.IMPLEMENTACION:
+            items.append(
+                ImpactItem(
+                    id=item_id,
+                    phase=SPEC_TO_API_PHASE[target_spec],
+                    target_id=fid_str,
+                    artifact_type="FeatureImplementation",
+                    target_display_id=feature.display_id,
+                    target_title=f"Código de {feature.title}",
+                    section=action.suggested_field if action else "código",
+                    rationale=per_rationale
+                    or f"Los cambios en {source_label} requieren regenerar el código de esta característica.",
+                    diff=None,
+                    action=per_action,
+                )
+            )
 
     return items
 

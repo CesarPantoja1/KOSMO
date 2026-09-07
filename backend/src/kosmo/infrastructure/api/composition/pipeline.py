@@ -155,6 +155,7 @@ def build_pipeline_components(
         requirement_repo=repos.requirements,
         diagram_repo=repos.diagrams,
         document_repo=repos.documents,
+        implementation_repo=repos.implementations,
     )
 
     process_chat_message = ProcessChatMessageUseCase(

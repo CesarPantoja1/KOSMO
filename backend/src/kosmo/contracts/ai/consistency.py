@@ -81,12 +81,27 @@ class ConsistencyEvaluationRepository(Protocol):
     async def delete_by_project(self, project_id: ProjectId) -> None: ...
 
 
-# Trazabilidad solo hacia la derecha: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo
+# Trazabilidad solo hacia la derecha: Descubrimiento -> Caracteristicas -> Requisitos -> Modelo -> Implementacion
 DOWNSTREAM_TARGETS: dict[SpecPhase, list[SpecPhase]] = {
-    SpecPhase.DESCUBRIMIENTO: [SpecPhase.CARACTERISTICAS, SpecPhase.REQUISITOS, SpecPhase.MODELO],
-    SpecPhase.CARACTERISTICAS: [SpecPhase.REQUISITOS, SpecPhase.MODELO],
-    SpecPhase.REQUISITOS: [SpecPhase.MODELO],
-    SpecPhase.MODELO: [],
+    SpecPhase.DESCUBRIMIENTO: [
+        SpecPhase.CARACTERISTICAS,
+        SpecPhase.REQUISITOS,
+        SpecPhase.MODELO,
+        SpecPhase.IMPLEMENTACION,
+    ],
+    SpecPhase.CARACTERISTICAS: [
+        SpecPhase.REQUISITOS,
+        SpecPhase.MODELO,
+        SpecPhase.IMPLEMENTACION,
+    ],
+    SpecPhase.REQUISITOS: [
+        SpecPhase.MODELO,
+        SpecPhase.IMPLEMENTACION,
+    ],
+    SpecPhase.MODELO: [
+        SpecPhase.IMPLEMENTACION,
+    ],
+    SpecPhase.IMPLEMENTACION: [],
 }
 
 PHASE_ORDER: dict[SpecPhase, int] = {
@@ -94,6 +109,7 @@ PHASE_ORDER: dict[SpecPhase, int] = {
     SpecPhase.CARACTERISTICAS: 1,
     SpecPhase.REQUISITOS: 2,
     SpecPhase.MODELO: 3,
+    SpecPhase.IMPLEMENTACION: 4,
 }
 
 

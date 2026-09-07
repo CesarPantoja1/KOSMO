@@ -463,6 +463,7 @@ class InMemoryUnitOfWork:
         features: InMemoryFeatureRepository | None = None,
         requirements: InMemoryRequirementRepository | None = None,
         diagrams: InMemoryActivityDiagramRepository | None = None,
+        implementations: InMemoryFeatureImplementationRepository | None = None,
         chat: InMemoryChatRepository | None = None,
         traceability: InMemoryTraceabilityRepository | None = None,
         outbox: InMemoryOutbox | None = None,
@@ -472,6 +473,7 @@ class InMemoryUnitOfWork:
         self.features = features or InMemoryFeatureRepository()
         self.requirements = requirements or InMemoryRequirementRepository()
         self.diagrams = diagrams or InMemoryActivityDiagramRepository()
+        self.implementations = implementations or InMemoryFeatureImplementationRepository()
         self.chat = chat or InMemoryChatRepository()
         self.traceability = traceability or InMemoryTraceabilityRepository()
         self.outbox = outbox or InMemoryOutbox()
@@ -776,3 +778,30 @@ class InMemoryUserDeploymentIntegrationRepository:
         existed = key in self.integrations
         self.integrations.pop(key, None)
         return existed
+
+
+class InMemoryFeatureImplementationRepository:
+    def __init__(self) -> None:
+        self.implementations: dict[str, Any] = {}
+
+    async def by_feature_id(self, feature_id: Any) -> Any:
+        return self.implementations.get(str(feature_id))
+
+    async def by_id(self, implementation_id: Any) -> Any:
+        for impl in self.implementations.values():
+            if str(impl.id) == str(implementation_id):
+                return impl
+        return None
+
+    async def list_by_project(self, project_id: Any) -> list[Any]:
+        return [impl for impl in self.implementations.values() if str(impl.project_id) == str(project_id)]
+
+    async def list_by_status(self, status: Any) -> list[Any]:
+        return [impl for impl in self.implementations.values() if impl.status == status]
+
+    async def save(self, implementation: Any) -> Any:
+        self.implementations[str(implementation.feature_id)] = implementation
+        return implementation
+
+    async def delete(self, feature_id: Any) -> None:
+        self.implementations.pop(str(feature_id), None)

@@ -110,7 +110,10 @@ async def get_consistency_review(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     uc: Annotated[GetConsistencyReviewUseCase, Depends(_review_uc)],
-    target_phase: Annotated[str, Query(description="Fase destino a revisar (features, requirements, model)")],
+    target_phase: Annotated[
+        str,
+        Query(description="Fase destino a revisar (features, requirements, model, implementation)"),
+    ],
 ) -> dict[str, Any]:
     phase = _to_spec_phase(target_phase)
     cards = await uc.execute(project_id=ProjectId(project_id), target_phase=phase)
@@ -277,6 +280,7 @@ def _resolve_origin_phase(phase_name: str) -> SpecPhase:
         "features": SpecPhase.CARACTERISTICAS,
         "requirements": SpecPhase.REQUISITOS,
         "model": SpecPhase.MODELO,
+        "implementation": SpecPhase.IMPLEMENTACION,
     }
     if phase_name not in reverse:
         raise HTTPException(
@@ -292,6 +296,7 @@ def _to_spec_phase(api_phase: str) -> SpecPhase:
         "features": SpecPhase.CARACTERISTICAS,
         "requirements": SpecPhase.REQUISITOS,
         "model": SpecPhase.MODELO,
+        "implementation": SpecPhase.IMPLEMENTACION,
     }
     if api_phase not in reverse:
         raise HTTPException(

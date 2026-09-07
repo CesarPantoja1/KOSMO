@@ -336,6 +336,7 @@ def build_consistency_components(
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
         diagram_repo=repos.diagrams,
+        implementation_repo=repos.implementations,
     )
     discard_evaluation = DiscardConsistencyEvaluationUseCase(evaluation_repo=evaluation_repo)
 
@@ -369,6 +370,7 @@ def build_consistency_components(
             feature_repo=repos.features,
             requirement_repo=repos.requirements,
             diagram_repo=repos.diagrams,
+            implementation_repo=repos.implementations,
         ),
         apply_consistency_evaluation=apply_evaluation,
         discard_consistency_evaluation=discard_evaluation,
