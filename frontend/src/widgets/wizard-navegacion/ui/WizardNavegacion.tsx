@@ -71,7 +71,7 @@ const phaseItems: {
 		Icon: Implementation,
 		label: 'IMPLEMENTACIÓN',
 		subtitle: 'Generar código',
-		consistencyPhase: null,
+		consistencyPhase: 'implementation',
 	},
 ];
 

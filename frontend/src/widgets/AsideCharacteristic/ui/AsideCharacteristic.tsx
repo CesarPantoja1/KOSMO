@@ -1,6 +1,6 @@
 import { useState, type ElementType } from 'react';
 import type { CharacteristicResponse } from '@/entities/characteristic';
-import { CloseMarkdownContent, OpenMarkdownContent, Trash } from '@/shared/ui';
+import { CloseMarkdownContent, OpenMarkdownContent, Trash, WarningIcon } from '@/shared/ui';
 
 type AsideCharacteristicProps = {
 	title?: string;
@@ -9,6 +9,7 @@ type AsideCharacteristicProps = {
 	onSelectCharacteristic: (id: string) => void;
 	onDeleteCharacteristic?: (id: string) => void;
 	hasIcon: Record<string, boolean>;
+	warningByFeature?: Record<string, boolean>;
 	defaultExpanded?: boolean;
 	isExpanded?: boolean;
 	onToggleExpand?: (expanded: boolean) => void;
@@ -22,6 +23,7 @@ const AsideCharacteristic = ({
 	onSelectCharacteristic,
 	onDeleteCharacteristic,
 	hasIcon,
+	warningByFeature,
 	defaultExpanded = true,
 	isExpanded: isExpandedProp,
 	onToggleExpand,
@@ -88,12 +90,19 @@ const AsideCharacteristic = ({
 									{c.title}
 								</p>
 							{hasIcon[c.id] && (
-								<div className='relative shrink-0 mt-0.5 w-4 h-4'>
+								<div
+									className='relative shrink-0 mt-0.5 w-4 h-4'
+									title={warningByFeature?.[c.id] ? 'Requiere actualización por cambios en especificaciones' : undefined}
+								>
 									<span className='absolute inset-0 opacity-100 group-hover:opacity-0 transition-opacity flex items-center justify-center'>
-										<Icon
-											size={16}
-											color={isSelected ? 'text-primary-500' : 'text-neutral-400'}
-										/>
+										{warningByFeature?.[c.id] ? (
+											<WarningIcon size={16} color='text-warning-500' />
+										) : (
+											<Icon
+												size={16}
+												color={isSelected ? 'text-primary-500' : 'text-neutral-400'}
+											/>
+										)}
 									</span>
 									{onDeleteCharacteristic && (
 										<span
@@ -147,12 +156,19 @@ const AsideCharacteristic = ({
 								{c.display_id}
 							</span>
 							{hasIcon[c.id] && (
-								<div className='relative shrink-0 w-3.5 h-3.5'>
+								<div
+									className='relative shrink-0 w-3.5 h-3.5'
+									title={warningByFeature?.[c.id] ? 'Requiere actualización por cambios en especificaciones' : undefined}
+								>
 									<span className='absolute inset-0 opacity-100 group-hover:opacity-0 transition-opacity flex items-center justify-center'>
-										<Icon
-											size={14}
-											color={isSelected ? 'text-primary-500' : 'text-neutral-400'}
-										/>
+										{warningByFeature?.[c.id] ? (
+											<WarningIcon size={14} color='text-warning-500' />
+										) : (
+											<Icon
+												size={14}
+												color={isSelected ? 'text-primary-500' : 'text-neutral-400'}
+											/>
+										)}
 									</span>
 									{onDeleteCharacteristic && (
 										<span

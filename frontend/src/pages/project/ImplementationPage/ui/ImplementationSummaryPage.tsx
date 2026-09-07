@@ -107,6 +107,7 @@ const heroMeta: Record<
 const ImplementationSummaryPage = () => {
 	const router = useRouter();
 	const summary = useImplementationStore((s) => s.summary);
+	const requiresReviewByFeature = useImplementationStore((s) => s.requiresReviewByFeature);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
 	const [railwayConnected, setRailwayConnected] = useState<boolean | null>(null);
@@ -259,6 +260,9 @@ const ImplementationSummaryPage = () => {
 	}
 
 	const meta = heroMeta[github.viewState] ?? heroMeta.synced;
+	const isRequiresReview =
+		summary.status === 'requires_review' ||
+		(selectedCharacteristic?.id ? !!requiresReviewByFeature[selectedCharacteristic.id] : false);
 
 	return (
 		<div className='page-container'>
@@ -277,6 +281,27 @@ const ImplementationSummaryPage = () => {
 						Volver
 					</button>
 				</div>
+
+				{isRequiresReview && (
+					<div className='mb-6 flex items-center justify-between gap-4 rounded-xl border border-warning-200 bg-warning-50 p-4'>
+						<div className='flex items-center gap-3'>
+							<div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning-100'>
+								<WarningIcon size={20} color='text-warning-700' />
+							</div>
+							<div>
+								<h3 className='text-sm font-semibold text-warning-900'>
+									Implementación desactualizada
+								</h3>
+								<p className='text-xs text-warning-700'>
+									Las especificaciones de esta funcionalidad cambiaron en fases anteriores. El código actual no está sincronizado con la última versión de los requisitos.
+								</p>
+							</div>
+						</div>
+						<Link href='/proyecto/codigo' className='btn btn-ai btn-sm shrink-0'>
+							Regenerar código
+						</Link>
+					</div>
+				)}
 
 				<div className='grid lg:grid-cols-2 gap-6'>
 					<div className='flex flex-col gap-6'>

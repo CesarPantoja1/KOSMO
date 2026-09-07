@@ -149,5 +149,31 @@ describe('useImplementationStore', () => {
 		expect(state.status).toBe('completed');
 		expect(state.currentThought).toBeNull();
 	});
+
+	it('hidrata status requires_review y activa requiresReviewByFeature', async () => {
+		// Arrange
+		mockedFetchImplementation.mockResolvedValue({
+			implementationId: 'impl_feat_01',
+			featureId: 'feat_01',
+			projectId: 'prj_01',
+			status: 'requires_review',
+			generatedFiles: ['src/app/page.tsx'],
+			updatedAt: '2026-08-19T10:00:00Z',
+		});
+		mockedBuildSummary.mockReturnValue({
+			...aSummary,
+			status: 'requires_review',
+			generatedFiles: ['src/app/page.tsx'],
+		});
+
+		// Act
+		await useImplementationStore.getState().loadImplementation('feat_01', 'Registrar gastos', 'F-01');
+
+		// Assert
+		const state = useImplementationStore.getState();
+		expect(state.implementations['feat_01']).toBe(true);
+		expect(state.requiresReviewByFeature['feat_01']).toBe(true);
+		expect(state.status).toBe('requires_review');
+	});
 });
 
