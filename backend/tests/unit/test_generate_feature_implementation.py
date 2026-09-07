@@ -2395,3 +2395,267 @@ async def test_auto_sync_github_ejecuta_push_tras_commit_exitoso(tmp_path: Path)
     call_args = mock_sync_use_case.execute.call_args
     assert call_args[0][0].project_id == proj_id
     assert call_args[0][1] == owner_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_build_timeout_recovers_when_workspace_has_valid_feature_structure(
+    tmp_path: Path,
+) -> None:
+    # Arrange workspace with valid structure generated on disk before timeout
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_rec_1")
+    prj_id = ProjectId("prj_rec_1")
+    feature = Feature(
+        id=feat_id,
+        project_id=prj_id,
+        number=1,
+        title="Valid Timeout Recovery",
+        slug="valid-recovery",
+        description="Recovery test",
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Test recovery")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_rec_1"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    # Prepare files in workspace tmp_path
+    page_dir = tmp_path / "src" / "app" / "valid-recovery"
+    page_dir.mkdir(parents=True)
+    (page_dir / "page.tsx").write_text("export default function Page() { return null; }")
+
+    slice_dir = tmp_path / "src" / "features" / "valid-recovery"
+    slice_dir.mkdir(parents=True)
+    (slice_dir / "index.ts").write_text("export const ok = true;")
+
+    lib_dir = tmp_path / "src" / "lib"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "feature-registry.ts").write_text("export const features = ['valid-recovery'];")
+
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(tmp_path))
+    code_runner = FakeCodeRunner(should_pass=True)
+
+    # Client that succeeds on plan, but times out on build
+    class TimeoutOnBuildClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if agent == "plan":
+                async for ev in super().send_prompt(session_id, prompt, agent=agent):
+                    yield ev
+            elif agent == "build":
+                # Simular timeout de OpenCode en fase build
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id=session_id,
+                    data={
+                        "error": "Tiempo de espera agotado al comunicar con OpenCode (tiempo límite: 300s)",
+                        "timeout": True,
+                    },
+                )
+
+    opencode_client = TimeoutOnBuildClient()
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    output = await use_case.execute(
+        GenerateFeatureImplementationInput(feature_id=feat_id),
+    )
+
+    # Assert: recovered and completed successfully
+    assert output.success is True
+    assert output.status == FeatureImplementationStatus.IMPLEMENTED
+    # Verified that progress event indicating recovery was emitted
+    recovery_events = [
+        e for e in output.events
+        if "detectó código generado en disco" in str(e.data.get("delta", ""))
+    ]
+    assert len(recovery_events) == 1
+    # Files collected accurately from disk
+    assert "src/app/valid-recovery/page.tsx" in output.generated_files
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_build_timeout_rolls_back_when_workspace_structure_is_invalid(
+    tmp_path: Path,
+) -> None:
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_rec_2")
+    prj_id = ProjectId("prj_rec_2")
+    feature = Feature(
+        id=feat_id,
+        project_id=prj_id,
+        number=1,
+        title="Invalid Timeout Rollback",
+        slug="invalid-recovery",
+        description="Rollback test",
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Test rollback")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_rec_2"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    # Empty workspace - no files generated
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(tmp_path))
+    code_runner = FakeCodeRunner(should_pass=True)
+
+    class TimeoutOnBuildClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if agent == "plan":
+                async for ev in super().send_prompt(session_id, prompt, agent=agent):
+                    yield ev
+            elif agent == "build":
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id=session_id,
+                    data={
+                        "error": "Tiempo de espera agotado al comunicar con OpenCode (tiempo límite: 300s)",
+                        "timeout": True,
+                    },
+                )
+
+    opencode_client = TimeoutOnBuildClient()
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    with pytest.raises(OpenCodeGenerationError, match="Tiempo de espera agotado"):
+        await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+
+    # Assert rollback was called
+    assert str(prj_id) in workspace_manager.rollback_called_for
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_fix_prompt_filters_opencode_error_event_without_aborting_retry(
+    tmp_path: Path,
+) -> None:
+    feature_repo = InMemoryFeatureRepository()
+    requirement_repo = InMemoryRequirementRepository()
+    activity_diagram_repo = InMemoryActivityDiagramRepository()
+    impl_repo = FakeFeatureImplementationRepository()
+    trace_repo = InMemoryTraceabilityRepository()
+
+    feat_id = FeatureId("feat_fix_flt")
+    prj_id = ProjectId("prj_fix_flt")
+    feature = Feature(
+        id=feat_id,
+        project_id=prj_id,
+        number=1,
+        title="Filter Error in Fix",
+        slug="filter-fix",
+        description="Filter test",
+    )
+    await feature_repo.save(feature)
+    await requirement_repo.save(feat_id, "# REQ-1.1: Test fix error filter")
+    await activity_diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("diag_fix_flt"),
+            feature_id=feat_id,
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+
+    page_dir = tmp_path / "src" / "app" / "filter-fix"
+    page_dir.mkdir(parents=True)
+    (page_dir / "page.tsx").write_text("export default function Page() { return null; }")
+
+    slice_dir = tmp_path / "src" / "features" / "filter-fix"
+    slice_dir.mkdir(parents=True)
+    (slice_dir / "index.ts").write_text("export const ok = true;")
+
+    lib_dir = tmp_path / "src" / "lib"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "feature-registry.ts").write_text("export const features = ['filter-fix'];")
+
+    workspace_manager = FakeWorkspaceManager(workspace_dir=str(tmp_path))
+
+    code_runner = FakeCodeRunner(should_pass=True, fail_count_before_pass=1)
+
+    class ErrorOnFixPromptClient(FakeOpenCodeClient):
+        async def send_prompt(
+            self,
+            session_id: str,
+            prompt: str,
+            *,
+            agent: str = "plan",
+        ) -> AsyncIterator[OpenCodeEvent]:
+            if "Directivas de corrección" in prompt:
+                # Emitir error transitorio durante fix
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id=session_id,
+                    data={"error": "Transitorio", "timeout": True},
+                )
+            else:
+                async for ev in super().send_prompt(session_id, prompt, agent=agent):
+                    yield ev
+
+    opencode_client = ErrorOnFixPromptClient()
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=feature_repo,
+        requirement_repo=requirement_repo,
+        activity_diagram_repo=activity_diagram_repo,
+        workspace_manager=workspace_manager,
+        opencode_client=opencode_client,
+        code_runner=code_runner,
+        implementation_repo=impl_repo,
+        traceability_repo=trace_repo,
+    )
+
+    output = await use_case.execute(
+        GenerateFeatureImplementationInput(feature_id=feat_id, max_retries=2),
+    )
+
+    # Assert: Second validation passed, transient error was not emitted as fatal error
+    assert output.success is True
+    error_events = [e for e in output.events if e.event_type == OpenCodeEventType.ERROR]
+    assert len(error_events) == 0
+

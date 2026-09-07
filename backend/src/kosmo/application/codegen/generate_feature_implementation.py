@@ -136,6 +136,31 @@ def _normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | N
         return None
 
 
+def _collect_workspace_feature_files(workspace_dir: str | Path, feature_slug: str) -> set[str]:
+    """Escanea el filesystem del workspace para recolectar archivos generados o modificados para la feature."""
+    ws_path = Path(workspace_dir)
+    files: set[str] = set()
+    if not ws_path.is_dir():
+        return files
+    normalized_slug = feature_slug.strip().lower()
+    slice_pattern = f"src/features/{normalized_slug}/"
+    app_pattern = f"src/app/{normalized_slug}/"
+    for p in ws_path.rglob("*"):
+        if p.is_file():
+            try:
+                rel = p.relative_to(ws_path).as_posix()
+                rel_lower = rel.lower()
+                if (
+                    rel_lower.startswith(slice_pattern)
+                    or rel_lower.startswith(app_pattern)
+                    or rel_lower in ("src/lib/feature-registry.ts", "src/lib/site.ts", "src/db/schema.ts")
+                ):
+                    files.add(rel)
+            except ValueError:
+                pass
+    return files
+
+
 def _get_existing_db_schema_context(workspace_dir: str | None) -> str:
     """Lee el esquema Drizzle existente de src/db/schema.ts para contexto de generación incremental."""
     if not workspace_dir:
@@ -623,23 +648,56 @@ class GenerateFeatureImplementationUseCase:
             )
 
             generated_files: set[str] = set()
-            async for ev in self._opencode_client.send_prompt(session_id, build_prompt, agent="build"):
-                _raise_for_opencode_error(ev)
-                await _emit(ev)
-                if ev.event_type == OpenCodeEventType.FILE_EDIT:
-                    file_path: object = ev.data.get("path") or ev.data.get("file")
-                    if file_path is not None:
-                        normalized_p = _normalize_generated_file_path(str(file_path), workspace_dir)
-                        if normalized_p:
-                            generated_files.add(normalized_p)
-                elif ev.event_type == OpenCodeEventType.BUILD_COMPLETE:
-                    files_obj: object = ev.data.get("files")
-                    if isinstance(files_obj, list):
-                        files_items: list[object] = list(files_obj)  # type: ignore[reportUnknownVariableType]
-                        for f_item in files_items:
-                            normalized_p = _normalize_generated_file_path(str(f_item), workspace_dir)
+            try:
+                async for ev in self._opencode_client.send_prompt(session_id, build_prompt, agent="build"):
+                    _raise_for_opencode_error(ev)
+                    await _emit(ev)
+                    if ev.event_type == OpenCodeEventType.FILE_EDIT:
+                        file_path: object = ev.data.get("path") or ev.data.get("file")
+                        if file_path is not None:
+                            normalized_p = _normalize_generated_file_path(str(file_path), workspace_dir)
                             if normalized_p:
                                 generated_files.add(normalized_p)
+                    elif ev.event_type == OpenCodeEventType.BUILD_COMPLETE:
+                        files_obj: object = ev.data.get("files")
+                        if isinstance(files_obj, list):
+                            files_items: list[object] = list(files_obj)  # type: ignore[reportUnknownVariableType]
+                            for f_item in files_items:
+                                normalized_p = _normalize_generated_file_path(str(f_item), workspace_dir)
+                                if normalized_p:
+                                    generated_files.add(normalized_p)
+            except OpenCodeGenerationError as exc:
+                structural_check = validate_workspace_feature_structure(
+                    workspace_dir=workspace_dir,
+                    feature_slug=feature_slug,
+                    extra_files=generated_files,
+                )
+                if structural_check.is_valid:
+                    _log.warning(
+                        "codegen.opencode_build_timeout_recovered",
+                        feature_id=str(feature.id),
+                        project_id=str(feature.project_id),
+                        error=str(exc),
+                    )
+                    await _emit(
+                        OpenCodeEvent(
+                            event_type=OpenCodeEventType.BUILD_PROGRESS,
+                            session_id=session_id,
+                            data={
+                                "delta": (
+                                    "La comunicación con OpenCode finalizó por tiempo límite, "
+                                    "pero se detectó código generado en disco. Procediendo a validación..."
+                                ),
+                                "stage": "validating",
+                            },
+                        )
+                    )
+                else:
+                    with contextlib.suppress(Exception):
+                        await self._workspace_manager.rollback_workspace(feature.project_id)
+                    raise
+
+            generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug))
 
             # 9. Fase Validación & Reintentos (hasta max_retries)
             attempt = 0
@@ -756,6 +814,13 @@ class GenerateFeatureImplementationUseCase:
                         f"## Directivas de corrección:\n{directives_block}"
                     )
                     async for ev in self._opencode_client.send_prompt(session_id, fix_prompt, agent="build"):
+                        if ev.event_type == OpenCodeEventType.ERROR:
+                            _log.warning(
+                                "codegen.fix_prompt_opencode_error",
+                                attempt=attempt,
+                                error=ev.data.get("error"),
+                            )
+                            continue
                         await _emit(ev)
                         if ev.event_type == OpenCodeEventType.FILE_EDIT:
                             file_path_fix: object = ev.data.get("path")
@@ -763,6 +828,8 @@ class GenerateFeatureImplementationUseCase:
                                 normalized_p = _normalize_generated_file_path(str(file_path_fix), workspace_dir)
                                 if normalized_p:
                                     generated_files.add(normalized_p)
+
+            generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug))
 
             # 10. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:
@@ -966,6 +1033,8 @@ class GenerateFeatureImplementationUseCase:
                 )
 
         except Exception:
+            with contextlib.suppress(Exception):
+                await self._workspace_manager.rollback_workspace(feature.project_id)
             with contextlib.suppress(Exception):
                 current_impl = await self._implementation_repo.by_feature_id(input_data.feature_id)
                 if current_impl is not None and current_impl.status == FeatureImplementationStatus.IN_PROGRESS:
