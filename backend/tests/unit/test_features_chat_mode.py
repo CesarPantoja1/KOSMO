@@ -16,7 +16,7 @@ def test_features_chat_mode_properties() -> None:
 
     assert mode.phase_name == SpecPhase.CARACTERISTICAS
     assert mode.temperature == 0.4
-    assert mode.max_tokens == 4096
+    assert mode.max_tokens == 8192
     assert mode.output_type == RespuestaChatLLM
     assert "NIVEL DE USUARIO" in mode.system_prompt
     assert "no afirmes que un cambio fue aplicado" in mode.system_prompt

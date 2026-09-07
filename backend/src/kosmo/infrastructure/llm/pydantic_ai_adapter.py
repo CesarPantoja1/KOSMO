@@ -129,7 +129,7 @@ class PydanticAILLMClient:
         self,
         prompt: PromptTemplate,
         temperature: float = 0.3,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> LLMResponse:
         agent = self._get_agent(prompt.system_prompt)
 
@@ -160,7 +160,7 @@ class PydanticAILLMClient:
         prompt: PromptTemplate,
         output_type: type[T],
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> T:
         response = await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
         return _parse_typed_output(response.text.strip(), output_type)
@@ -169,7 +169,7 @@ class PydanticAILLMClient:
         self,
         prompt: PromptTemplate,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> LLMResponse:
         return await self.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextvars
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -9,13 +8,12 @@ import structlog
 
 from kosmo.contracts.ai.ai_config import UserAiConfigRepository
 from kosmo.contracts.auth import SecretCipher
+from kosmo.contracts.auth.context import current_user_id
 from kosmo.contracts.auth.secrets import EncryptedSecret
 from kosmo.contracts.llm.ports import LLMClient, LLMResponse, PromptTemplate, ToolCallRecord
 from kosmo.contracts.sdd.errors import AIProviderAuthError
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient, StreamedTypedResult
-
-current_user_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_user_id", default=None)
 
 _log = structlog.get_logger(__name__)
 
@@ -142,7 +140,7 @@ class DynamicUserLLMClient(LLMClient):
         self,
         prompt: PromptTemplate,
         temperature: float = 0.3,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> LLMResponse:
         client = await self._resolve_client()
         try:
@@ -156,7 +154,7 @@ class DynamicUserLLMClient(LLMClient):
         self,
         prompt: PromptTemplate,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> LLMResponse:
         client = await self._resolve_client()
         try:
@@ -171,7 +169,7 @@ class DynamicUserLLMClient(LLMClient):
         prompt: PromptTemplate,
         output_type: type[T],
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> T:
         client = await self._resolve_client()
         try:
@@ -220,7 +218,7 @@ class DynamicUserLLMClient(LLMClient):
         prompt: PromptTemplate,
         output_type: type[T],
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> AsyncGenerator[StreamedTypedResult[T]]:
         client = await self._resolve_client()
         stream_fn: Any = getattr(client, "stream_typed", None)
