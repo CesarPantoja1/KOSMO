@@ -137,44 +137,54 @@ def _normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | N
         return None
 
 
-def _collect_workspace_feature_files(workspace_dir: str | Path, feature_slug: str) -> set[str]:
-    """Escanea el filesystem del workspace para recolectar archivos generados o modificados para la feature."""
-    ws_path = Path(workspace_dir)
+class _NullFileSystemReader(FileSystemReader):
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        del root
+        return ()
+
+    def read_text(self, path: str | Path) -> str | None:
+        del path
+        return None
+
+
+def _collect_workspace_feature_files(
+    workspace_dir: str | Path,
+    feature_slug: str,
+    fs_reader: FileSystemReader | None = None,
+) -> set[str]:
+    """Recolecta archivos generados o modificados para la feature usando el puerto FileSystemReader."""
+    reader = fs_reader or _NullFileSystemReader()
     files: set[str] = set()
-    if not ws_path.is_dir():
-        return files
+    all_files = reader.list_files(workspace_dir)
     normalized_slug = feature_slug.strip().lower()
     slice_pattern = f"src/features/{normalized_slug}/"
     app_pattern = f"src/app/{normalized_slug}/"
-    for p in ws_path.rglob("*"):
-        if p.is_file():
-            try:
-                rel = p.relative_to(ws_path).as_posix()
-                rel_lower = rel.lower()
-                if (
-                    rel_lower.startswith(slice_pattern)
-                    or rel_lower.startswith(app_pattern)
-                    or rel_lower in ("src/lib/feature-registry.ts", "src/lib/site.ts", "src/db/schema.ts")
-                ):
-                    files.add(rel)
-            except ValueError:
-                pass
+    for raw_f in all_files:
+        norm_f = raw_f.replace("\\", "/").strip("./")
+        norm_lower = norm_f.lower()
+        if (
+            norm_lower.startswith(slice_pattern)
+            or norm_lower.startswith(app_pattern)
+            or norm_lower in ("src/lib/feature-registry.ts", "src/lib/site.ts", "src/db/schema.ts")
+        ):
+            files.add(norm_f)
     return files
 
 
-def _get_existing_db_schema_context(workspace_dir: str | None) -> str:
-    """Lee el esquema Drizzle existente de src/db/schema.ts para contexto de generación incremental."""
-    if not workspace_dir:
+def _get_existing_db_schema_context(
+    workspace_dir: str | None,
+    fs_reader: FileSystemReader | None = None,
+) -> str:
+    """Lee el esquema Drizzle existente de src/db/schema.ts usando el puerto FileSystemReader."""
+    if not workspace_dir or fs_reader is None:
         return ""
-    schema_path = Path(workspace_dir) / "src" / "db" / "schema.ts"
-    if not schema_path.is_file():
-        return ""
-    try:
-        content = schema_path.read_text(encoding="utf-8").strip()
-        if content:
-            return f"\n### Esquema de base de datos actual (`src/db/schema.ts`)\n```typescript\n{content}\n```"
-    except Exception:
-        pass
+    ws_str = str(workspace_dir).replace("\\", "/").rstrip("/")
+    schema_path = f"{ws_str}/src/db/schema.ts"
+    content = fs_reader.read_text(schema_path)
+    if content is None:
+        content = fs_reader.read_text("src/db/schema.ts")
+    if content and content.strip():
+        return f"\n### Esquema de base de datos actual (`src/db/schema.ts`)\n```typescript\n{content.strip()}\n```"
     return ""
 
 
@@ -196,16 +206,6 @@ class GenerateFeatureImplementationOutput:
     error_message: str | None = None
     retry_history: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
     events: tuple[OpenCodeEvent, ...] = field(default_factory=tuple)
-
-
-class _NullFileSystemReader(FileSystemReader):
-    def list_files(self, root: str | Path) -> tuple[str, ...]:
-        del root
-        return ()
-
-    def read_text(self, path: str | Path) -> str | None:
-        del path
-        return None
 
 
 class GenerateFeatureImplementationUseCase:
@@ -290,7 +290,7 @@ class GenerateFeatureImplementationUseCase:
 
         # Contexto de base de datos existente
         if workspace_dir:
-            db_context = _get_existing_db_schema_context(workspace_dir)
+            db_context = _get_existing_db_schema_context(workspace_dir, self._fs_reader)
             if db_context:
                 lines.append(db_context)
 
@@ -716,7 +716,7 @@ class GenerateFeatureImplementationUseCase:
                         await self._workspace_manager.rollback_workspace(feature.project_id)
                     raise
 
-            generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug))
+            generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug, self._fs_reader))
 
             # 9. Fase Validación & Reintentos (hasta max_retries)
             attempt = 0
@@ -849,7 +849,7 @@ class GenerateFeatureImplementationUseCase:
                                 if normalized_p:
                                     generated_files.add(normalized_p)
 
-            generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug))
+            generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug, self._fs_reader))
 
             # 10. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:

@@ -15,6 +15,8 @@ from kosmo.application.codegen.generate_feature_implementation import (
     MissingRequirementsError,
     OpenCodeGenerationError,
     OpenCodeUnavailableError,
+    _collect_workspace_feature_files,
+    _get_existing_db_schema_context,
     _normalize_generated_file_path,
     _raise_for_opencode_error,
 )
@@ -2677,3 +2679,67 @@ async def test_fix_prompt_filters_opencode_error_event_without_aborting_retry(
     assert output.success is True
     error_events = [e for e in output.events if e.event_type == OpenCodeEventType.ERROR]
     assert len(error_events) == 0
+
+
+class _FakeTestFsReader(FileSystemReader):
+    def __init__(self, files: dict[str, str] | None = None) -> None:
+        self.files = files or {}
+
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        del root
+        return tuple(self.files.keys())
+
+    def read_text(self, path: str | Path) -> str | None:
+        norm = str(path).replace("\\", "/").strip("./")
+        for key, val in self.files.items():
+            norm_k = key.replace("\\", "/").strip("./")
+            if norm == norm_k or norm.endswith(f"/{norm_k}"):
+                return val
+        return None
+
+
+@pytest.mark.unit
+def test_collect_workspace_feature_files_with_fs_reader() -> None:
+    fake_fs = _FakeTestFsReader(
+        {
+            "src/features/user-profile/components/Profile.tsx": "...",
+            "src/app/user-profile/page.tsx": "...",
+            "src/lib/feature-registry.ts": "...",
+            "src/lib/site.ts": "...",
+            "src/db/schema.ts": "...",
+            "src/features/other-feature/other.ts": "...",
+            "src/app/other-feature/page.tsx": "...",
+        }
+    )
+
+    collected = _collect_workspace_feature_files(
+        workspace_dir="/virtual/dir",
+        feature_slug="user-profile",
+        fs_reader=fake_fs,
+    )
+
+    assert "src/features/user-profile/components/Profile.tsx" in collected
+    assert "src/app/user-profile/page.tsx" in collected
+    assert "src/lib/feature-registry.ts" in collected
+    assert "src/lib/site.ts" in collected
+    assert "src/db/schema.ts" in collected
+    assert "src/features/other-feature/other.ts" not in collected
+    assert "src/app/other-feature/page.tsx" not in collected
+
+
+@pytest.mark.unit
+def test_get_existing_db_schema_context_with_fs_reader() -> None:
+    fake_fs = _FakeTestFsReader(
+        {
+            "src/db/schema.ts": "export const users = sqliteTable('users', {});",
+        }
+    )
+
+    ctx = _get_existing_db_schema_context("/virtual/dir", fake_fs)
+    assert "export const users = sqliteTable" in ctx
+    assert "### Esquema de base de datos actual" in ctx
+
+    # When file does not exist
+    empty_fs = _FakeTestFsReader({})
+    assert _get_existing_db_schema_context("/virtual/dir", empty_fs) == ""
+    assert _get_existing_db_schema_context(None, fake_fs) == ""
