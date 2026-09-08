@@ -5,6 +5,7 @@ from types import TracebackType
 
 import pytest
 
+from kosmo.infrastructure.persistence.postgres.models import OutboxJobModel
 from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
 from kosmo.infrastructure.persistence.postgres.repositories.activity_diagram_repo import (
     SqlAlchemyActivityDiagramRepository,
@@ -202,3 +203,13 @@ async def test_in_memory_uow_exposes_fakes_and_noop_transaction() -> None:
     assert uow.documents is documents
     assert uow.chat is chat
     assert active is uow
+
+
+@pytest.mark.unit
+def test_outbox_job_model_defines_composite_index() -> None:
+    # Arrange & Act
+    indexes = {idx.name: tuple(col.name for col in idx.columns) for idx in OutboxJobModel.__table__.indexes}
+
+    # Assert
+    assert "ix_outbox_pending" in indexes
+    assert indexes["ix_outbox_pending"] == ("status", "created_at")
