@@ -11,6 +11,7 @@ import pytest
 
 from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
+    FileSystemReader,
     PreviewPublisherPort,
     ValidationStep,
     ValidationStepResult,
@@ -21,6 +22,7 @@ from kosmo.contracts.sdd.ids import ProjectId, UserId, WorkspaceId
 from kosmo.contracts.sdd.project import Project
 from kosmo.domain.sdd.document_converters import markdown_to_document
 from kosmo.infrastructure.codegen.workspace import (
+    LocalFileSystemReader,
     LocalWorkspaceManager,
     WorkspaceLockedError,
     recover_orphan_previews,
@@ -1462,3 +1464,36 @@ async def test_recover_orphan_previews_helper_delegates() -> None:
         # Assert
         assert reconciled == 1
         assert (markers_dir / "prj_helper_orphan").exists() is False
+
+
+@pytest.mark.unit
+def test_local_file_system_reader_lists_and_reads_files() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        sub_dir = tmp_root / "src" / "app"
+        sub_dir.mkdir(parents=True)
+        file_a = sub_dir / "page.tsx"
+        file_a.write_text("export default function Page() {}", encoding="utf-8")
+
+        reader = LocalFileSystemReader()
+
+        # Act
+        files = reader.list_files(tmp_root)
+        content = reader.read_text(file_a)
+        non_existent = reader.read_text(tmp_root / "no_such_file.txt")
+
+        # Assert
+        assert "src/app/page.tsx" in [f.replace("\\", "/") for f in files]
+        assert content == "export default function Page() {}"
+        assert non_existent is None
+
+
+@pytest.mark.unit
+def test_local_workspace_manager_implements_file_system_reader() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_dir, git_init=False)
+
+        # Assert
+        assert isinstance(manager, FileSystemReader)

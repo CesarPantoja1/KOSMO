@@ -21,6 +21,7 @@ from kosmo.application.codegen.analyze_ux_context import (
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
+    FileSystemReader,
     PreviewPublisherPort,
     WorkspaceManagerPort,
     WorkspaceRepository,
@@ -152,7 +153,31 @@ class WorkspaceLockedError(RuntimeError):
     """Lanzada cuando se intenta acceder o bloquear un workspace que ya está bloqueado."""
 
 
-class LocalWorkspaceManager(WorkspaceManagerPort):
+class LocalFileSystemReader(FileSystemReader):
+    """Adaptador de infraestructura para lectura del sistema de archivos local."""
+
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        root_path = Path(root)
+        if not root_path.is_dir():
+            return ()
+        files: list[str] = []
+        for p in root_path.rglob("*"):
+            if p.is_file():
+                with contextlib.suppress(ValueError):
+                    files.append(p.relative_to(root_path).as_posix())
+        return tuple(files)
+
+    def read_text(self, path: str | Path) -> str | None:
+        p = Path(path)
+        if not p.is_file():
+            return None
+        try:
+            return p.read_text(encoding="utf-8")
+        except Exception:
+            return None
+
+
+class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
     """Adaptador de infraestructura para la gestión de workspaces locales."""
 
     def __init__(
@@ -166,6 +191,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         code_runner: CodeRunnerPort | None = None,
         preview_publisher: PreviewPublisherPort | None = None,
         document_repo: DocumentRepository | None = None,
+        fs_reader: FileSystemReader | None = None,
     ) -> None:
         self._workspaces_root = Path(workspaces_root)
         self._workspace_repo = workspace_repo
@@ -176,10 +202,19 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
         self._code_runner = code_runner
         self._preview_publisher = preview_publisher
         self._document_repo = document_repo
+        self._fs_reader = fs_reader or LocalFileSystemReader()
         self._in_memory_locks: set[str] = set()
         # ponytail: guard global del proceso; la carrera multi-worker se cierra con el
         # CAS (UPDATE condicional) de update_lock en el repositorio SQL.
         self._lock_guard = asyncio.Lock()
+
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        """Implementación de FileSystemReader delegada en LocalFileSystemReader."""
+        return self._fs_reader.list_files(root)
+
+    def read_text(self, path: str | Path) -> str | None:
+        """Implementación de FileSystemReader delegada en LocalFileSystemReader."""
+        return self._fs_reader.read_text(path)
 
     @staticmethod
     def _extract_manifest(workspace_path: Path) -> tuple[str, ...]:

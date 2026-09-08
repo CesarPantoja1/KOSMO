@@ -11,7 +11,7 @@ from kosmo.config import Settings
 from kosmo.contracts.sdd.codegen import CodeRunnerPort
 from kosmo.infrastructure.cloudflare.preview import CloudflareTunnelPreviewPublisher
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
-from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
+from kosmo.infrastructure.codegen.workspace import LocalFileSystemReader, LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
 from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
@@ -66,6 +66,7 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
             tunnel_id=settings.cloudflare_preview_tunnel_id,
             host_suffix=settings.preview_public_host_suffix,
         )
+    fs_reader = LocalFileSystemReader()
     workspace_manager = LocalWorkspaceManager(
         workspaces_root=settings.kosmo_workspaces_dir,
         workspace_repo=repos.workspaces,
@@ -73,6 +74,7 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         project_repo=repos.projects,
         code_runner=code_runner,
         preview_publisher=preview_publisher,
+        fs_reader=fs_reader,
     )
     use_case = GenerateFeatureImplementationUseCase(
         feature_repo=repos.features,
@@ -85,6 +87,7 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         traceability_repo=repos.traceability,
         project_repo=repos.projects,
         document_repo=repos.documents,
+        fs_reader=fs_reader,
     )
     return CodegenComponents(
         generate_feature_implementation=use_case,

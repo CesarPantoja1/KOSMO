@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from kosmo.contracts.sdd.codegen import FileSystemReader
+
 
 @dataclass(frozen=True)
 class StructuralValidationResult:
@@ -86,44 +88,47 @@ def validate_feature_structure(
 def validate_workspace_feature_structure(
     workspace_dir: str | Path,
     feature_slug: str,
+    fs_reader: FileSystemReader,
     extra_files: Iterable[str] = (),
 ) -> StructuralValidationResult:
-    """Inspecciona el filesystem del workspace para validar la estructura de la feature."""
-    ws_path = Path(workspace_dir)
-    found_files: set[str] = set(extra_files)
+    """Inspecciona la estructura de la feature en el workspace utilizando el puerto FileSystemReader.
 
-    if ws_path.is_dir():
-        for p in ws_path.rglob("*"):
-            if p.is_file():
-                try:
-                    rel = p.relative_to(ws_path).as_posix()
-                    found_files.add(rel)
-                except ValueError:
-                    pass
+    El dominio permanece puro: no realiza llamadas directas al sistema de archivos ni depende
+    de adaptadores de infraestructura concretos.
+    """
+    ws_str = str(workspace_dir).replace("\\", "/").rstrip("/")
+    listed = fs_reader.list_files(workspace_dir)
+    found_files: set[str] = {f.replace("\\", "/").strip("./") for f in listed}
+    found_files.update(f.replace("\\", "/").strip("./") for f in extra_files)
 
     normalized_slug = feature_slug.strip().lower()
     page_candidates = (
-        ws_path / "src" / "app" / normalized_slug / "page.tsx",
-        ws_path / "src" / "app" / normalized_slug / "page.jsx",
-        ws_path / "src" / "app" / normalized_slug / "page.ts",
-        ws_path / "src" / "app" / normalized_slug / "page.js",
+        f"{ws_str}/src/app/{normalized_slug}/page.tsx",
+        f"{ws_str}/src/app/{normalized_slug}/page.jsx",
+        f"{ws_str}/src/app/{normalized_slug}/page.ts",
+        f"{ws_str}/src/app/{normalized_slug}/page.js",
+    )
+    rel_page_candidates = (
+        f"src/app/{normalized_slug}/page.tsx",
+        f"src/app/{normalized_slug}/page.jsx",
+        f"src/app/{normalized_slug}/page.ts",
+        f"src/app/{normalized_slug}/page.js",
     )
     page_content: str | None = None
     for candidate in page_candidates:
-        if candidate.is_file():
-            try:
-                page_content = candidate.read_text(encoding="utf-8")
+        page_content = fs_reader.read_text(candidate)
+        if page_content is not None:
+            break
+    if page_content is None:
+        for candidate in rel_page_candidates:
+            page_content = fs_reader.read_text(candidate)
+            if page_content is not None:
                 break
-            except Exception:
-                pass
 
-    registry_path = ws_path / "src" / "lib" / "feature-registry.ts"
-    registry_content: str | None = None
-    if registry_path.is_file():
-        try:
-            registry_content = registry_path.read_text(encoding="utf-8")
-        except Exception:
-            registry_content = None
+    registry_path = f"{ws_str}/src/lib/feature-registry.ts"
+    registry_content = fs_reader.read_text(registry_path)
+    if registry_content is None:
+        registry_content = fs_reader.read_text("src/lib/feature-registry.ts")
 
     return validate_feature_structure(
         feature_slug=feature_slug,

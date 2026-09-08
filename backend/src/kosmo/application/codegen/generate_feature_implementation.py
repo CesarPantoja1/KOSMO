@@ -33,6 +33,7 @@ from kosmo.contracts.sdd.codegen import (
     FeatureImplementationStatus,
     FileAction,
     FileOperation,
+    FileSystemReader,
     ImplementationPlan,
     OpenCodeClientPort,
     OpenCodeEvent,
@@ -197,6 +198,16 @@ class GenerateFeatureImplementationOutput:
     events: tuple[OpenCodeEvent, ...] = field(default_factory=tuple)
 
 
+class _NullFileSystemReader(FileSystemReader):
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        del root
+        return ()
+
+    def read_text(self, path: str | Path) -> str | None:
+        del path
+        return None
+
+
 class GenerateFeatureImplementationUseCase:
     """Caso de uso principal para orquestar la generación de código por característica."""
 
@@ -214,6 +225,7 @@ class GenerateFeatureImplementationUseCase:
         document_repo: DocumentRepository | None = None,
         ux_analyzer: UXAnalyzerUseCase | None = None,
         sync_github_repository: SyncGitHubRepositoryUseCase | None = None,
+        fs_reader: FileSystemReader | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -225,6 +237,12 @@ class GenerateFeatureImplementationUseCase:
         self._project_repo = project_repo
         self._document_repo = document_repo
         self._sync_github_repository = sync_github_repository
+        if fs_reader is not None:
+            self._fs_reader: FileSystemReader = fs_reader
+        elif isinstance(workspace_manager, FileSystemReader):
+            self._fs_reader = workspace_manager
+        else:
+            self._fs_reader = _NullFileSystemReader()
         self._ux_analyzer = ux_analyzer or UXAnalyzerUseCase(
             document_repo=document_repo,
             feature_repo=feature_repo,
@@ -670,6 +688,7 @@ class GenerateFeatureImplementationUseCase:
                 structural_check = validate_workspace_feature_structure(
                     workspace_dir=workspace_dir,
                     feature_slug=feature_slug,
+                    fs_reader=self._fs_reader,
                     extra_files=generated_files,
                 )
                 if structural_check.is_valid:
@@ -721,6 +740,7 @@ class GenerateFeatureImplementationUseCase:
                 structural_result = validate_workspace_feature_structure(
                     workspace_dir=workspace_dir,
                     feature_slug=feature_slug,
+                    fs_reader=self._fs_reader,
                     extra_files=generated_files,
                 )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +26,7 @@ from kosmo.contracts.sdd.codegen import (
     FeatureImplementationRepository,
     FeatureImplementationStatus,
     FileOperation,
+    FileSystemReader,
     OpenCodeClientPort,
     OpenCodeEvent,
     OpenCodeEventType,
@@ -60,7 +62,7 @@ from tests.unit.fakes import (
 )
 
 
-class FakeWorkspaceManager(WorkspaceManagerPort):
+class FakeWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
     def __init__(self, workspace_dir: str = "/workspaces/prj_01") -> None:
         self.workspace_dir = workspace_dir
         self.locked_projects: set[str] = set()
@@ -68,6 +70,26 @@ class FakeWorkspaceManager(WorkspaceManagerPort):
         self.commit_called_for: list[tuple[str, str]] = []
         self.preview_published_for: set[str] = set()
         self.manifest: tuple[str, ...] = ("package.json", "tsconfig.json", "src/index.ts")
+
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        root_path = Path(root)
+        if not root_path.is_dir():
+            return ()
+        files: list[str] = []
+        for p in root_path.rglob("*"):
+            if p.is_file():
+                with contextlib.suppress(ValueError):
+                    files.append(p.relative_to(root_path).as_posix())
+        return tuple(files)
+
+    def read_text(self, path: str | Path) -> str | None:
+        p = Path(path)
+        if not p.is_file():
+            return None
+        try:
+            return p.read_text(encoding="utf-8")
+        except Exception:
+            return None
 
     async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace:
         return CodeWorkspace(
