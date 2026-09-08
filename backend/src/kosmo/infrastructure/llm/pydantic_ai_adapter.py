@@ -10,6 +10,13 @@ from pydantic import BaseModel
 from pydantic_ai.agent import Agent
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import Tool
+from tenacity import (
+    AsyncRetrying,
+    retry_if_not_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    wait_fixed,
+)
 
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
 
@@ -99,20 +106,25 @@ class PydanticAILLMClient:
     _RETRY_ATTEMPTS = 2
     _RETRY_DELAY_SECONDS = 1.0
 
-    def __init__(self, model: Any) -> None:
+    def __init__(self, model: Any, retry_wait_seconds: float | None = None) -> None:
         self._model = model
         self._agents: OrderedDict[str, Agent[Any]] = OrderedDict()
+        self._retry_wait_seconds = retry_wait_seconds
 
     async def _run_with_retry(self, coro_fn: Any) -> Any:
-        last_exc: Exception | None = None
-        for attempt in range(self._RETRY_ATTEMPTS):
-            try:
+        wait_strategy = (
+            wait_fixed(self._retry_wait_seconds)
+            if self._retry_wait_seconds is not None
+            else wait_exponential(multiplier=1, min=1, max=5)
+        )
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(self._RETRY_ATTEMPTS),
+            wait=wait_strategy,
+            retry=retry_if_not_exception_type(ValueError),
+            reraise=True,
+        ):
+            with attempt:
                 return await coro_fn()
-            except Exception as exc:
-                last_exc = exc
-                if attempt < self._RETRY_ATTEMPTS - 1:
-                    await asyncio.sleep(self._RETRY_DELAY_SECONDS)
-        raise last_exc  # type: ignore[reportPossiblyUnboundVariable]
 
     def _get_agent(self, system_prompt: str) -> Agent[Any]:
         agent = self._agents.get(system_prompt)
