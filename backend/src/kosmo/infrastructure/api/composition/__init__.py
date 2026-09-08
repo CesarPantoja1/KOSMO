@@ -96,6 +96,9 @@ def build_app_components(settings: Settings) -> AppContainer:
     db_engine = create_async_engine(
         settings.database_url.get_secret_value(),
         pool_pre_ping=True,
+        pool_size=20,
+        max_overflow=30,
+        pool_recycle=1800,
         connect_args={"statement_cache_size": 0},
     )
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
