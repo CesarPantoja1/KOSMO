@@ -9,6 +9,9 @@ from kosmo.contracts.telemetry import (
     TelemetryPort,
     get_telemetry_provider,
     record_auth_event,
+    record_codegen_duration,
+    record_codegen_retries,
+    record_llm_tokens,
     set_telemetry_provider,
     traced,
 )
@@ -31,6 +34,9 @@ class FakeTelemetryProvider(TelemetryPort):
         self.sync_calls: list[tuple[str, dict[str, Any]]] = []
         self.async_calls: list[tuple[str, dict[str, Any]]] = []
         self.auth_events: list[tuple[str, str | None]] = []
+        self.codegen_durations: list[tuple[str, float, str]] = []
+        self.codegen_retries: list[tuple[int, bool]] = []
+        self.llm_tokens: list[tuple[int, str, str | None]] = []
 
     def trace_sync(
         self,
@@ -56,6 +62,29 @@ class FakeTelemetryProvider(TelemetryPort):
 
     def record_auth_event(self, event_type: str, user_id: str | None = None) -> None:
         self.auth_events.append((event_type, user_id))
+
+    def record_codegen_duration(
+        self,
+        phase: str,
+        duration_seconds: float,
+        status: str = "success",
+    ) -> None:
+        self.codegen_durations.append((phase, duration_seconds, status))
+
+    def record_codegen_retries(
+        self,
+        retries_count: int,
+        success: bool,
+    ) -> None:
+        self.codegen_retries.append((retries_count, success))
+
+    def record_llm_tokens(
+        self,
+        tokens: int,
+        model: str = "",
+        user_id: str | None = None,
+    ) -> None:
+        self.llm_tokens.append((tokens, model, user_id))
 
 
 @pytest.mark.unit
@@ -201,3 +230,43 @@ def test_configure_telemetry_sets_opentelemetry_provider() -> None:
     active_provider = get_telemetry_provider()
     assert active_provider is not None
     assert isinstance(active_provider, OpenTelemetryProvider)
+
+
+@pytest.mark.unit
+def test_codegen_and_llm_telemetry_without_provider_noop() -> None:
+    # Sin provider activo no deben lanzar excepciones
+    record_codegen_duration("plan", 1.5, status="success")
+    record_codegen_retries(retries_count=2, success=True)
+    record_llm_tokens(tokens=150, model="gpt-4o", user_id="usr_123")
+
+
+@pytest.mark.unit
+def test_codegen_and_llm_telemetry_delegates_to_configured_provider() -> None:
+    provider = FakeTelemetryProvider()
+    set_telemetry_provider(provider)
+
+    record_codegen_duration("plan", 2.3, status="success")
+    record_codegen_duration("build", 4.1, status="failure")
+    record_codegen_retries(retries_count=1, success=True)
+    record_llm_tokens(tokens=500, model="claude-3-5-sonnet", user_id="usr_abc")
+
+    assert len(provider.codegen_durations) == 2
+    assert provider.codegen_durations[0] == ("plan", 2.3, "success")
+    assert provider.codegen_durations[1] == ("build", 4.1, "failure")
+
+    assert len(provider.codegen_retries) == 1
+    assert provider.codegen_retries[0] == (1, True)
+
+    assert len(provider.llm_tokens) == 1
+    assert provider.llm_tokens[0] == (500, "claude-3-5-sonnet", "usr_abc")
+
+
+@pytest.mark.unit
+def test_opentelemetry_provider_record_codegen_and_llm_metrics() -> None:
+    provider = OpenTelemetryProvider()
+    # Verifica que los instrumentos metricos de OpenTelemetry no fallen
+    provider.record_codegen_duration("plan", 3.2, status="success")
+    provider.record_codegen_duration("total", 12.5, status="error")
+    provider.record_codegen_retries(retries_count=3, success=False)
+    provider.record_llm_tokens(tokens=1200, model="gpt-4o-mini", user_id="usr_01")
+    provider.record_llm_tokens(tokens=300, model="", user_id=None)

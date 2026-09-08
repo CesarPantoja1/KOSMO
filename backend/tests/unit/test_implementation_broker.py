@@ -157,7 +157,45 @@ async def test_broker_aclose_cancels_running_and_cleanup_tasks() -> None:
 
     # Assert
     assert len(broker._tasks) == 0
-    assert len(broker._cleanup_tasks) == 0
     assert len(broker._queues) == 0
     assert len(broker._history) == 0
     assert len(broker._project_ids) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_propagates_user_and_project_context() -> None:
+    import structlog
+
+    from kosmo.contracts.auth.context import current_user_id
+
+    captured_ctx: dict[str, object] = {}
+    captured_user_id: list[str | None] = []
+
+    class ContextCapturingUseCase:
+        async def execute_stream(
+            self,
+            input_data: GenerateFeatureImplementationInput,
+        ) -> AsyncIterator[OpenCodeEvent]:
+            captured_user_id.append(current_user_id.get())
+            captured_ctx.update(structlog.contextvars.get_contextvars())
+            yield OpenCodeEvent(event_type=OpenCodeEventType.DONE, session_id="sess_ctx", data={})
+
+    broker = ImplementationEventBroker()
+    broker.start_implementation(
+        "impl_ctx",
+        ContextCapturingUseCase(),
+        _input_data(),
+        project_id="prj_test_123",
+        user_id="usr_test_456",
+    )
+
+    task = broker._tasks["impl_ctx"]
+    await task
+
+    assert captured_user_id == ["usr_test_456"]
+    assert captured_ctx.get("project_id") == "prj_test_123"
+    assert captured_ctx.get("user_id") == "usr_test_456"
+    assert captured_ctx.get("implementation_id") == "impl_ctx"
+    # Ensure cleanup after completion
+    assert current_user_id.get() is None

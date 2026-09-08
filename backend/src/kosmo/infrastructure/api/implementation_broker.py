@@ -4,6 +4,7 @@ from typing import Protocol, cast
 
 import structlog
 
+from kosmo.contracts.auth.context import current_user_id
 from kosmo.contracts.sdd.codegen import OpenCodeEvent, OpenCodeEventType
 
 _log = structlog.get_logger(__name__)
@@ -60,11 +61,32 @@ class ImplementationEventBroker:
         implementation_id: str,
         use_case: object,
         input_data: object,
+        *,
+        project_id: str | None = None,
+        user_id: str | None = None,
     ) -> None:
+        structlog.contextvars.bind_contextvars(
+            implementation_id=implementation_id,
+            project_id=project_id,
+            user_id=user_id,
+        )
+        token = current_user_id.set(user_id) if user_id is not None else None
         try:
+            _log.info(
+                "codegen.task_started",
+                implementation_id=implementation_id,
+                project_id=project_id,
+                user_id=user_id,
+            )
             stream = cast(StreamUseCase, use_case)
             async for event in stream.execute_stream(input_data):
                 self._publish(implementation_id, event)
+            _log.info(
+                "codegen.task_finished",
+                implementation_id=implementation_id,
+                project_id=project_id,
+                user_id=user_id,
+            )
         except Exception as exc:
             _log.exception("implementation_broker.run_error", implementation_id=implementation_id)
             self._publish(
@@ -81,6 +103,10 @@ class ImplementationEventBroker:
                 ),
             )
         finally:
+            if token is not None:
+                current_user_id.reset(token)
+            structlog.contextvars.unbind_contextvars("implementation_id", "project_id", "user_id")
+
             # Enviar señal de fin (None) a todos los subscriptores
             if implementation_id in self._queues:
                 for queue in self._queues[implementation_id]:
@@ -100,16 +126,27 @@ class ImplementationEventBroker:
         input_data: object,
         *,
         project_id: str | None = None,
+        user_id: str | None = None,
     ) -> None:
         """Inicia una tarea de flujo (generación o eliminación de código) en background."""
         if implementation_id in self._tasks:
             # Ya está corriendo
             return
 
+        effective_user_id = user_id or current_user_id.get()
+
         if project_id is not None:
             self._project_ids[implementation_id] = project_id
 
-        task = asyncio.create_task(self._run_implementation(implementation_id, use_case, input_data))
+        task = asyncio.create_task(
+            self._run_implementation(
+                implementation_id,
+                use_case,
+                input_data,
+                project_id=project_id,
+                user_id=effective_user_id,
+            )
+        )
         self._tasks[implementation_id] = task
 
     def project_id_for(self, implementation_id: str) -> str | None:

@@ -18,7 +18,9 @@ from tenacity import (
     wait_fixed,
 )
 
+from kosmo.contracts.auth.context import current_user_id
 from kosmo.contracts.llm.ports import LLMResponse, LLMUsage, PromptTemplate, ToolCallRecord
+from kosmo.contracts.telemetry import record_llm_tokens
 
 T = TypeVar("T")
 
@@ -157,6 +159,12 @@ class PydanticAILLMClient:
         result = await self._run_with_retry(_call)
 
         usage = result.usage()
+        model_name = getattr(result, "model_name", "") or (str(self._model) if hasattr(self, "_model") else "")
+        record_llm_tokens(
+            tokens=usage.total_tokens,
+            model=model_name,
+            user_id=current_user_id.get(),
+        )
         return LLMResponse(
             text=result.output,
             usage=LLMUsage(
@@ -230,6 +238,17 @@ class PydanticAILLMClient:
             )
 
         result = await self._run_with_retry(_call)
+
+        try:
+            usage = result.usage()
+            model_name = getattr(result, "model_name", "") or (str(self._model) if hasattr(self, "_model") else "")
+            record_llm_tokens(
+                tokens=usage.total_tokens,
+                model=model_name,
+                user_id=current_user_id.get(),
+            )
+        except Exception:
+            pass
 
         return (result.output or "", records)
 

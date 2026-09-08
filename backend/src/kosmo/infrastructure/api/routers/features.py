@@ -368,10 +368,11 @@ def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCa
 async def delete_feature(
     project_id: str,
     feature_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     uc: Annotated[DeleteFeatureUseCase, Depends(_delete_feature_uc)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> dict[str, str]:
+
     try:
         feature = await uc.execute(
             project_id=ProjectId(project_id),
@@ -390,6 +391,7 @@ async def delete_feature(
         use_case=container.codegen.delete_feature_code,
         input_data=DeleteFeatureCodeInput(feature=feature),
         project_id=str(feature.project_id),
+        user_id=principal.subject,
     )
 
     return {"status": "deleted", "feature_id": feature_id}

@@ -125,8 +125,18 @@ def test_contracts_init_includes_core_bounded_contexts() -> None:
     assert UXContext is not None
 
     # Telemetry
-    from kosmo.contracts import TelemetryPort, record_auth_event, traced
+    from kosmo.contracts import (
+        TelemetryPort,
+        record_auth_event,
+        record_codegen_duration,
+        record_codegen_retries,
+        record_llm_tokens,
+        traced,
+    )
 
     assert TelemetryPort is not None
     assert record_auth_event is not None
+    assert record_codegen_duration is not None
+    assert record_codegen_retries is not None
+    assert record_llm_tokens is not None
     assert traced is not None

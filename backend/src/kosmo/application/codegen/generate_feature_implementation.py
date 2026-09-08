@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import dataclasses
 import re
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -60,6 +61,7 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
+from kosmo.contracts.telemetry import record_codegen_duration, record_codegen_retries
 from kosmo.domain.codegen.plan_rules import validate_plan
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
 from kosmo.domain.sdd.document_converters import slugify_spanish
@@ -307,8 +309,15 @@ class GenerateFeatureImplementationUseCase:
                 await event_collector(event)
 
         # 5. Adquirir lock y preparar workspace
+        total_start: float = time.monotonic()
+        _log.info(
+            "codegen.pipeline_started",
+            feature_id=str(feature.id),
+            project_id=str(feature.project_id),
+        )
         await self._workspace_manager.acquire_lock(feature.project_id)
         workspace: CodeWorkspace | None = None
+
         session_id: str | None = None
 
         try:
@@ -375,6 +384,7 @@ class GenerateFeatureImplementationUseCase:
             )
 
             # 7. Fase Plan: análisis UX y prompt al Plan Agent
+            plan_start = time.monotonic()
             feature_slug = slugify_spanish(feature.slug) or feature.slug
             project_context = await self._build_project_context(
                 feature.project_id,
@@ -455,8 +465,11 @@ class GenerateFeatureImplementationUseCase:
             validate_plan(impl_plan, workspace.manifest_files, workspace_dir)
             impl = dataclasses.replace(impl, plan=impl_plan)
             await self._implementation_repo.save(impl)
+            record_codegen_duration("plan", time.monotonic() - plan_start, status="success")
 
             # 8. Fase Build: enviar prompt al Build Agent
+            build_start = time.monotonic()
+
             plan_lines = "\n".join(
                 f"- [{op.action}] {op.path}" + (f" — {op.description}" if op.description else "")
                 for op in impl_plan.operations
@@ -522,9 +535,12 @@ class GenerateFeatureImplementationUseCase:
                     raise
 
             generated_files.update(_collect_workspace_feature_files(workspace_dir, feature_slug, self._fs_reader))
+            record_codegen_duration("build", time.monotonic() - build_start, status="success")
 
             # 9. Fase Validación & Reintentos (hasta max_retries)
+            val_start = time.monotonic()
             attempt = 0
+
             validation_result: ValidationRunResult | None = None
             retry_history: list[tuple[str, ...]] = []
 
@@ -650,6 +666,19 @@ class GenerateFeatureImplementationUseCase:
 
             # 10. Conclusión del pipeline
             if validation_result is not None and validation_result.all_passed:
+                total_duration = time.monotonic() - total_start
+                val_duration = time.monotonic() - val_start
+                record_codegen_duration("validate", val_duration, status="success")
+                record_codegen_duration("total", total_duration, status="success")
+                record_codegen_retries(retries_count=max(0, attempt - 1), success=True)
+                _log.info(
+                    "codegen.pipeline_completed",
+                    feature_id=str(feature.id),
+                    project_id=str(feature.project_id),
+                    total_duration_seconds=round(total_duration, 2),
+                    attempts=attempt,
+                    generated_files_count=len(generated_files),
+                )
                 await _emit(
                     OpenCodeEvent(
                         event_type=OpenCodeEventType.BUILD_PROGRESS,
@@ -657,6 +686,7 @@ class GenerateFeatureImplementationUseCase:
                         data={"delta": "Guardando cambios y publicando vista previa...", "stage": "finishing"},
                     )
                 )
+
                 commit_msg = f"feat({feature_slug}): implement feature {feature.display_id} - {feature.title}"
                 await self._workspace_manager.commit_workspace(
                     feature.project_id,
@@ -805,6 +835,18 @@ class GenerateFeatureImplementationUseCase:
                 )
             else:
                 # CA-04: Reintentos agotados -> rollback + REQUIRES_REVIEW
+                total_duration = time.monotonic() - total_start
+                val_duration = time.monotonic() - val_start
+                record_codegen_duration("validate", val_duration, status="failure")
+                record_codegen_duration("total", total_duration, status="failure")
+                record_codegen_retries(retries_count=max(0, attempt - 1), success=False)
+                _log.warning(
+                    "codegen.pipeline_requires_review",
+                    feature_id=str(feature.id),
+                    project_id=str(feature.project_id),
+                    total_duration_seconds=round(total_duration, 2),
+                    attempts=attempt,
+                )
                 await self._workspace_manager.rollback_workspace(feature.project_id)
 
                 # Construir mensaje de error con historial
@@ -850,6 +892,16 @@ class GenerateFeatureImplementationUseCase:
                 )
 
         except Exception:
+            if "total_start" in locals():
+                total_duration = time.monotonic() - total_start
+                record_codegen_duration("total", total_duration, status="error")
+                _log.exception(
+                    "codegen.pipeline_failed",
+                    feature_id=str(input_data.feature_id),
+                    project_id=str(feature.project_id) if "feature" in locals() else None,
+                    total_duration_seconds=round(total_duration, 2),
+
+                )
             with contextlib.suppress(Exception):
                 await self._workspace_manager.rollback_workspace(feature.project_id)
             with contextlib.suppress(Exception):
@@ -862,6 +914,7 @@ class GenerateFeatureImplementationUseCase:
                             updated_at=datetime.now(UTC),
                         )
                     )
+
             raise
         finally:
             if session_id is not None:

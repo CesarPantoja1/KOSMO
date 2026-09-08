@@ -87,6 +87,7 @@ async def start_implementation(
         use_case=use_case,
         input_data=input_data,
         project_id=str(feature.project_id),
+        user_id=principal.subject,
     )
 
     return GenerateImplementationResponse(implementation_id=impl_id)

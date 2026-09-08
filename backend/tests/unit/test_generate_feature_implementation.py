@@ -2743,3 +2743,72 @@ def test_get_existing_db_schema_context_with_fs_reader() -> None:
     empty_fs = _FakeTestFsReader({})
     assert _get_existing_db_schema_context("/virtual/dir", empty_fs) == ""
     assert _get_existing_db_schema_context(None, fake_fs) == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_generate_feature_implementation_records_telemetry_metrics() -> None:
+    from kosmo.contracts.telemetry import set_telemetry_provider
+    from tests.unit.test_telemetry import FakeTelemetryProvider
+
+    fake_telemetry = FakeTelemetryProvider()
+    set_telemetry_provider(fake_telemetry)
+
+    try:
+        feature_repo = InMemoryFeatureRepository()
+        requirement_repo = InMemoryRequirementRepository()
+        activity_diagram_repo = InMemoryActivityDiagramRepository()
+        workspace_manager = FakeWorkspaceManager()
+        opencode_client = FakeOpenCodeClient()
+        code_runner = FakeCodeRunner(should_pass=True)
+        impl_repo = FakeFeatureImplementationRepository()
+        trace_repo = InMemoryTraceabilityRepository()
+
+        feat_id = FeatureId("feat_telemetry")
+        prj_id = ProjectId("prj_telemetry")
+        feature = Feature(
+            id=feat_id,
+            number=1,
+            title="Telemetría Feature",
+            slug="telemetria-feature",
+            description="Test telemetría",
+            project_id=prj_id,
+        )
+        await feature_repo.save(feature)
+        await requirement_repo.save(feat_id, "# REQ-1.1: Test")
+        await activity_diagram_repo.save(
+            DiagramaActividad(
+                id=ActivityDiagramId("diag_tel"),
+                feature_id=feat_id,
+                diagram_syntax="@startuml\nstart\n:accion;\nstop\n@enduml",
+            )
+        )
+
+        use_case = GenerateFeatureImplementationUseCase(
+            feature_repo=feature_repo,
+            requirement_repo=requirement_repo,
+            activity_diagram_repo=activity_diagram_repo,
+            workspace_manager=workspace_manager,
+            opencode_client=opencode_client,
+            code_runner=code_runner,
+            implementation_repo=impl_repo,
+            traceability_repo=trace_repo,
+        )
+
+        output = await use_case.execute(GenerateFeatureImplementationInput(feature_id=feat_id))
+        assert output.success is True
+
+        phases = [d[0] for d in fake_telemetry.codegen_durations]
+        assert "plan" in phases
+        assert "build" in phases
+        assert "validate" in phases
+        assert "total" in phases
+
+        for _phase, dur, st in fake_telemetry.codegen_durations:
+            assert dur >= 0
+            assert st == "success"
+
+        assert len(fake_telemetry.codegen_retries) == 1
+        assert fake_telemetry.codegen_retries[0] == (1, True)
+    finally:
+        set_telemetry_provider(None)

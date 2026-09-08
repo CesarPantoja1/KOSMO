@@ -20,6 +20,21 @@ class OpenTelemetryProvider(TelemetryPort):
             unit="1",
             description="Authentication events by type",
         )
+        self._codegen_duration = self._meter.create_histogram(
+            "kosmo.codegen.phase_duration_seconds",
+            unit="s",
+            description="Duration of codegen pipeline phases in seconds",
+        )
+        self._codegen_retries = self._meter.create_counter(
+            "kosmo.codegen.retries",
+            unit="1",
+            description="Number of codegen validation retries",
+        )
+        self._llm_tokens = self._meter.create_counter(
+            "kosmo.llm.tokens",
+            unit="1",
+            description="LLM tokens consumed",
+        )
 
     def trace_sync(
         self,
@@ -61,3 +76,37 @@ class OpenTelemetryProvider(TelemetryPort):
         if user_id is not None:
             attributes["user_id"] = user_id
         self._auth_events.add(1, attributes)
+
+    def record_codegen_duration(
+        self,
+        phase: str,
+        duration_seconds: float,
+        status: str = "success",
+    ) -> None:
+        self._codegen_duration.record(
+            duration_seconds,
+            {"phase": phase, "status": status},
+        )
+
+    def record_codegen_retries(
+        self,
+        retries_count: int,
+        success: bool,
+    ) -> None:
+        self._codegen_retries.add(
+            retries_count,
+            {"success": str(success).lower()},
+        )
+
+    def record_llm_tokens(
+        self,
+        tokens: int,
+        model: str = "",
+        user_id: str | None = None,
+    ) -> None:
+        attributes: dict[str, str] = {}
+        if model:
+            attributes["model"] = model
+        if user_id:
+            attributes["user_id"] = user_id
+        self._llm_tokens.add(tokens, attributes)

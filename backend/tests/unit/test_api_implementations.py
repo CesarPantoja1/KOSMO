@@ -83,6 +83,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
     kwargs = mock_broker.start_implementation.call_args.kwargs
     assert kwargs["implementation_id"] == "impl_feat_01ULXGXXXX"
     assert kwargs["project_id"] == "prj_01"
+    assert kwargs["user_id"] == "usr_123"
 
 
 def test_stream_implementation_events(client: TestClient, mock_broker, valid_token_headers: dict[str, str]) -> None:
@@ -464,6 +465,7 @@ def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
     assert kwargs["implementation_id"] == "impl_feat_del_api"
     assert kwargs["input_data"].feature.id == FeatureId("feat_del_api")
     assert kwargs["input_data"].feature.slug == "registrar-productos"
+    assert kwargs["user_id"] == "usr_123"
 
 
 def test_get_implementation_by_feature_returns_dynamic_metrics(

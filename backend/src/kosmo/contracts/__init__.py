@@ -200,6 +200,9 @@ from kosmo.contracts.telemetry import (
     TelemetryPort,
     get_telemetry_provider,
     record_auth_event,
+    record_codegen_duration,
+    record_codegen_retries,
+    record_llm_tokens,
     set_telemetry_provider,
     traced,
 )
@@ -377,6 +380,9 @@ __all__ = [
     "get_telemetry_provider",
     "mask_api_key",
     "record_auth_event",
+    "record_codegen_duration",
+    "record_codegen_retries",
+    "record_llm_tokens",
     "set_telemetry_provider",
     "traced",
 ]

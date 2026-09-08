@@ -74,3 +74,43 @@ async def test_run_with_retry_does_not_retry_value_error() -> None:
 
     # ValueError no debe reintentarse (falla inmediata)
     assert call_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_complete_records_llm_tokens() -> None:
+    from unittest.mock import AsyncMock
+
+    from kosmo.contracts.auth.context import current_user_id
+    from kosmo.contracts.llm.ports import PromptTemplate
+    from kosmo.contracts.telemetry import set_telemetry_provider
+    from tests.unit.test_telemetry import FakeTelemetryProvider
+
+    fake_provider = FakeTelemetryProvider()
+    set_telemetry_provider(fake_provider)
+
+    mock_agent = MagicMock()
+    mock_run_result = MagicMock()
+    mock_run_result.output = "test output"
+    mock_run_result.model_name = "test-model"
+    mock_usage = MagicMock()
+    mock_usage.input_tokens = 10
+    mock_usage.output_tokens = 20
+    mock_usage.total_tokens = 30
+    mock_run_result.usage.return_value = mock_usage
+    mock_agent.run = AsyncMock(return_value=mock_run_result)
+
+    client = PydanticAILLMClient(model=MagicMock())
+    client._get_agent = MagicMock(return_value=mock_agent)
+
+    token = current_user_id.set("usr_test_llm")
+    try:
+        response = await client.complete(PromptTemplate(system_prompt="sys", user_prompt="usr"))
+        assert response.text == "test output"
+        assert response.usage.total_tokens == 30
+
+        assert len(fake_provider.llm_tokens) == 1
+        assert fake_provider.llm_tokens[0] == (30, "test-model", "usr_test_llm")
+    finally:
+        current_user_id.reset(token)
+        set_telemetry_provider(None)
