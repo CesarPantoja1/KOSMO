@@ -582,3 +582,116 @@ class LocalWorkspaceManager(WorkspaceManagerPort):
             (markers_dir / str(project_id)).write_text(str(target_dir), encoding="utf-8")
 
         await asyncio.to_thread(_sync_publish_marker)
+
+    async def reconcile_orphan_previews(self) -> int:
+        """Reconcilia y limpia marcadores de preview y entradas de puertos huérfanas en startup.
+
+        Elimina de `<workspaces_root>/.preview-active/` y de `<workspaces_root>/.preview-ports.json`
+        cualquier proyecto cuyo workspace ya no exista en disco o que ya no esté registrado
+        en el repositorio de proyectos.
+        """
+        root_dir = self._workspaces_root.resolve()
+        markers_dir = root_dir / ".preview-active"
+        ports_file = root_dir / ".preview-ports.json"
+
+        if not root_dir.exists():
+            return 0
+
+        def _scan_filesystem() -> tuple[set[str], list[str], dict[str, object]]:
+            orphans: set[str] = set()
+            active_candidates: list[str] = []
+            ports: dict[str, object] = {}
+
+            if markers_dir.exists() and markers_dir.is_dir():
+                for marker in markers_dir.iterdir():
+                    if not marker.is_file():
+                        continue
+                    project_id_str = marker.name
+                    try:
+                        raw_target = marker.read_text(encoding="utf-8").strip()
+                        target_dir = Path(raw_target) if raw_target else None
+                    except OSError:
+                        target_dir = None
+
+                    default_dir = root_dir / project_id_str
+                    ws_dir_exists = (target_dir is not None and target_dir.is_dir()) or default_dir.is_dir()
+
+                    if not ws_dir_exists:
+                        orphans.add(project_id_str)
+                    else:
+                        active_candidates.append(project_id_str)
+
+            if ports_file.exists():
+                try:
+                    raw_ports = json.loads(ports_file.read_text(encoding="utf-8"))
+                    if isinstance(raw_ports, dict):
+                        ports = cast(dict[str, object], raw_ports)
+                        for pid_str, entry in ports.items():
+                            ws_dir: Path | None = None
+                            if isinstance(entry, dict):
+                                entry_dict = cast(dict[str, object], entry)
+                                ws_val = entry_dict.get("workspace")
+                                if isinstance(ws_val, str) and ws_val.strip():
+                                    ws_dir = Path(ws_val.strip())
+                            ws_exists = (ws_dir is not None and ws_dir.is_dir()) or (root_dir / pid_str).is_dir()
+                            if not ws_exists:
+                                orphans.add(pid_str)
+                except (ValueError, OSError):
+                    pass
+
+            return orphans, active_candidates, ports
+
+        orphans, active_candidates, ports = await asyncio.to_thread(_scan_filesystem)
+
+        if self._project_repo is not None:
+            for pid_str in active_candidates:
+                try:
+                    proj = await self._project_repo.by_id(ProjectId(pid_str))
+                    if proj is None:
+                        orphans.add(pid_str)
+                except Exception:
+                    pass
+
+        if not orphans:
+            return 0
+
+        if self._preview_publisher is not None:
+            for pid_str in orphans:
+                try:
+                    await self._preview_publisher.unpublish(ProjectId(pid_str))
+                except Exception:
+                    _log.warning(
+                        "workspace.preview_unpublish_failed",
+                        project_id=pid_str,
+                        exc_info=True,
+                    )
+
+        def _cleanup_orphans() -> None:
+            if markers_dir.exists():
+                for pid_str in orphans:
+                    (markers_dir / pid_str).unlink(missing_ok=True)
+
+            ports_changed = False
+            for pid_str in orphans:
+                if pid_str in ports:
+                    ports.pop(pid_str, None)
+                    ports_changed = True
+
+            if ports_changed and ports_file.parent.exists():
+                temporary_ports_file = ports_file.with_suffix(".json.tmp")
+                temporary_ports_file.write_text(json.dumps(ports, indent=2) + "\n", encoding="utf-8")
+                temporary_ports_file.replace(ports_file)
+
+        await asyncio.to_thread(_cleanup_orphans)
+
+        _log.info(
+            "workspace.orphan_previews_reconciled",
+            count=len(orphans),
+            project_ids=sorted(orphans),
+        )
+        return len(orphans)
+
+
+async def recover_orphan_previews(workspace_manager: LocalWorkspaceManager) -> int:
+    """Reconcilia y limpia marcadores de preview huérfanos del workspace manager."""
+    return await workspace_manager.reconcile_orphan_previews()

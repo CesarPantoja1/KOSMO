@@ -37,6 +37,7 @@ from kosmo.infrastructure.api.routers.requirements import router as requirements
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.routers.traceability import router as traceability_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
+from kosmo.infrastructure.codegen.workspace import recover_orphan_previews
 from kosmo.infrastructure.persistence.postgres.outbox import OutboxHandler, run_outbox_worker
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
 
@@ -279,6 +280,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             project_repo=components.repos.projects,
             deployment_worker=components.integrations.deployment_worker,
         )
+
+    # Reconciliación best-effort de previews huérfanas tras un reinicio del backend:
+    # limpiar marcadores en .preview-active/ y entradas en .preview-ports.json
+    # cuyos workspaces ya no existen en disco o en la base de datos.
+    with contextlib.suppress(Exception):
+        await recover_orphan_previews(components.codegen.workspace_manager)
 
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:

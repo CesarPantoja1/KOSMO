@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 
 from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
+    PreviewPublisherPort,
     ValidationStep,
     ValidationStepResult,
     WorkspaceRepository,
@@ -21,6 +23,7 @@ from kosmo.domain.sdd.document_converters import markdown_to_document
 from kosmo.infrastructure.codegen.workspace import (
     LocalWorkspaceManager,
     WorkspaceLockedError,
+    recover_orphan_previews,
 )
 from kosmo.infrastructure.git import GitError
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
@@ -1273,3 +1276,189 @@ async def test_workspace_manager_delegates_manifest_to_thread() -> None:
             # Assert
             assert isinstance(manifest, tuple)
             spy_to_thread.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_removes_orphan_markers_and_ports() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        valid_project_id = ProjectId("prj_valid")
+        valid_ws = await manager.ensure_workspace(valid_project_id)
+        assert valid_ws.workspace_dir is not None
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+
+        # Marker válido
+        (markers_dir / "prj_valid").write_text(valid_ws.workspace_dir, encoding="utf-8")
+
+        # Marker huérfano (el directorio al que apunta no existe)
+        non_existent_path = str(tmp_root / "prj_orphan_nonexistent")
+        (markers_dir / "prj_orphan").write_text(non_existent_path, encoding="utf-8")
+
+        # Puertos con ambos proyectos
+        ports_file = tmp_root / ".preview-ports.json"
+        ports_file.write_text(
+            json.dumps(
+                {
+                    "prj_valid": {"port": 3000, "url": "http://localhost:3001"},
+                    "prj_orphan": {"port": 3002, "url": "http://localhost:3003"},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        assert (markers_dir / "prj_orphan").exists() is False
+        assert (markers_dir / "prj_valid").exists() is True
+        saved_ports = json.loads(ports_file.read_text(encoding="utf-8"))
+        assert "prj_orphan" not in saved_ports
+        assert "prj_valid" in saved_ports
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_removes_ports_entry_without_workspace() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        ports_file = tmp_root / ".preview-ports.json"
+        ports_file.write_text(
+            json.dumps(
+                {
+                    "prj_zombie": {
+                        "port": 3005,
+                        "workspace": str(tmp_root / "prj_zombie"),
+                        "url": "http://localhost:3005",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        saved_ports = json.loads(ports_file.read_text(encoding="utf-8"))
+        assert "prj_zombie" not in saved_ports
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_cleans_up_when_project_not_in_db() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        project_repo = InMemoryProjectRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+        )
+
+        # Proyecto que existe en DB y en disco
+        valid_pid = ProjectId("prj_in_db")
+        await project_repo.save(
+            Project(
+                id=valid_pid,
+                name="Valid",
+                slug="valid",
+                description="Valid",
+                owner_id=UserId("usr_1"),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
+        ws_valid = await manager.ensure_workspace(valid_pid)
+        assert ws_valid.workspace_dir is not None
+
+        # Proyecto que existe en disco pero NO en DB (fue borrado de la DB)
+        deleted_pid = ProjectId("prj_deleted_from_db")
+        ws_deleted = await manager.ensure_workspace(deleted_pid)
+        assert ws_deleted.workspace_dir is not None
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+        (markers_dir / "prj_in_db").write_text(ws_valid.workspace_dir, encoding="utf-8")
+        (markers_dir / "prj_deleted_from_db").write_text(ws_deleted.workspace_dir, encoding="utf-8")
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        assert (markers_dir / "prj_deleted_from_db").exists() is False
+        assert (markers_dir / "prj_in_db").exists() is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_calls_unpublish_on_publisher() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        publisher = AsyncMock(spec=PreviewPublisherPort)
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            preview_publisher=publisher,
+        )
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+        (markers_dir / "prj_unpublish_target").write_text(str(tmp_root / "nonexistent"), encoding="utf-8")
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        publisher.unpublish.assert_awaited_once_with(ProjectId("prj_unpublish_target"))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_returns_zero_when_no_orphans_or_empty() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        # Act & Assert on empty directory
+        assert await manager.reconcile_orphan_previews() == 0
+
+    # Nonexistent root
+    manager_nonexistent = LocalWorkspaceManager(workspaces_root=Path(tmp_dir) / "does_not_exist", git_init=False)
+    assert await manager_nonexistent.reconcile_orphan_previews() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recover_orphan_previews_helper_delegates() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+        (markers_dir / "prj_helper_orphan").write_text(str(tmp_root / "nonexistent"), encoding="utf-8")
+
+        # Act
+        reconciled = await recover_orphan_previews(manager)
+
+        # Assert
+        assert reconciled == 1
+        assert (markers_dir / "prj_helper_orphan").exists() is False
