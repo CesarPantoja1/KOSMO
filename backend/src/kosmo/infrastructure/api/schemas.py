@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from kosmo.contracts.ai.chat import HistorialChat, MensajeChat
 from kosmo.contracts.auth import TokenPair
@@ -1038,11 +1038,20 @@ class PushGitHubRequest(BaseModel):
         default=None, min_length=1, max_length=100, description="Nombre deseado para el repositorio"
     )
     is_public: bool = Field(
-        default=False, description="Visibilidad del repositorio (privado por defecto; público requiere confirmación)"
+        default=True, description="Visibilidad del repositorio (siempre público; no se permiten repositorios privados)"
     )
     commit_message: str | None = Field(
         default=None, max_length=300, description="Mensaje descriptivo para el commit de sincronización"
     )
+
+    @field_validator("is_public")
+    @classmethod
+    def validate_is_public(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(
+                "No se permiten repositorios privados. Todos los repositorios de GitHub deben ser públicos."
+            )
+        return v
 
 
 # ── Cloud Deployment (HU-24) ──

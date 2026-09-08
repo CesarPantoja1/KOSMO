@@ -2217,7 +2217,7 @@ paths:
       summary: Obtener estado de integración con GitHub del proyecto
       description: >-
         Devuelve los metadatos del repositorio remoto en GitHub asociado al proyecto, incluyendo la URL remota,
-        visibilidad (privado/público), fecha de la última sincronización y hash del último commit enviado.
+        visibilidad pública, fecha de la última sincronización y hash del último commit enviado.
       operationId: project_github_get_status
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -2240,8 +2240,8 @@ paths:
       description: >-
         Orquesta la subida del código fuente del proyecto hacia GitHub.
         1. Ejecuta la validación previa del workspace en un contenedor efímero.
-        2. Si el proyecto aún no tiene un repositorio asociado, lo crea vía API de GitHub con el nombre y visibilidad
-           indicados (privado por defecto o público previa confirmación) y configura el remote origin.
+        2. Si el proyecto aún no tiene un repositorio asociado, lo crea vía API de GitHub con visibilidad pública obligatoria
+           y configura el remote origin.
         3. Si el repositorio ya existe, realiza un push incremental con los nuevos commits.
         4. Actualiza y persiste los metadatos de sincronización en la base de datos.
       operationId: project_github_push
@@ -4126,8 +4126,8 @@ components:
         is_public:
           type: boolean
           nullable: true
-          description: Visibilidad del repositorio (True = público, False = privado)
-          example: false
+          description: Visibilidad del repositorio (True = público)
+          example: true
         last_push_at:
           type: string
           format: date-time
@@ -4167,9 +4167,9 @@ components:
           example: "kosmo-gestion-inventarios"
         is_public:
           type: boolean
-          default: false
-          description: Visibilidad del repositorio (privado por defecto; público requiere confirmación previa)
-          example: false
+          default: true
+          description: Visibilidad del repositorio (siempre público; no se permiten repositorios privados)
+          example: true
         commit_message:
           type: string
           maxLength: 300

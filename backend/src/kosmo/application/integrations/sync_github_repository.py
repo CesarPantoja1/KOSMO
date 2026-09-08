@@ -34,7 +34,7 @@ class SyncGitHubRepositoryCommand:
     project_id: ProjectId
     project_name: str | None = None
     repo_name: str | None = None
-    is_public: bool = False
+    is_public: bool = True
     commit_message: str | None = None
 
 
@@ -68,6 +68,11 @@ class SyncGitHubRepositoryUseCase:
         cmd: SyncGitHubRepositoryCommand,
         user_id: UserId,
     ) -> ProjectGitHubIntegration:
+        if cmd.is_public is False:
+            raise ValueError(
+                "No se permiten repositorios privados. Todos los repositorios de GitHub deben ser públicos."
+            )
+
         user_integration = await self._user_repo.get_by_user_id(user_id)
         if not user_integration:
             raise ValueError("El usuario no tiene su cuenta vinculada con GitHub.")
@@ -81,7 +86,7 @@ class SyncGitHubRepositoryUseCase:
             project_integration = ProjectGitHubIntegration(
                 project_id=cmd.project_id,
                 repo_name=cmd.repo_name,
-                is_public=cmd.is_public,
+                is_public=True,
                 sync_status=GitHubSyncStatus.NOT_CREATED,
             )
 
@@ -127,7 +132,6 @@ class SyncGitHubRepositoryUseCase:
             else:
                 user = await self._github_client.get_authenticated_user(token)
                 repo_name = cmd.repo_name or project_integration.repo_name or f"project-{cmd.project_id}"
-                is_public = cmd.is_public or project_integration.is_public
 
                 exists = await self._github_client.check_repository_exists(token, user.login, repo_name)
                 if not exists:
@@ -144,7 +148,7 @@ class SyncGitHubRepositoryUseCase:
                         description=(
                             f"Repositorio sincronizado automáticamente desde KOSMO para proyecto {project_display}"
                         ),
-                        is_private=not is_public,
+                        is_private=False,
                     )
                     repo_url = github_repo.clone_url
                     if github_repo.id:
@@ -167,7 +171,7 @@ class SyncGitHubRepositoryUseCase:
                     project_integration,
                     repo_url=repo_url,
                     repo_name=repo_name,
-                    is_public=is_public,
+                    is_public=True,
                 )
                 await self._project_repo.save(project_integration)
 

@@ -349,14 +349,14 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
         clone_url="https://github.com/octocat/custom-repo-name.git",
         html_url="https://github.com/octocat/custom-repo-name",
         owner="octocat",
-        is_private=True,
+        is_private=False,
     )
     git_workspace.push.return_value = "initial_hash_001"
 
     cmd = SyncGitHubRepositoryCommand(
         project_id=project_id,
         repo_name="custom-repo-name",
-        is_public=False,
+        is_public=True,
         commit_message="feat: initial project generation",
     )
 
@@ -368,7 +368,7 @@ async def test_sync_github_repository_first_push_creates_repo_and_sets_metadata(
         token="token",
         name="custom-repo-name",
         description="Repositorio sincronizado automáticamente desde KOSMO para proyecto proj-initial",
-        is_private=True,
+        is_private=False,
     )
     git_workspace.remote_add_or_update.assert_called_once_with(
         "/tmp/ws-initial", "origin", "https://github.com/octocat/custom-repo-name.git"
@@ -613,7 +613,7 @@ async def test_sync_github_repository_uses_project_name_in_description(
         clone_url="https://github.com/octocat/repo.git",
         html_url="https://github.com/octocat/repo",
         owner="octocat",
-        is_private=True,
+        is_private=False,
     )
     git_workspace.build_authenticated_url.return_value = "https://auth-url"
     git_workspace.push.return_value = "hash123"
@@ -633,7 +633,7 @@ async def test_sync_github_repository_uses_project_name_in_description(
         description=(
             "Repositorio sincronizado automáticamente desde KOSMO para proyecto Sistema de Gestión Hospitalaria"
         ),
-        is_private=True,
+        is_private=False,
     )
 
 
@@ -689,7 +689,7 @@ async def test_sync_github_repository_resolves_project_name_from_sdd_project_rep
         clone_url="https://github.com/octocat/repo.git",
         html_url="https://github.com/octocat/repo",
         owner="octocat",
-        is_private=True,
+        is_private=False,
     )
     git_workspace.build_authenticated_url.return_value = "https://auth-url"
     git_workspace.push.return_value = "hash123"
@@ -705,5 +705,24 @@ async def test_sync_github_repository_resolves_project_name_from_sdd_project_rep
         token="token",
         name=f"project-{project_id}",
         description="Repositorio sincronizado automáticamente desde KOSMO para proyecto Plataforma Educativa",
-        is_private=True,
+        is_private=False,
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_rejects_private_repository(
+    use_case: SyncGitHubRepositoryUseCase,
+) -> None:
+    # Arrange
+    user_id = UserId("usr-123")
+    cmd = SyncGitHubRepositoryCommand(
+        project_id=ProjectId("prj-private-test"),
+        is_public=False,
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        await use_case.execute(cmd, user_id)
+
+    assert "No se permiten repositorios privados" in str(exc_info.value)

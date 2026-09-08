@@ -383,7 +383,7 @@ class ProjectIntegrationModel(Base):
     provider: Mapped[str] = mapped_column(String(32), nullable=False, default="github")
     repo_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     repo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     default_branch: Mapped[str] = mapped_column(String(100), nullable=False, default="main")
     last_push_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_commit_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
