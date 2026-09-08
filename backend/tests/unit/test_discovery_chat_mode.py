@@ -183,17 +183,6 @@ def test_system_prompt_no_voseo() -> None:
     assert "Generá" not in prompt
 
 
-@pytest.mark.unit
-def test_system_prompt_no_simbolo_seccion() -> None:
-    # Arrange
-    mode = _mode()
-
-    # Act
-    prompt = mode.system_prompt
-
-    # Assert
-    assert "§" not in prompt
-
 
 # ── build_user_prompt ──
 

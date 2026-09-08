@@ -154,7 +154,7 @@ introspecciÃ³n de contratos de datos para el Frontend.
 ### Respuestas de error
 
 Todos los errores de autenticaciÃ³n siguen el esquema `OAuthErrorResponse`
-(RFC 6749 Â§5.2). Los errores de infraestructura usan `HttpErrorResponse`.
+(RFC 6749). Los errores de infraestructura usan `HttpErrorResponse`.
 """
 
 _SERVERS = [

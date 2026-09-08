@@ -374,7 +374,7 @@ class UserPublic(BaseModel):
 
 
 class OAuthErrorResponse(BaseModel):
-    """Respuesta de error compatible con RFC 6749 §5.2.
+    """Respuesta de error compatible con RFC 6749.
 
     Todos los endpoints de autenticación devuelven este esquema cuando
     falla la operación, permitiendo al cliente manejar errores de forma

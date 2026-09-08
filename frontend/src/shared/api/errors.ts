@@ -87,7 +87,7 @@ export function parseApiError(res: Response, body: unknown): ApiError {
 		});
 	}
 
-	// RFC 6749 §5.2 (flujo OAuth)
+	// RFC 6749 (flujo OAuth)
 	if (typeof body.error === 'string') {
 		return new ApiError({
 			status,
