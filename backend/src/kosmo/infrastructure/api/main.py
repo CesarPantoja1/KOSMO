@@ -348,11 +348,12 @@ async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],
+    allow_origins=settings.parsed_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.add_middleware(RequestLoggingMiddleware)
 
 if not settings.auth_disabled:

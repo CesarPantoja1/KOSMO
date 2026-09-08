@@ -156,5 +156,27 @@ class Settings(BaseSettings):
 
         return self
 
+    @property
+    def parsed_cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _validate_cors_configuration(self) -> Self:
+        if self.env == "production":
+            origins = self.parsed_cors_origins
+            if not origins:
+                raise ValueError("Debe configurar al menos un origen en CORS_ALLOWED_ORIGINS para producción")
+            if any(o == "*" for o in origins):
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS no puede ser '*' en entorno de producción. "
+                    "Debe especificar orígenes explícitos (ej. 'https://app.kosmo.dev')."
+                )
+            for origin in origins:
+                if not (origin.startswith("https://") or origin.startswith("http://")):
+                    raise ValueError(
+                        f"Origen CORS inválido '{origin}' en producción. Debe iniciar con 'https://' o 'http://'."
+                    )
+        return self
+
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
