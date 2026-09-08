@@ -281,9 +281,7 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                     if isinstance(raw_args, str) and raw_args.strip().startswith("{"):
                         with contextlib.suppress(Exception):
                             raw_args = json.loads(raw_args)
-                    args_dict: dict[str, Any] = (
-                        cast(dict[str, Any], raw_args) if isinstance(raw_args, dict) else {}
-                    )
+                    args_dict: dict[str, Any] = cast(dict[str, Any], raw_args) if isinstance(raw_args, dict) else {}
                     raw_path = (
                         part_dict.get("path")
                         or args_dict.get("path")

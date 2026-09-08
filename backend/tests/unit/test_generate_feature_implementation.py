@@ -2488,10 +2488,7 @@ async def test_build_timeout_recovers_when_workspace_has_valid_feature_structure
     assert output.success is True
     assert output.status == FeatureImplementationStatus.IMPLEMENTED
     # Verified that progress event indicating recovery was emitted
-    recovery_events = [
-        e for e in output.events
-        if "detectó código generado en disco" in str(e.data.get("delta", ""))
-    ]
+    recovery_events = [e for e in output.events if "detectó código generado en disco" in str(e.data.get("delta", ""))]
     assert len(recovery_events) == 1
     # Files collected accurately from disk
     assert "src/app/valid-recovery/page.tsx" in output.generated_files
@@ -2658,4 +2655,3 @@ async def test_fix_prompt_filters_opencode_error_event_without_aborting_retry(
     assert output.success is True
     error_events = [e for e in output.events if e.event_type == OpenCodeEventType.ERROR]
     assert len(error_events) == 0
-

@@ -823,4 +823,3 @@ async def test_send_prompt_yields_file_edits_from_tool_calls() -> None:
         "src/lib/feature-registry.ts",
     ]
     await client.aclose()
-

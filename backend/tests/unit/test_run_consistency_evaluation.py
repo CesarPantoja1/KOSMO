@@ -367,4 +367,3 @@ async def test_run_evaluation_handles_analisis_fallido_status() -> None:
     assert len(rows) == 1
     assert rows[0].status == ConsistencyEvaluationStatus.FAILED
     assert "API key inválida" in (rows[0].failure_reason or "")
-

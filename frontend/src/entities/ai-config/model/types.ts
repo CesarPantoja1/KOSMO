@@ -15,7 +15,7 @@ export interface AIProviderInfo {
 }
 
 export const DEFAULT_AI_PROVIDER: AIProvider = 'google';
-export const DEFAULT_AI_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_AI_MODEL = 'gemini-3.8-flash';
 
 export const TIER_LABELS: Record<AIModelTier, string> = {
 	flagship: 'Máxima capacidad',
