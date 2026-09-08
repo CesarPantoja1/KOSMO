@@ -3,15 +3,7 @@
 import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
 import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
-import { connectIntegration, getIntegrationStatus } from '@/entities/integration';
-import {
-	buildRailwayAuthUrl,
-	consumeOAuthCodeVerifier,
-	consumeOAuthState,
-	createOAuthAuthorization,
-	getDefaultRedirectUri,
-} from '@/entities/integration';
-import { formatApiError } from '@/shared/api';
+import { useRailwayOAuth } from '@/entities/integration';
 import { useProjectStore } from '@/entities/project';
 import { useProjectGithubRepo, type ProjectGithubViewState } from '@/features/github-sync';
 import {
@@ -28,13 +20,12 @@ import {
 	SmallCheckIcon,
 	SparkleIcon,
 	StarIcon,
-	toast,
 	WarningIcon,
 } from '@/shared/ui';
 import { GestionRepositorioGitHub } from '@/widgets';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { PreconditionState } from '@/entities/deploy';
 import { useDeployStatus } from '@/entities/deploy';
 import { DeployPreconditionPanel } from './DeployPreconditionPanel';
@@ -110,11 +101,11 @@ const ImplementationSummaryPage = () => {
 	const requiresReviewByFeature = useImplementationStore((s) => s.requiresReviewByFeature);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
-	const [railwayConnected, setRailwayConnected] = useState<boolean | null>(null);
 
 	const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
 	const github = useProjectGithubRepo(currentProjectId);
 	const deploy = useDeployStatus(currentProjectId);
+	const railway = useRailwayOAuth();
 
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 	const selectedCharacteristic = useCharacteristicStore(
@@ -149,99 +140,27 @@ const ImplementationSummaryPage = () => {
 		};
 	}, []);
 
-	const [connectingRailway, setConnectingRailway] = useState(false);
-
-	const refreshRailwayStatus = useCallback(() => {
-		getIntegrationStatus('railway')
-			.then((s) => setRailwayConnected(s.is_connected))
-			.catch(() => setRailwayConnected(false));
-	}, []);
-
-	const handleConnectRailway = useCallback(() => {
-		setConnectingRailway(true);
-		const redirectUri = getDefaultRedirectUri();
-		const popup = window.open(
-			'',
-			'oauth-railway',
-			'width=600,height=700',
-		);
-		if (!popup) {
-			setConnectingRailway(false);
-			router.push('/perfil');
-			return;
-		}
-		void createOAuthAuthorization('railway')
-			.then(({ state, codeChallenge }) =>
-				popup.location.assign(buildRailwayAuthUrl(redirectUri, state, codeChallenge)),
-			)
-			.catch(() => {
-				popup.close();
-				setConnectingRailway(false);
-				toast.error('No se pudo iniciar la autorización de Railway. Intenta de nuevo.');
-			});
-	}, [router]);
-
+	const refreshRailway = railway.refresh;
 	useEffect(() => {
-		refreshRailwayStatus();
-
-		const handleFocus = () => refreshRailwayStatus();
+		const handleFocus = () => {
+			void refreshRailway();
+		};
 		window.addEventListener('focus', handleFocus);
 		document.addEventListener('visibilitychange', handleFocus);
-
-		const handleMessage = (event: MessageEvent) => {
-			if (event.origin !== window.location.origin) return;
-			if (event.data?.type === 'railway-oauth-code') {
-				if (!consumeOAuthState('railway', event.data.state)) {
-					setConnectingRailway(false);
-					toast.error('La respuesta de autorización de Railway no es válida. Intenta de nuevo.');
-					return;
-				}
-				const codeVerifier = consumeOAuthCodeVerifier('railway');
-				if (!codeVerifier) {
-					setConnectingRailway(false);
-					toast.error('La respuesta de autorización de Railway no es válida. Intenta de nuevo.');
-					return;
-				}
-				const code = event.data.code as string;
-				if (code) {
-					connectIntegration('railway', {
-						code,
-						redirect_uri: getDefaultRedirectUri(),
-						code_verifier: codeVerifier,
-					})
-						.then((result) => {
-							setRailwayConnected(result.is_connected);
-							toast.success(
-								`Cuenta de Railway vinculada como @${result.username ?? 'desconocido'}.`,
-							);
-						})
-						.catch((err) => {
-							toast.error(
-								formatApiError(err, 'Error al vincular la cuenta de Railway.'),
-							);
-						})
-						.finally(() => {
-							setConnectingRailway(false);
-						});
-				}
-			}
-		};
-		window.addEventListener('message', handleMessage);
 
 		return () => {
 			window.removeEventListener('focus', handleFocus);
 			document.removeEventListener('visibilitychange', handleFocus);
-			window.removeEventListener('message', handleMessage);
 		};
-	}, [refreshRailwayStatus]);
+	}, [refreshRailway]);
 
 	const precondition: PreconditionState = (() => {
-		if (github.loading || railwayConnected === null) return 'loading';
+		if (github.loading || railway.loading) return 'loading';
 		if (!github.status?.has_repository) {
 			if (github.viewState === 'not-linked') return 'github-not-linked';
 			return 'github-not-synced';
 		}
-		if (!railwayConnected) return 'railway-not-linked';
+		if (!railway.isConnected) return 'railway-not-linked';
 		return 'ready';
 	})();
 
@@ -440,8 +359,8 @@ const ImplementationSummaryPage = () => {
 									precondition={precondition}
 									onDeploy={() => deploy.deploy()}
 									deploying={deploy.deploying}
-									onConnectRailway={handleConnectRailway}
-									connectingRailway={connectingRailway}
+									onConnectRailway={railway.handleConnect}
+									connectingRailway={railway.actionLoading}
 									deployError={deploy.error}
 								/>
 							))}
