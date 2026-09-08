@@ -37,6 +37,22 @@ DEFAULT_STEP_TIMEOUTS: dict[ValidationStep, int] = {
 INSTALL_COMMAND: str = "npm install"
 INSTALL_TIMEOUT_SECONDS: int = 600
 
+_DEFAULT_MAX_CONCURRENT_RUNNERS: int = 4
+
+
+def _get_runner_semaphore() -> asyncio.Semaphore:
+    raw = os.getenv("KOSMO_MAX_CONCURRENT_RUNNERS", str(_DEFAULT_MAX_CONCURRENT_RUNNERS))
+    try:
+        limit = int(raw)
+        if limit <= 0:
+            limit = _DEFAULT_MAX_CONCURRENT_RUNNERS
+    except ValueError:
+        limit = _DEFAULT_MAX_CONCURRENT_RUNNERS
+    return asyncio.Semaphore(limit)
+
+
+_runner_semaphore: asyncio.Semaphore = _get_runner_semaphore()
+
 DEFAULT_ALLOWED_COMMAND_PREFIXES: frozenset[str] = frozenset(
     {
         "npm",
@@ -81,6 +97,7 @@ class SubprocessCodeRunner(CodeRunnerPort):
         step_commands: dict[ValidationStep, str] | None = None,
         allowed_prefixes: frozenset[str] = DEFAULT_ALLOWED_COMMAND_PREFIXES,
         step_timeouts: dict[ValidationStep, int] | None = None,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         self._step_commands = dict(DEFAULT_STEP_COMMANDS)
         if step_commands:
@@ -89,6 +106,7 @@ class SubprocessCodeRunner(CodeRunnerPort):
         self._step_timeouts = dict(DEFAULT_STEP_TIMEOUTS)
         if step_timeouts:
             self._step_timeouts.update(step_timeouts)
+        self._semaphore = semaphore if semaphore is not None else _runner_semaphore
 
     @staticmethod
     def _clean_env() -> dict[str, str]:
@@ -121,37 +139,38 @@ class SubprocessCodeRunner(CodeRunnerPort):
     ) -> ValidationStepResult:
         start = time.perf_counter()
 
-        proc = await asyncio.create_subprocess_shell(
-            command,
-            cwd=workspace_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env=self._clean_env(),
-        )
-
-        try:
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=float(timeout_seconds),
+        async with self._semaphore:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                cwd=workspace_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                env=self._clean_env(),
             )
-        except TimeoutError:
-            await self._kill_process_tree(proc)
+
+            try:
+                stdout, _ = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=float(timeout_seconds),
+                )
+            except TimeoutError:
+                await self._kill_process_tree(proc)
+
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
+                return ValidationStepResult(
+                    step=step or ValidationStep.TESTS,
+                    success=False,
+                    duration_ms=duration_ms,
+                    exit_code=-1,
+                    raw_output=timeout_msg,
+                    errors=(),
+                    error_messages=(timeout_msg,),
+                )
 
             duration_ms = int((time.perf_counter() - start) * 1000)
-            timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
-            return ValidationStepResult(
-                step=step or ValidationStep.TESTS,
-                success=False,
-                duration_ms=duration_ms,
-                exit_code=-1,
-                raw_output=timeout_msg,
-                errors=(),
-                error_messages=(timeout_msg,),
-            )
-
-        duration_ms = int((time.perf_counter() - start) * 1000)
-        raw_output = stdout.decode("utf-8", errors="replace")
-        exit_code = proc.returncode if proc.returncode is not None else 0
+            raw_output = stdout.decode("utf-8", errors="replace")
+            exit_code = proc.returncode if proc.returncode is not None else 0
 
         if step is not None:
             return parse_step_output(

@@ -415,3 +415,68 @@ async def test_run_pipeline_uses_custom_and_default_step_timeouts() -> None:
         assert spy_run_step.call_count == 2
         assert spy_run_step.call_args_list[0].kwargs["timeout_seconds"] == 15
         assert spy_run_step.call_args_list[1].kwargs["timeout_seconds"] == 45
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_subprocess_code_runner_limits_concurrency_with_semaphore() -> None:
+    # Arrange
+    semaphore = asyncio.Semaphore(2)
+    runner = SubprocessCodeRunner(semaphore=semaphore)
+
+    active_count = 0
+    max_active_count = 0
+    lock = asyncio.Lock()
+
+    async def fake_subprocess(*_args: object, **_kwargs: object) -> MagicMock:
+        nonlocal active_count, max_active_count
+        async with lock:
+            active_count += 1
+            if active_count > max_active_count:
+                max_active_count = active_count
+        await asyncio.sleep(0.02)
+        async with lock:
+            active_count -= 1
+
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        return mock_proc
+
+    with patch("asyncio.create_subprocess_shell", side_effect=fake_subprocess):
+        # Act
+        tasks = [runner.run_step("/tmp/workspace", ValidationStep.TYPECHECK) for _ in range(5)]
+        results = await asyncio.gather(*tasks)
+
+        # Assert
+        assert len(results) == 5
+        assert all(r.success for r in results)
+        assert max_active_count <= 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("env_value", "expected_limit"),
+    [
+        ("8", 8),
+        ("1", 1),
+        ("0", 4),
+        ("-3", 4),
+        ("invalid", 4),
+    ],
+)
+def test_get_runner_semaphore_handles_env_values(
+    monkeypatch: pytest.MonkeyPatch,
+    env_value: str,
+    expected_limit: int,
+) -> None:
+    # Arrange
+    from kosmo.infrastructure.sandbox.code_runner import _get_runner_semaphore
+
+    monkeypatch.setenv("KOSMO_MAX_CONCURRENT_RUNNERS", env_value)
+
+    # Act
+    sem = _get_runner_semaphore()
+
+    # Assert
+    assert sem._value == expected_limit
