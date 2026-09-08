@@ -10,6 +10,7 @@ from kosmo.application.codegen.generate_feature_implementation import GenerateFe
 from kosmo.config import Settings
 from kosmo.infrastructure.api.composition import build_app_components
 from kosmo.infrastructure.api.composition.codegen import CodegenComponents, build_codegen_components
+from kosmo.infrastructure.api.implementation_broker import ImplementationEventBroker
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
@@ -72,6 +73,8 @@ def test_build_codegen_components_cablea_use_case_con_adaptadores() -> None:
     assert use_case._code_runner is components.code_runner
     assert use_case._implementation_repo is repos.implementations
     assert use_case._register_traceability._traceability_repo is repos.traceability
+    assert isinstance(components.implementation_broker, ImplementationEventBroker)
+    assert components.implementation_broker._history_ttl_seconds == settings.implementation_broker_ttl_seconds
 
 
 @pytest.mark.unit
@@ -132,5 +135,21 @@ async def test_build_app_components_incluye_codegen() -> None:
             container.codegen.generate_feature_implementation,
             GenerateFeatureImplementationUseCase,
         )
+        assert isinstance(container.codegen.implementation_broker, ImplementationEventBroker)
     finally:
         await container.close()
+
+
+@pytest.mark.unit
+def test_build_codegen_components_permite_inyectar_broker_personalizado() -> None:
+    # Arrange
+    settings = _make_settings()
+    repos = _make_repos()
+    custom_broker = ImplementationEventBroker(history_ttl_seconds=42)
+
+    # Act
+    components = build_codegen_components(settings, repos, broker=custom_broker)
+
+    # Assert
+    assert components.implementation_broker is custom_broker
+    assert components.implementation_broker._history_ttl_seconds == 42

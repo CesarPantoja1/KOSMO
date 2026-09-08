@@ -147,6 +147,18 @@ class ImplementationEventBroker:
                 if not self._queues[implementation_id]:
                     del self._queues[implementation_id]
 
+    async def aclose(self) -> None:
+        """Cancela todas las tareas de ejecución y purga en curso al apagar el servidor."""
+        for task in list(self._tasks.values()):
+            task.cancel()
+        for task in list(self._cleanup_tasks):
+            task.cancel()
+        self._tasks.clear()
+        self._cleanup_tasks.clear()
+        self._queues.clear()
+        self._history.clear()
+        self._project_ids.clear()
 
-# Singleton global
+
+# Instancia por defecto mantenida para compatibilidad
 broker = ImplementationEventBroker()

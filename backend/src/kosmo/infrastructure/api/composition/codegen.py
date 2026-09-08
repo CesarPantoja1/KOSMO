@@ -9,6 +9,7 @@ from kosmo.application.codegen.generate_feature_implementation import (
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCase
 from kosmo.config import Settings
 from kosmo.contracts.sdd.codegen import CodeRunnerPort
+from kosmo.infrastructure.api.implementation_broker import ImplementationEventBroker
 from kosmo.infrastructure.cloudflare.preview import CloudflareTunnelPreviewPublisher
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalFileSystemReader, LocalWorkspaceManager
@@ -27,9 +28,14 @@ class CodegenComponents:
     workspace_manager: LocalWorkspaceManager
     opencode_client: OpenCodeHttpClient
     code_runner: CodeRunnerPort
+    implementation_broker: ImplementationEventBroker
 
 
-def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> CodegenComponents:
+def build_codegen_components(
+    settings: Settings,
+    repos: RepositoryRegistry,
+    broker: ImplementationEventBroker | None = None,
+) -> CodegenComponents:
     opencode_client = OpenCodeHttpClient(
         base_url=settings.opencode_base_url,
         server_username=settings.opencode_server_username,
@@ -89,6 +95,9 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         document_repo=repos.documents,
         fs_reader=fs_reader,
     )
+    implementation_broker = broker or ImplementationEventBroker(
+        history_ttl_seconds=settings.implementation_broker_ttl_seconds,
+    )
     return CodegenComponents(
         generate_feature_implementation=use_case,
         validate_workspace=ValidateWorkspaceUseCase(
@@ -104,4 +113,5 @@ def build_codegen_components(settings: Settings, repos: RepositoryRegistry) -> C
         workspace_manager=workspace_manager,
         opencode_client=opencode_client,
         code_runner=code_runner,
+        implementation_broker=implementation_broker,
     )

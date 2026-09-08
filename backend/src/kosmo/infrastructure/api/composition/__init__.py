@@ -85,6 +85,7 @@ class AppContainer:
     async def close(self) -> None:
         if self.redis is not None:
             await self.redis.aclose()
+        await self.codegen.implementation_broker.aclose()
         await self.codegen.opencode_client.aclose()
         if isinstance(self.codegen.code_runner, RemoteCodeRunner):
             await self.codegen.code_runner.aclose()

@@ -81,7 +81,8 @@ async def start_implementation(
         max_retries=request.max_retries,
     )
 
-    broker.start_implementation(
+    broker_instance = getattr(container.codegen, "implementation_broker", broker)
+    broker_instance.start_implementation(
         implementation_id=impl_id,
         use_case=use_case,
         input_data=input_data,
@@ -193,8 +194,11 @@ async def stream_implementation_events(
     principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> EventSourceResponse:
+    broker_instance = getattr(container.codegen, "implementation_broker", broker)
     implementation = await container.repos.implementations.by_id(ImplementationId(implementation_id))
-    project_id = implementation.project_id if implementation is not None else broker.project_id_for(implementation_id)
+    project_id = (
+        implementation.project_id if implementation is not None else broker_instance.project_id_for(implementation_id)
+    )
     if project_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Implementación no encontrada")
     await _require_project_owner(container, ProjectId(project_id), principal)
@@ -202,7 +206,7 @@ async def stream_implementation_events(
     # El broker devuelve un AsyncGenerator[OpenCodeEvent, None]
     # SseEventSourceResponse itera sobre él y lo expone como Server-Sent Events.
     async def event_publisher() -> AsyncGenerator[dict[str, Any]]:
-        async for event in broker.subscribe(implementation_id):
+        async for event in broker_instance.subscribe(implementation_id):
             event_type = getattr(event.event_type, "value", str(event.event_type))
             yield {
                 "event": event_type,

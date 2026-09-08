@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
+import structlog
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -40,6 +41,8 @@ from kosmo.infrastructure.api.schemas import HttpErrorResponse
 from kosmo.infrastructure.codegen.workspace import recover_orphan_previews
 from kosmo.infrastructure.persistence.postgres.outbox import OutboxHandler, run_outbox_worker
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
+
+_log = structlog.get_logger(__name__)
 
 # Metadatos OpenAPI
 
@@ -256,6 +259,17 @@ def _make_outbox_handler(container: AppContainer) -> OutboxHandler:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
+    if settings.server_workers > 1:
+        _log.warning(
+            "implementation_broker.multi_worker_warning",
+            workers=settings.server_workers,
+            detail=(
+                "ImplementationEventBroker opera en memoria. "
+                "Ejecutar con múltiples workers (--workers > 1) puede causar que los eventos SSE "
+                "no lleguen al suscriptor si la petición llega a un worker diferente. "
+                "Se recomienda ejecutar con --workers 1 o migrar a Redis Pub/Sub."
+            ),
+        )
     components = build_app_components(settings)
     app.state.container = components
     app.state.requirement_repo = components.repos.requirements

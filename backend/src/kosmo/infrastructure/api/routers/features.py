@@ -384,7 +384,8 @@ async def delete_feature(
 
     # Eliminación del código generado en background: el frontend observa los eventos
     # en GET /implementations/impl_<feature_id>/events
-    broker.start_implementation(
+    broker_instance = getattr(container.codegen, "implementation_broker", broker)
+    broker_instance.start_implementation(
         implementation_id=f"impl_{feature_id}",
         use_case=container.codegen.delete_feature_code,
         input_data=DeleteFeatureCodeInput(feature=feature),

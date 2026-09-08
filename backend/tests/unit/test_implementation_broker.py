@@ -129,3 +129,35 @@ async def test_broker_keeps_history_for_replay_until_ttl() -> None:
     # Assert — el historial sigue disponible para replay antes del TTL
     assert len(events) == 2
     assert "impl_keep" in broker._history
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_aclose_cancels_running_and_cleanup_tasks() -> None:
+    import asyncio
+
+    # Arrange
+    broker = ImplementationEventBroker(history_ttl_seconds=300)
+
+    class HangingUseCase:
+        async def execute_stream(
+            self,
+            input_data: GenerateFeatureImplementationInput,
+        ) -> AsyncIterator[OpenCodeEvent]:
+            await asyncio.sleep(100)
+            yield OpenCodeEvent(event_type=OpenCodeEventType.DONE, session_id="sess_hang", data={})
+
+    broker.start_implementation("impl_hang", HangingUseCase(), _input_data())
+    broker._schedule_history_purge("impl_purge")
+    assert len(broker._tasks) == 1
+    assert len(broker._cleanup_tasks) == 1
+
+    # Act
+    await broker.aclose()
+
+    # Assert
+    assert len(broker._tasks) == 0
+    assert len(broker._cleanup_tasks) == 0
+    assert len(broker._queues) == 0
+    assert len(broker._history) == 0
+    assert len(broker._project_ids) == 0
