@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import (
 
 from kosmo.config import Settings
 from kosmo.infrastructure.api.composition.auth import AuthComponents, build_auth_components
-from kosmo.infrastructure.api.composition.codegen import CodegenComponents, build_codegen_components
+from kosmo.infrastructure.api.composition.codegen import (
+    CodegenComponents,
+    build_code_runner,
+    build_codegen_components,
+    build_workspace_manager,
+)
 from kosmo.infrastructure.api.composition.integrations import (
     IntegrationsComponents,
     build_integrations_components,
@@ -50,6 +55,7 @@ __all__ = [
     "RequirementsComponents",
     "build_app_components",
     "build_auth_components",
+    "build_code_runner",
     "build_codegen_components",
     "build_consistency_components",
     "build_discovery_components",
@@ -59,6 +65,7 @@ __all__ = [
     "build_pipeline_components",
     "build_project_components",
     "build_requirements_components",
+    "build_workspace_manager",
 ]
 
 
@@ -118,7 +125,6 @@ def build_app_components(settings: Settings) -> AppContainer:
     features = build_features_components(repos, pipeline, discovery.consistency_evaluator)
     requirements = build_requirements_components(repos, pipeline, uow)
     modelo = build_modelo_components(repos, pipeline)
-    codegen = build_codegen_components(settings, repos)
     consistency = build_consistency_components(repos, discovery.consistency_evaluator, uow)
 
     cipher = (
@@ -130,19 +136,28 @@ def build_app_components(settings: Settings) -> AppContainer:
             else FernetSecretCipher.generate_master_key()
         )
     )
+    code_runner = build_code_runner(settings)
+    workspace_manager = build_workspace_manager(settings, repos, code_runner=code_runner)
+
     integrations = build_integrations_components(
         settings,
         repos,
-        codegen.workspace_manager,
+        workspace_manager,
         cipher,
-        code_runner=codegen.code_runner,
+        code_runner=code_runner,
     )
-    codegen.generate_feature_implementation.set_sync_github_repository(integrations.sync_github_repository)
+    codegen = build_codegen_components(
+        settings,
+        repos,
+        sync_github_repository=integrations.sync_github_repository,
+        workspace_manager=workspace_manager,
+        code_runner=code_runner,
+    )
 
     projects = build_project_components(
         repos,
         pipeline,
-        workspace_manager=codegen.workspace_manager,
+        workspace_manager=workspace_manager,
         github_client=integrations.github_client,
         railway_client=integrations.railway_client,
         deployment_worker=integrations.deployment_worker,
