@@ -20,6 +20,9 @@ import structlog
 from opentelemetry import trace
 from structlog.typing import EventDict, Processor, WrappedLogger
 
+from kosmo.contracts.telemetry import set_telemetry_provider
+from kosmo.infrastructure.telemetry.otel import OpenTelemetryProvider
+
 if TYPE_CHECKING:
     from fastapi import FastAPI
     from sqlalchemy.ext.asyncio import AsyncEngine
@@ -80,6 +83,7 @@ def configure_telemetry(settings: Settings) -> None:
 
     _configure_structlog(settings)
     _configure_logfire(settings)
+    set_telemetry_provider(OpenTelemetryProvider())
 
 
 def instrument_prometheus(app: FastAPI) -> None:

@@ -69,6 +69,13 @@ from kosmo.contracts.sdd.ids import (
     ImplementationId,
     WorkspaceId,
 )
+from kosmo.contracts.telemetry import (
+    TelemetryPort,
+    get_telemetry_provider,
+    record_auth_event,
+    set_telemetry_provider,
+    traced,
+)
 
 __all__ = [
     "AIConfigError",
@@ -117,6 +124,7 @@ __all__ = [
     "SaveAIConfigInput",
     "SugerenciaCambio",
     "SugerenciaCambioLLM",
+    "TelemetryPort",
     "TestAIConnectionInput",
     "TestAIConnectionResult",
     "TraceabilityRepository",
@@ -131,5 +139,9 @@ __all__ = [
     "WorkspaceManagerPort",
     "WorkspaceRepository",
     "WorkspaceStatus",
+    "get_telemetry_provider",
     "mask_api_key",
+    "record_auth_event",
+    "set_telemetry_provider",
+    "traced",
 ]
