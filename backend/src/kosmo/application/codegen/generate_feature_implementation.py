@@ -7,7 +7,6 @@ import re
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
 
 import structlog
 from ulid import ULID
@@ -15,6 +14,13 @@ from ulid import ULID
 from kosmo.application.codegen.analyze_ux_context import (
     UXAnalysisInput,
     UXAnalyzerUseCase,
+)
+from kosmo.application.codegen.implementation_context_builder import (
+    ImplementationContextBuilder,
+    NullFileSystemReader,
+    collect_workspace_feature_files,
+    get_existing_db_schema_context,
+    normalize_generated_file_path,
 )
 from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
@@ -46,7 +52,6 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceManagerPort,
 )
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
-from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
@@ -55,15 +60,9 @@ from kosmo.contracts.sdd.repositories import (
     ProjectRepository,
     RequirementRepository,
 )
-from kosmo.domain.codegen.parse_validation_output import (
-    derive_fix_directives,
-    format_validation_errors_for_prompt,
-)
-from kosmo.domain.codegen.path_safety import UnsafePathError, sanitize_relative_path
 from kosmo.domain.codegen.plan_rules import validate_plan
-from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.codegen.structural_validator import validate_workspace_feature_structure
-from kosmo.domain.sdd.document_converters import document_to_markdown, slugify_spanish
+from kosmo.domain.sdd.document_converters import slugify_spanish
 
 _log = structlog.get_logger("kosmo.codegen.generate")
 
@@ -118,74 +117,10 @@ def _raise_for_opencode_error(event: OpenCodeEvent) -> None:
     raise OpenCodeGenerationError(message)
 
 
-def _normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | None:
-    """Normaliza y valida una ruta de archivo generada para asegurar que sea relativa y segura."""
-    raw_str = raw_path.strip()
-    if not raw_str:
-        return None
-    try:
-        p = Path(raw_str)
-        ws_p = Path(workspace_dir).resolve()
-        if p.is_absolute():
-            p_resolved = p.resolve()
-            if p_resolved.is_relative_to(ws_p):
-                rel = p_resolved.relative_to(ws_p)
-                return sanitize_relative_path(str(rel))
-            return None
-        return sanitize_relative_path(raw_str)
-    except (UnsafePathError, ValueError):
-        return None
-
-
-class _NullFileSystemReader(FileSystemReader):
-    def list_files(self, root: str | Path) -> tuple[str, ...]:
-        del root
-        return ()
-
-    def read_text(self, path: str | Path) -> str | None:
-        del path
-        return None
-
-
-def _collect_workspace_feature_files(
-    workspace_dir: str | Path,
-    feature_slug: str,
-    fs_reader: FileSystemReader | None = None,
-) -> set[str]:
-    """Recolecta archivos generados o modificados para la feature usando el puerto FileSystemReader."""
-    reader = fs_reader or _NullFileSystemReader()
-    files: set[str] = set()
-    all_files = reader.list_files(workspace_dir)
-    normalized_slug = feature_slug.strip().lower()
-    slice_pattern = f"src/features/{normalized_slug}/"
-    app_pattern = f"src/app/{normalized_slug}/"
-    for raw_f in all_files:
-        norm_f = raw_f.replace("\\", "/").strip("./")
-        norm_lower = norm_f.lower()
-        if (
-            norm_lower.startswith(slice_pattern)
-            or norm_lower.startswith(app_pattern)
-            or norm_lower in ("src/lib/feature-registry.ts", "src/lib/site.ts", "src/db/schema.ts")
-        ):
-            files.add(norm_f)
-    return files
-
-
-def _get_existing_db_schema_context(
-    workspace_dir: str | None,
-    fs_reader: FileSystemReader | None = None,
-) -> str:
-    """Lee el esquema Drizzle existente de src/db/schema.ts usando el puerto FileSystemReader."""
-    if not workspace_dir or fs_reader is None:
-        return ""
-    ws_str = str(workspace_dir).replace("\\", "/").rstrip("/")
-    schema_path = f"{ws_str}/src/db/schema.ts"
-    content = fs_reader.read_text(schema_path)
-    if content is None:
-        content = fs_reader.read_text("src/db/schema.ts")
-    if content and content.strip():
-        return f"\n### Esquema de base de datos actual (`src/db/schema.ts`)\n```typescript\n{content.strip()}\n```"
-    return ""
+_normalize_generated_file_path = normalize_generated_file_path
+_NullFileSystemReader = NullFileSystemReader
+_collect_workspace_feature_files = collect_workspace_feature_files
+_get_existing_db_schema_context = get_existing_db_schema_context
 
 
 @dataclass(frozen=True)
@@ -226,6 +161,7 @@ class GenerateFeatureImplementationUseCase:
         ux_analyzer: UXAnalyzerUseCase | None = None,
         sync_github_repository: SyncGitHubRepositoryUseCase | None = None,
         fs_reader: FileSystemReader | None = None,
+        context_builder: ImplementationContextBuilder | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -251,6 +187,13 @@ class GenerateFeatureImplementationUseCase:
             traceability_repo=traceability_repo,
             requirement_repo=requirement_repo,
         )
+        self._context_builder = context_builder or ImplementationContextBuilder(
+            project_repo=project_repo,
+            document_repo=document_repo,
+            implementation_repo=implementation_repo,
+            feature_repo=feature_repo,
+            fs_reader=self._fs_reader,
+        )
 
     def set_sync_github_repository(self, sync_github_repository: SyncGitHubRepositoryUseCase) -> None:
         self._sync_github_repository = sync_github_repository
@@ -261,81 +204,23 @@ class GenerateFeatureImplementationUseCase:
         current_feature_id: FeatureId | None = None,
         workspace_dir: str | None = None,
     ) -> str:
-        """Construye el bloque de contexto del proyecto (visión, features previas y schema de BD)."""
-        lines: list[str] = ["## Contexto del proyecto"]
-        if self._project_repo is not None:
-            project = await self._project_repo.by_id(project_id)
-            if project is not None:
-                lines.append(f"- Nombre: {project.name}")
-                if project.description:
-                    lines.append(f"- Descripción: {project.description}")
-
-        if self._document_repo is not None:
-            discovery = await self._document_repo.get_discovery(project_id)
-            if discovery is not None:
-                try:
-                    vision = document_to_markdown(discovery)
-                except Exception:
-                    vision = ""
-                if vision:
-                    lines.append(f"\n### Visión del producto (descubrimiento)\n{vision}")
-
-        # Contexto inter-feature: funcionalidades ya implementadas
-        implemented_context = await self._build_implemented_features_context(
+        """Construye el bloque de contexto del proyecto delegando en el context builder."""
+        return await self._context_builder.build_project_context(
             project_id=project_id,
             current_feature_id=current_feature_id,
+            workspace_dir=workspace_dir,
         )
-        if implemented_context:
-            lines.append(f"\n### Funcionalidades ya implementadas en el proyecto\n{implemented_context}")
-
-        # Contexto de base de datos existente
-        if workspace_dir:
-            db_context = _get_existing_db_schema_context(workspace_dir, self._fs_reader)
-            if db_context:
-                lines.append(db_context)
-
-        return "\n".join(lines)
 
     async def _build_implemented_features_context(
         self,
         project_id: ProjectId,
         current_feature_id: FeatureId | None = None,
     ) -> str:
-        """Construye un resumen conciso de funcionalidades ya implementadas para evitar duplicación."""
-        try:
-            implementations = await self._implementation_repo.list_by_project(project_id)
-        except Exception:
-            return ""
-
-        implemented_impls = [
-            impl
-            for impl in implementations
-            if impl.status == FeatureImplementationStatus.IMPLEMENTED
-            and (current_feature_id is None or impl.feature_id != current_feature_id)
-        ]
-        if not implemented_impls:
-            return ""
-
-        feature_map: dict[str, Feature] = {}
-        try:
-            features = await self._feature_repo.list_by_project(project_id)
-            feature_map = {str(f.id): f for f in features}
-        except Exception:
-            feature_map = {}
-
-        lines: list[str] = []
-        for impl in implemented_impls:
-            feat = feature_map.get(str(impl.feature_id))
-            title = feat.title if feat else str(impl.feature_id)
-            slug = feat.slug if feat else ""
-            slug_info = f" (slug: `{slug}`)" if slug else ""
-            files_preview = ", ".join(f"`{f}`" for f in impl.generated_files[:4])
-            if len(impl.generated_files) > 4:
-                files_preview += f" (+{len(impl.generated_files) - 4} archivos)"
-            files_info = f" — Archivos: {files_preview}" if impl.generated_files else ""
-            lines.append(f"- **{title}**{slug_info}{files_info}")
-
-        return "\n".join(lines)
+        """Construye un resumen conciso de funcionalidades ya implementadas delegando en el context builder."""
+        return await self._context_builder.build_implemented_features_context(
+            project_id=project_id,
+            current_feature_id=current_feature_id,
+        )
 
     async def execute_stream(
         self,
@@ -501,21 +386,7 @@ class GenerateFeatureImplementationUseCase:
             )
 
             # Sincronizar site.ts con el arquetipo y tokens reales del análisis UX
-            site_file = Path(workspace_dir) / "src" / "lib" / "site.ts"
-            if site_file.exists() and self._project_repo:
-                with contextlib.suppress(Exception):
-                    proj = await self._project_repo.by_id(feature.project_id)
-                    p_name = proj.name if proj and proj.name else "KOSMO App"
-                    p_desc = (proj.description if proj and proj.description else "") or "Aplicación generada con KOSMO."
-                    site_file.write_text(
-                        format_site_config(
-                            name=p_name,
-                            description=p_desc,
-                            archetype=ux_analysis.ux_context.archetype.value,
-                            primary_color=ux_analysis.ux_context.tokens.primary_color,
-                        ),
-                        encoding="utf-8",
-                    )
+            await self._context_builder.sync_site_config(workspace_dir, feature.project_id, ux_analysis)
 
             await _emit(
                 OpenCodeEvent(
@@ -528,26 +399,12 @@ class GenerateFeatureImplementationUseCase:
                 )
             )
 
-            plan_prompt = (
-                f"{ux_analysis.prompt_block}\n\n"
-                f"{project_context}\n\n"
-                f"Eres el agente de planificación para la feature '{feature.title}'.\n\n"
-                f"## Descripción\n{feature.description}\n\n"
-                f"## Requisitos EARS\n{req_markdown}\n\n"
-                f"## Diagrama de Actividad\n{diagram.diagram_syntax}\n\n"
-                "Propón un plan de implementación detallando los archivos a crear y modificar.\n"
-                "OBLIGATORIO: la feature DEBE entregar una solución 100% FUNCIONAL DE EXTREMO A EXTREMO "
-                "(Frontend + Backend + Base de Datos). El plan debe incluir:\n"
-                "1. El slice autocontenido en `src/features/<slug>/` (manifest.ts, logic.ts, components/).\n"
-                "2. La ruta navegable y página principal en `src/app/<slug>/page.tsx` con export default "
-                "que renderice la vista interactiva (formularios, listas, acciones).\n"
-                "3. El registro del manifest en `src/lib/feature-registry.ts` "
-                "(IMPORTANTE: añade la feature al array `features` existente sin eliminar las features previas; "
-                "la navegación del shell se deriva del registro).\n"
-                "4. Los tests de la lógica en Vitest.\n"
-                "5. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
-                "para declarar las tablas con Drizzle ORM y la integración de lectura/escritura.\n"
-                "Lee las skills `kosmo-ui`, `kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
+            plan_prompt = self._context_builder.build_plan_prompt(
+                feature=feature,
+                req_markdown=req_markdown,
+                diagram_syntax=diagram.diagram_syntax,
+                ux_prompt_block=ux_analysis.prompt_block,
+                project_context=project_context,
             )
 
             plan_operations: list[FileOperation] = []
@@ -576,37 +433,11 @@ class GenerateFeatureImplementationUseCase:
 
             # Fallback canónico con arquitectura de feature slices si el Plan Agent no produjo operaciones
             if not plan_operations:
-                existing_manifest = set(workspace.manifest_files if workspace else ())
-                registry_action = (
-                    FileAction.MODIFY if "src/lib/feature-registry.ts" in existing_manifest else FileAction.CREATE
+                plan_operations = self._context_builder.build_fallback_plan_operations(
+                    feature=feature,
+                    feature_slug=feature_slug,
+                    manifest_files=workspace.manifest_files if workspace else (),
                 )
-                plan_operations = [
-                    FileOperation(
-                        action=FileAction.CREATE,
-                        path=f"src/features/{feature_slug}/logic.ts",
-                        description=f"Lógica de negocio y tipos para {feature.title}",
-                    ),
-                    FileOperation(
-                        action=FileAction.CREATE,
-                        path=f"src/features/{feature_slug}/manifest.ts",
-                        description=f"Manifiesto del slice de {feature.title}",
-                    ),
-                    FileOperation(
-                        action=FileAction.CREATE,
-                        path=f"src/app/{feature_slug}/page.tsx",
-                        description=f"Página y UI principal de {feature.title}",
-                    ),
-                    FileOperation(
-                        action=registry_action,
-                        path="src/lib/feature-registry.ts",
-                        description=f"Registro de {feature.title} en el catálogo global de navegación",
-                    ),
-                    FileOperation(
-                        action=FileAction.CREATE,
-                        path=f"tests/{feature_slug}.test.ts",
-                        description=f"Pruebas unitarias de {feature.title}",
-                    ),
-                ]
                 _log.info(
                     "codegen.fallback_plan_used",
                     feature_id=str(feature.id),
@@ -630,39 +461,13 @@ class GenerateFeatureImplementationUseCase:
                 f"- [{op.action}] {op.path}" + (f" — {op.description}" if op.description else "")
                 for op in impl_plan.operations
             )
-            build_prompt = (
-                f"{ux_analysis.prompt_block}\n\n"
-                f"{project_context}\n\n"
-                f"Eres el agente de construcción para la feature '{feature.title}'.\n\n"
-                f"## Descripción\n{feature.description}\n\n"
-                f"## Requisitos EARS\n{req_markdown}\n\n"
-                f"## Diagrama de Actividad\n{diagram.diagram_syntax}\n\n"
-                f"## Plan aprobado\n{plan_lines}\n\n"
-                "Implementa el código y las pruebas respetando el plan aprobado.\n"
-                "OBLIGATORIO: entrega una funcionalidad 100% OPERATIVA Y COMPLETA "
-                "(Frontend + Backend + Base de Datos) usando Bootstrap 5:\n"
-                "1. Frontend interactivo en `src/app/<slug>/page.tsx`: DEBE contener `export default` y "
-                "renderizar la vista operativa de la feature con componentes funcionales (formularios con captura "
-                "de datos, tablas de registros, botones de acción con respuesta real, feedback de error/éxito "
-                "y estados de carga). PROHIBIDO dejar páginas vacías o stubs que provoquen error 404 al navegar.\n"
-                "2. Lógica de negocio y backend en `src/features/<slug>/logic.ts` (con tests exhaustivos en Vitest) "
-                "y Server Actions o API routes si se requiere.\n"
-                "3. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
-                "`src/components/ui/` (Button, Card, Input, Label, Badge, Textarea, EmptyState, "
-                "PageHeader, Table, Stat, Select, Tabs, Modal, Alert, Steps, BadgeStatus) y clases de Bootstrap 5. "
-                "PROHIBIDO el uso de Tailwind CSS.\n"
-                "4. Registro del manifest en `src/lib/feature-registry.ts` "
-                "(IMPORTANTE: importa el manifest del nuevo slice y añádelo al array `features` existente "
-                "sin borrar ni sobrescribir las entradas de features anteriores; "
-                "la navegación depende de este catálogo).\n"
-                "5. Actualiza `src/lib/site.ts` con el nombre, descripción y arquetipo reales del proyecto.\n"
-                "6. Persistencia de datos: Si la feature maneja persistencia, define las tablas en `src/db/schema.ts` "
-                "usando `drizzle-orm/sqlite-core` y consume `db` desde `src/db/index.ts`. "
-                "Prohibido usar arreglos volátiles en memoria para datos persistentes.\n"
-                "La UI debe adaptarse a la naturaleza del negocio (ver visión y directivas UX), "
-                "mantener el modelo mental del usuario (navegación del registro, estados vacío/error/loading) "
-                "y usar textos en español neutro con los mensajes de validación reales de la lógica. "
-                "No dejes la feature sin pantalla funcional."
+            build_prompt = self._context_builder.build_build_prompt(
+                feature=feature,
+                req_markdown=req_markdown,
+                diagram_syntax=diagram.diagram_syntax,
+                ux_prompt_block=ux_analysis.prompt_block,
+                project_context=project_context,
+                plan_lines=plan_lines,
             )
 
             generated_files: set[str] = set()
@@ -807,11 +612,6 @@ class GenerateFeatureImplementationUseCase:
                 retry_history.append(validation_result.error_summary)
 
                 if attempt < input_data.max_retries:
-                    error_feedback = format_validation_errors_for_prompt(
-                        validation_result,
-                        max_chars=6000,
-                    )
-
                     # Emitir evento RETRY para notificar al frontend
                     await _emit(
                         OpenCodeEvent(
@@ -825,13 +625,10 @@ class GenerateFeatureImplementationUseCase:
                         )
                     )
 
-                    directives = derive_fix_directives(validation_result)
-                    directives_block = "\n".join(f"- {d}" for d in directives)
-
-                    fix_prompt = (
-                        f"La validación falló en el intento {attempt}/{input_data.max_retries}.\n\n"
-                        f"## Errores detectados:\n{error_feedback}\n\n"
-                        f"## Directivas de corrección:\n{directives_block}"
+                    fix_prompt = self._context_builder.build_fix_prompt(
+                        attempt=attempt,
+                        max_retries=input_data.max_retries,
+                        validation_result=validation_result,
                     )
                     async for ev in self._opencode_client.send_prompt(session_id, fix_prompt, agent="build"):
                         if ev.event_type == OpenCodeEventType.ERROR:

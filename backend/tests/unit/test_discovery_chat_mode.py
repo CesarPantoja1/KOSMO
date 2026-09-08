@@ -183,7 +183,6 @@ def test_system_prompt_no_voseo() -> None:
     assert "Generá" not in prompt
 
 
-
 # ── build_user_prompt ──
 
 

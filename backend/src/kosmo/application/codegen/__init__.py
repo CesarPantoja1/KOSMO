@@ -5,6 +5,9 @@ from kosmo.application.codegen.generate_feature_implementation import (
     MissingDiagramError,
     MissingRequirementsError,
 )
+from kosmo.application.codegen.implementation_context_builder import (
+    ImplementationContextBuilder,
+)
 from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
     RegisterCodeTraceabilityOutput,
@@ -25,6 +28,7 @@ __all__ = [
     "GenerateFeatureImplementationInput",
     "GenerateFeatureImplementationOutput",
     "GenerateFeatureImplementationUseCase",
+    "ImplementationContextBuilder",
     "MissingDiagramError",
     "MissingRequirementsError",
     "RegisterCodeTraceabilityInput",
