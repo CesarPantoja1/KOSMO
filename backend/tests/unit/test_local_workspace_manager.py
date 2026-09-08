@@ -1254,3 +1254,22 @@ async def test_ensure_workspace_initializes_site_ts_with_storefront_archetype() 
         assert 'name: "Tienda Ropa"' in content
         assert 'archetype: "storefront"' in content
         assert 'primaryColor: "#0f766e"' in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_workspace_manager_delegates_manifest_to_thread() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_to_thread_test")
+        ws = await manager.ensure_workspace(project_id)
+
+        with patch("asyncio.to_thread", wraps=asyncio.to_thread) as spy_to_thread:
+            # Act
+            manifest = await manager.get_manifest(ws)
+
+            # Assert
+            assert isinstance(manifest, tuple)
+            spy_to_thread.assert_called_once()
