@@ -32,7 +32,7 @@ services:
       # Migrations are executed explicitly by GitHub Actions before this
       # service is recreated, avoiding an implicit migration during startup.
       RUN_MIGRATIONS: "0"
-      WORKERS: "1"
+      WORKERS: "4"
       KOSMO_WORKSPACES_DIR: /workspaces
       KOSMO_MCP_BASE_URL: http://backend:8000/mcp
       OPENCODE_BASE_URL: http://opencode:4096

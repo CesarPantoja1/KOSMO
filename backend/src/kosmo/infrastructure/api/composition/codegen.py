@@ -19,6 +19,8 @@ from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
 from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
 
 if TYPE_CHECKING:
+    from redis.asyncio import Redis
+
     from kosmo.application.integrations.sync_github_repository import SyncGitHubRepositoryUseCase
 
 
@@ -87,6 +89,7 @@ def build_codegen_components(
     workspace_manager: LocalWorkspaceManager | None = None,
     code_runner: CodeRunnerPort | None = None,
     fs_reader: FileSystemReader | None = None,
+    redis: Redis | None = None,
 ) -> CodegenComponents:
     runner = code_runner or build_code_runner(settings)
     reader = fs_reader or LocalFileSystemReader()
@@ -121,6 +124,7 @@ def build_codegen_components(
     )
     implementation_broker = broker or ImplementationEventBroker(
         history_ttl_seconds=settings.implementation_broker_ttl_seconds,
+        redis=redis,
     )
     return CodegenComponents(
         generate_feature_implementation=use_case,

@@ -152,6 +152,7 @@ def build_app_components(settings: Settings) -> AppContainer:
         sync_github_repository=integrations.sync_github_repository,
         workspace_manager=workspace_manager,
         code_runner=code_runner,
+        redis=redis,
     )
 
     projects = build_project_components(

@@ -195,9 +195,13 @@ async def stream_implementation_events(
 ) -> EventSourceResponse:
     broker_instance = getattr(container.codegen, "implementation_broker", broker)
     implementation = await container.repos.implementations.by_id(ImplementationId(implementation_id))
-    project_id = (
-        implementation.project_id if implementation is not None else broker_instance.project_id_for(implementation_id)
-    )
+    if implementation is not None:
+        project_id = implementation.project_id
+    elif hasattr(broker_instance, "get_project_id"):
+        project_id = await broker_instance.get_project_id(implementation_id)
+    else:
+        project_id = broker_instance.project_id_for(implementation_id)
+
     if project_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Implementación no encontrada")
     await _require_project_owner(container, ProjectId(project_id), principal)

@@ -199,3 +199,126 @@ async def test_broker_propagates_user_and_project_context() -> None:
     assert captured_ctx.get("implementation_id") == "impl_ctx"
     # Ensure cleanup after completion
     assert current_user_id.get() is None
+
+
+class _FakeRedis:
+    """Mock mínimo de Redis para verificar Redis Streams y operaciones de broker."""
+
+    def __init__(self) -> None:
+        self.streams: dict[str, list[tuple[str, dict[bytes, bytes]]]] = {}
+        self.kv: dict[str, bytes] = {}
+        self.expirations: dict[str, int] = {}
+        self._counter = 0
+
+    async def xadd(self, key: str, fields: dict[str, str], maxlen: int | None = None, approximate: bool = False) -> str:
+        self._counter += 1
+        msg_id = f"{self._counter}-0"
+        byte_fields = {
+            (k.encode("utf-8") if isinstance(k, str) else k): (v.encode("utf-8") if isinstance(v, str) else v)
+            for k, v in fields.items()
+        }
+        self.streams.setdefault(key, []).append((msg_id, byte_fields))
+        return msg_id
+
+    async def xread(
+        self, streams: dict[str, str], count: int | None = None, block: int | None = None
+    ) -> list[tuple[str, list[tuple[str, dict[bytes, bytes]]]]]:
+        results: list[tuple[str, list[tuple[str, dict[bytes, bytes]]]]] = []
+        for key, last_id in streams.items():
+            entries = self.streams.get(key, [])
+            filtered: list[tuple[str, dict[bytes, bytes]]] = []
+            for entry_id, fields in entries:
+                if last_id == "0-0" or int(entry_id.split("-")[0]) > int(last_id.split("-")[0]):
+                    filtered.append((entry_id, fields))
+            if count is not None:
+                filtered = filtered[:count]
+            if filtered:
+                results.append((key, filtered))
+        return results
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        self.expirations[key] = seconds
+        return True
+
+    async def exists(self, key: str) -> int:
+        return 1 if (key in self.streams or key in self.kv) else 0
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+        self.kv[key] = value.encode("utf-8")
+        if ex is not None:
+            self.expirations[key] = ex
+        return True
+
+    async def get(self, key: str) -> bytes | None:
+        return self.kv.get(key)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_distributed_flag_and_redis_stream_flow() -> None:
+    from typing import Any, cast
+
+    fake_redis = _FakeRedis()
+    broker = ImplementationEventBroker(redis=cast(Any, fake_redis))
+
+    assert broker.is_distributed is True
+
+    # Iniciar implementación en broker 1 (Worker 1)
+    broker.start_implementation(
+        "impl_redis_1",
+        HappyUseCase(),
+        _input_data(),
+        project_id="prj_redis_99",
+        user_id="usr_redis_1",
+    )
+    task = broker._tasks["impl_redis_1"]
+    await task
+
+    # Simular Worker 2 que no tiene estado local en memoria
+    worker2_broker = ImplementationEventBroker(redis=cast(Any, fake_redis))
+    assert worker2_broker.project_id_for("impl_redis_1") is None
+
+    # Debe recuperar el project_id desde Redis
+    resolved_pid = await worker2_broker.get_project_id("impl_redis_1")
+    assert resolved_pid == "prj_redis_99"
+
+    # Suscribirse desde Worker 2 consume el stream de Redis Streams
+    events = await _collect(worker2_broker, "impl_redis_1")
+    assert len(events) == 2
+    assert events[0].event_type == OpenCodeEventType.PLAN_PROGRESS
+    assert events[1].event_type == OpenCodeEventType.DONE
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_serialization_and_deserialization() -> None:
+    broker = ImplementationEventBroker()
+    event = OpenCodeEvent(
+        event_type=OpenCodeEventType.FILE_EDIT,
+        session_id="sess_test",
+        data={"path": "src/App.tsx", "lines": 42},
+    )
+
+    serialized = broker._serialize_event(event)
+    assert serialized["event_type"] == "file_edit"
+    assert serialized["session_id"] == "sess_test"
+    assert '"lines": 42' in serialized["data"]
+
+    deserialized = broker._deserialize_event(
+        {
+            b"event_type": b"file_edit",
+            b"session_id": b"sess_test",
+            b"data": b'{"path": "src/App.tsx", "lines": 42}',
+            b"timestamp": event.timestamp.isoformat().encode("utf-8"),
+            b"run_id": b"run_123",
+        }
+    )
+    assert deserialized is not None
+    assert deserialized.event_type == OpenCodeEventType.FILE_EDIT
+    assert deserialized.session_id == "sess_test"
+    assert deserialized.data["path"] == "src/App.tsx"
+    assert deserialized.run_id == "run_123"
+
+    # Terminal marker devuelve None
+    terminal = broker._deserialize_event({b"_done": b"true"})
+    assert terminal is None

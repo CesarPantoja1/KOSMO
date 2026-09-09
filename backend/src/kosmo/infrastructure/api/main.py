@@ -259,7 +259,8 @@ def _make_outbox_handler(container: AppContainer) -> OutboxHandler:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_telemetry(settings)
-    if settings.server_workers > 1:
+    components = build_app_components(settings)
+    if settings.server_workers > 1 and not components.codegen.implementation_broker.is_distributed:
         _log.warning(
             "implementation_broker.multi_worker_warning",
             workers=settings.server_workers,
@@ -267,10 +268,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 "ImplementationEventBroker opera en memoria. "
                 "Ejecutar con múltiples workers (--workers > 1) puede causar que los eventos SSE "
                 "no lleguen al suscriptor si la petición llega a un worker diferente. "
-                "Se recomienda ejecutar con --workers 1 o migrar a Redis Pub/Sub."
+                "Se recomienda ejecutar con --workers 1 o configurar REDIS_URL."
             ),
         )
-    components = build_app_components(settings)
     app.state.container = components
     app.state.requirement_repo = components.repos.requirements
     app.state.diagram_repo = components.repos.diagrams

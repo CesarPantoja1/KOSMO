@@ -900,7 +900,6 @@ class GenerateFeatureImplementationUseCase:
                     feature_id=str(input_data.feature_id),
                     project_id=str(feature.project_id) if "feature" in locals() else None,
                     total_duration_seconds=round(total_duration, 2),
-
                 )
             with contextlib.suppress(Exception):
                 await self._workspace_manager.rollback_workspace(feature.project_id)
