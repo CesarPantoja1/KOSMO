@@ -136,6 +136,8 @@ class Settings(BaseSettings):
             raise ValueError("Debe configurar todas las variables CLOUDFLARE_PREVIEW_* o ninguna")
 
         if self.auth_disabled:
+            if self.env == "production":
+                raise ValueError("AUTH_DISABLED no puede ser 'true' en entorno de producción.")
             return self
 
         if self.jwt_private_key_pem is None:

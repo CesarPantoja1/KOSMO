@@ -7,8 +7,7 @@ from kosmo.config import Settings
 
 @pytest.fixture(autouse=True)
 def _base_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Configura variables mínimas para construir Settings con AUTH_DISABLED=true."""
-    monkeypatch.setenv("AUTH_DISABLED", "true")
+    """Configura variables mínimas para construir Settings."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/kosmo_test")
     monkeypatch.setenv("LLM_PROVIDER", "noop")
     monkeypatch.setenv("LLM_MODEL", "noop")
@@ -94,3 +93,46 @@ def test_cors_middleware_integration() -> None:
     assert response.status_code == 200
     assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
     assert response.headers.get("access-control-allow-credentials") == "true"
+
+
+# ---------------------------------------------------------------------------
+# auth_disabled — guard de producción
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_auth_disabled_production_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "https://app.kosmo.dev")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="AUTH_DISABLED no puede ser 'true' en entorno de producción"):
+        Settings(_env_file=None)
+
+
+@pytest.mark.unit
+def test_auth_disabled_development_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+
+    # Act
+    settings = Settings(_env_file=None)
+
+    # Assert
+    assert settings.auth_disabled is True
+
+
+@pytest.mark.unit
+def test_auth_disabled_staging_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    monkeypatch.setenv("ENV", "staging")
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+
+    # Act
+    settings = Settings(_env_file=None)
+
+    # Assert
+    assert settings.auth_disabled is True
