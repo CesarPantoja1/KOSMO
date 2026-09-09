@@ -106,6 +106,7 @@ def build_app_components(settings: Settings) -> AppContainer:
         pool_pre_ping=True,
         pool_size=35,
         max_overflow=25,
+        pool_timeout=45.0,
         pool_recycle=1800,
         connect_args={"statement_cache_size": 0},
     )

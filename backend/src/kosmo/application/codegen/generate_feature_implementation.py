@@ -269,13 +269,11 @@ class GenerateFeatureImplementationUseCase:
         input_data: GenerateFeatureImplementationInput,
         event_collector: Callable[[OpenCodeEvent], Awaitable[None]] | None = None,
     ) -> GenerateFeatureImplementationOutput:
-        # 1. Consultar precondiciones concurrentemente
-        feature, req_markdown, diagram, is_healthy = await asyncio.gather(
-            self._feature_repo.by_id(input_data.feature_id),
-            self._requirement_repo.by_feature_id(input_data.feature_id),
-            self._activity_diagram_repo.by_feature_id(input_data.feature_id),
-            self._opencode_client.health_check(),
-        )
+        # 1. Consultar precondiciones de repositorios secuencialmente para evitar checkouts concurrentes del pool
+        feature = await self._feature_repo.by_id(input_data.feature_id)
+        req_markdown = await self._requirement_repo.by_feature_id(input_data.feature_id)
+        diagram = await self._activity_diagram_repo.by_feature_id(input_data.feature_id)
+        is_healthy = await self._opencode_client.health_check()
 
         # 2. Validar existencia de Feature
         if feature is None:
