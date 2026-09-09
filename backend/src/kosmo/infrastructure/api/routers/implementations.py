@@ -16,7 +16,7 @@ from kosmo.contracts.sdd.codegen import FeatureImplementation
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
 from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
 from kosmo.infrastructure.api.composition import AppContainer
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.implementation_broker import broker
 from kosmo.infrastructure.api.schemas import (
@@ -35,9 +35,7 @@ router = APIRouter(prefix="/api/v1/implementations", tags=["Implementations"])
 
 async def _require_project_owner(container: AppContainer, project_id: ProjectId, principal: Principal) -> None:
     """Hide cross-tenant resources behind the same 404 contract as absent ones."""
-    project = await container.repos.projects.by_id(project_id)
-    if project is None or str(project.owner_id) != principal.subject:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado")
+    await require_project_owner(container, project_id, principal)
 
 
 async def _owned_implementation(

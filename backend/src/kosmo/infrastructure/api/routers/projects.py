@@ -139,7 +139,7 @@ async def list_projects(
 )
 async def get_project(
     project_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[GetProjectUseCase, Depends(_get_project)],
 ) -> ProjectResponse:
     try:
@@ -149,6 +149,11 @@ async def get_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=exc.problem.detail,
         ) from exc
+    if str(project.owner_id) != principal.subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proyecto '{project_id}' no encontrado.",
+        )
     return ProjectResponse(
         id=project.id,
         name=project.name,

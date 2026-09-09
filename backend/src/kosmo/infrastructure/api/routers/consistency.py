@@ -32,7 +32,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, ProjectId
 from kosmo.infrastructure.api.async_generation import sse_consistency_response
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     ChangeInputView,
@@ -43,6 +43,7 @@ from kosmo.infrastructure.api.schemas import (
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/consistency",
     tags=["consistency"],
+    dependencies=[Depends(verify_project_owner)],
     responses={
         401: {"model": HttpErrorResponse, "description": "Token ausente, inválido o expirado"},
         404: {"model": HttpErrorResponse, "description": "Proyecto no encontrado"},

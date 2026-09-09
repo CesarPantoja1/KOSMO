@@ -128,8 +128,8 @@ async def test_build_app_components_configures_db_connection_pool() -> None:
 
         pool = components.db_engine.pool
         assert isinstance(pool, QueuePool)
-        assert pool.size() == 20
-        assert pool._max_overflow == 30
+        assert pool.size() == 35
+        assert pool._max_overflow == 25
         assert pool._recycle == 1800
     finally:
         await components.close()

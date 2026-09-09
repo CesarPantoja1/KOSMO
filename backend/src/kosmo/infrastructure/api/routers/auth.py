@@ -43,10 +43,10 @@ from kosmo.infrastructure.api.schemas import (
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 _register_limiter = IpRateLimiter(3)
-_authorize_limiter = IpRateLimiter(10)
-_token_limiter = IpRateLimiter(5)
-_refresh_limiter = IpRateLimiter(30)
-_logout_limiter = IpRateLimiter(20)
+_authorize_limiter = IpRateLimiter(60)
+_token_limiter = IpRateLimiter(60)
+_refresh_limiter = IpRateLimiter(60)
+_logout_limiter = IpRateLimiter(60)
 
 
 def _auth_components(request: Request) -> AuthComponents:

@@ -26,7 +26,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 
 router = APIRouter(
@@ -49,8 +49,16 @@ class RefineRequirementsRequest(BaseModel):
     instructions: str = Field(min_length=1, max_length=500)
 
 
-async def _get_feature_id(request: Request, project_id: str, id_or_slug: str) -> FeatureId:
-    fid = await resolve_feature_id(get_container(request).features.feature_repo, ProjectId(project_id), id_or_slug)
+async def _get_feature_id(
+    request: Request,
+    project_id: str,
+    id_or_slug: str,
+    principal: Principal | None = None,
+) -> FeatureId:
+    container = get_container(request)
+    if principal is not None:
+        await require_project_owner(container, project_id, principal)
+    fid = await resolve_feature_id(container.features.feature_repo, ProjectId(project_id), id_or_slug)
     if fid is None:
         raise FeatureNotFoundError(feature_id=id_or_slug, instance=f"/api/v1/features/{id_or_slug}/requirements")
     return fid
@@ -68,7 +76,7 @@ async def generate_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
-    fid = await _get_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: GenerateEARSUseCase = get_container(request).requirements.generate_ears
 
     output = await uc.execute(GenerateEARSInput(project_id=ProjectId(body.project_id), feature_id=fid))
@@ -102,7 +110,7 @@ async def get_requirements(
     request: Request,
     project_id: str = Query(...),
 ) -> dict[str, Any]:
-    fid = await _get_feature_id(request, project_id, feature_id)
+    fid = await _get_feature_id(request, project_id, feature_id, _principal)
     uc: GetRequirementsUseCase = get_container(request).requirements.get_requirements
 
     try:
@@ -130,7 +138,7 @@ async def save_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, str]:
-    fid = await _get_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: SaveRequirementsUseCase = get_container(request).requirements.save_requirements
 
     try:
@@ -160,7 +168,7 @@ async def delete_requirements(
     request: Request,
     project_id: str = Query(...),
 ) -> dict[str, str]:
-    fid = await _get_feature_id(request, project_id, feature_id)
+    fid = await _get_feature_id(request, project_id, feature_id, _principal)
     uc: DeleteRequirementsUseCase = get_container(request).requirements.delete_requirements
 
     await uc.execute(
@@ -191,7 +199,7 @@ async def refine_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
 ) -> dict[str, Any]:
-    fid = await _get_feature_id(request, body.project_id, feature_id)
+    fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: RefineRequirementsUseCase = get_container(request).requirements.refine_requirements
 
     try:
@@ -244,7 +252,9 @@ async def regenerate_requirements(
     request: Request,
     project_id: str = Query(...),
 ) -> RegenerateRequirementsResponse:
-    uc: RegenerateRequirementsUseCase = get_container(request).requirements.regenerate_requirements
+    container = get_container(request)
+    await require_project_owner(container, project_id, _principal)
+    uc: RegenerateRequirementsUseCase = container.requirements.regenerate_requirements
 
     try:
         output = await uc.execute(

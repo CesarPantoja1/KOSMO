@@ -14,6 +14,8 @@ from kosmo.contracts.auth import (
     TokenRevokedError,
 )
 from kosmo.contracts.auth.context import current_user_id
+from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.project import Project
 from kosmo.infrastructure.api.dependencies.container import get_container
 
 _bearer_scheme = HTTPBearer(auto_error=False, description="JWT de acceso (RS256)")
@@ -39,6 +41,37 @@ async def get_principal(
         return principal
     except AuthError as exc:
         raise _to_http(exc) from exc
+
+
+async def require_project_owner(
+    container: Any,
+    project_id: ProjectId | str,
+    principal: Principal,
+) -> Project | None:
+    """Verifica que el proyecto exista y pertenezca al usuario autenticado (IDOR / BOLA guard).
+
+    Si no existe o pertenece a otro usuario, responde 404 para ocultar su existencia.
+    """
+    if not hasattr(container, "repos") or not hasattr(container.repos, "projects"):
+        return None
+    pid = ProjectId(str(project_id))
+    project = await container.repos.projects.by_id(pid)
+    if project is None or str(getattr(project, "owner_id", "")) != principal.subject:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proyecto '{project_id}' no encontrado.",
+        )
+    return project
+
+
+async def verify_project_owner(
+    project_id: str,
+    principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> None:
+    """Dependencia FastAPI para routers con {project_id} en el path."""
+    container = get_container(request)
+    await require_project_owner(container, project_id, principal)
 
 
 def require_scopes(
