@@ -105,6 +105,8 @@ def build_pipeline_components(
             default_provider=settings.llm_provider,
             default_model=settings.llm_model,
             default_api_key=api_key,
+            max_concurrency=settings.llm_max_concurrency,
+            cache_ttl_seconds=settings.user_ai_config_cache_ttl_seconds,
         )
     elif settings.llm_provider.lower() == "noop":
         llm_client = NoopLLMClient()

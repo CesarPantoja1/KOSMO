@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -90,40 +91,61 @@ class DynamicUserLLMClient(LLMClient):
         default_provider: str,
         default_model: str,
         default_api_key: str | None = None,
+        max_concurrency: int = 15,
+        cache_ttl_seconds: float = 60.0,
     ) -> None:
         self._config_repo = config_repo
         self._cipher = cipher
         self._default_provider = default_provider
         self._default_model = default_model
         self._default_api_key = default_api_key
+        self._max_concurrency = max_concurrency
+        self._cache_ttl_seconds = cache_ttl_seconds
+        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._config_cache: dict[str, tuple[float, str, str, str | None]] = {}
         self._clients: dict[tuple[str, str, str | None], PydanticAILLMClient] = {}
 
-    async def _resolve_client(self) -> LLMClient:
-        user_id = current_user_id.get()
+    def invalidate_cache(self, user_id: str) -> None:
+        """Invalida la configuración en cache de un usuario para refresco inmediato."""
+        self._config_cache.pop(user_id, None)
+
+    async def _resolve_config(self, user_id: str | None) -> tuple[str, str, str | None]:
+        if not user_id:
+            return (self._default_provider, self._default_model, self._default_api_key)
+
+        now = asyncio.get_running_loop().time()
+        cached = self._config_cache.get(user_id)
+        if cached is not None and (now - cached[0]) < self._cache_ttl_seconds:
+            return (cached[1], cached[2], cached[3])
+
         provider = self._default_provider
         model = self._default_model
         api_key = self._default_api_key
 
-        if user_id:
-            try:
-                user_config = await self._config_repo.by_user_id(user_id)
-                if user_config and user_config.encrypted_api_key is not None:
-                    secret = (
-                        user_config.encrypted_api_key
-                        if isinstance(user_config.encrypted_api_key, EncryptedSecret)
-                        else EncryptedSecret(ciphertext=user_config.encrypted_api_key)
-                    )
-                    raw_key = self._cipher.decrypt(secret)
-                    provider_str = (
-                        user_config.provider.value
-                        if hasattr(user_config.provider, "value")
-                        else str(user_config.provider)
-                    )
-                    provider = provider_str
-                    model = user_config.model
-                    api_key = raw_key.decode("utf-8")
-            except Exception:
-                _log.warning("dynamic_llm_client.resolve_user_config_failed", user_id=user_id, exc_info=True)
+        try:
+            user_config = await self._config_repo.by_user_id(user_id)
+            if user_config and user_config.encrypted_api_key is not None:
+                secret = (
+                    user_config.encrypted_api_key
+                    if isinstance(user_config.encrypted_api_key, EncryptedSecret)
+                    else EncryptedSecret(ciphertext=user_config.encrypted_api_key)
+                )
+                raw_key = self._cipher.decrypt(secret)
+                provider_str = (
+                    user_config.provider.value if hasattr(user_config.provider, "value") else str(user_config.provider)
+                )
+                provider = provider_str
+                model = user_config.model
+                api_key = raw_key.decode("utf-8")
+        except Exception:
+            _log.warning("dynamic_llm_client.resolve_user_config_failed", user_id=user_id, exc_info=True)
+
+        self._config_cache[user_id] = (now, provider, model, api_key)
+        return (provider, model, api_key)
+
+    async def _resolve_client(self) -> LLMClient:
+        user_id = current_user_id.get()
+        provider, model, api_key = await self._resolve_config(user_id)
 
         if provider.lower() == "noop":
             return NoopLLMClient()
@@ -143,12 +165,13 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 8192,
     ) -> LLMResponse:
         client = await self._resolve_client()
-        try:
-            return await client.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
-        except Exception as exc:
-            if is_ai_auth_error(exc):
-                raise AIProviderAuthError() from exc
-            raise
+        async with self._semaphore:
+            try:
+                return await client.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
 
     async def complete_json(
         self,
@@ -157,12 +180,13 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 8192,
     ) -> LLMResponse:
         client = await self._resolve_client()
-        try:
-            return await client.complete_json(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
-        except Exception as exc:
-            if is_ai_auth_error(exc):
-                raise AIProviderAuthError() from exc
-            raise
+        async with self._semaphore:
+            try:
+                return await client.complete_json(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
 
     async def complete_typed[T](
         self,
@@ -172,17 +196,18 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 8192,
     ) -> T:
         client = await self._resolve_client()
-        try:
-            return await client.complete_typed(
-                prompt=prompt,
-                output_type=output_type,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-        except Exception as exc:
-            if is_ai_auth_error(exc):
-                raise AIProviderAuthError() from exc
-            raise
+        async with self._semaphore:
+            try:
+                return await client.complete_typed(
+                    prompt=prompt,
+                    output_type=output_type,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
 
     @property
     def supports_native_tools(self) -> bool:
@@ -198,18 +223,19 @@ class DynamicUserLLMClient(LLMClient):
     ) -> tuple[str, list[ToolCallRecord]]:
         client = await self._resolve_client()
         if isinstance(client, PydanticAILLMClient):
-            try:
-                return await client.complete_with_tools(
-                    prompt=prompt,
-                    tools=tools,
-                    tool_handler=tool_handler,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-            except Exception as exc:
-                if is_ai_auth_error(exc):
-                    raise AIProviderAuthError() from exc
-                raise
+            async with self._semaphore:
+                try:
+                    return await client.complete_with_tools(
+                        prompt=prompt,
+                        tools=tools,
+                        tool_handler=tool_handler,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                except Exception as exc:
+                    if is_ai_auth_error(exc):
+                        raise AIProviderAuthError() from exc
+                    raise
         return ("", [])
 
     @asynccontextmanager
@@ -220,41 +246,42 @@ class DynamicUserLLMClient(LLMClient):
         temperature: float = 0.1,
         max_tokens: int = 8192,
     ) -> AsyncGenerator[StreamedTypedResult[T]]:
-        client = await self._resolve_client()
-        stream_fn: Any = getattr(client, "stream_typed", None)
-        if callable(stream_fn):
-            try:
-                async with stream_fn(
+        async with self._semaphore:
+            client = await self._resolve_client()
+            stream_fn: Any = getattr(client, "stream_typed", None)
+            if callable(stream_fn):
+                try:
+                    async with stream_fn(
+                        prompt=prompt,
+                        output_type=output_type,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    ) as streamed:  # type: ignore[reportUnknownVariableType]
+                        yield streamed  # type: ignore[reportReturnType]
+                except Exception as exc:
+                    if is_ai_auth_error(exc):
+                        raise AIProviderAuthError() from exc
+                    raise
+            else:
+                result = await client.complete_typed(
                     prompt=prompt,
                     output_type=output_type,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                ) as streamed:  # type: ignore[reportUnknownVariableType]
-                    yield streamed  # type: ignore[reportReturnType]
-            except Exception as exc:
-                if is_ai_auth_error(exc):
-                    raise AIProviderAuthError() from exc
-                raise
-        else:
-            result = await client.complete_typed(
-                prompt=prompt,
-                output_type=output_type,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+                )
 
-            class _FallbackStreamed:
-                def __init__(self, data: T):
-                    self._data = data
+                class _FallbackStreamed:
+                    def __init__(self, data: T):
+                        self._data = data
 
-                async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
-                    content = getattr(self._data, "content", None)
-                    if isinstance(content, str):
-                        yield content
-                    else:
-                        yield str(self._data)
+                    async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
+                        content = getattr(self._data, "content", None)
+                        if isinstance(content, str):
+                            yield content
+                        else:
+                            yield str(self._data)
 
-                async def get_data(self) -> T:
-                    return self._data
+                    async def get_data(self) -> T:
+                        return self._data
 
-            yield _FallbackStreamed(result)  # type: ignore[reportReturnType]
+                yield _FallbackStreamed(result)  # type: ignore[reportReturnType]

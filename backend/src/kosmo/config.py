@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
     llm_model: str
     llm_api_key: SecretStr | None = None
+    llm_max_concurrency: int = 15
+    user_ai_config_cache_ttl_seconds: float = 60.0
 
     # Embeddings
     embedding_provider: Literal["auto", "openai", "fastembed", "none"] = "auto"

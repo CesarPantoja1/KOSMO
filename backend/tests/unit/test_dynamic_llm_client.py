@@ -157,3 +157,94 @@ async def test_dynamic_client_stream_typed_with_noop(mock_repo, mock_cipher):
 
     assert len(chunks) > 0
     assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_caches_user_credentials(dynamic_client, mock_repo):
+    user_id = "usr_cached"
+    current_user_id.set(user_id)
+
+    mock_repo.by_user_id.return_value = UserAiConfig(
+        user_id=user_id,
+        provider=AIProvider.DEEPSEEK,
+        model="deepseek-v4-flash",
+        encrypted_api_key=EncryptedSecret(ciphertext=b"enc_sk-user-key"),
+        is_custom=True,
+    )
+
+    mock_pydantic_client = AsyncMock()
+    mock_pydantic_client.complete.return_value = LLMResponse(text="ok")
+
+    with patch("kosmo.infrastructure.llm.dynamic_llm_client.PydanticAILLMClient", return_value=mock_pydantic_client):
+        prompt = PromptTemplate(system_prompt="sys", user_prompt="hello")
+        await dynamic_client.complete(prompt)
+        await dynamic_client.complete(prompt)
+
+        assert mock_repo.by_user_id.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_invalidate_cache(dynamic_client, mock_repo):
+    user_id = "usr_invalidate"
+    current_user_id.set(user_id)
+
+    mock_repo.by_user_id.return_value = UserAiConfig(
+        user_id=user_id,
+        provider=AIProvider.DEEPSEEK,
+        model="deepseek-v4-flash",
+        encrypted_api_key=EncryptedSecret(ciphertext=b"enc_sk-user-key"),
+        is_custom=True,
+    )
+
+    mock_pydantic_client = AsyncMock()
+    mock_pydantic_client.complete.return_value = LLMResponse(text="ok")
+
+    with patch("kosmo.infrastructure.llm.dynamic_llm_client.PydanticAILLMClient", return_value=mock_pydantic_client):
+        prompt = PromptTemplate(system_prompt="sys", user_prompt="hello")
+        await dynamic_client.complete(prompt)
+        assert mock_repo.by_user_id.call_count == 1
+
+        dynamic_client.invalidate_cache(user_id)
+        await dynamic_client.complete(prompt)
+        assert mock_repo.by_user_id.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_semaphore_limits_concurrency(mock_repo, mock_cipher):
+    import asyncio
+
+    client = DynamicUserLLMClient(
+        config_repo=mock_repo,
+        cipher=mock_cipher,
+        default_provider="openai",
+        default_model="gpt-4o",
+        default_api_key="sk-test",
+        max_concurrency=2,
+    )
+    current_user_id.set(None)
+
+    active_count = 0
+    max_active = 0
+    lock = asyncio.Lock()
+
+    async def slow_complete(*_args, **_kwargs):
+        nonlocal active_count, max_active
+        async with lock:
+            active_count += 1
+            if active_count > max_active:
+                max_active = active_count
+        await asyncio.sleep(0.05)
+        async with lock:
+            active_count -= 1
+        return LLMResponse(text="done")
+
+    mock_pydantic_client = AsyncMock()
+    mock_pydantic_client.complete.side_effect = slow_complete
+
+    with patch("kosmo.infrastructure.llm.dynamic_llm_client.PydanticAILLMClient", return_value=mock_pydantic_client):
+        prompt = PromptTemplate(system_prompt="sys", user_prompt="hello")
+        tasks = [asyncio.create_task(client.complete(prompt)) for _ in range(6)]
+        results = await asyncio.gather(*tasks)
+
+        assert len(results) == 6
+        assert max_active <= 2
