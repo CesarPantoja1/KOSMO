@@ -389,9 +389,43 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _extract_pool_metrics(engine: Any) -> dict[str, int]:
+    """Extrae de forma defensiva las métricas del pool de conexiones."""
+    pool = getattr(engine, "pool", None)
+    if pool is None and hasattr(engine, "sync_engine"):
+        pool = getattr(engine.sync_engine, "pool", None)
+    if pool is None:
+        return {}
+    metrics: dict[str, int] = {}
+    for attr, key in [
+        ("size", "size"),
+        ("checkedin", "checked_in"),
+        ("checkedout", "checked_out"),
+        ("overflow", "overflow"),
+    ]:
+        fn = getattr(pool, attr, None)
+        if callable(fn):
+            with contextlib.suppress(Exception):
+                val = fn()
+                if isinstance(val, (int, float, str)):
+                    metrics[key] = int(val)
+    return metrics
+
+
+def _extract_broker_info(container: Any) -> dict[str, str]:
+    """Reporta el tipo y estado operativo del broker de eventos."""
+    codegen = getattr(container, "codegen", None)
+    broker = getattr(codegen, "implementation_broker", None) if codegen else None
+    is_redis = getattr(broker, "_redis", None) is not None if broker else False
+    return {
+        "type": "redis" if is_redis else "in_memory",
+        "status": "connected" if is_redis or getattr(container, "redis", None) is not None else "in_memory",
+    }
+
+
 @app.get("/ready", tags=["health"], summary="Readiness check", include_in_schema=False)
-async def readiness(request: Request) -> dict[str, str]:
-    """Verifica las dependencias requeridas antes de aceptar tráfico público."""
+async def readiness(request: Request) -> dict[str, Any]:
+    """Verifica las dependencias requeridas antes de aceptar tráfico público y reporta saturación."""
     try:
         container = cast(AppContainer, request.app.state.container)
         async with container.db_engine.connect() as connection:
@@ -404,7 +438,11 @@ async def readiness(request: Request) -> dict[str, str]:
             detail="Dependencias no disponibles",
         ) from exc
 
-    return {"status": "ready"}
+    return {
+        "status": "ready",
+        "pool": _extract_pool_metrics(getattr(container, "db_engine", None)),
+        "broker": _extract_broker_info(container),
+    }
 
 
 # EspecificaciÃ³n OpenAPI customizada
