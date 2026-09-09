@@ -23,6 +23,13 @@ from kosmo.contracts.sdd.codegen import (
 )
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, UserId
+from kosmo.contracts.sdd.product_map import (
+    ActorRef,
+    DomainEntityRef,
+    FeatureDisposition,
+    ImplementationDisposition,
+    ProductMap,
+)
 from kosmo.contracts.sdd.project import Project
 from kosmo.contracts.sdd.ux_context import (
     BootstrapDesignTokens,
@@ -314,3 +321,75 @@ async def test_sync_site_config(tmp_path: Path) -> None:
     assert "Tienda online" in content
     assert "#ff5500" in content
     assert "storefront" in content
+
+
+@pytest.mark.unit
+def test_format_product_map_context_and_prompts() -> None:
+    builder = ImplementationContextBuilder()
+    p_id = ProjectId("prj_clinic")
+    f_id = FeatureId("feat_02")
+
+    pmap = ProductMap(
+        project_id=p_id,
+        entities=(
+            DomainEntityRef(
+                name="Cita",
+                description="Cita médica",
+                table_name="citas",
+                feature_ids=("feat_01", "feat_02"),
+            ),
+        ),
+        actors=(ActorRef(name="Paciente", navigation_group="Área Paciente", feature_ids=("feat_02",)),),
+        dispositions={
+            "feat_02": FeatureDisposition(
+                feature_id="feat_02",
+                disposition=ImplementationDisposition.EXTEND,
+                actor="Paciente",
+                actors=("Médico", "Paciente"),
+                navigation_group="Área Paciente",
+                reason="Extiende la entidad Cita sin duplicar persistencia",
+            )
+        },
+    )
+
+    formatted = builder.format_product_map_context(pmap, current_feature_id=f_id)
+    assert "Mapa de Cohesión e Integración del Producto (Product Map)" in formatted
+    assert "EXTENSIÓN" in formatted
+    assert "Área Paciente" in formatted
+    assert "Cita" in formatted
+    assert "**Actores involucrados:** Médico, Paciente" in formatted
+    assert "Interacción Multi-Rol" in formatted
+
+    feature = Feature(
+        id=f_id,
+        number=2,
+        title="Cancelar cita",
+        slug="cancelar-cita",
+        description="Cancela una cita médica agendada.",
+        project_id=p_id,
+    )
+    plan_prompt = builder.build_plan_prompt(
+        feature=feature,
+        req_markdown="### REQ-2.1 Cancelar",
+        diagram_syntax="@startuml\n@enduml",
+        ux_prompt_block="UX",
+        project_context="CTX",
+        product_map=pmap,
+    )
+    assert "Directiva de Integración del Product Map" in plan_prompt
+    assert "EXTEND" in plan_prompt
+    assert "src/domain/" in plan_prompt
+    assert "Actores involucrados: Médico, Paciente" in plan_prompt
+    assert "IMPORTANTE MULTI-ROL" in plan_prompt
+
+    build_prompt = builder.build_build_prompt(
+        feature=feature,
+        req_markdown="### REQ-2.1 Cancelar",
+        diagram_syntax="@startuml\n@enduml",
+        ux_prompt_block="UX",
+        project_context="CTX",
+        plan_lines="- [create] src/app/cancelar-cita/page.tsx",
+        product_map=pmap,
+    )
+    assert "Actores involucrados: Médico, Paciente" in build_prompt
+    assert "SOPORTE MULTI-ROL" in build_prompt

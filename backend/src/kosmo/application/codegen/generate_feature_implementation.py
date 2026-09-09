@@ -12,6 +12,10 @@ from datetime import UTC, datetime
 import structlog
 from ulid import ULID
 
+from kosmo.application.codegen.analyze_feature_integration import (
+    AnalyzeFeatureIntegrationInput,
+    AnalyzeFeatureIntegrationUseCase,
+)
 from kosmo.application.codegen.analyze_ux_context import (
     UXAnalysisInput,
     UXAnalyzerUseCase,
@@ -54,6 +58,7 @@ from kosmo.contracts.sdd.codegen import (
 )
 from kosmo.contracts.sdd.errors import FeatureNotFoundError
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId
+from kosmo.contracts.sdd.product_map import ImplementationDisposition, ProductMap
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,
@@ -164,6 +169,7 @@ class GenerateFeatureImplementationUseCase:
         sync_github_repository: SyncGitHubRepositoryUseCase | None = None,
         fs_reader: FileSystemReader | None = None,
         context_builder: ImplementationContextBuilder | None = None,
+        integration_analyzer: AnalyzeFeatureIntegrationUseCase | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -196,6 +202,11 @@ class GenerateFeatureImplementationUseCase:
             feature_repo=feature_repo,
             fs_reader=self._fs_reader,
         )
+        self._integration_analyzer = integration_analyzer or AnalyzeFeatureIntegrationUseCase(
+            feature_repo=feature_repo,
+            document_repo=document_repo,
+            implementation_repo=implementation_repo,
+        )
 
     def set_sync_github_repository(self, sync_github_repository: SyncGitHubRepositoryUseCase) -> None:
         self._sync_github_repository = sync_github_repository
@@ -205,12 +216,14 @@ class GenerateFeatureImplementationUseCase:
         project_id: ProjectId,
         current_feature_id: FeatureId | None = None,
         workspace_dir: str | None = None,
+        product_map: ProductMap | None = None,
     ) -> str:
         """Construye el bloque de contexto del proyecto delegando en el context builder."""
         return await self._context_builder.build_project_context(
             project_id=project_id,
             current_feature_id=current_feature_id,
             workspace_dir=workspace_dir,
+            product_map=product_map,
         )
 
     async def _build_implemented_features_context(
@@ -381,13 +394,24 @@ class GenerateFeatureImplementationUseCase:
                 )
             )
 
-            # 7. Fase Plan: análisis UX y prompt al Plan Agent
+            # 7. Fase Plan: análisis de integración, análisis UX y prompt al Plan Agent
             plan_start = time.monotonic()
             feature_slug = slugify_spanish(feature.slug) or feature.slug
+
+            product_map = None
+            with contextlib.suppress(Exception):
+                product_map = await self._integration_analyzer.execute(
+                    AnalyzeFeatureIntegrationInput(
+                        project_id=feature.project_id,
+                        current_feature_id=feature.id,
+                    )
+                )
+
             project_context = await self._build_project_context(
                 feature.project_id,
                 current_feature_id=feature.id,
                 workspace_dir=workspace_dir,
+                product_map=product_map,
             )
             ux_analysis = await self._ux_analyzer.execute(
                 UXAnalysisInput(feature_id=feature.id, project_id=feature.project_id)
@@ -401,7 +425,7 @@ class GenerateFeatureImplementationUseCase:
                     event_type=OpenCodeEventType.PLAN_PROGRESS,
                     session_id=session_id,
                     data={
-                        "delta": f"Analizando requisitos, UX y diagrama de '{feature.title}'...",
+                        "delta": f"Analizando requisitos, UX, integración y diagrama de '{feature.title}'...",
                         "stage": "planning",
                     },
                 )
@@ -413,6 +437,7 @@ class GenerateFeatureImplementationUseCase:
                 diagram_syntax=diagram.diagram_syntax,
                 ux_prompt_block=ux_analysis.prompt_block,
                 project_context=project_context,
+                product_map=product_map,
             )
 
             plan_operations: list[FileOperation] = []
@@ -441,10 +466,16 @@ class GenerateFeatureImplementationUseCase:
 
             # Fallback canónico con arquitectura de feature slices si el Plan Agent no produjo operaciones
             if not plan_operations:
+                disposition = (
+                    product_map.get_disposition(feature.id).disposition
+                    if product_map
+                    else ImplementationDisposition.CREATE
+                )
                 plan_operations = self._context_builder.build_fallback_plan_operations(
                     feature=feature,
                     feature_slug=feature_slug,
                     manifest_files=workspace.manifest_files if workspace else (),
+                    disposition=disposition,
                 )
                 _log.info(
                     "codegen.fallback_plan_used",
@@ -479,6 +510,7 @@ class GenerateFeatureImplementationUseCase:
                 ux_prompt_block=ux_analysis.prompt_block,
                 project_context=project_context,
                 plan_lines=plan_lines,
+                product_map=product_map,
             )
 
             generated_files: set[str] = set()
@@ -501,11 +533,17 @@ class GenerateFeatureImplementationUseCase:
                                 if normalized_p:
                                     generated_files.add(normalized_p)
             except OpenCodeGenerationError as exc:
+                disposition = (
+                    product_map.get_disposition(feature.id).disposition
+                    if product_map
+                    else ImplementationDisposition.CREATE
+                )
                 structural_check = validate_workspace_feature_structure(
                     workspace_dir=workspace_dir,
                     feature_slug=feature_slug,
                     fs_reader=self._fs_reader,
                     extra_files=generated_files,
+                    disposition=disposition,
                 )
                 if structural_check.is_valid:
                     _log.warning(
@@ -555,12 +593,18 @@ class GenerateFeatureImplementationUseCase:
                         },
                     )
                 )
-                # 1. Validación estructural post-build (page.tsx, slice, feature-registry.ts)
+                # 1. Validación estructural post-build (page.tsx, slice, feature-registry.ts, domain)
+                disposition = (
+                    product_map.get_disposition(feature.id).disposition
+                    if product_map
+                    else ImplementationDisposition.CREATE
+                )
                 structural_result = validate_workspace_feature_structure(
                     workspace_dir=workspace_dir,
                     feature_slug=feature_slug,
                     fs_reader=self._fs_reader,
                     extra_files=generated_files,
+                    disposition=disposition,
                 )
 
                 # 2. Validación técnica (tsc, eslint, vitest, build)
