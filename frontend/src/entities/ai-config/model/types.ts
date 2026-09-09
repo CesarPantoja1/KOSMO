@@ -1,4 +1,4 @@
-export type AIProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'custom' | 'kosmo_default';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'custom';
 
 export type AIModelTier = 'flagship' | 'balanced' | 'fast';
 
@@ -24,8 +24,8 @@ export const TIER_LABELS: Record<AIModelTier, string> = {
 };
 
 export interface AIConfigView {
-	provider: AIProvider;
-	model: string;
+	provider: AIProvider | null;
+	model: string | null;
 	is_custom: boolean;
 	has_api_key: boolean;
 	masked_key: string | null;
