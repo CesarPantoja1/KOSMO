@@ -9,12 +9,9 @@ import {
 import { formatApiError } from '@/shared/api';
 import {
 	CharacterCounter,
-	ConfirmacionVisibilidadRepositorio,
 	GitHub,
-	InfoCircleIcon,
 	Send,
 	toast,
-	WarningIcon,
 } from '@/shared/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
@@ -31,8 +28,6 @@ const CreateProjectForm = () => {
 	const getProjects = useProjectStore((s) => s.getProjects);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [phase, setPhase] = useState<'creating-project' | 'creating-repo' | null>(null);
-	const [showPublicConfirm, setShowPublicConfirm] = useState(false);
-	const [pendingValues, setPendingValues] = useState<ProjectFormData | null>(null);
 	const createdProjectRef = useRef<Project | null>(null);
 
 	useEffect(() => {
@@ -46,7 +41,7 @@ const CreateProjectForm = () => {
 			name: '',
 			description: '',
 			repo_name: 'kosmo-repositorio',
-			is_public: false,
+			is_public: true,
 		},
 	});
 
@@ -64,10 +59,6 @@ const CreateProjectForm = () => {
 		field: { value: repoNameValue, ref: repoNameRef },
 		fieldState: { error: repoNameError },
 	} = useController({ name: 'repo_name', control });
-
-	const {
-		field: { value: isPublic, onChange: isPublicOnChange },
-	} = useController({ name: 'is_public', control });
 
 	const watchedName = watch('name');
 
@@ -121,23 +112,7 @@ const CreateProjectForm = () => {
 	};
 
 	const onSubmit = (data: ProjectFormData) => {
-		if (data.is_public) {
-			setPendingValues(data);
-			setShowPublicConfirm(true);
-			return;
-		}
 		doSubmit(data);
-	};
-
-	const handleConfirmPublic = () => {
-		setShowPublicConfirm(false);
-		if (pendingValues) doSubmit(pendingValues);
-	};
-
-	const handleCancelConfirm = () => {
-		setShowPublicConfirm(false);
-		setPendingValues(null);
-		setValue('is_public', false);
 	};
 
 	return (
@@ -251,84 +226,6 @@ const CreateProjectForm = () => {
 							)}
 						</div>
 
-						{/* Visibility toggle */}
-						<div className='flex flex-col gap-2'>
-							<span className='text-xs font-semibold text-neutral-500 uppercase tracking-wider'>
-								Visibilidad
-							</span>
-							<div className='flex gap-2'>
-								<button
-									type='button'
-									onClick={() => isPublicOnChange(false)}
-									className={`flex-1 rounded-lg border px-4 py-3 text-left transition-all duration-150 ${
-										!isPublic
-											? 'border-primary-500 bg-primary-50 shadow-sm'
-											: 'border-neutral-200 bg-neutral-50 hover:border-neutral-300'
-									}`}
-								>
-									<span
-										className={`block text-sm font-semibold ${
-											!isPublic ? 'text-primary-600' : 'text-neutral-800'
-										}`}
-									>
-										Privado
-									</span>
-									<span className='text-xs text-neutral-500'>
-										Solo tú y los colaboradores que invites podrán ver el código.
-									</span>
-								</button>
-								<button
-									type='button'
-									onClick={() => isPublicOnChange(true)}
-									className={`flex-1 rounded-lg border px-4 py-3 text-left transition-all duration-150 ${
-										isPublic
-											? 'border-warning-500 bg-warning-50 shadow-sm'
-											: 'border-neutral-200 bg-neutral-50 hover:border-neutral-300'
-									}`}
-								>
-									<span
-										className={`block text-sm font-semibold ${
-											isPublic ? 'text-warning-600' : 'text-neutral-800'
-										}`}
-									>
-										Público
-									</span>
-									<span className='text-xs text-neutral-500'>
-										Cualquier persona podrá ver el código fuente.
-									</span>
-								</button>
-							</div>
-						</div>
-
-						{/* Railway deployment notice */}
-						{!isPublic ? (
-							<div className='flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 mt-2'>
-								<WarningIcon size={20} color='text-warning-600' />
-								<div className='flex flex-col gap-1'>
-									<p className='text-sm font-semibold text-warning-700'>
-										No podrás desplegar en Railway
-									</p>
-									<p className='text-sm text-warning-700/80'>
-										Los repositorios privados no son compatibles con el despliegue en
-										Railway. Si deseas publicar tu aplicación, selecciona la visibilidad{' '}
-										<span className='font-semibold'>Pública</span>.
-									</p>
-								</div>
-							</div>
-						) : (
-							<div className='flex items-start gap-3 rounded-lg border border-info-200 bg-info-50 px-4 py-3 mt-2'>
-								<InfoCircleIcon size={20} color='text-info-600' />
-								<div className='flex flex-col gap-1'>
-									<p className='text-sm font-semibold text-info-700'>
-										Despliegue en Railway disponible
-									</p>
-									<p className='text-sm text-info-700/80'>
-										Con un repositorio público podrás publicar tu aplicación en Railway
-										directamente desde la plataforma.
-									</p>
-								</div>
-							</div>
-						)}
 					</div>
 
 					{/* Actions — al final del formulario */}
@@ -352,14 +249,6 @@ const CreateProjectForm = () => {
 				</div>
 			</form>
 
-			{showPublicConfirm && pendingValues && (
-				<ConfirmacionVisibilidadRepositorio
-					repoName={pendingValues.repo_name}
-					onCancel={handleCancelConfirm}
-					onConfirm={handleConfirmPublic}
-					confirmLoading={isSubmitting}
-				/>
-			)}
 		</>
 	);
 };
