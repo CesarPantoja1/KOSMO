@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, Self, cast
 
 import httpx
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from kosmo.contracts.sdd.codegen import (
     OpenCodeClientPort,
@@ -122,37 +123,47 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         """Crea una nueva sesión en el servidor OpenCode para el workspace especificado."""
         headers = self._get_auth_headers()
         payload: dict[str, object] = {"title": title}
-        try:
-            response = await self._client.post(
-                "/session",
-                params={"directory": workspace_dir},
-                json=payload,
-                headers=headers,
-            )
-            if not response.is_success:
-                raise OpenCodeClientError(
-                    f"No se pudo iniciar la generación (HTTP {response.status_code}): {response.text}"
-                )
-            data: dict[str, Any] = response.json()
-            session_id = data.get("id") or data.get("session_id")
-            if not session_id:
-                raise OpenCodeClientError(f"La respuesta del asistente de generación es inválida: {data}")
 
-            resolved_dir = str(data.get("workspace_dir") or data.get("directory") or workspace_dir)
-            resolved_title = str(data.get("title") or title)
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception_type((httpx.ConnectError, httpx.TransportError)),
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=1, max=4),
+            reraise=True,
+        ):
+            with attempt:
+                try:
+                    response = await self._client.post(
+                        "/session",
+                        params={"directory": workspace_dir},
+                        json=payload,
+                        headers=headers,
+                    )
+                    if not response.is_success:
+                        raise OpenCodeClientError(
+                            f"No se pudo iniciar la generación (HTTP {response.status_code}): {response.text}"
+                        )
+                    data: dict[str, Any] = response.json()
+                    session_id = data.get("id") or data.get("session_id")
+                    if not session_id:
+                        raise OpenCodeClientError(f"La respuesta del asistente de generación es inválida: {data}")
 
-            return OpenCodeSession(
-                session_id=str(session_id),
-                workspace_dir=resolved_dir,
-                title=resolved_title,
-                created_at=datetime.now(UTC),
-            )
-        except OpenCodeClientError:
-            raise
-        except httpx.TimeoutException as exc:
-            raise OpenCodeTimeoutError(f"Tiempo de espera agotado al crear sesión OpenCode: {exc}") from exc
-        except httpx.HTTPError as exc:
-            raise OpenCodeConnectionError(f"Error HTTP al conectar con OpenCode: {exc}") from exc
+                    resolved_dir = str(data.get("workspace_dir") or data.get("directory") or workspace_dir)
+                    resolved_title = str(data.get("title") or title)
+
+                    return OpenCodeSession(
+                        session_id=str(session_id),
+                        workspace_dir=resolved_dir,
+                        title=resolved_title,
+                        created_at=datetime.now(UTC),
+                    )
+                except OpenCodeClientError:
+                    raise
+                except httpx.TimeoutException as exc:
+                    raise OpenCodeTimeoutError(f"Tiempo de espera agotado al crear sesión OpenCode: {exc}") from exc
+                except httpx.HTTPError as exc:
+                    raise OpenCodeConnectionError(f"Error HTTP al conectar con OpenCode: {exc}") from exc
+
+        raise OpenCodeConnectionError("No se pudo crear la sesión OpenCode tras reintentos")
 
     def _model_payload(self) -> dict[str, str] | None:
         """Convierte el modelo configurado (provider/model) al objeto que espera la API."""
