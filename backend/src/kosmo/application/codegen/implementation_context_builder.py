@@ -15,6 +15,7 @@ from kosmo.contracts.sdd.codegen import (
 )
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
+from kosmo.contracts.sdd.product_map import ImplementationDisposition, ProductMap
 from kosmo.contracts.sdd.repositories import (
     DocumentRepository,
     FeatureRepository,
@@ -81,6 +82,7 @@ def collect_workspace_feature_files(
         if (
             norm_lower.startswith(slice_pattern)
             or norm_lower.startswith(app_pattern)
+            or norm_lower.startswith("src/domain/")
             or norm_lower in ("src/lib/feature-registry.ts", "src/lib/site.ts", "src/db/schema.ts")
         ):
             files.add(norm_f)
@@ -133,13 +135,83 @@ class ImplementationContextBuilder:
         """Obtiene el contexto del esquema de base de datos si existe."""
         return get_existing_db_schema_context(workspace_dir, self._fs_reader)
 
+    def format_product_map_context(
+        self,
+        product_map: ProductMap | None,
+        current_feature_id: FeatureId | None = None,
+    ) -> str:
+        """Construye la sección estructurada del Product Map para guiar la integración y reutilización."""
+        if product_map is None:
+            return ""
+
+        sections: list[str] = ["\n### Mapa de Cohesión e Integración del Producto (Product Map)"]
+
+        # 1. Disposición de la característica actual
+        if current_feature_id is not None:
+            disp = product_map.get_disposition(current_feature_id)
+            disp_desc = {
+                ImplementationDisposition.CREATE: (
+                    "CREACIÓN (Característica fundacional con entidades y vistas propias)"
+                ),
+                ImplementationDisposition.EXTEND: (
+                    "EXTENSIÓN (Extiende entidades o lógica existentes; reutiliza modelos y persistencia)"
+                ),
+                ImplementationDisposition.INTEGRATE: (
+                    "INTEGRACIÓN (Sub-capacidad; intégrala en el flujo/página padre o en src/domain/)"
+                ),
+                ImplementationDisposition.COMPOSE: (
+                    "COMPOSICIÓN (Vista agregadora que consolida métricas o entidades previas)"
+                ),
+                ImplementationDisposition.SKIP: ("OMISIÓN (Capacidad ya cubierta previamente en el producto)"),
+            }.get(disp.disposition, str(disp.disposition))
+            sections.append(f"- **Disposición asignada:** `{disp.disposition.value.upper()}` — {disp_desc}")
+            if disp.reason:
+                sections.append(f"- **Razón de integración:** {disp.reason}")
+            actors_list = disp.actors if disp.actors else ((disp.actor,) if disp.actor else ())
+            if actors_list:
+                actors_str = ", ".join(actors_list)
+                sections.append(f"- **Actores involucrados:** {actors_str}")
+            elif disp.actor:
+                sections.append(f"- **Actor principal:** {disp.actor}")
+            if disp.navigation_group:
+                sections.append(f"- **Grupo de navegación recomendado:** `{disp.navigation_group}`")
+
+        # 2. Entidades de dominio compartidas
+        if product_map.entities:
+            sections.append("\n#### Entidades de dominio del producto (`src/domain/`):")
+            for ent in product_map.entities[:6]:
+                f_count = len(ent.feature_ids)
+                sections.append(
+                    f"- `{ent.name}` (tabla: `{ent.table_name}`): Compartida entre {f_count} características."
+                )
+
+        # 3. Directivas de no duplicación e interacción multi-rol
+        sections.append(
+            "\n#### Directivas de Cohesión, Multi-Rol y No Duplicación:\n"
+            "- **Reutilización de Entidades:** Si una entidad ya existe en `src/db/schema.ts` o en `src/domain/`, "
+            "reutilízala e importa sus tipos. PROHIBIDO crear tablas o tipos duplicados con nombres similares.\n"
+            "- **Dominio Compartido (`src/domain/`):** La lógica de negocio y tipos que pertenezcan al dominio "
+            "común deben ubicarse en `src/domain/<entidad>/` para que cualquier feature pueda consumirlos "
+            "sin acoplamiento inter-slice.\n"
+            "- **Interacción Multi-Rol (Crucial):** Cuando la feature involucre más de un rol/actor "
+            "(o el flujo EARS/diagrama mencione múltiples actores), la UI NO debe limitarse a un único rol. "
+            "DEBE ofrecer la perspectiva y acciones de cada actor involucrado (por ejemplo mediante selector de rol, "
+            "pestañas por rol con `<Tabs>`, o secciones específicas de la pantalla según el actor), "
+            "permitiendo probar y experimentar el flujo completo para todos los roles participantes.\n"
+            "- **Navegación Coherente:** Usa el campo opcional `group` en el manifest y agrúpala en `featureGroups` "
+            "en `src/lib/feature-registry.ts` para que la navegación refleje los roles del negocio."
+        )
+
+        return "\n".join(sections)
+
     async def build_project_context(
         self,
         project_id: ProjectId,
         current_feature_id: FeatureId | None = None,
         workspace_dir: str | None = None,
+        product_map: ProductMap | None = None,
     ) -> str:
-        """Construye el bloque de contexto del proyecto (visión, features previas y schema de BD)."""
+        """Construye el bloque de contexto del proyecto (visión, product map, features previas y schema de BD)."""
         lines: list[str] = ["## Contexto del proyecto"]
         if self._project_repo is not None:
             project = await self._project_repo.by_id(project_id)
@@ -158,6 +230,11 @@ class ImplementationContextBuilder:
                     vision = ""
                 if vision:
                     lines.append(f"\n### Visión del producto (descubrimiento)\n{vision}")
+
+        # Contexto del Product Map (cohesión e integración)
+        pm_context = self.format_product_map_context(product_map, current_feature_id=current_feature_id)
+        if pm_context:
+            lines.append(pm_context)
 
         # Contexto inter-feature: funcionalidades ya implementadas
         implemented_context = await self.build_implemented_features_context(
@@ -254,8 +331,25 @@ class ImplementationContextBuilder:
         diagram_syntax: str,
         ux_prompt_block: str,
         project_context: str,
+        product_map: ProductMap | None = None,
     ) -> str:
         """Construye el prompt para el Plan Agent de OpenCode."""
+        disp_info = ""
+        if product_map is not None:
+            disp = product_map.get_disposition(feature.id)
+            actors_list = disp.actors if disp.actors else ((disp.actor,) if disp.actor else ())
+            actors_str = ", ".join(actors_list) if actors_list else "General"
+            disp_info = (
+                f"\n## Directiva de Integración del Product Map\n"
+                f"Disposición de esta feature: `{disp.disposition.value.upper()}`.\n"
+                f"Justificación: {disp.reason}\n"
+                f"Actores involucrados: {actors_str}\n"
+                "Asegúrate de reutilizar entidades y utilidades existentes en `src/domain/` y `src/db/schema.ts`.\n"
+                "IMPORTANTE MULTI-ROL: Si hay múltiples actores involucrados en la feature o en los requisitos EARS, "
+                "diseña la pantalla con soporte para todos los roles (e.g. selector de rol o pestañas con `<Tabs>`), "
+                "sin restringir la funcionalidad ni las interacciones a uno solo.\n"
+            )
+
         return (
             f"{ux_prompt_block}\n\n"
             f"{project_context}\n\n"
@@ -263,18 +357,22 @@ class ImplementationContextBuilder:
             f"## Descripción\n{feature.description}\n\n"
             f"## Requisitos EARS\n{req_markdown}\n\n"
             f"## Diagrama de Actividad\n{diagram_syntax}\n\n"
+            f"{disp_info}"
             "Propón un plan de implementación detallando los archivos a crear y modificar.\n"
             "OBLIGATORIO: la feature DEBE entregar una solución 100% FUNCIONAL DE EXTREMO A EXTREMO "
             "(Frontend + Backend + Base de Datos). El plan debe incluir:\n"
-            "1. El slice autocontenido en `src/features/<slug>/` (manifest.ts, logic.ts, components/).\n"
+            "1. El slice en `src/features/<slug>/` (manifest.ts, logic.ts, components/). Si la feature opera "
+            "sobre entidades comunes de negocio, coloca la entidad/tipos en `src/domain/<entidad>/` "
+            "para compartirla.\n"
             "2. La ruta navegable y página principal en `src/app/<slug>/page.tsx` con export default "
             "que renderice la vista interactiva (formularios, listas, acciones).\n"
             "3. El registro del manifest en `src/lib/feature-registry.ts` "
-            "(IMPORTANTE: añade la feature al array `features` existente sin eliminar las features previas; "
-            "la navegación del shell se deriva del registro).\n"
+            "(IMPORTANTE: añade la feature al array `features` o `featureGroups` existente sin eliminar las "
+            "features previas; la navegación del shell se deriva del registro).\n"
             "4. Los tests de la lógica en Vitest.\n"
             "5. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
-            "para declarar las tablas con Drizzle ORM y la integración de lectura/escritura.\n"
+            "para declarar las tablas con Drizzle ORM y la integración de lectura/escritura "
+            "(reutilizando tablas si ya existen).\n"
             "Lee las skills `kosmo-ui`, `kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
         )
 
@@ -283,10 +381,37 @@ class ImplementationContextBuilder:
         feature: Feature,
         feature_slug: str,
         manifest_files: tuple[str, ...],
+        disposition: ImplementationDisposition | str = ImplementationDisposition.CREATE,
     ) -> list[FileOperation]:
-        """Genera el conjunto canónico de operaciones de contingencia si el Plan Agent no produjo operaciones."""
+        """Genera el conjunto canónico de operaciones de contingencia respetando la disposición de integración."""
         existing_manifest = set(manifest_files)
         registry_action = FileAction.MODIFY if "src/lib/feature-registry.ts" in existing_manifest else FileAction.CREATE
+        disp_str = str(disposition).lower()
+
+        if disp_str == ImplementationDisposition.INTEGRATE or disp_str == "integrate":
+            return [
+                FileOperation(
+                    action=FileAction.CREATE,
+                    path=f"src/features/{feature_slug}/logic.ts",
+                    description=f"Sub-capacidad y lógica de integración para {feature.title}",
+                ),
+                FileOperation(
+                    action=FileAction.CREATE,
+                    path=f"src/features/{feature_slug}/manifest.ts",
+                    description=f"Manifiesto de integración de {feature.title}",
+                ),
+                FileOperation(
+                    action=registry_action,
+                    path="src/lib/feature-registry.ts",
+                    description=f"Registro de {feature.title} en el catálogo de navegación",
+                ),
+                FileOperation(
+                    action=FileAction.CREATE,
+                    path=f"tests/{feature_slug}.test.ts",
+                    description=f"Pruebas unitarias de {feature.title}",
+                ),
+            ]
+
         return [
             FileOperation(
                 action=FileAction.CREATE,
@@ -323,8 +448,25 @@ class ImplementationContextBuilder:
         ux_prompt_block: str,
         project_context: str,
         plan_lines: str,
+        product_map: ProductMap | None = None,
     ) -> str:
         """Construye el prompt para el Build Agent de OpenCode."""
+        disp_info = ""
+        if product_map is not None:
+            disp = product_map.get_disposition(feature.id)
+            actors_list = disp.actors if disp.actors else ((disp.actor,) if disp.actor else ())
+            actors_str = ", ".join(actors_list) if actors_list else "General"
+            disp_info = (
+                f"\n## Directivas de Integración del Product Map\n"
+                f"- Disposición: `{disp.disposition.value.upper()}`\n"
+                f"- Razón: {disp.reason}\n"
+                f"- Actores involucrados: {actors_str}\n"
+                "- Si la entidad de negocio es compartida, centralízala en `src/domain/` para evitar duplicar código.\n"
+                "- SOPORTE MULTI-ROL: Implementa la interfaz permitiendo interactuar como cualquiera de los actores "
+                "involucrados (por ejemplo con pestañas `<Tabs>` o selector de rol para alternar vistas/acciones "
+                "de cada rol), de modo que ningún rol quede excluido de la experiencia interactiva.\n"
+            )
+
         return (
             f"{ux_prompt_block}\n\n"
             f"{project_context}\n\n"
@@ -333,6 +475,7 @@ class ImplementationContextBuilder:
             f"## Requisitos EARS\n{req_markdown}\n\n"
             f"## Diagrama de Actividad\n{diagram_syntax}\n\n"
             f"## Plan aprobado\n{plan_lines}\n\n"
+            f"{disp_info}"
             "Implementa el código y las pruebas respetando el plan aprobado.\n"
             "OBLIGATORIO: entrega una funcionalidad 100% OPERATIVA Y COMPLETA "
             "(Frontend + Backend + Base de Datos) usando Bootstrap 5:\n"
@@ -341,19 +484,21 @@ class ImplementationContextBuilder:
             "de datos, tablas de registros, botones de acción con respuesta real, feedback de error/éxito "
             "y estados de carga). PROHIBIDO dejar páginas vacías o stubs que provoquen error 404 al navegar.\n"
             "2. Lógica de negocio y backend en `src/features/<slug>/logic.ts` (con tests exhaustivos en Vitest) "
-            "y Server Actions o API routes si se requiere.\n"
+            "y Server Actions o API routes si se requiere. Si la lógica corresponde a una entidad compartida, "
+            "colócala en `src/domain/`.\n"
             "3. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
             "`src/components/ui/` (Button, Card, Input, Label, Badge, Textarea, EmptyState, "
             "PageHeader, Table, Stat, Select, Tabs, Modal, Alert, Steps, BadgeStatus) y clases de Bootstrap 5. "
             "PROHIBIDO el uso de Tailwind CSS.\n"
             "4. Registro del manifest en `src/lib/feature-registry.ts` "
             "(IMPORTANTE: importa el manifest del nuevo slice y añádelo al array `features` existente "
+            "o a `featureGroups` con su grupo de navegación correspondiente "
             "sin borrar ni sobrescribir las entradas de features anteriores; "
             "la navegación depende de este catálogo).\n"
             "5. Actualiza `src/lib/site.ts` con el nombre, descripción y arquetipo reales del proyecto.\n"
-            "6. Persistencia de datos: Si la feature maneja persistencia, define las tablas en `src/db/schema.ts` "
-            "usando `drizzle-orm/sqlite-core` y consume `db` desde `src/db/index.ts`. "
-            "Prohibido usar arreglos volátiles en memoria para datos persistentes.\n"
+            "6. Persistencia de datos: Si la feature maneja persistencia, define o extiende las tablas en "
+            "`src/db/schema.ts` usando `drizzle-orm/sqlite-core` y consume `db` desde `src/db/index.ts`. "
+            "No dupliques tablas existentes para la misma entidad de negocio.\n"
             "La UI debe adaptarse a la naturaleza del negocio (ver visión y directivas UX), "
             "mantener el modelo mental del usuario (navegación del registro, estados vacío/error/loading) "
             "y usar textos en español neutro con los mensajes de validación reales de la lógica. "

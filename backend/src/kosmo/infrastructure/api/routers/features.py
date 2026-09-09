@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -229,15 +230,17 @@ async def create_characteristic_manual(
     if output.is_saved and output.characteristic is not None:
         return {
             "is_saved": True,
-            "feature": _feature_to_response(output.characteristic).model_dump(),
+            "feature": _feature_to_response(output.characteristic, output.warnings).model_dump(),
             "origin": output.origin,
             "is_consistent": output.is_consistent,
+            "warnings": list(output.warnings),
         }
     return {
         "is_saved": False,
         "origin": output.origin,
         "is_consistent": output.is_consistent,
         "inconsistency_reason": output.inconsistency_reason,
+        "warnings": list(output.warnings),
     }
 
 
@@ -292,7 +295,7 @@ async def edit_characteristic_manual(
         )
 
     assert output.feature is not None
-    return _feature_to_response(output.feature)
+    return _feature_to_response(output.feature, output.warnings)
 
 
 @router.post(
@@ -336,7 +339,7 @@ async def save_selected_features(
     return [_feature_to_response(f) for f in output.features]
 
 
-def _feature_to_response(f: Any) -> FeatureResponse:
+def _feature_to_response(f: Any, warnings: Sequence[str] = ()) -> FeatureResponse:
     return FeatureResponse(
         id=str(f.id),
         project_id=str(f.project_id),
@@ -346,6 +349,7 @@ def _feature_to_response(f: Any) -> FeatureResponse:
         description=f.description,
         origin=f.origin,
         display_id=f.display_id,
+        warnings=list(warnings),
     )
 
 

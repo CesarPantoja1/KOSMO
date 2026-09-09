@@ -363,3 +363,58 @@ def test_validate_workspace_feature_structure_with_extra_files_combined() -> Non
     # Assert
     assert result.is_valid is True
     assert result.missing_slice is False
+
+
+@pytest.mark.unit
+def test_validate_feature_structure_disposition_skip() -> None:
+    # Arrange — feature omitida porque ya fue satisfecha
+    slug = "aceptar-terminos"
+    files: list[str] = []
+
+    # Act
+    result = validate_feature_structure(
+        feature_slug=slug,
+        files=files,
+        disposition="skip",
+    )
+
+    # Assert
+    assert result.is_valid is True
+    assert len(result.errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_feature_structure_disposition_integrate_with_domain() -> None:
+    # Arrange — sub-capacidad que aporta componente a src/domain/ sin página propia
+    slug = "aceptar-terminos"
+    files = ["src/domain/terms/accept-terms.tsx"]
+
+    # Act
+    result = validate_feature_structure(
+        feature_slug=slug,
+        files=files,
+        disposition="integrate",
+    )
+
+    # Assert
+    assert result.is_valid is True
+    assert len(result.errors) == 0
+
+
+@pytest.mark.unit
+def test_validate_feature_structure_disposition_integrate_no_files() -> None:
+    # Arrange — sub-capacidad que no generó ningún archivo
+    slug = "aceptar-terminos"
+    files = ["src/other.ts"]
+
+    # Act
+    result = validate_feature_structure(
+        feature_slug=slug,
+        files=files,
+        disposition="integrate",
+    )
+
+    # Assert
+    assert result.is_valid is False
+    assert result.missing_slice is True
+    assert any("sub-capacidad" in err for err in result.errors)

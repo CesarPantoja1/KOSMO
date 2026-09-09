@@ -540,6 +540,10 @@ class FeatureResponse(BaseModel):
         description="Identificador visible para el usuario (ej: C01).",
         examples=["C01"],
     )
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Advertencias sobre solapamientos funcionales o inconsistencias menores.",
+    )
 
 
 class FeatureSuggestionItem(BaseModel):

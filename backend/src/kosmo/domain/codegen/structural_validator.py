@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from kosmo.contracts.sdd.codegen import FileSystemReader
+from kosmo.contracts.sdd.product_map import ImplementationDisposition
 
 
 @dataclass(frozen=True)
@@ -21,16 +22,40 @@ def validate_feature_structure(
     files: Iterable[str],
     registry_content: str | None = None,
     page_content: str | None = None,
+    disposition: ImplementationDisposition | str = ImplementationDisposition.CREATE,
 ) -> StructuralValidationResult:
     """Valida determinísticamente la estructura requerida para una funcionalidad en el workspace.
 
-    Verifica:
-    1. Existencia de la página principal en `src/app/<slug>/page.tsx` y su export default.
-    2. Existencia de al menos un archivo en el slice de la feature en `src/features/<slug>/`.
-    3. Presencia del slug o import de la feature en `src/lib/feature-registry.ts` (si se provee el contenido).
+    Respeta la disposición de implementación del Product Map:
+    - CREATE / EXTEND / COMPOSE: Verifica page.tsx con export default, slice en src/features/<slug>/
+      y registro en src/lib/feature-registry.ts.
+    - INTEGRATE: Sub-capacidad integrada en un flujo/página existente o en src/domain/.
+      No exige page.tsx aislada ni entrada propia en el registro si aporta archivos al workspace.
+    - SKIP: Característica ya cubierta o redundante; no requiere nuevos archivos aislados.
     """
+    disp_str = str(disposition).lower()
+    if disp_str == ImplementationDisposition.SKIP or disp_str == "skip":
+        return StructuralValidationResult(is_valid=True)
+
     normalized_slug = feature_slug.strip().lower()
     normalized_files = [f.replace("\\", "/").strip("./") for f in files]
+
+    # Caso INTEGRATE: sub-capacidad que se integra en flujo padre o en src/domain/
+    if disp_str == ImplementationDisposition.INTEGRATE or disp_str == "integrate":
+        has_any_implementation_file = any(
+            f.lower().startswith(f"src/features/{normalized_slug}/")
+            or f"/{normalized_slug}/" in f.lower()
+            or f.lower().startswith("src/domain/")
+            or normalized_slug in f.lower()
+            for f in normalized_files
+        )
+        if has_any_implementation_file:
+            return StructuralValidationResult(is_valid=True)
+        return StructuralValidationResult(
+            is_valid=False,
+            errors=(f"La sub-capacidad '{normalized_slug}' no generó archivos en el slice ni en src/domain/.",),
+            missing_slice=True,
+        )
 
     # 1. Verificar page.tsx
     valid_page_suffixes = (
@@ -48,9 +73,14 @@ def validate_feature_structure(
     if page_content is not None:
         page_has_export_default = "export default" in page_content
 
-    # 2. Verificar feature slice
+    # 2. Verificar feature slice o módulo de dominio
     slice_prefix = f"src/features/{normalized_slug}/"
-    has_slice = any(f.lower().startswith(slice_prefix) or f"/{slice_prefix}" in f.lower() for f in normalized_files)
+    has_slice = any(
+        f.lower().startswith(slice_prefix)
+        or f"/{slice_prefix}" in f.lower()
+        or (f.lower().startswith("src/domain/") and normalized_slug in f.lower())
+        for f in normalized_files
+    )
 
     # 3. Verificar feature registry
     has_registry = True
@@ -90,12 +120,17 @@ def validate_workspace_feature_structure(
     feature_slug: str,
     fs_reader: FileSystemReader,
     extra_files: Iterable[str] = (),
+    disposition: ImplementationDisposition | str = ImplementationDisposition.CREATE,
 ) -> StructuralValidationResult:
     """Inspecciona la estructura de la feature en el workspace utilizando el puerto FileSystemReader.
 
     El dominio permanece puro: no realiza llamadas directas al sistema de archivos ni depende
     de adaptadores de infraestructura concretos.
     """
+    disp_str = str(disposition).lower()
+    if disp_str == ImplementationDisposition.SKIP or disp_str == "skip":
+        return StructuralValidationResult(is_valid=True)
+
     ws_str = str(workspace_dir).replace("\\", "/").rstrip("/")
     listed = fs_reader.list_files(workspace_dir)
     found_files: set[str] = {f.replace("\\", "/").strip("./") for f in listed}
@@ -135,4 +170,5 @@ def validate_workspace_feature_structure(
         files=found_files,
         registry_content=registry_content,
         page_content=page_content,
+        disposition=disposition,
     )

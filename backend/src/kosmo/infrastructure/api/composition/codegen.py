@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from kosmo.application.codegen.analyze_feature_integration import (
+    AnalyzeFeatureIntegrationUseCase,
+)
 from kosmo.application.codegen.delete_feature_code import DeleteFeatureCodeUseCase
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationUseCase,
@@ -108,6 +111,11 @@ def build_codegen_components(
         connect_timeout_seconds=settings.opencode_connect_timeout_seconds,
         write_timeout_seconds=settings.opencode_write_timeout_seconds,
     )
+    integration_analyzer = AnalyzeFeatureIntegrationUseCase(
+        feature_repo=repos.features,
+        document_repo=repos.documents,
+        implementation_repo=repos.implementations,
+    )
     use_case = GenerateFeatureImplementationUseCase(
         feature_repo=repos.features,
         requirement_repo=repos.requirements,
@@ -121,6 +129,7 @@ def build_codegen_components(
         document_repo=repos.documents,
         sync_github_repository=sync_github_repository,
         fs_reader=reader,
+        integration_analyzer=integration_analyzer,
     )
     implementation_broker = broker or ImplementationEventBroker(
         history_ttl_seconds=settings.implementation_broker_ttl_seconds,

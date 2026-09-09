@@ -22,11 +22,12 @@ Una feature NO está implementada si solo existe su lógica. Toda feature debe e
    - `components/` — componentes de la UI de la feature (usando Bootstrap y `src/components/ui/`).
    - `index.ts` — exports públicos del slice.
 3. **Registro de navegación**: importar el manifest en `src/lib/feature-registry.ts`.
+   - Si la aplicación tiene múltiples actores o dominios (ej. Cliente vs Administrador), define `group` en el manifest y regístrala en `featureGroups` para que la navegación organice las secciones por actor.
 4. **Tests** de la lógica en Vitest (`tests/` o dentro del slice).
 
-**Desacople absoluto**: el shell (`layout`, `app-shell`, home) y las demás features NO pueden importar
-nada del interior de otro slice. Eliminar una feature = borrar `src/features/<slug>/` + su import
-en el registro. Nada más.
+**Desacople y Dominio Compartido**: los slices no se importan directamente entre sí. Si dos características comparten una entidad (ej. citas, gastos, usuarios), la lógica y tipos comunes se extraen a `src/domain/<entidad>/`, consumida por ambos slices. Eliminar una feature = borrar `src/features/<slug>/` + su import en el registro sin romper el dominio común.
+
+**Soporte Multi-Rol e Interacciones Completas**: Si la feature o sus requisitos describen interacciones de múltiples actores (ej. Médico y Paciente, Vendedor y Comprador), la pantalla NO debe limitarse a una sola perspectiva. Incluye controles (como `<Tabs>` para alternar rol o un selector de actor) que permitan ejecutar las acciones de cada rol involucrado en el flujo para que cualquier evaluador o usuario pueda probar la experiencia completa.
 
 ---
 

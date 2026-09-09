@@ -10,6 +10,7 @@ from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository
+from kosmo.domain.codegen.integration_rules import detect_capability_overlap
 from kosmo.domain.sdd.document_converters import document_to_markdown, slugify_spanish
 from kosmo.domain.sdd.id_generator import IdGenerator
 
@@ -78,6 +79,7 @@ class CreateCharacteristicOutput:
     origin: str = ""
     is_consistent: bool = True
     inconsistency_reason: str = ""
+    warnings: tuple[str, ...] = ()
 
 
 class CreateCharacteristicUseCase:
@@ -120,6 +122,7 @@ class CreateCharacteristicUseCase:
         if not origin:
             origin = "Definicion manual"
 
+        existing_features = await self._feature_repo.list_by_project(input_data.project_id)
         next_number = await self._feature_repo.next_number(input_data.project_id)
 
         feature = Feature(
@@ -132,8 +135,16 @@ class CreateCharacteristicUseCase:
             origin=origin,
         )
 
+        overlaps = detect_capability_overlap(feature, existing_features)
+        warnings = tuple(o.message for o in overlaps if o.message)
+
         saved = await self._feature_repo.save(feature)
-        return CreateCharacteristicOutput(is_saved=True, characteristic=saved, origin=origin)
+        return CreateCharacteristicOutput(
+            is_saved=True,
+            characteristic=saved,
+            origin=origin,
+            warnings=warnings,
+        )
 
     async def _derive_origin(self, project_id: ProjectId, title: str, description: str) -> dict[str, object]:
         doc = await self._document_repo.get_discovery(project_id)  # type: ignore[union-attr]
