@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import tarfile
@@ -43,7 +44,8 @@ class RemoteCodeRunner:
         return base64.b64encode(output.getvalue()).decode("ascii")
 
     async def _run(self, workspace_dir: str, payload: dict[str, object]) -> dict[str, Any]:
-        payload["archive"] = self._archive_workspace(workspace_dir)
+        loop = asyncio.get_running_loop()
+        payload["archive"] = await loop.run_in_executor(None, self._archive_workspace, workspace_dir)
         response = await self._client.post("/run", json=payload, headers={"Authorization": f"Bearer {self._token}"})
         if not response.is_success:
             raise RemoteCodeRunnerError(f"Runner returned HTTP {response.status_code}: {response.text[:500]}")
