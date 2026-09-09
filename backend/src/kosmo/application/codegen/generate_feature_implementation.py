@@ -776,25 +776,6 @@ class GenerateFeatureImplementationUseCase:
                         )
                     )
 
-                screens_count = sum(
-                    1
-                    for f in generated_files
-                    if f.replace("\\", "/").endswith("page.tsx")
-                    or "/components/" in f.replace("\\", "/")
-                    or f.replace("\\", "/").startswith("src/components/")
-                )
-                if screens_count == 0 and generated_files:
-                    screens_count = max(1, len(generated_files) // 2)
-
-                req_matches = set(re.findall(r"REQ-\d+\.\d+", req_markdown, flags=re.IGNORECASE))
-                requirements_count = len(req_matches) if req_matches else 1
-
-                validations_passed = sum(1 for s in validation_result.steps if s.success)
-                validations_total = len(validation_result.steps)
-
-                if traceability_edges == 0:
-                    traceability_edges = max(1, requirements_count + len(generated_files))
-
                 features_count = 1
                 try:
                     project_impls = await self._implementation_repo.list_by_project(feature.project_id)
@@ -803,22 +784,14 @@ class GenerateFeatureImplementationUseCase:
                     )
                 except Exception:
                     _log.debug("codegen.features_count_failed", feature_id=str(feature.id), exc_info=True)
-                    features_count = 1
 
-                done_event = OpenCodeEvent(
-                    event_type=OpenCodeEventType.DONE,
+                done_event = await self._build_done_event(
                     session_id=session_id,
-                    data={
-                        "status": "implemented",
-                        "generated_files": list(generated_files),
-                        "features_count": features_count,
-                        "screens_count": screens_count,
-                        "requirements_count": requirements_count,
-                        "validations_passed": validations_passed,
-                        "validations_total": validations_total,
-                        "traceability_edges": traceability_edges,
-                        "technologies": ["Next.js", "TypeScript", "Bootstrap 5", "Vitest"],
-                    },
+                    generated_files=generated_files,
+                    req_markdown=req_markdown,
+                    validation_result=validation_result,
+                    traceability_edges=traceability_edges,
+                    features_count=features_count,
                 )
                 await _emit(done_event)
 
@@ -849,10 +822,7 @@ class GenerateFeatureImplementationUseCase:
                 await self._workspace_manager.rollback_workspace(feature.project_id)
 
                 # Construir mensaje de error con historial
-                history_lines: list[str] = []
-                for idx, errors in enumerate(retry_history, 1):
-                    history_lines.append(f"Intento {idx}: {'; '.join(errors)}")
-                error_detail = "\n".join(history_lines) if history_lines else "Sin detalles"
+                error_detail = self._format_retry_history(retry_history)
 
                 impl = dataclasses.replace(
                     impl,
@@ -920,3 +890,56 @@ class GenerateFeatureImplementationUseCase:
                     await self._opencode_client.close_session(session_id)
             with contextlib.suppress(Exception):
                 await self._workspace_manager.release_lock(feature.project_id)
+
+    @staticmethod
+    def _format_retry_history(retry_history: list[tuple[str, ...]]) -> str:
+        """Construye el mensaje de detalle de error a partir del historial de reintentos."""
+        if not retry_history:
+            return "Sin detalles"
+        return "\n".join(f"Intento {i}: {'; '.join(errs)}" for i, errs in enumerate(retry_history, 1))
+
+    async def _build_done_event(
+        self,
+        *,
+        session_id: str,
+        generated_files: set[str],
+        req_markdown: str,
+        validation_result: ValidationRunResult,
+        traceability_edges: int,
+        features_count: int,
+    ) -> OpenCodeEvent:
+        """Calcula las métricas del evento DONE y construye el objeto de evento."""
+        screens_count = sum(
+            1
+            for f in generated_files
+            if f.replace("\\", "/").endswith("page.tsx")
+            or "/components/" in f.replace("\\", "/")
+            or f.replace("\\", "/").startswith("src/components/")
+        )
+        if screens_count == 0 and generated_files:
+            screens_count = max(1, len(generated_files) // 2)
+
+        req_matches = set(re.findall(r"REQ-\d+\.\d+", req_markdown, flags=re.IGNORECASE))
+        requirements_count = len(req_matches) if req_matches else 1
+
+        validations_passed = sum(1 for s in validation_result.steps if s.success)
+        validations_total = len(validation_result.steps)
+
+        if traceability_edges == 0:
+            traceability_edges = max(1, requirements_count + len(generated_files))
+
+        return OpenCodeEvent(
+            event_type=OpenCodeEventType.DONE,
+            session_id=session_id,
+            data={
+                "status": "implemented",
+                "generated_files": list(generated_files),
+                "features_count": features_count,
+                "screens_count": screens_count,
+                "requirements_count": requirements_count,
+                "validations_passed": validations_passed,
+                "validations_total": validations_total,
+                "traceability_edges": traceability_edges,
+                "technologies": ["Next.js", "TypeScript", "Bootstrap 5", "Vitest"],
+            },
+        )
