@@ -428,7 +428,7 @@ export const generateImplementation = async (
 	await consumeSse(res, onEvent);
 
 	if (!done) {
-		throw new Error('El flujo de generación terminó sin completarse.');
+		throw new Error('La generación no se completó. Puedes volver a intentarlo.');
 	}
 	return done;
 };

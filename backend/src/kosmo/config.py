@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
     code_runner_base_url: str | None = None
     code_runner_token: SecretStr | None = None
-    implementation_broker_ttl_seconds: float = 300.0
+    implementation_broker_ttl_seconds: float = 1800.0
     preview_public_host_suffix: str | None = None
     cloudflare_preview_api_token: SecretStr | None = None
     cloudflare_preview_account_id: str | None = None

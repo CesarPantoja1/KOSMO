@@ -252,6 +252,18 @@ class _FakeRedis:
     async def get(self, key: str) -> bytes | None:
         return self.kv.get(key)
 
+    async def delete(self, *keys: str) -> int:
+        count = 0
+        for k in keys:
+            if k in self.streams:
+                del self.streams[k]
+                count += 1
+            if k in self.kv:
+                del self.kv[k]
+                count += 1
+            self.expirations.pop(k, None)
+        return count
+
 
 @pytest.mark.asyncio
 @pytest.mark.unit
@@ -322,3 +334,94 @@ async def test_broker_serialization_and_deserialization() -> None:
     # Terminal marker devuelve None
     terminal = broker._deserialize_event({b"_done": b"true"})
     assert terminal is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_start_implementation_cancels_previous_task_and_restarts() -> None:
+    import asyncio
+
+    broker = ImplementationEventBroker()
+
+    class HangingUseCase:
+        async def execute_stream(
+            self,
+            input_data: GenerateFeatureImplementationInput,
+        ) -> AsyncIterator[OpenCodeEvent]:
+            await asyncio.sleep(100)
+            yield OpenCodeEvent(event_type=OpenCodeEventType.DONE, session_id="sess_hang", data={})
+
+    # Start first task that would hang
+    broker.start_implementation("impl_restart", HangingUseCase(), _input_data())
+    first_task = broker._tasks["impl_restart"]
+    assert not first_task.done()
+
+    # Start second task with HappyUseCase - should cancel the first task
+    broker.start_implementation("impl_restart", HappyUseCase(), _input_data())
+    second_task = broker._tasks["impl_restart"]
+    assert second_task is not first_task
+    assert first_task.cancelling() > 0 or first_task.done()
+
+    await second_task
+    events = await _collect(broker, "impl_restart")
+    assert [e.event_type for e in events] == [OpenCodeEventType.PLAN_PROGRESS, OpenCodeEventType.DONE]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_start_implementation_cleans_stale_redis_stream() -> None:
+    from typing import Any, cast
+
+    fake_redis = _FakeRedis()
+    stream_key = "kosmo:impl:impl_stale:events"
+    # Pre-populate stream with stale event and terminal marker
+    await fake_redis.xadd(
+        stream_key,
+        {
+            "event_type": "done",
+            "session_id": "old",
+            "data": "{}",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "run_id": "old",
+        },
+    )
+    await fake_redis.xadd(stream_key, {"_done": "true"})
+    assert stream_key in fake_redis.streams
+
+    broker = ImplementationEventBroker(redis=cast(Any, fake_redis))
+    broker.start_implementation("impl_stale", HappyUseCase(), _input_data())
+    task = broker._tasks["impl_stale"]
+    await task
+
+    # Stream should have only new events, old stale ones wiped
+    events = await _collect(broker, "impl_stale")
+    assert [e.event_type for e in events] == [OpenCodeEventType.PLAN_PROGRESS, OpenCodeEventType.DONE]
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_is_running_reflects_task_state() -> None:
+    import asyncio
+
+    # Arrange
+    broker = ImplementationEventBroker()
+
+    class HangingUseCase:
+        async def execute_stream(
+            self,
+            input_data: GenerateFeatureImplementationInput,
+        ) -> AsyncIterator[OpenCodeEvent]:
+            await asyncio.sleep(10)
+            yield OpenCodeEvent(event_type=OpenCodeEventType.DONE, session_id="sess_hang", data={})
+
+    assert broker.is_running("impl_not_exists") is False
+
+    # Act
+    broker.start_implementation("impl_running", HangingUseCase(), _input_data())
+
+    # Assert
+    assert broker.is_running("impl_running") is True
+
+    # Cleanup
+    await broker.aclose()
+    assert broker.is_running("impl_running") is False

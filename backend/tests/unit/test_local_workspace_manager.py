@@ -614,9 +614,45 @@ async def test_opencode_json_content_and_permissions() -> None:
         # oculta las tools y el agente no puede generar código).
         assert config["permission"]["edit"] == {"*": "allow"}
         assert config["permission"]["bash"] == {"*": "allow"}
+        assert config["permission"]["external_directory"] == {"*": "allow"}
+        assert config["permission"]["websearch"] == "allow"
 
         # Tools: la pregunta interactiva está deshabilitada (flujo headless)
         assert config["tools"] == {"question": False}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_heals_missing_permissions_in_existing_opencode_json() -> None:
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_healing")
+
+        # Create workspace with legacy opencode.json missing external_directory and websearch
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        opencode_file = Path(ws.workspace_dir) / "opencode.json"
+        legacy_cfg = {
+            "instructions": ["AGENTS.md"],
+            "permission": {
+                "read": {"*": "allow"},
+                "edit": {"*": "allow"},
+                "bash": {"*": "allow"},
+            },
+        }
+        opencode_file.write_text(json.dumps(legacy_cfg), encoding="utf-8")
+
+        # Second ensure_workspace call should heal missing permissions
+        await manager.ensure_workspace(project_id)
+
+        healed_cfg = json.loads(opencode_file.read_text(encoding="utf-8"))
+        assert healed_cfg["permission"]["read"] == {"*": "allow"}
+        assert healed_cfg["permission"]["edit"] == {"*": "allow"}
+        assert healed_cfg["permission"]["bash"] == {"*": "allow"}
+        assert healed_cfg["permission"]["external_directory"] == {"*": "allow"}
+        assert healed_cfg["permission"]["websearch"] == "allow"
 
 
 @pytest.mark.unit

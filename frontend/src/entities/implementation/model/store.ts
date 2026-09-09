@@ -96,6 +96,14 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 				});
 				return;
 			}
+			if (record.status === 'failed') {
+				set((state) => ({
+					status: 'idle',
+					summary: null,
+					implementations: { ...state.implementations, [featureId]: false },
+				}));
+				return;
+			}
 			if (record.status !== 'implemented' && record.status !== 'requires_review') {
 				return;
 			}

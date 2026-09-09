@@ -18,7 +18,6 @@ from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
 from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
-from kosmo.infrastructure.api.implementation_broker import broker
 from kosmo.infrastructure.api.schemas import (
     GenerateImplementationRequest,
     GenerateImplementationResponse,
@@ -79,7 +78,12 @@ async def start_implementation(
         max_retries=request.max_retries,
     )
 
-    broker_instance = getattr(container.codegen, "implementation_broker", broker)
+    broker_instance = container.codegen.implementation_broker
+
+    # Evitar doble generación concurrente (doble clic)
+    if broker_instance.is_running(impl_id):
+        return GenerateImplementationResponse(implementation_id=impl_id)
+
     broker_instance.start_implementation(
         implementation_id=impl_id,
         use_case=use_case,
@@ -196,14 +200,12 @@ async def stream_implementation_events(
     principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> EventSourceResponse:
-    broker_instance = getattr(container.codegen, "implementation_broker", broker)
+    broker_instance = container.codegen.implementation_broker
     implementation = await container.repos.implementations.by_id(ImplementationId(implementation_id))
     if implementation is not None:
         project_id = implementation.project_id
-    elif hasattr(broker_instance, "get_project_id"):
-        project_id = await broker_instance.get_project_id(implementation_id)
     else:
-        project_id = broker_instance.project_id_for(implementation_id)
+        project_id = await broker_instance.get_project_id(implementation_id)
 
     if project_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Implementación no encontrada")

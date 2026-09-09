@@ -860,7 +860,7 @@ class GenerateFeatureImplementationUseCase:
                     events=tuple(collected_events),
                 )
 
-        except Exception:
+        except Exception as exc:
             if "total_start" in locals():
                 total_duration = time.monotonic() - total_start
                 record_codegen_duration("total", total_duration, status="error")
@@ -882,6 +882,21 @@ class GenerateFeatureImplementationUseCase:
                             updated_at=datetime.now(UTC),
                         )
                     )
+
+            # Emitir ERROR al subscriber SSE para que el frontend lo reciba
+            # antes de que la excepción cierre el stream
+            with contextlib.suppress(Exception):
+                await _emit(
+                    OpenCodeEvent(
+                        event_type=OpenCodeEventType.ERROR,
+                        session_id=session_id or "",
+                        data={
+                            "error": str(exc),
+                            "error_type": type(exc).__name__,
+                            "fatal": True,
+                        },
+                    )
+                )
 
             raise
         finally:

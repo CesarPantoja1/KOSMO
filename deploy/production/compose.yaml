@@ -98,6 +98,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-${LLM_API_KEY:-}}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-${LLM_API_KEY:-}}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENCODE_PERMISSION: '{"read":{"*":"allow"},"edit":{"*":"allow"},"bash":{"*":"allow"},"external_directory":{"*":"allow"},"websearch":"allow"}'
     volumes:
       - ./workspaces:/workspaces
     expose:

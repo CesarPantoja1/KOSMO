@@ -1,7 +1,6 @@
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,8 +31,12 @@ from kosmo.infrastructure.api.main import app
 
 @pytest.fixture
 def mock_broker():
-    with patch("kosmo.infrastructure.api.routers.implementations.broker") as mock:
-        yield mock
+    from unittest.mock import AsyncMock, MagicMock
+
+    broker = MagicMock()
+    broker.is_running.return_value = False
+    broker.get_project_id = AsyncMock(return_value="prj_01")
+    return broker
 
 
 @pytest.fixture
@@ -65,7 +68,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
     }
 
     # Act
-    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01")
+    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01", broker=mock_broker)
     response = client.post(
         "/api/v1/implementations",
         json=payload,
@@ -95,7 +98,7 @@ def test_stream_implementation_events(client: TestClient, mock_broker, valid_tok
     mock_broker.subscribe.side_effect = fake_subscribe
 
     # Act
-    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01")
+    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01", broker=mock_broker)
     with client.stream("GET", "/api/v1/implementations/impl_feat_01/events", headers=valid_token_headers) as response:
         assert response.status_code == 200
 
@@ -215,17 +218,25 @@ class FakeValidateUseCase:
 
 
 class FakeCodegen:
-    def __init__(self, validate_workspace: FakeValidateUseCase) -> None:
+    def __init__(self, validate_workspace: FakeValidateUseCase, broker: object | None = None) -> None:
+        from unittest.mock import MagicMock
+
         self.validate_workspace = validate_workspace
         self.generate_feature_implementation = object()
+        self.implementation_broker = broker or MagicMock()
 
 
 class FakeContainer:
-    def __init__(self, workspace_dir: str, validate_workspace: FakeValidateUseCase | None = None) -> None:
+    def __init__(
+        self,
+        workspace_dir: str,
+        validate_workspace: FakeValidateUseCase | None = None,
+        broker: object | None = None,
+    ) -> None:
         self.repos = FakeRepos(workspace_dir)
         if validate_workspace is None:
             validate_workspace = FakeValidateUseCase(_validation_output())
-        self.codegen = FakeCodegen(validate_workspace)
+        self.codegen = FakeCodegen(validate_workspace, broker=broker)
 
 
 def _validation_output(all_passed: bool = True) -> ValidateWorkspaceOutput:
@@ -423,19 +434,24 @@ class FakeConsistencyContainer:
 
 
 class FakeDeleteCodegen:
-    def __init__(self) -> None:
+    def __init__(self, broker: object | None = None) -> None:
+        from unittest.mock import MagicMock
+
         self.delete_feature_code = object()
+        self.implementation_broker = broker or MagicMock()
 
 
 class FakeDeleteContainer:
-    def __init__(self, feature: Feature) -> None:
+    def __init__(self, feature: Feature, broker: object | None = None) -> None:
         self.consistency = FakeConsistencyContainer(feature)
-        self.codegen = FakeDeleteCodegen()
+        self.codegen = FakeDeleteCodegen(broker=broker)
 
 
 def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
     client: TestClient,
 ) -> None:
+    from unittest.mock import MagicMock
+
     # Arrange
     feature = Feature(
         id=FeatureId("feat_del_api"),
@@ -445,17 +461,17 @@ def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
         description="Permite registrar productos",
         project_id=ProjectId("prj_01"),
     )
+    mock_broker = MagicMock()
     app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
-    fake_container = FakeDeleteContainer(feature)
+    fake_container = FakeDeleteContainer(feature, broker=mock_broker)
     app.dependency_overrides[get_container] = lambda: fake_container  # type: ignore[arg-type]
     app.state.container = fake_container  # type: ignore[attr-defined]
 
     # Act
-    with patch("kosmo.infrastructure.api.routers.features.broker") as mock_broker:
-        response = client.delete(
-            "/api/v1/projects/prj_01/features/feat_del_api",
-            headers={"Authorization": "Bearer mock"},
-        )
+    response = client.delete(
+        "/api/v1/projects/prj_01/features/feat_del_api",
+        headers={"Authorization": "Bearer mock"},
+    )
 
     # Assert — la feature se elimina de la especificación y el cleanup del código se agenda en background
     assert response.status_code == 200

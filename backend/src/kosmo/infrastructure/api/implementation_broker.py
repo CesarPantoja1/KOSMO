@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -26,7 +27,7 @@ class StreamUseCase(Protocol):
 class ImplementationEventBroker:
     """Broker en memoria o distribuido (Redis Streams) para enrutar eventos de generación SSE."""
 
-    def __init__(self, history_ttl_seconds: float = 300, redis: Redis | None = None) -> None:
+    def __init__(self, history_ttl_seconds: float = 1800, redis: Redis | None = None) -> None:
         self._redis = redis
         # Colas activas por cada id de implementación (puede haber múltiples subscriptores locales)
         self._queues: dict[str, list[asyncio.Queue[OpenCodeEvent | None]]] = {}
@@ -39,6 +40,8 @@ class ImplementationEventBroker:
         self._project_ids: dict[str, str] = {}
         # Tasks de purga del historial programadas al terminar cada generación
         self._cleanup_tasks: set[asyncio.Task[None]] = set()
+        # Tasks de purga indexadas por implementation_id para cancelación en reintentos
+        self._purge_tasks: dict[str, asyncio.Task[None]] = {}
         self._history_ttl_seconds = history_ttl_seconds
 
     @property
@@ -106,14 +109,21 @@ class ImplementationEventBroker:
 
     def _schedule_history_purge(self, implementation_id: str) -> None:
         """Programa la purga del historial de una implementación terminada tras el TTL."""
+        if implementation_id in self._purge_tasks:
+            self._purge_tasks[implementation_id].cancel()
 
         async def _purge() -> None:
-            await asyncio.sleep(self._history_ttl_seconds)
-            self._history.pop(implementation_id, None)
-            self._project_ids.pop(implementation_id, None)
+            try:
+                await asyncio.sleep(self._history_ttl_seconds)
+                self._history.pop(implementation_id, None)
+                self._project_ids.pop(implementation_id, None)
+                self._purge_tasks.pop(implementation_id, None)
+            except asyncio.CancelledError:
+                pass
 
         task = asyncio.create_task(_purge())
         self._cleanup_tasks.add(task)
+        self._purge_tasks[implementation_id] = task
         task.add_done_callback(lambda _: self._cleanup_tasks.discard(task))
 
     async def _run_implementation(
@@ -131,7 +141,12 @@ class ImplementationEventBroker:
             user_id=user_id,
         )
         token = current_user_id.set(user_id) if user_id is not None else None
+        current_task = asyncio.current_task()
         try:
+            if self._redis is not None:
+                with contextlib.suppress(Exception):
+                    await self._redis.delete(f"kosmo:impl:{implementation_id}:events")
+
             _log.info(
                 "codegen.task_started",
                 implementation_id=implementation_id,
@@ -147,6 +162,9 @@ class ImplementationEventBroker:
                 project_id=project_id,
                 user_id=user_id,
             )
+        except asyncio.CancelledError:
+            _log.info("codegen.task_cancelled", implementation_id=implementation_id)
+            raise
         except Exception as exc:
             _log.exception("implementation_broker.run_error", implementation_id=implementation_id)
             await self._publish(
@@ -167,28 +185,29 @@ class ImplementationEventBroker:
                 current_user_id.reset(token)
             structlog.contextvars.unbind_contextvars("implementation_id", "project_id", "user_id")
 
-            # Publicar marcador de fin en Redis si está configurado
-            if self._redis is not None:
-                try:
-                    stream_key = f"kosmo:impl:{implementation_id}:events"
-                    await self._redis.xadd(stream_key, cast(Any, {"_done": "true"}), maxlen=1000, approximate=True)
-                    await self._redis.expire(stream_key, int(self._history_ttl_seconds))
-                except Exception:
-                    _log.exception(
-                        "implementation_broker.redis_publish_done_error", implementation_id=implementation_id
-                    )
+            # Solo actuar si esta tarea sigue siendo la tarea activa para implementation_id
+            if self._tasks.get(implementation_id) is current_task:
+                # Publicar marcador de fin en Redis si está configurado
+                if self._redis is not None:
+                    try:
+                        stream_key = f"kosmo:impl:{implementation_id}:events"
+                        await self._redis.xadd(stream_key, cast(Any, {"_done": "true"}), maxlen=1000, approximate=True)
+                        await self._redis.expire(stream_key, int(self._history_ttl_seconds))
+                    except Exception:
+                        _log.exception(
+                            "implementation_broker.redis_publish_done_error", implementation_id=implementation_id
+                        )
 
-            # Enviar señal de fin (None) a todos los subscriptores locales
-            if implementation_id in self._queues:
-                for queue in self._queues[implementation_id]:
-                    queue.put_nowait(None)
+                # Enviar señal de fin (None) a todos los subscriptores locales
+                if implementation_id in self._queues:
+                    for queue in self._queues[implementation_id]:
+                        queue.put_nowait(None)
 
-            # Limpiar la tarea terminada
-            if implementation_id in self._tasks:
+                # Limpiar la tarea terminada
                 del self._tasks[implementation_id]
 
-            # El historial queda disponible un tiempo para replay de suscriptores tardíos
-            self._schedule_history_purge(implementation_id)
+                # El historial queda disponible un tiempo para replay de suscriptores tardíos
+                self._schedule_history_purge(implementation_id)
 
     def start_implementation(
         self,
@@ -201,8 +220,14 @@ class ImplementationEventBroker:
     ) -> None:
         """Inicia una tarea de flujo (generación o eliminación de código) en background."""
         if implementation_id in self._tasks:
-            # Ya está corriendo
-            return
+            old_task = self._tasks[implementation_id]
+            if not old_task.done():
+                old_task.cancel()
+
+        if implementation_id in self._purge_tasks:
+            self._purge_tasks.pop(implementation_id).cancel()
+
+        self._history.pop(implementation_id, None)
 
         effective_user_id = user_id or current_user_id.get()
 
@@ -237,6 +262,11 @@ class ImplementationEventBroker:
             )
         )
         self._tasks[implementation_id] = task
+
+    def is_running(self, implementation_id: str) -> bool:
+        """Indica si existe una tarea de ejecución en curso para la implementación dada."""
+        task = self._tasks.get(implementation_id)
+        return task is not None and not task.done()
 
     def project_id_for(self, implementation_id: str) -> str | None:
         """Returns the project recorded for an active or recently-finished run."""
@@ -292,9 +322,14 @@ class ImplementationEventBroker:
                 if idle_time >= idle_timeout:
                     _log.warning("implementation_broker.redis_stream_idle_timeout", implementation_id=implementation_id)
                     break
-                if idle_time >= 3.0:
+                if idle_time >= 30.0:
+                    if implementation_id in self._tasks and not self._tasks[implementation_id].done():
+                        continue
                     try:
                         if not await self._redis.exists(stream_key):
+                            _log.warning(
+                                "implementation_broker.redis_stream_not_found", implementation_id=implementation_id
+                            )
                             break
                     except Exception:
                         pass
@@ -341,12 +376,11 @@ class ImplementationEventBroker:
             task.cancel()
         for task in list(self._cleanup_tasks):
             task.cancel()
+        for task in list(self._purge_tasks.values()):
+            task.cancel()
         self._tasks.clear()
         self._cleanup_tasks.clear()
+        self._purge_tasks.clear()
         self._queues.clear()
         self._history.clear()
         self._project_ids.clear()
-
-
-# Instancia por defecto mantenida para compatibilidad
-broker = ImplementationEventBroker()

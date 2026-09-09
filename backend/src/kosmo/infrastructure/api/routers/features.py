@@ -35,7 +35,6 @@ from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
-from kosmo.infrastructure.api.implementation_broker import broker
 from kosmo.infrastructure.api.schemas import (
     CheckConsistencyRequestView,
     CreateCharacteristicRequest,
@@ -386,7 +385,7 @@ async def delete_feature(
 
     # Eliminación del código generado en background: el frontend observa los eventos
     # en GET /implementations/impl_<feature_id>/events
-    broker_instance = getattr(container.codegen, "implementation_broker", broker)
+    broker_instance = container.codegen.implementation_broker
     broker_instance.start_implementation(
         implementation_id=f"impl_{feature_id}",
         use_case=container.codegen.delete_feature_code,

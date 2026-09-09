@@ -175,5 +175,26 @@ describe('useImplementationStore', () => {
 		expect(state.requiresReviewByFeature['feat_01']).toBe(true);
 		expect(state.status).toBe('requires_review');
 	});
+
+	it('restablece estado idle y permite reintento cuando el status es failed', async () => {
+		// Arrange
+		mockedFetchImplementation.mockResolvedValue({
+			implementationId: 'impl_feat_failed',
+			featureId: 'feat_failed',
+			projectId: 'prj_01',
+			status: 'failed',
+			generatedFiles: [],
+			updatedAt: '2026-08-19T10:00:00Z',
+		});
+
+		// Act
+		await useImplementationStore.getState().loadImplementation('feat_failed', 'Fallida', 'F-08');
+
+		// Assert
+		const state = useImplementationStore.getState();
+		expect(state.implementations['feat_failed']).toBe(false);
+		expect(state.status).toBe('idle');
+		expect(state.summary).toBeNull();
+	});
 });
 

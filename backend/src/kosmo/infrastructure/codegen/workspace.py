@@ -10,7 +10,7 @@ import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import structlog
 
@@ -140,6 +140,8 @@ def _generate_opencode_json(
             "read": {"*": "allow"},
             "edit": {"*": "allow"},
             "bash": {"*": "allow"},
+            "external_directory": {"*": "allow"},
+            "websearch": "allow",
         },
         # Flujo headless: el agente no debe bloquearse pidiendo aclaraciones al usuario
         "tools": {
@@ -297,6 +299,26 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
                     _generate_opencode_json(project_id, str(target_dir), self._mcp_url),
                     encoding="utf-8",
                 )
+            else:
+                try:
+                    parsed: object = json.loads(opencode_file.read_text(encoding="utf-8"))
+                    if isinstance(parsed, dict):
+                        raw_cfg: dict[str, Any] = cast(dict[str, Any], parsed)
+                        perms = raw_cfg.get("permission")
+                        if isinstance(perms, dict):
+                            cfg_perms: dict[str, Any] = cast(dict[str, Any], perms)
+                            cfg_updated = False
+                            for perm_key in ("read", "edit", "bash", "external_directory"):
+                                if perm_key not in cfg_perms:
+                                    cfg_perms[perm_key] = {"*": "allow"}
+                                    cfg_updated = True
+                            if cfg_perms.get("websearch") != "allow":
+                                cfg_perms["websearch"] = "allow"
+                                cfg_updated = True
+                            if cfg_updated:
+                                opencode_file.write_text(json.dumps(raw_cfg, indent=2) + "\n", encoding="utf-8")
+                except Exception:
+                    pass
 
             # Actualizar site.ts con el nombre, descripción y arquetipo reales del proyecto
             site_file = target_dir / "src" / "lib" / "site.ts"
