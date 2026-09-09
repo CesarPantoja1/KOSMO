@@ -478,6 +478,7 @@ class EvaluateConsistencyUseCase:
         try:
             previous_md = await self._document_repo.get_latest_version(project_id, SpecPhase.DESCUBRIMIENTO)
         except Exception:
+            _log.debug("evaluate_consistency.prev_version_fetch_failed", project_id=str(project_id), exc_info=True)
             previous_md = None
 
         if previous_md is None:

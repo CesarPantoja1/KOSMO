@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 from pathlib import Path
 
+import structlog
+
 from kosmo.contracts.sdd.codegen import (
     FeatureImplementationRepository,
     FeatureImplementationStatus,
@@ -26,6 +28,8 @@ from kosmo.domain.codegen.parse_validation_output import (
 from kosmo.domain.codegen.path_safety import UnsafePathError, sanitize_relative_path
 from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.sdd.document_converters import document_to_markdown
+
+_log = structlog.get_logger(__name__)
 
 
 class NullFileSystemReader(FileSystemReader):
@@ -150,6 +154,7 @@ class ImplementationContextBuilder:
                 try:
                     vision = document_to_markdown(discovery)
                 except Exception:
+                    _log.debug("context_builder.document_to_markdown_failed", exc_info=True)
                     vision = ""
                 if vision:
                     lines.append(f"\n### Visión del producto (descubrimiento)\n{vision}")
@@ -182,6 +187,7 @@ class ImplementationContextBuilder:
         try:
             implementations = await self._implementation_repo.list_by_project(project_id)
         except Exception:
+            _log.debug("context_builder.list_implementations_failed", project_id=str(project_id), exc_info=True)
             return ""
 
         implemented_impls = [
@@ -199,6 +205,7 @@ class ImplementationContextBuilder:
                 features = await self._feature_repo.list_by_project(project_id)
                 feature_map = {str(f.id): f for f in features}
             except Exception:
+                _log.debug("context_builder.list_features_failed", project_id=str(project_id), exc_info=True)
                 feature_map = {}
 
         lines: list[str] = []

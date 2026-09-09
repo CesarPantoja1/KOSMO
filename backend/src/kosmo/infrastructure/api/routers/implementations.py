@@ -132,6 +132,7 @@ async def get_implementation_by_feature(
                 req_matches = set(re.findall(r"REQ-\d+\.\d+", req_markdown, flags=re.IGNORECASE))
                 requirements_count = len(req_matches)
     except Exception:
+        _log.debug("implementations.req_count_failed", feature_id=str(impl.feature_id), exc_info=True)
         requirements_count = 0
 
     if impl.last_validation is not None and impl.last_validation.steps:
@@ -152,6 +153,7 @@ async def get_implementation_by_feature(
                 req_impact = await trace_repo.get_impact(req_key)
                 traceability_edges_count += len(req_impact.get("upstream", [])) + len(req_impact.get("downstream", []))
     except Exception:
+        _log.debug("implementations.traceability_count_failed", feature_id=str(impl.feature_id), exc_info=True)
         traceability_edges_count = 0
 
     if traceability_edges_count == 0 and (requirements_count > 0 or impl.generated_files):
@@ -162,6 +164,7 @@ async def get_implementation_by_feature(
         project_impls = await container.repos.implementations.list_by_project(impl.project_id)
         features_count = sum(1 for i in project_impls if getattr(i.status, "value", i.status) == "implemented") or 1
     except Exception:
+        _log.debug("implementations.features_count_failed", project_id=str(impl.project_id), exc_info=True)
         features_count = 1
 
     technologies = ["Next.js", "TypeScript", "Bootstrap 5", "Vitest"]

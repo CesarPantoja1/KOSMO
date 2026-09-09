@@ -172,6 +172,7 @@ class GetConsistencyReviewUseCase:
         try:
             diagram = await self._diagram_repo.by_feature_id(FeatureId(row.target_artifact_id))
         except Exception:
+            _log.debug("manage_consistency.diagram_fetch_failed", artifact_id=row.target_artifact_id, exc_info=True)
             return row
         if diagram is None:
             return row

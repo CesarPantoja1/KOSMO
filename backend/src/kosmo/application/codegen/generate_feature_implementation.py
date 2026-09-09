@@ -802,6 +802,7 @@ class GenerateFeatureImplementationUseCase:
                         sum(1 for f in project_impls if getattr(f.status, "value", f.status) == "implemented") or 1
                     )
                 except Exception:
+                    _log.debug("codegen.features_count_failed", feature_id=str(feature.id), exc_info=True)
                     features_count = 1
 
                 done_event = OpenCodeEvent(
