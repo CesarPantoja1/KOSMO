@@ -238,9 +238,17 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
 
         return tuple(sorted(files))
 
+    def _resolve_target_dir(self, project_id: ProjectId) -> Path:
+        """Resuelve y valida que el directorio del proyecto resida estrictamente dentro de la raíz."""
+        root_dir = self._workspaces_root.resolve()
+        target_dir = (root_dir / str(project_id)).resolve()
+        if not target_dir.is_relative_to(root_dir) or target_dir == root_dir:
+            raise ValueError(f"Workspace path escapes configured root for project '{project_id}'.")
+        return target_dir
+
     async def ensure_workspace(self, project_id: ProjectId) -> CodeWorkspace:
         """Crea el directorio del workspace si no existe (idempotente) y retorna la entidad."""
-        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        target_dir = self._resolve_target_dir(project_id)
         created_new = not target_dir.exists()
 
         # Resuelve project_name y site_config de forma asíncrona desde repositorios
@@ -482,10 +490,8 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         pero el filesystem compartido no tiene ese mecanismo. Esta operación debe
         completarse antes de borrar el proyecto para no dejar código accesible.
         """
+        target_dir = self._resolve_target_dir(project_id)
         root_dir = self._workspaces_root.resolve()
-        target_dir = (root_dir / str(project_id)).resolve()
-        if not target_dir.is_relative_to(root_dir):
-            raise ValueError(f"Workspace path escapes configured root for project '{project_id}'.")
 
         if self._preview_publisher is not None:
             try:
@@ -531,7 +537,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
 
         Retorna el hash del commit creado, o None si no había cambios.
         """
-        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        target_dir = self._resolve_target_dir(project_id)
         if not target_dir.exists():
             return None
 
@@ -562,7 +568,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         empiece con "<slug>.". Nunca coincide con slugs hermanos más largos
         (ej. borrar "registrar-productos" no toca "registrar-productos-con-s".
         """
-        target_dir = (self._workspaces_root / str(project_id)).resolve()
+        target_dir = self._resolve_target_dir(project_id)
         if not target_dir.exists():
             return ()
 

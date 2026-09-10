@@ -1532,3 +1532,23 @@ def test_local_workspace_manager_implements_file_system_reader() -> None:
 
         # Assert
         assert isinstance(manager, FileSystemReader)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_workspace_manager_rejects_escaping_project_id() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_dir, git_init=False)
+        invalid_id = ProjectId("../../escaping_project")
+
+        with pytest.raises(ValueError, match="Workspace path escapes configured root"):
+            await manager.ensure_workspace(invalid_id)
+
+        with pytest.raises(ValueError, match="Workspace path escapes configured root"):
+            await manager.commit_workspace(invalid_id, "test")
+
+        with pytest.raises(ValueError, match="Workspace path escapes configured root"):
+            await manager.remove_feature_paths(invalid_id, "slug")
+
+        with pytest.raises(ValueError, match="Workspace path escapes configured root"):
+            await manager.delete_workspace(invalid_id)
