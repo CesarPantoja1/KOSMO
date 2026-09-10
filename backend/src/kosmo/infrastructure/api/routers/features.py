@@ -422,6 +422,7 @@ async def check_feature_consistency(
     feature_id: str,
     payload: Annotated[CheckConsistencyRequestView, Body(...)],
     use_case: Annotated[CheckFeatureConsistencyUseCase, Depends(_check_feature_consistency)],
+    _principal: Annotated[Principal, Depends(get_principal)],
 ) -> InconsistencyResultView:
     title = str(payload.content.get("title", ""))
     description = str(payload.content.get("description", ""))
