@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
@@ -346,6 +346,49 @@ async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
     )
 
 
+_Scope = dict[str, Any]
+_Message = dict[str, Any]
+_ASGIApp = Callable[[_Scope, Callable[[], Awaitable[_Message]], Callable[[_Message], Awaitable[None]]], Awaitable[None]]
+
+
+class SecurityHeadersMiddleware:
+    """Inyecta encabezados HTTP de seguridad defensivos en las respuestas."""
+
+    def __init__(self, app: _ASGIApp, is_production: bool = False) -> None:
+        self.app = app
+        self._is_production = is_production
+
+    async def __call__(
+        self,
+        scope: _Scope,
+        receive: Callable[[], Awaitable[_Message]],
+        send: Callable[[_Message], Awaitable[None]],
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: _Message) -> None:
+            if message["type"] == "http.response.start":
+                raw_headers = list(message.get("headers", []))
+                names = {h[0].lower() for h in raw_headers}
+
+                if b"x-content-type-options" not in names:
+                    raw_headers.append((b"x-content-type-options", b"nosniff"))
+                if b"x-frame-options" not in names:
+                    raw_headers.append((b"x-frame-options", b"DENY"))
+                if b"referrer-policy" not in names:
+                    raw_headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                if self._is_production and b"strict-transport-security" not in names:
+                    raw_headers.append((b"strict-transport-security", b"max-age=63072000; includeSubDomains"))
+
+                message["headers"] = raw_headers
+
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.parsed_cors_origins,
@@ -353,7 +396,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    is_production=settings.env == "production",
+)
 app.add_middleware(RequestLoggingMiddleware)
 
 if not settings.auth_disabled:

@@ -138,3 +138,32 @@ def test_openapi_route_not_found_when_disabled() -> None:
     with TestClient(prod_app) as prod_client:
         assert prod_client.get("/api/v1/openapi.json").status_code == 404
         assert prod_client.get("/openapi.json").status_code == 404
+
+
+@pytest.mark.contract
+def test_security_headers_present_in_responses(client: TestClient) -> None:
+    response = client.get("/health")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+
+
+@pytest.mark.unit
+def test_security_headers_middleware_production_hsts() -> None:
+    from fastapi import FastAPI
+
+    from kosmo.infrastructure.api.main import SecurityHeadersMiddleware
+
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityHeadersMiddleware, is_production=True)
+
+    @test_app.get("/ping")
+    def ping() -> dict[str, str]:
+        return {"pong": "ok"}
+
+    with TestClient(test_app) as test_client:
+        res = test_client.get("/ping")
+        assert res.headers["x-content-type-options"] == "nosniff"
+        assert res.headers["x-frame-options"] == "DENY"
+        assert res.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert "max-age=63072000" in res.headers["strict-transport-security"]
