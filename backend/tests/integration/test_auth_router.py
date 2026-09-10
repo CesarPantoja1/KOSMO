@@ -406,8 +406,15 @@ def test_me_rejects_missing_token(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_schemas_rejects_unauthenticated_access(client: TestClient) -> None:
+    assert client.get("/api/v1/schemas").status_code == 401
+    assert client.get("/api/v1/schemas/RegisterRequest").status_code == 401
+
+
 def test_schemas_index_lists_models(client: TestClient) -> None:
-    response = client.get("/api/v1/schemas")
+    pair = _full_login_flow(client)
+    headers = {"Authorization": f"Bearer {pair['access']['token']}"}
+    response = client.get("/api/v1/schemas", headers=headers)
     assert response.status_code == 200
     schemas = response.json()["schemas"]
     assert "RegisterRequest" in schemas
@@ -415,7 +422,9 @@ def test_schemas_index_lists_models(client: TestClient) -> None:
 
 
 def test_schemas_returns_json_schema(client: TestClient) -> None:
-    response = client.get("/api/v1/schemas/RegisterRequest")
+    pair = _full_login_flow(client)
+    headers = {"Authorization": f"Bearer {pair['access']['token']}"}
+    response = client.get("/api/v1/schemas/RegisterRequest", headers=headers)
     assert response.status_code == 200
     body = response.json()
     assert body["title"] == "RegisterRequest"
@@ -424,8 +433,9 @@ def test_schemas_returns_json_schema(client: TestClient) -> None:
 
 
 def test_schemas_returns_oauth_error_schema_with_seconds_remaining(client: TestClient) -> None:
-    # Arrange / Act
-    response = client.get("/api/v1/schemas/OAuthErrorResponse")
+    pair = _full_login_flow(client)
+    headers = {"Authorization": f"Bearer {pair['access']['token']}"}
+    response = client.get("/api/v1/schemas/OAuthErrorResponse", headers=headers)
 
     # Assert
     assert response.status_code == 200
@@ -437,7 +447,9 @@ def test_schemas_returns_oauth_error_schema_with_seconds_remaining(client: TestC
 
 
 def test_schemas_unknown_returns_404(client: TestClient) -> None:
-    response = client.get("/api/v1/schemas/Unknown")
+    pair = _full_login_flow(client)
+    headers = {"Authorization": f"Bearer {pair['access']['token']}"}
+    response = client.get("/api/v1/schemas/Unknown", headers=headers)
     assert response.status_code == 404
 
 

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 import schemathesis
 from fastapi.testclient import TestClient
 
+from kosmo.contracts.auth import Principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.main import app
 
 
@@ -13,8 +17,11 @@ def schema() -> schemathesis.openapi.OpenApiSchema:
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
-    return TestClient(app)
+def client() -> Generator[TestClient]:
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_contract")
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.pop(get_principal, None)
 
 
 @pytest.mark.contract
