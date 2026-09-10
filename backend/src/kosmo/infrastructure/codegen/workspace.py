@@ -139,8 +139,8 @@ def _generate_opencode_json(
         "permission": {
             "read": {"*": "allow"},
             "edit": {"*": "allow"},
-            "bash": {"*": "allow"},
-            "external_directory": {"*": "allow"},
+            "bash": "deny",
+            "external_directory": "deny",
             "websearch": "allow",
         },
         # Flujo headless: el agente no debe bloquearse pidiendo aclaraciones al usuario
@@ -308,9 +308,13 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
                         if isinstance(perms, dict):
                             cfg_perms: dict[str, Any] = cast(dict[str, Any], perms)
                             cfg_updated = False
-                            for perm_key in ("read", "edit", "bash", "external_directory"):
+                            for perm_key in ("read", "edit"):
                                 if perm_key not in cfg_perms:
                                     cfg_perms[perm_key] = {"*": "allow"}
+                                    cfg_updated = True
+                            for deny_key in ("bash", "external_directory"):
+                                if cfg_perms.get(deny_key) != "deny":
+                                    cfg_perms[deny_key] = "deny"
                                     cfg_updated = True
                             if cfg_perms.get("websearch") != "allow":
                                 cfg_perms["websearch"] = "allow"

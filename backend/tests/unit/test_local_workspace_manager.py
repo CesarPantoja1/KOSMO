@@ -609,12 +609,11 @@ async def test_opencode_json_content_and_permissions() -> None:
         # Permissions: read
         assert config["permission"]["read"] == {"*": "allow"}
 
-        # Permissions: edit/bash en todo el workspace para que el agente tenga
-        # disponibles las herramientas de escritura (si se niega todo, opencode
-        # oculta las tools y el agente no puede generar código).
+        # Permissions: edit en todo el workspace para edición de archivos.
+        # bash y external_directory restringidos (deny) para mitigar ejecución arbitraria (VULN-010).
         assert config["permission"]["edit"] == {"*": "allow"}
-        assert config["permission"]["bash"] == {"*": "allow"}
-        assert config["permission"]["external_directory"] == {"*": "allow"}
+        assert config["permission"]["bash"] == "deny"
+        assert config["permission"]["external_directory"] == "deny"
         assert config["permission"]["websearch"] == "allow"
 
         # Tools: la pregunta interactiva está deshabilitada (flujo headless)
@@ -630,7 +629,7 @@ async def test_ensure_workspace_heals_missing_permissions_in_existing_opencode_j
         manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
         project_id = ProjectId("prj_healing")
 
-        # Create workspace with legacy opencode.json missing external_directory and websearch
+        # Create workspace with legacy opencode.json missing external_directory and insecure bash
         ws = await manager.ensure_workspace(project_id)
         assert ws.workspace_dir is not None
         opencode_file = Path(ws.workspace_dir) / "opencode.json"
@@ -644,14 +643,14 @@ async def test_ensure_workspace_heals_missing_permissions_in_existing_opencode_j
         }
         opencode_file.write_text(json.dumps(legacy_cfg), encoding="utf-8")
 
-        # Second ensure_workspace call should heal missing permissions
+        # Second ensure_workspace call should heal insecure bash and missing external_directory
         await manager.ensure_workspace(project_id)
 
         healed_cfg = json.loads(opencode_file.read_text(encoding="utf-8"))
         assert healed_cfg["permission"]["read"] == {"*": "allow"}
         assert healed_cfg["permission"]["edit"] == {"*": "allow"}
-        assert healed_cfg["permission"]["bash"] == {"*": "allow"}
-        assert healed_cfg["permission"]["external_directory"] == {"*": "allow"}
+        assert healed_cfg["permission"]["bash"] == "deny"
+        assert healed_cfg["permission"]["external_directory"] == "deny"
         assert healed_cfg["permission"]["websearch"] == "allow"
 
 
