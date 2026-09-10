@@ -27,7 +27,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import ChatSessionId, FeatureId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_feature_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
@@ -38,6 +38,11 @@ from kosmo.infrastructure.api.schemas import (
 router = APIRouter(
     prefix="/api/v1/features/{feature_id}/requirements/chat",
     tags=["requirements"],
+    dependencies=[Depends(verify_feature_owner)],
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Token inválido o expirado."},
+        status.HTTP_404_NOT_FOUND: {"description": "Característica o requisito no encontrado."},
+    },
 )
 
 

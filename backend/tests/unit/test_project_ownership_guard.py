@@ -312,3 +312,42 @@ def test_feature_chat_endpoint_blocks_cross_tenant_intruder_with_404() -> None:
         assert "no encontrado" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.unit
+def test_requirement_chat_endpoint_blocks_cross_tenant_intruder_with_404() -> None:
+    # Arrange
+    project = Project(
+        id=ProjectId("prj_alice"),
+        name="Proyecto de Alice",
+        slug="proyecto-de-alice",
+        description="Privado",
+        owner_id=UserId("usr_alice"),
+    )
+    feature = Feature(
+        id=FeatureId("feat_alice"),
+        number=1,
+        title="Secreto",
+        slug="secreto",
+        description="Feature secreta",
+        project_id=ProjectId("prj_alice"),
+    )
+    container = _make_container({"prj_alice": project}, {"feat_alice": feature})
+
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_intruder")
+    app.dependency_overrides[get_container] = lambda: container
+    app.state.container = container
+
+    try:
+        # Act
+        client = TestClient(app)
+        response = client.get(
+            "/api/v1/features/feat_alice/requirements/chat/history",
+            headers={"Authorization": "Bearer mock"},
+        )
+
+        # Assert — debe retornar 404 al intruso para no revelar existencia ni contenido
+        assert response.status_code == 404
+        assert "no encontrado" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
