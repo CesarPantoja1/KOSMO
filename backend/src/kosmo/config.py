@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     env: Literal["development", "staging", "production"]
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
-    # Secretos criptogrÃ¡ficos â€” contenido PEM (prioridad) o rutas como fallback
+    # Secretos criptográficos — contenido PEM (prioridad) o rutas como fallback
     jwt_private_key_pem: SecretStr | None = None
     jwt_public_key_pem: SecretStr | None = None
     jwt_private_key_path: str | None = None
@@ -123,7 +123,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:
-        """Resuelve el contenido PEM: variable de entorno â†’ lectura de archivo."""
+        """Resuelve el contenido PEM: variable de entorno → lectura de archivo."""
         cloudflare_preview_values = (
             self.cloudflare_preview_api_token,
             self.cloudflare_preview_account_id,

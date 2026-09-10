@@ -50,9 +50,9 @@ _OPENAPI_TAGS = [
     {
         "name": "auth",
         "description": (
-            "Flujo de autenticaciÃ³n PKCE + OAuth 2.0. "
-            "Los endpoints siguen el estÃ¡ndar RFC 6749/7636: el cliente genera un "
-            "``code_verifier`` efÃ­mero, solicita un ``authorization_code`` en ``/authorize``, "
+            "Flujo de autenticación PKCE + OAuth 2.0. "
+            "Los endpoints siguen el estándar RFC 6749/7636: el cliente genera un "
+            "``code_verifier`` efímero, solicita un ``authorization_code`` en ``/authorize``, "
             "lo intercambia por tokens JWT en ``/token`` y los renueva con ``/refresh``. "
             "Todos los endpoints protegidos requieren ``Authorization: Bearer <access_token>``."
         ),
@@ -60,18 +60,18 @@ _OPENAPI_TAGS = [
     {
         "name": "projects",
         "description": (
-            "GestiÃ³n de proyectos. Permite crear, listar y consultar proyectos "
+            "Gestión de proyectos. Permite crear, listar y consultar proyectos "
             "asociados al usuario autenticado. Cada proyecto agrupa el ciclo "
-            "completo de especificaciÃ³n, modelado y generaciÃ³n de artefactos."
+            "completo de especificación, modelado y generación de artefactos."
         ),
     },
     {
         "name": "discovery",
         "description": (
-            "GeneraciÃ³n de documentos de descubrimiento mediante IA. "
-            "Permite generar, consultar y actualizar el documento de visiÃ³n "
+            "Generación de documentos de descubrimiento mediante IA. "
+            "Permite generar, consultar y actualizar el documento de visión "
             "de producto de un proyecto. El documento se estructura en 8 "
-            "secciones obligatorias que cubren visiÃ³n, problema, actores, "
+            "secciones obligatorias que cubren visión, problema, actores, "
             "propuesta de valor, casos de uso, capacidades, reglas de negocio "
             "y atributos de calidad."
         ),
@@ -79,38 +79,38 @@ _OPENAPI_TAGS = [
     {
         "name": "features",
         "description": (
-            "GeneraciÃ³n y gestiÃ³n de caracterÃ­sticas del producto software mediante IA. "
-            "Permite generar caracterÃ­sticas a partir del documento de descubrimiento, "
-            "sugerir nuevas caracterÃ­sticas no duplicadas, listar las existentes y "
+            "Generación y gestión de características del producto software mediante IA. "
+            "Permite generar características a partir del documento de descubrimiento, "
+            "sugerir nuevas características no duplicadas, listar las existentes y "
             "guardar las seleccionadas por el usuario."
         ),
     },
     {
         "name": "requirements",
         "description": (
-            "GeneraciÃ³n y gestiÃ³n de requisitos EARS por caracterÃ­stica mediante IA. "
+            "Generación y gestión de requisitos EARS por característica mediante IA. "
             "Permite generar requisitos a partir del documento de descubrimiento y la "
-            "caracterÃ­stica seleccionada, consultarlos y actualizar su contenido en Markdown."
+            "característica seleccionada, consultarlos y actualizar su contenido en Markdown."
         ),
     },
     {
         "name": "modelo",
         "description": (
-            "GeneraciÃ³n y consulta de diagramas de actividad PlantUML por caracterÃ­stica mediante IA. "
+            "Generación y consulta de diagramas de actividad PlantUML por característica mediante IA. "
             "Permite generar diagramas UML a partir de los requisitos EARS y consultar los diagramas generados."
         ),
     },
     {
         "name": "schemas",
         "description": (
-            "IntrospecciÃ³n de contratos. Permite al Frontend consultar el JSON Schema "
-            "de cualquier DTO expuesto por la API para generaciÃ³n dinÃ¡mica de formularios, "
+            "Introspección de contratos. Permite al Frontend consultar el JSON Schema "
+            "de cualquier DTO expuesto por la API para generación dinámica de formularios, "
             "validaciones y tipos TypeScript."
         ),
     },
     {
         "name": "documents",
-        "description": "ModificaciÃ³n directa de documentos sin fase de plan intermedio.",
+        "description": "Modificación directa de documentos sin fase de plan intermedio.",
     },
 ]
 
@@ -129,46 +129,46 @@ _DESCRIPTION = """
 KOSMO Backend API
 
 KOSMO es una plataforma de agentes de IA con identidad centralizada.
-Esta API gestiona el ciclo completo de autenticaciÃ³n de usuarios y la
-introspecciÃ³n de contratos de datos para el Frontend.
+Esta API gestiona el ciclo completo de autenticación de usuarios y la
+introspección de contratos de datos para el Frontend.
 
-### Flujo de autenticaciÃ³n recomendado
+### Flujo de autenticación recomendado
 
 ```
-1. POST /api/v1/auth/register      â†’ Crear cuenta
-2. POST /api/v1/auth/authorize     â†’ Obtener authorization_code (PKCE)
-3. POST /api/v1/auth/token         â†’ Intercambiar cÃ³digo por JWT pair
-4. GET  /api/v1/auth/me            â†’ Verificar identidad (Bearer token)
-5. POST /api/v1/auth/refresh       â†’ Renovar tokens antes de expirar
-6. POST /api/v1/auth/logout        â†’ Revocar sesiÃ³n activa
+1. POST /api/v1/auth/register      → Crear cuenta
+2. POST /api/v1/auth/authorize     → Obtener authorization_code (PKCE)
+3. POST /api/v1/auth/token         → Intercambiar código por JWT pair
+4. GET  /api/v1/auth/me            → Verificar identidad (Bearer token)
+5. POST /api/v1/auth/refresh       → Renovar tokens antes de expirar
+6. POST /api/v1/auth/logout        → Revocar sesión activa
 ```
 
 ### Seguridad
 
 - Tokens firmados con **RS256** (par de claves RSA 2048-bit)
-- ContraseÃ±as hasheadas con **Argon2id** (OWASP 2025)
+- Contraseñas hasheadas con **Argon2id** (OWASP 2025)
 - Refresh tokens con **Token Rotation**: cada uso emite un par nuevo
 - Rate limiting por IP en todos los endpoints sensibles
 - Secrets cifrados con **Fernet** (AES-128-CBC + HMAC-SHA256)
 
 ### Respuestas de error
 
-Todos los errores de autenticaciÃ³n siguen el esquema `OAuthErrorResponse`
+Todos los errores de autenticación siguen el esquema `OAuthErrorResponse`
 (RFC 6749). Los errores de infraestructura usan `HttpErrorResponse`.
 """
 
 _SERVERS = [
     {
         "url": "http://localhost:8000",
-        "description": "Local â€” desarrollo en mÃ¡quina del programador",
+        "description": "Local — desarrollo en máquina del programador",
     },
     {
         "url": "https://api-dev.kosmo.app",
-        "description": "Desarrollo â€” entorno de integraciÃ³n continua",
+        "description": "Desarrollo — entorno de integración continua",
     },
     {
         "url": "https://api.kosmo.app",
-        "description": "ProducciÃ³n â€” trÃ¡fico real de usuarios",
+        "description": "Producción — tráfico real de usuarios",
     },
 ]
 
@@ -177,19 +177,19 @@ _SERVERS = [
 _GLOBAL_RESPONSES = {
     403: {
         "description": (
-            "Forbidden â€” El token es vÃ¡lido pero no tiene los scopes necesarios para acceder al recurso solicitado."
+            "Forbidden — El token es válido pero no tiene los scopes necesarios para acceder al recurso solicitado."
         ),
         "content": {
             "application/json": {
                 "schema": {"$ref": "#/components/schemas/HttpErrorResponse"},
-                "example": {"detail": "No tienes permisos suficientes para realizar esta acciÃ³n."},
+                "example": {"detail": "No tienes permisos suficientes para realizar esta acción."},
             }
         },
     },
     500: {
         "description": (
-            "Internal Server Error â€” Error inesperado en el servidor. "
-            "Se registra automÃ¡ticamente en el sistema de observabilidad (Logfire/OTEL). "
+            "Internal Server Error — Error inesperado en el servidor. "
+            "Se registra automáticamente en el sistema de observabilidad (Logfire/OTEL). "
             "El cliente debe implementar retry con back-off exponencial."
         ),
         "content": {
@@ -201,7 +201,7 @@ _GLOBAL_RESPONSES = {
     },
 }
 
-# Ciclo de vida y aplicaciÃ³n
+# Ciclo de vida y aplicación
 
 
 def _make_outbox_handler(container: AppContainer) -> OutboxHandler:
@@ -277,7 +277,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     outbox_task = asyncio.create_task(run_outbox_worker(components.pipeline.outbox, _make_outbox_handler(components)))
 
-    # RecuperaciÃ³n best-effort de generaciones huÃ©rfanas tras un reinicio del backend:
+    # Recuperación best-effort de generaciones huérfanas tras un reinicio del backend:
     # marcar IN_PROGRESS como FAILED, cerrar sesiones OpenCode y liberar locks de workspace.
     with contextlib.suppress(Exception):
         await recover_zombie_implementations(
@@ -381,9 +381,9 @@ app.include_router(deployment_router)
 
 @app.get("/health", tags=["health"], summary="Health check", include_in_schema=True)
 async def health() -> dict[str, str]:
-    """VerificaciÃ³n de disponibilidad del servidor.
+    """Verificación de disponibilidad del servidor.
 
-    Devuelve ``{"status": "ok"}`` si el proceso estÃ¡ activo.
+    Devuelve ``{"status": "ok"}`` si el proceso está activo.
     No verifica conectividad con base de datos ni Redis.
     """
     return {"status": "ok"}
@@ -445,13 +445,13 @@ async def readiness(request: Request) -> dict[str, Any]:
     }
 
 
-# EspecificaciÃ³n OpenAPI customizada
+# Especificación OpenAPI customizada
 
 
 def _custom_openapi() -> dict[str, Any]:
-    """Genera la especificaciÃ³n OpenAPI enriquecida con respuestas globales.
+    """Genera la especificación OpenAPI enriquecida con respuestas globales.
 
-    Se inyectan las respuestas 403 y 500 en cada operaciÃ³n para que el
+    Se inyectan las respuestas 403 y 500 en cada operación para que el
     Frontend pueda manejar todos los errores de forma consistente.
     """
     if app.openapi_schema:

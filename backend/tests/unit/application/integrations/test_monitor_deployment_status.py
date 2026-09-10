@@ -94,7 +94,7 @@ async def test_monitor_deployment_success_transition(
     # get_service_status se llama 2 veces
     assert deployment_client.get_service_status.call_count == 2
 
-    # Se guarda el deployment sÃ³lo cuando cambia de estado (en la segunda iteraciÃ³n)
+    # Se guarda el deployment sólo cuando cambia de estado (en la segunda iteración)
     project_deployment_repo.save.assert_called_once()
     saved_deployment = project_deployment_repo.save.call_args[0][0]
     assert saved_deployment.status == DeploymentStatus.PUBLISHED

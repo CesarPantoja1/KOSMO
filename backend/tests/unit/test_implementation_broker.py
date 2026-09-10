@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 
 import pytest
@@ -129,6 +130,20 @@ async def test_broker_keeps_history_for_replay_until_ttl() -> None:
     # Assert — el historial sigue disponible para replay antes del TTL
     assert len(events) == 2
     assert "impl_keep" in broker._history
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_purge_task_propagates_cancellation() -> None:
+    broker = ImplementationEventBroker(history_ttl_seconds=300)
+    broker._schedule_history_purge("impl_cancelled_purge")
+    task = broker._purge_tasks["impl_cancelled_purge"]
+
+    await asyncio.sleep(0)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
 
 
 @pytest.mark.asyncio
@@ -299,6 +314,29 @@ async def test_broker_distributed_flag_and_redis_stream_flow() -> None:
     assert len(events) == 2
     assert events[0].event_type == OpenCodeEventType.PLAN_PROGRESS
     assert events[1].event_type == OpenCodeEventType.DONE
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_persists_project_id_when_redis_reference_changes() -> None:
+    from typing import Any, cast
+
+    fake_redis = _FakeRedis()
+    broker = ImplementationEventBroker(redis=cast(Any, fake_redis))
+    broker.start_implementation(
+        "impl_redis_snapshot",
+        HappyUseCase(),
+        _input_data(),
+        project_id="prj_redis_snapshot",
+    )
+    persistence_tasks = set(broker._cleanup_tasks)
+    broker._redis = None
+
+    await broker._tasks["impl_redis_snapshot"]
+    for task in persistence_tasks:
+        await task
+
+    assert await fake_redis.get("kosmo:impl:impl_redis_snapshot:project_id") == b"prj_redis_snapshot"
 
 
 @pytest.mark.asyncio

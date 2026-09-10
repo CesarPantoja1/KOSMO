@@ -94,7 +94,7 @@ describe('useAiConfigStore', () => {
 		expect(useAiConfigStore.getState().loading).toBe(false);
 	});
 
-	it('deleteConfig llama a la API y restablece la configuración por defecto', async () => {
+	it('deleteConfig llama a la API y elimina la configuración activa', async () => {
 		useAiConfigStore.setState({ config: mockConfig });
 		apiMocks.deleteConfig.mockResolvedValue(undefined);
 

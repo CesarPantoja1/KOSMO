@@ -4,6 +4,7 @@ import logging
 import re
 import subprocess
 from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -202,28 +203,30 @@ def git_remote_get_url(
 
 
 def git_build_authenticated_url(repo_url: str, token: str) -> str:
-    """Construye una URL HTTPS autenticada para GitHub utilizando el token provisto.
+    """Construye una URL autenticada para GitHub usando HTTPS o un Git local.
 
     Ejemplo:
         'https://github.com/org/repo.git' -> 'https://x-access-token:<token>@github.com/org/repo.git'
     """
     clean_url = repo_url.strip()
-    clean_token = token.strip()
+    clean_token = quote(token.strip(), safe="")
 
     if not clean_token:
         raise GitError("El token de acceso no puede estar vacío.")
 
-    # Quitar cualquier credencial existente en la URL
-    if clean_url.startswith("https://"):
-        host_path = clean_url[len("https://") :]
-        if "@" in host_path:
-            host_path = host_path.split("@", 1)[1]
-        return f"https://x-access-token:{clean_token}@{host_path}"
-    elif clean_url.startswith("http://"):
-        host_path = clean_url[len("http://") :]
-        if "@" in host_path:
-            host_path = host_path.split("@", 1)[1]
-        return f"http://x-access-token:{clean_token}@{host_path}"
+    parsed = urlsplit(clean_url)
+    if parsed.scheme:
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise GitError("La URL remota debe ser HTTPS o un servidor Git local HTTP válido.")
+
+        local_hosts = {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme == "http" and parsed.hostname not in local_hosts:
+            raise GitError("Solo se permiten URLs HTTPS fuera de servidores Git locales.")
+
+        host_path = parsed.netloc.rsplit("@", 1)[-1] + parsed.path
+        if parsed.query:
+            host_path += f"?{parsed.query}"
+        return f"{parsed.scheme}://x-access-token:{clean_token}@{host_path}"
 
     return f"https://x-access-token:{clean_token}@{clean_url}"
 

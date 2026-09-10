@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Define immutable AMD64 API image reference
         id: images
@@ -77,17 +77,17 @@ jobs:
           echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${GITHUB_SHA}-amd64" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish backend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
@@ -108,7 +108,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Define immutable ARM64 API image reference
         id: images
@@ -119,17 +119,17 @@ jobs:
           echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${GITHUB_SHA}-arm64" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish ARM64 backend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
@@ -159,10 +159,10 @@ jobs:
           echo "api=${REGISTRY}/${owner}/kosmo-api:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -190,7 +190,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Define immutable AMD64 Web image reference
         id: images
@@ -201,17 +201,17 @@ jobs:
           echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}-amd64" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish frontend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
@@ -238,7 +238,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Define immutable ARM64 Web image reference
         id: images
@@ -249,17 +249,17 @@ jobs:
           echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}-arm64" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish ARM64 frontend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile.prod
@@ -295,10 +295,10 @@ jobs:
           echo "web=${REGISTRY}/${owner}/kosmo-web:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -328,7 +328,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Define immutable AMD64 OpenCode image references
         id: images
@@ -343,17 +343,17 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish OpenCode image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./docker/opencode
           file: ./docker/opencode/Dockerfile
@@ -362,7 +362,7 @@ jobs:
           tags: ${{ steps.images.outputs.opencode }}
 
       - name: Build and publish isolated code-runner image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./docker/code-runner
           file: ./docker/code-runner/Dockerfile
@@ -371,7 +371,7 @@ jobs:
           tags: ${{ steps.images.outputs.code_runner }}
 
       - name: Build and publish preview image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./docker/preview
           file: ./docker/preview/Dockerfile
@@ -394,7 +394,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Define immutable ARM64 image references
         id: images
@@ -409,17 +409,17 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish ARM64 OpenCode image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./docker/opencode
           file: ./docker/opencode/Dockerfile
@@ -428,7 +428,7 @@ jobs:
           tags: ${{ steps.images.outputs.opencode }}
 
       - name: Build and publish ARM64 isolated code-runner image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./docker/code-runner
           file: ./docker/code-runner/Dockerfile
@@ -437,7 +437,7 @@ jobs:
           tags: ${{ steps.images.outputs.code_runner }}
 
       - name: Build and publish ARM64 preview image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./docker/preview
           file: ./docker/preview/Dockerfile
@@ -473,10 +473,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -514,10 +514,10 @@ jobs:
 
     steps:
       - name: Checkout deployment configuration
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Configure AWS credentials through OIDC
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}

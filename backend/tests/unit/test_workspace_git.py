@@ -273,6 +273,15 @@ def test_git_build_authenticated_url() -> None:
     auth_url_clean = git_build_authenticated_url("https://old_user:old_token@github.com/owner/project.git", "ghp_new")
     assert auth_url_clean == "https://x-access-token:ghp_new@github.com/owner/project.git"
 
+    auth_url_encoded = git_build_authenticated_url("https://github.com/owner/project.git", "ghp_token:@value")
+    assert auth_url_encoded == "https://x-access-token:ghp_token%3A%40value@github.com/owner/project.git"
+
+    local_auth_url = git_build_authenticated_url("http://localhost:3000/owner/project.git", "local_token")
+    assert local_auth_url == "http://x-access-token:local_token@localhost:3000/owner/project.git"
+
+    with pytest.raises(GitError, match="Solo se permiten URLs HTTPS fuera"):
+        git_build_authenticated_url("http://github.com/owner/project.git", "ghp_secretToken123")
+
     # Token vacío
     with pytest.raises(GitError, match="El token de acceso no puede estar vacío"):
         git_build_authenticated_url("https://github.com/owner/project.git", "")

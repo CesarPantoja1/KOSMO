@@ -1251,7 +1251,7 @@ async def test_ensure_workspace_initializes_site_ts_with_dashboard_archetype() -
         content = site_file.read_text(encoding="utf-8")
         assert 'name: "GastoJusto"' in content
         assert 'archetype: "dashboard"' in content
-        assert 'primaryColor: "#4f46e5"' in content
+        assert 'primaryColor: "#006bbb"' in content
 
 
 @pytest.mark.unit
@@ -1294,7 +1294,7 @@ async def test_ensure_workspace_initializes_site_ts_with_storefront_archetype() 
         content = site_file.read_text(encoding="utf-8")
         assert 'name: "Tienda Ropa"' in content
         assert 'archetype: "storefront"' in content
-        assert 'primaryColor: "#0f766e"' in content
+        assert 'primaryColor: "#00835c"' in content
 
 
 @pytest.mark.unit
