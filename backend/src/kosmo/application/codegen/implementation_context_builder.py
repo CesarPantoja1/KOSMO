@@ -27,7 +27,11 @@ from kosmo.domain.codegen.parse_validation_output import (
     format_validation_errors_for_prompt,
 )
 from kosmo.domain.codegen.path_safety import UnsafePathError, sanitize_relative_path
-from kosmo.domain.codegen.site_config import format_site_config
+from kosmo.domain.codegen.site_config import (
+    format_design_tokens_ts,
+    format_globals_css,
+    format_site_config,
+)
 from kosmo.domain.sdd.document_converters import document_to_markdown
 
 _log = structlog.get_logger(__name__)
@@ -305,7 +309,7 @@ class ImplementationContextBuilder:
         project_id: ProjectId,
         ux_analysis: UXAnalysisOutput,
     ) -> None:
-        """Sincroniza site.ts con el arquetipo y tokens reales del análisis UX."""
+        """Sincroniza site.ts, design-tokens.ts y globals.css con los tokens del análisis UX."""
         site_file = Path(workspace_dir) / "src" / "lib" / "site.ts"
         if not site_file.exists() or self._project_repo is None:
             return
@@ -323,6 +327,21 @@ class ImplementationContextBuilder:
                 ),
                 encoding="utf-8",
             )
+            tokens_file = Path(workspace_dir) / "src" / "lib" / "design-tokens.ts"
+            if tokens_file.exists():
+                tokens_file.write_text(
+                    format_design_tokens_ts(
+                        tokens=ux_analysis.ux_context.tokens,
+                        domain=ux_analysis.ux_context.archetype.value,
+                    ),
+                    encoding="utf-8",
+                )
+            globals_file = Path(workspace_dir) / "src" / "app" / "globals.css"
+            if globals_file.exists():
+                globals_file.write_text(
+                    format_globals_css(tokens=ux_analysis.ux_context.tokens),
+                    encoding="utf-8",
+                )
 
     def build_plan_prompt(
         self,
@@ -373,7 +392,8 @@ class ImplementationContextBuilder:
             "5. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
             "para declarar las tablas con Drizzle ORM y la integración de lectura/escritura "
             "(reutilizando tablas si ya existen).\n"
-            "Lee las skills `kosmo-ui`, `kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
+            "Lee las skills `kosmo-ui`, `kosmo-design-tokens`, `kosmo-layout-patterns`, "
+            "`kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
         )
 
     def build_fallback_plan_operations(
@@ -486,10 +506,13 @@ class ImplementationContextBuilder:
             "2. Lógica de negocio y backend en `src/features/<slug>/logic.ts` (con tests exhaustivos en Vitest) "
             "y Server Actions o API routes si se requiere. Si la lógica corresponde a una entidad compartida, "
             "colócala en `src/domain/`.\n"
-            "3. Componentes en `src/features/<slug>/components/` usando SOLO el design system de "
-            "`src/components/ui/` (Button, Card, Input, Label, Badge, Textarea, EmptyState, "
-            "PageHeader, Table, Stat, Select, Tabs, Modal, Alert, Steps, BadgeStatus) y clases de Bootstrap 5. "
-            "PROHIBIDO el uso de Tailwind CSS.\n"
+            "3. Componentes en `src/features/<slug>/components/` usando el design system de "
+            "`src/components/ui/` (Button, Card, DataTable, Table, Stat, Calendar, Timeline, "
+            "Steps, Tabs, Modal, Drawer, Dropdown, FileUpload, Alert, Badge, BadgeStatus, Toast, "
+            "Skeleton, Spinner, Switch, Checkbox, RadioGroup, etc.) y clases de Bootstrap 5. "
+            "Si la feature requiere componentes visuales especializados del negocio no presentes en el catálogo, "
+            "constrúyelos en `src/features/<slug>/components/` consumiendo las variables CSS "
+            "del proyecto (`var(--app-*)`). PROHIBIDO el uso de Tailwind CSS.\n"
             "4. Registro del manifest en `src/lib/feature-registry.ts` "
             "(IMPORTANTE: importa el manifest del nuevo slice y añádelo al array `features` existente "
             "o a `featureGroups` con su grupo de navegación correspondiente "
