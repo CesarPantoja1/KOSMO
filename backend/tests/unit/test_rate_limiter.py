@@ -207,3 +207,34 @@ def test_project_generation_rate_limiter_allows_in_dev_when_redis_none() -> None
     with TestClient(app) as client:
         response = client.post("/projects/prj_123/generate")
         assert response.status_code == 200
+
+
+@pytest.mark.unit
+def test_rate_limiter_rejects_spoofed_ip_from_untrusted_client() -> None:
+    app, mock_redis = _build_app(1)
+    # Untrusted client connecting directly from external public IP
+    with TestClient(app, client=("203.0.113.195", 50000)) as client:
+        # First request attempts to set spoofed IP 198.51.100.10
+        res1 = client.get("/probe", headers={"X-Kosmo-Client-IP": "198.51.100.10"})
+        assert res1.status_code == 200
+
+        # Second request attempts to evade rate limit by changing spoofed IP to 198.51.100.99
+        res2 = client.get("/probe", headers={"X-Kosmo-Client-IP": "198.51.100.99"})
+        assert res2.status_code == 429
+
+    # Verify keys in redis were tied to the socket host, not the spoofed headers
+    assert "auth:ip_rate:/probe:203.0.113.195" in mock_redis._counts
+    assert "auth:ip_rate:/probe:198.51.100.10" not in mock_redis._counts
+    assert "auth:ip_rate:/probe:198.51.100.99" not in mock_redis._counts
+
+
+@pytest.mark.unit
+def test_rate_limiter_ignores_malformed_ip_from_trusted_proxy() -> None:
+    app, mock_redis = _build_app(1)
+    with TestClient(app, client=("127.0.0.1", 50000)) as client:
+        res = client.get("/probe", headers={"X-Kosmo-Client-IP": "invalid_ip_injection"})
+        assert res.status_code == 200
+
+    # Falls back safely to 127.0.0.1
+    assert "auth:ip_rate:/probe:127.0.0.1" in mock_redis._counts
+    assert "auth:ip_rate:/probe:invalid_ip_injection" not in mock_redis._counts
