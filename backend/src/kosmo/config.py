@@ -160,6 +160,14 @@ class Settings(BaseSettings):
         if self.redis_url is None:
             raise ValueError("Debe configurar REDIS_URL cuando AUTH_DISABLED=false")
 
+        if self.env == "production" and self.redis_url:
+            parsed_redis = urlsplit(self.redis_url.get_secret_value())
+            if not parsed_redis.password:
+                raise ValueError(
+                    "REDIS_URL debe incluir contraseña de autenticación en entorno de producción "
+                    "(ej. 'redis://:password@host:port/db')."
+                )
+
         return self
 
     @property
