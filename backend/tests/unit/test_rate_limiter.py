@@ -3,8 +3,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+from redis.exceptions import RedisError
 
-from kosmo.infrastructure.api.dependencies.rate_limit import IpRateLimiter  # noqa: E402
+from kosmo.infrastructure.api.dependencies.rate_limit import (  # noqa: E402
+    IpRateLimiter,
+    ProjectGenerationRateLimiter,
+)
 
 
 class _MockRedis:
@@ -105,3 +109,101 @@ def test_rate_limiter_skips_when_redis_unavailable() -> None:
     with TestClient(app) as client:
         for _ in range(5):
             assert client.get("/probe").status_code == 200
+
+
+@pytest.mark.unit
+def test_rate_limiter_fail_closed_when_redis_none_in_production() -> None:
+    limiter = IpRateLimiter(1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=None,
+        settings=SimpleNamespace(env="production", rate_limit_required=False),
+    )
+
+    @app.get("/probe", dependencies=[Depends(limiter)])
+    async def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        response = client.get("/probe")
+        assert response.status_code == 503
+        assert "no disponible" in response.json()["detail"]
+
+
+@pytest.mark.unit
+def test_rate_limiter_fail_closed_when_rate_limit_required() -> None:
+    limiter = IpRateLimiter(1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=None,
+        settings=SimpleNamespace(env="development", rate_limit_required=True),
+    )
+
+    @app.get("/probe", dependencies=[Depends(limiter)])
+    async def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        response = client.get("/probe")
+        assert response.status_code == 503
+        assert "no disponible" in response.json()["detail"]
+
+
+@pytest.mark.unit
+def test_rate_limiter_fail_closed_when_redis_raises_error_in_production() -> None:
+    class _FailingRedis:
+        async def eval(self, *args: object, **kwargs: object) -> int:
+            raise RedisError("Connection refused")
+
+    limiter = IpRateLimiter(1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=_FailingRedis(),
+        settings=SimpleNamespace(env="production", rate_limit_required=False),
+    )
+
+    @app.get("/probe", dependencies=[Depends(limiter)])
+    async def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        response = client.get("/probe")
+        assert response.status_code == 503
+        assert "temporalmente no disponible" in response.json()["detail"]
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_fail_closed_in_production() -> None:
+    limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=None,
+        settings=SimpleNamespace(env="production", rate_limit_required=False),
+    )
+
+    @app.post("/projects/{project_id}/generate", dependencies=[Depends(limiter)])
+    async def generate(project_id: str) -> dict[str, object]:
+        return {"ok": True, "project_id": project_id}
+
+    with TestClient(app) as client:
+        response = client.post("/projects/prj_123/generate")
+        assert response.status_code == 503
+        assert "no disponible" in response.json()["detail"]
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_allows_in_dev_when_redis_none() -> None:
+    limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=None,
+        settings=SimpleNamespace(env="development", rate_limit_required=False),
+    )
+
+    @app.post("/projects/{project_id}/generate", dependencies=[Depends(limiter)])
+    async def generate(project_id: str) -> dict[str, object]:
+        return {"ok": True, "project_id": project_id}
+
+    with TestClient(app) as client:
+        response = client.post("/projects/prj_123/generate")
+        assert response.status_code == 200

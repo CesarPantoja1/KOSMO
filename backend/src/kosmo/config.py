@@ -82,6 +82,7 @@ class Settings(BaseSettings):
     api_version: str = "v1"
     cors_allowed_origins: str = "*"
     auth_disabled: bool = False
+    rate_limit_required: bool = False
     server_workers: int = Field(default=1, validation_alias="WORKERS")
 
     # Observabilidad
