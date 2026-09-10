@@ -14,7 +14,8 @@ from kosmo.contracts.auth import (
     TokenRevokedError,
 )
 from kosmo.contracts.auth.context import current_user_id
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.project import Project
 from kosmo.infrastructure.api.dependencies.container import get_container
 
@@ -72,6 +73,25 @@ async def verify_project_owner(
     """Dependencia FastAPI para routers con {project_id} en el path."""
     container = get_container(request)
     await require_project_owner(container, project_id, principal)
+
+
+async def verify_feature_owner(
+    feature_id: str,
+    principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> Feature | None:
+    """Dependencia FastAPI para routers con {feature_id} en el path (BOLA guard)."""
+    container = get_container(request)
+    if not hasattr(container, "repos") or not hasattr(container.repos, "features"):
+        return None
+    feature = await container.repos.features.by_id(FeatureId(feature_id))
+    if feature is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Característica '{feature_id}' no encontrada.",
+        )
+    await require_project_owner(container, feature.project_id, principal)
+    return feature
 
 
 def require_scopes(
