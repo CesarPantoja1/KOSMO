@@ -1,11 +1,9 @@
 export {
 	MarkdownEditor,
 	type MarkdownEditorHandle,
-} from './markdown-editor/ui/markdown-editor';
-
-export type { SaveStatus } from './markdown-editor/ui/save-indicator';
-
-export { MarkdownEditorSkeleton } from './markdown-editor/ui/markdown-editor-skeleton';
+	MarkdownEditorSkeleton,
+	type SaveStatus,
+} from './markdown-editor';
 
 export {
 	Chatbot,
@@ -17,3 +15,5 @@ export {
 export { PlantUmlViewer } from './plantuml-viewer';
 
 export { useAppStore, clearAppStore, useUnsavedChanges, clearAllStores } from './app-state';
+
+export { useProjectGithubRepo, type ProjectGithubViewState } from './github-sync';

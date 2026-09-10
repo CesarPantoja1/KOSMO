@@ -355,7 +355,7 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
-             for key in DATABASE_URL REDIS_URL REDIS_PASSWORD FERNET_MASTER_KEY CORS_ALLOWED_ORIGINS; do
+             for key in DATABASE_URL REDIS_URL REDIS_PASSWORD FERNET_MASTER_KEY CORS_ALLOWED_ORIGINS GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET RAILWAY_CLIENT_ID RAILWAY_CLIENT_SECRET NEXT_PUBLIC_GITHUB_CLIENT_ID NEXT_PUBLIC_RAILWAY_CLIENT_ID NEXT_PUBLIC_DOMAIN_APP; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing required authentication variable: ${key}" >&2
                  exit 1

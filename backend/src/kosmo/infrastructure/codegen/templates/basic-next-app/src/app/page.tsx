@@ -31,33 +31,36 @@ export default function HomePage() {
           />
         ) : (
           <div className="row g-3 row-cols-1 row-cols-md-2 row-cols-lg-3">
-            {features.map((feature) => (
-              <div key={feature.slug} className="col">
-                <Card className="h-100 d-flex flex-column">
-                  <CardHeader>
-                    <div className="d-flex align-items-center gap-3">
-                      <div
-                        className="d-flex align-items-center justify-content-center rounded bg-primary-subtle text-primary shrink-0"
-                        style={{ width: "2.5rem", height: "2.5rem" }}
-                      >
-                        <feature.icon size={20} />
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <div key={feature.slug} className="col">
+                  <Card className="h-100 d-flex flex-column">
+                    <CardHeader>
+                      <div className="d-flex align-items-center gap-3">
+                        <div
+                          className="d-flex align-items-center justify-content-center rounded bg-primary-subtle text-primary shrink-0"
+                          style={{ width: "2.5rem", height: "2.5rem" }}
+                        >
+                          {Icon ? <Icon size={20} /> : <span className="fw-bold fs-6">{feature.title.charAt(0)}</span>}
+                        </div>
+                        <div>
+                          <CardTitle>{feature.title}</CardTitle>
+                        </div>
                       </div>
-                      <div>
-                        <CardTitle>{feature.title}</CardTitle>
-                      </div>
-                    </div>
-                    <CardDescription className="mt-2">{feature.description}</CardDescription>
-                  </CardHeader>
-                  <CardBody className="mt-auto pt-3">
-                    <Link href={feature.route} className="text-decoration-none">
-                      <Button variant="outline" size="sm" className="w-100">
-                        Abrir
-                      </Button>
-                    </Link>
-                  </CardBody>
-                </Card>
-              </div>
-            ))}
+                      <CardDescription className="mt-2">{feature.description}</CardDescription>
+                    </CardHeader>
+                    <CardBody className="mt-auto pt-3">
+                      <Link href={feature.route} className="text-decoration-none">
+                        <Button variant="outline" size="sm" className="w-100">
+                          Abrir
+                        </Button>
+                      </Link>
+                    </CardBody>
+                  </Card>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

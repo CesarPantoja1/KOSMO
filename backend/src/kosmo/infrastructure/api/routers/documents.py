@@ -18,7 +18,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     DocumentModifyRequestView,
@@ -131,7 +131,9 @@ async def revert_document(
     doc_repo: Annotated[DocumentRepository, Depends(_document_repo)],
     request: Request,
 ) -> dict[str, str]:
-    outbox = get_container(request).pipeline.outbox
+    container = get_container(request)
+    await require_project_owner(container, project_id, _principal)
+    outbox = container.pipeline.outbox
     result = await revert_to_version(
         document_repo=doc_repo,
         project_id=ProjectId(project_id),

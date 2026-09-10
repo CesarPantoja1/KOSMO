@@ -9,10 +9,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="forbid",
+        extra="ignore",
     )
 
     # Runtime
@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
     llm_model: str
     llm_api_key: SecretStr | None = None
+    llm_max_concurrency: int = 15
+    user_ai_config_cache_ttl_seconds: float = 60.0
 
     # Embeddings
     embedding_provider: Literal["auto", "openai", "fastembed", "none"] = "auto"
@@ -55,20 +57,32 @@ class Settings(BaseSettings):
     opencode_server_username: str = "opencode"
     opencode_server_password: SecretStr | None = None
     opencode_model: str | None = None
+    opencode_timeout_seconds: float = 900.0
+    opencode_read_timeout_seconds: float = 900.0
+    opencode_connect_timeout_seconds: float = 30.0
+    opencode_write_timeout_seconds: float = 60.0
     kosmo_workspaces_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "kosmo-workspaces")
     kosmo_mcp_base_url: str = "http://127.0.0.1:8000/mcp"
     code_runner_base_url: str | None = None
     code_runner_token: SecretStr | None = None
+    implementation_broker_ttl_seconds: float = 1800.0
     preview_public_host_suffix: str | None = None
     cloudflare_preview_api_token: SecretStr | None = None
     cloudflare_preview_account_id: str | None = None
     cloudflare_preview_zone_id: str | None = None
     cloudflare_preview_tunnel_id: str | None = None
 
+    # Integraciones
+    github_client_id: str | None = None
+    github_client_secret: SecretStr | None = None
+    railway_client_id: str | None = None
+    railway_client_secret: SecretStr | None = None
+
     # API
     api_version: str = "v1"
     cors_allowed_origins: str = "*"
     auth_disabled: bool = False
+    server_workers: int = Field(default=1, validation_alias="WORKERS")
 
     # Observabilidad
     logfire_token: SecretStr | None = None
@@ -122,6 +136,8 @@ class Settings(BaseSettings):
             raise ValueError("Debe configurar todas las variables CLOUDFLARE_PREVIEW_* o ninguna")
 
         if self.auth_disabled:
+            if self.env == "production":
+                raise ValueError("AUTH_DISABLED no puede ser 'true' en entorno de producción.")
             return self
 
         if self.jwt_private_key_pem is None:
@@ -142,6 +158,28 @@ class Settings(BaseSettings):
         if self.redis_url is None:
             raise ValueError("Debe configurar REDIS_URL cuando AUTH_DISABLED=false")
 
+        return self
+
+    @property
+    def parsed_cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _validate_cors_configuration(self) -> Self:
+        if self.env == "production":
+            origins = self.parsed_cors_origins
+            if not origins:
+                raise ValueError("Debe configurar al menos un origen en CORS_ALLOWED_ORIGINS para producción")
+            if any(o == "*" for o in origins):
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS no puede ser '*' en entorno de producción. "
+                    "Debe especificar orígenes explícitos (ej. 'https://app.kosmo.dev')."
+                )
+            for origin in origins:
+                if not (origin.startswith("https://") or origin.startswith("http://")):
+                    raise ValueError(
+                        f"Origen CORS inválido '{origin}' en producción. Debe iniciar con 'https://' o 'http://'."
+                    )
         return self
 
 

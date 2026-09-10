@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage, ChatPhase } from '@/entities/chat';
 import { useChatSessions, useChatSessionsStore } from '@/entities/chat';
 import { ApiError, formatApiError } from '@/shared/api';
-import { useChatStream } from '../hooks/useChatStream';
+import { useChatStream } from '../model/useChatStream';
 import { Chatbot } from './Chatbot';
 import { SessionSelector } from './SessionSelector';
 

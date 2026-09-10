@@ -25,6 +25,11 @@ services:
       NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-development}
       NEXT_PUBLIC_AUTH_DISABLED: ${NEXT_PUBLIC_AUTH_DISABLED:-false}
       NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
+      NEXT_PUBLIC_GITHUB_CLIENT_ID: ${NEXT_PUBLIC_GITHUB_CLIENT_ID:-${GITHUB_CLIENT_ID:-}}
+      NEXT_PUBLIC_GITHUB_SCOPES: ${NEXT_PUBLIC_GITHUB_SCOPES:-repo}
+      NEXT_PUBLIC_RAILWAY_CLIENT_ID: ${NEXT_PUBLIC_RAILWAY_CLIENT_ID:-${RAILWAY_CLIENT_ID:-}}
+      NEXT_PUBLIC_RAILWAY_SCOPES: ${NEXT_PUBLIC_RAILWAY_SCOPES:-openid email profile offline_access workspace:admin}
+      NEXT_PUBLIC_DOMAIN_APP: ${NEXT_PUBLIC_DOMAIN_APP:-http://localhost:3000}
       CHOKIDAR_USEPOLLING: 'true'
       WATCHPACK_POLLING: 'true'
     volumes:
@@ -54,6 +59,11 @@ services:
       DEV_GENERATE_SECRETS: ${DEV_GENERATE_SECRETS:-1}
       AUTH_DISABLED: 'false'
 
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      RAILWAY_CLIENT_ID: ${RAILWAY_CLIENT_ID:-}
+      RAILWAY_CLIENT_SECRET: ${RAILWAY_CLIENT_SECRET:-}
+
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}}
       REDIS_URL: redis://redis:6379/0
 
@@ -80,6 +90,9 @@ services:
       OPENCODE_BASE_URL: http://opencode:4096
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
       OPENCODE_MODEL: ${OPENCODE_MODEL:-deepseek/deepseek-v4-flash}
+      OPENCODE_TIMEOUT_SECONDS: ${OPENCODE_TIMEOUT_SECONDS:-900.0}
+      OPENCODE_READ_TIMEOUT_SECONDS: ${OPENCODE_READ_TIMEOUT_SECONDS:-900.0}
+      OPENCODE_CONNECT_TIMEOUT_SECONDS: ${OPENCODE_CONNECT_TIMEOUT_SECONDS:-30.0}
       KOSMO_WORKSPACES_DIR: /workspaces
       KOSMO_MCP_BASE_URL: ${KOSMO_MCP_BASE_URL:-http://backend:8000/mcp}
 
@@ -127,6 +140,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-${LLM_API_KEY:-}}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-${LLM_API_KEY:-}}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENCODE_PERMISSION: '{"read":{"*":"allow"},"edit":{"*":"allow"},"bash":{"*":"allow"},"external_directory":{"*":"allow"},"websearch":"allow"}'
     volumes:
       - kosmo_workspaces:/workspaces
     # Configura el password del servidor (clave server.password), el modelo LLM y
@@ -135,7 +149,7 @@ services:
     command: >
       sh -c 'npm install -g --prefix /home/node/opencode opencode-ai@latest &&
             mkdir -p /home/node/.config/opencode &&
-            printf "{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"}}\n" "$${OPENCODE_SERVER_PASSWORD}" > /home/node/.config/opencode/opencode.json &&
+            printf "{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"},\"permission\":{\"read\":{\"*\":\"allow\"},\"edit\":{\"*\":\"allow\"},\"bash\":{\"*\":\"allow\"},\"external_directory\":{\"*\":\"allow\"},\"websearch\":\"allow\"}}\n" "$${OPENCODE_SERVER_PASSWORD}" > /home/node/.config/opencode/opencode.json &&
             export PATH=/home/node/opencode/bin:$$PATH &&
             opencode serve --hostname 0.0.0.0 --port 4096'
     restart: unless-stopped

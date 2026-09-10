@@ -1,29 +1,37 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
+    FileSystemReader,
+    PreviewPublisherPort,
     ValidationStep,
     ValidationStepResult,
     WorkspaceRepository,
     WorkspaceStatus,
 )
-from kosmo.contracts.sdd.ids import ProjectId, WorkspaceId
+from kosmo.contracts.sdd.ids import ProjectId, UserId, WorkspaceId
+from kosmo.contracts.sdd.project import Project
+from kosmo.domain.sdd.document_converters import markdown_to_document
 from kosmo.infrastructure.codegen.workspace import (
+    LocalFileSystemReader,
     LocalWorkspaceManager,
     WorkspaceLockedError,
+    recover_orphan_previews,
 )
 from kosmo.infrastructure.git import GitError
 from kosmo.infrastructure.persistence.postgres.repositories.workspace_repo import (
     LOCK_STALE_AFTER_MINUTES,
 )
+from tests.unit.fakes import InMemoryDocumentRepository, InMemoryProjectRepository
 
 
 class FakeWorkspaceRepository(WorkspaceRepository):
@@ -606,9 +614,45 @@ async def test_opencode_json_content_and_permissions() -> None:
         # oculta las tools y el agente no puede generar código).
         assert config["permission"]["edit"] == {"*": "allow"}
         assert config["permission"]["bash"] == {"*": "allow"}
+        assert config["permission"]["external_directory"] == {"*": "allow"}
+        assert config["permission"]["websearch"] == "allow"
 
         # Tools: la pregunta interactiva está deshabilitada (flujo headless)
         assert config["tools"] == {"question": False}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_heals_missing_permissions_in_existing_opencode_json() -> None:
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_healing")
+
+        # Create workspace with legacy opencode.json missing external_directory and websearch
+        ws = await manager.ensure_workspace(project_id)
+        assert ws.workspace_dir is not None
+        opencode_file = Path(ws.workspace_dir) / "opencode.json"
+        legacy_cfg = {
+            "instructions": ["AGENTS.md"],
+            "permission": {
+                "read": {"*": "allow"},
+                "edit": {"*": "allow"},
+                "bash": {"*": "allow"},
+            },
+        }
+        opencode_file.write_text(json.dumps(legacy_cfg), encoding="utf-8")
+
+        # Second ensure_workspace call should heal missing permissions
+        await manager.ensure_workspace(project_id)
+
+        healed_cfg = json.loads(opencode_file.read_text(encoding="utf-8"))
+        assert healed_cfg["permission"]["read"] == {"*": "allow"}
+        assert healed_cfg["permission"]["edit"] == {"*": "allow"}
+        assert healed_cfg["permission"]["bash"] == {"*": "allow"}
+        assert healed_cfg["permission"]["external_directory"] == {"*": "allow"}
+        assert healed_cfg["permission"]["websearch"] == "allow"
 
 
 @pytest.mark.unit
@@ -809,6 +853,39 @@ async def test_delete_workspace_removes_code_preview_marker_and_port_mapping() -
         assert not Path(workspace.workspace_dir).exists()
         assert not (marker_dir / str(project_id)).exists()
         assert json.loads((root / ".preview-ports.json").read_text(encoding="utf-8")) == {"prj_other": 3002}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_workspace_waits_asynchronously_before_retrying_rmtree() -> None:
+    with tempfile.TemporaryDirectory() as tmp_root:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_delete_workspace_retry")
+        workspace = await manager.ensure_workspace(project_id)
+        assert workspace.workspace_dir is not None
+
+        real_rmtree = __import__("shutil").rmtree
+        attempts = 0
+
+        def rmtree_with_transient_failure(path: Path) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise OSError("locked")
+            real_rmtree(path)
+
+        async_sleep = AsyncMock()
+        with (
+            patch(
+                "kosmo.infrastructure.codegen.workspace.shutil.rmtree",
+                side_effect=rmtree_with_transient_failure,
+            ) as rmtree,
+            patch("kosmo.infrastructure.codegen.workspace.asyncio.sleep", async_sleep),
+        ):
+            await manager.delete_workspace(project_id)
+
+        assert rmtree.call_count == 2
+        async_sleep.assert_awaited_once_with(0.3)
 
 
 @pytest.mark.unit
@@ -1131,3 +1208,328 @@ async def test_ensure_workspace_continues_when_npm_install_fails() -> None:
         assert ws.workspace_dir is not None
         assert Path(ws.workspace_dir).exists()
         assert code_runner.commands == [("npm install", 600)]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_initializes_site_ts_with_dashboard_archetype() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        project_repo = InMemoryProjectRepository()
+        document_repo = InMemoryDocumentRepository()
+        project_id = ProjectId("prj_dashboard_01")
+        await project_repo.save(
+            Project(
+                id=project_id,
+                name="GastoJusto",
+                slug="gasto-justo",
+                description="Control de gastos y finanzas personales",
+                owner_id=UserId("usr_01"),
+            )
+        )
+        await document_repo.save_discovery(
+            project_id,
+            markdown_to_document(
+                "# Visión del producto\n\n"
+                "Sistema para registrar gastos, monitorear presupuestos y ver balances y reportes."
+            ),
+        )
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+            document_repo=document_repo,
+        )
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.workspace_dir is not None
+        site_file = Path(ws.workspace_dir) / "src" / "lib" / "site.ts"
+        assert site_file.exists()
+        content = site_file.read_text(encoding="utf-8")
+        assert 'name: "GastoJusto"' in content
+        assert 'archetype: "dashboard"' in content
+        assert 'primaryColor: "#006bbb"' in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ensure_workspace_initializes_site_ts_with_storefront_archetype() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_root:
+        project_repo = InMemoryProjectRepository()
+        document_repo = InMemoryDocumentRepository()
+        project_id = ProjectId("prj_store_01")
+        await project_repo.save(
+            Project(
+                id=project_id,
+                name="Tienda Ropa",
+                slug="tienda-ropa",
+                description="Catálogo y venta de prendas",
+                owner_id=UserId("usr_01"),
+            )
+        )
+        await document_repo.save_discovery(
+            project_id,
+            markdown_to_document(
+                "# Visión del producto\n\nCatálogo de productos para compras de clientes con carrito de compras."
+            ),
+        )
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+            document_repo=document_repo,
+        )
+
+        # Act
+        ws = await manager.ensure_workspace(project_id)
+
+        # Assert
+        assert ws.workspace_dir is not None
+        site_file = Path(ws.workspace_dir) / "src" / "lib" / "site.ts"
+        assert site_file.exists()
+        content = site_file.read_text(encoding="utf-8")
+        assert 'name: "Tienda Ropa"' in content
+        assert 'archetype: "storefront"' in content
+        assert 'primaryColor: "#00835c"' in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_workspace_manager_delegates_manifest_to_thread() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+        project_id = ProjectId("prj_to_thread_test")
+        ws = await manager.ensure_workspace(project_id)
+
+        with patch("asyncio.to_thread", wraps=asyncio.to_thread) as spy_to_thread:
+            # Act
+            manifest = await manager.get_manifest(ws)
+
+            # Assert
+            assert isinstance(manifest, tuple)
+            spy_to_thread.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_removes_orphan_markers_and_ports() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        valid_project_id = ProjectId("prj_valid")
+        valid_ws = await manager.ensure_workspace(valid_project_id)
+        assert valid_ws.workspace_dir is not None
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+
+        # Marker válido
+        (markers_dir / "prj_valid").write_text(valid_ws.workspace_dir, encoding="utf-8")
+
+        # Marker huérfano (el directorio al que apunta no existe)
+        non_existent_path = str(tmp_root / "prj_orphan_nonexistent")
+        (markers_dir / "prj_orphan").write_text(non_existent_path, encoding="utf-8")
+
+        # Puertos con ambos proyectos
+        ports_file = tmp_root / ".preview-ports.json"
+        ports_file.write_text(
+            json.dumps(
+                {
+                    "prj_valid": {"port": 3000, "url": "http://localhost:3001"},
+                    "prj_orphan": {"port": 3002, "url": "http://localhost:3003"},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        assert (markers_dir / "prj_orphan").exists() is False
+        assert (markers_dir / "prj_valid").exists() is True
+        saved_ports = json.loads(ports_file.read_text(encoding="utf-8"))
+        assert "prj_orphan" not in saved_ports
+        assert "prj_valid" in saved_ports
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_removes_ports_entry_without_workspace() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        ports_file = tmp_root / ".preview-ports.json"
+        ports_file.write_text(
+            json.dumps(
+                {
+                    "prj_zombie": {
+                        "port": 3005,
+                        "workspace": str(tmp_root / "prj_zombie"),
+                        "url": "http://localhost:3005",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        saved_ports = json.loads(ports_file.read_text(encoding="utf-8"))
+        assert "prj_zombie" not in saved_ports
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_cleans_up_when_project_not_in_db() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        project_repo = InMemoryProjectRepository()
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            project_repo=project_repo,
+        )
+
+        # Proyecto que existe en DB y en disco
+        valid_pid = ProjectId("prj_in_db")
+        await project_repo.save(
+            Project(
+                id=valid_pid,
+                name="Valid",
+                slug="valid",
+                description="Valid",
+                owner_id=UserId("usr_1"),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
+        ws_valid = await manager.ensure_workspace(valid_pid)
+        assert ws_valid.workspace_dir is not None
+
+        # Proyecto que existe en disco pero NO en DB (fue borrado de la DB)
+        deleted_pid = ProjectId("prj_deleted_from_db")
+        ws_deleted = await manager.ensure_workspace(deleted_pid)
+        assert ws_deleted.workspace_dir is not None
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+        (markers_dir / "prj_in_db").write_text(ws_valid.workspace_dir, encoding="utf-8")
+        (markers_dir / "prj_deleted_from_db").write_text(ws_deleted.workspace_dir, encoding="utf-8")
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        assert (markers_dir / "prj_deleted_from_db").exists() is False
+        assert (markers_dir / "prj_in_db").exists() is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_calls_unpublish_on_publisher() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        publisher = AsyncMock(spec=PreviewPublisherPort)
+        manager = LocalWorkspaceManager(
+            workspaces_root=tmp_root,
+            git_init=False,
+            preview_publisher=publisher,
+        )
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+        (markers_dir / "prj_unpublish_target").write_text(str(tmp_root / "nonexistent"), encoding="utf-8")
+
+        # Act
+        reconciled = await manager.reconcile_orphan_previews()
+
+        # Assert
+        assert reconciled == 1
+        publisher.unpublish.assert_awaited_once_with(ProjectId("prj_unpublish_target"))
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_reconcile_orphan_previews_returns_zero_when_no_orphans_or_empty() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        # Act & Assert on empty directory
+        assert await manager.reconcile_orphan_previews() == 0
+
+    # Nonexistent root
+    manager_nonexistent = LocalWorkspaceManager(workspaces_root=Path(tmp_dir) / "does_not_exist", git_init=False)
+    assert await manager_nonexistent.reconcile_orphan_previews() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_recover_orphan_previews_helper_delegates() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        manager = LocalWorkspaceManager(workspaces_root=tmp_root, git_init=False)
+
+        markers_dir = tmp_root / ".preview-active"
+        markers_dir.mkdir(parents=True, exist_ok=True)
+        (markers_dir / "prj_helper_orphan").write_text(str(tmp_root / "nonexistent"), encoding="utf-8")
+
+        # Act
+        reconciled = await recover_orphan_previews(manager)
+
+        # Assert
+        assert reconciled == 1
+        assert (markers_dir / "prj_helper_orphan").exists() is False
+
+
+@pytest.mark.unit
+def test_local_file_system_reader_lists_and_reads_files() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_root = Path(tmp_dir)
+        sub_dir = tmp_root / "src" / "app"
+        sub_dir.mkdir(parents=True)
+        file_a = sub_dir / "page.tsx"
+        file_a.write_text("export default function Page() {}", encoding="utf-8")
+
+        reader = LocalFileSystemReader()
+
+        # Act
+        files = reader.list_files(tmp_root)
+        content = reader.read_text(file_a)
+        non_existent = reader.read_text(tmp_root / "no_such_file.txt")
+
+        # Assert
+        assert "src/app/page.tsx" in [f.replace("\\", "/") for f in files]
+        assert content == "export default function Page() {}"
+        assert non_existent is None
+
+
+@pytest.mark.unit
+def test_local_workspace_manager_implements_file_system_reader() -> None:
+    # Arrange
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        manager = LocalWorkspaceManager(workspaces_root=tmp_dir, git_init=False)
+
+        # Assert
+        assert isinstance(manager, FileSystemReader)

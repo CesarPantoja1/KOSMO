@@ -4,6 +4,7 @@ from typing import Any, Protocol, Self
 
 from kosmo.contracts.ai.chat import ChatRepository
 from kosmo.contracts.ai.consistency import TraceabilityRepository
+from kosmo.contracts.sdd.codegen import FeatureImplementationRepository
 from kosmo.contracts.sdd.repositories import (
     ActivityDiagramRepository,
     DocumentRepository,
@@ -30,6 +31,7 @@ class UnitOfWork(Protocol):
     features: FeatureRepository
     requirements: RequirementRepository
     diagrams: ActivityDiagramRepository
+    implementations: FeatureImplementationRepository
     chat: ChatRepository
     traceability: TraceabilityRepository
     outbox: OutboxPort

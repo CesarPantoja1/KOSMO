@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { Logo } from '@/shared/ui';
+import { useAuthStore } from '@/shared/model';
 
 interface RootNavbarProps {
 	onComenzar?: () => void;
@@ -10,6 +12,7 @@ interface RootNavbarProps {
 export function RootNavbar({ onComenzar }: RootNavbarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
+	const user = useAuthStore((s) => s.user);
 	const isLanding = pathname === '/';
 
 	const handleComenzar = () => {
@@ -24,10 +27,7 @@ export function RootNavbar({ onComenzar }: RootNavbarProps) {
 		<header className='sticky top-0 z-50 border-b border-neutral-200 bg-neutral-0/90 backdrop-blur-xl'>
 			<div className='mx-auto flex h-20 max-w-7xl items-center justify-between px-6'>
 				<div className='flex items-center gap-3'>
-					<button
-						onClick={() => router.push('/')}
-						className='flex items-center gap-3'
-					>
+					<button onClick={() => router.push('/')} className='flex items-center gap-3'>
 						<Logo size={36} />
 						<span className='text-xl font-bold tracking-tight text-neutral-800'>
 							KOSMO
@@ -49,13 +49,19 @@ export function RootNavbar({ onComenzar }: RootNavbarProps) {
 					</nav>
 				)}
 
-				<button
-					type='button'
-					onClick={handleComenzar}
-					className='btn btn-primary btn-sm'
-				>
-					Comenzar
-				</button>
+				{user ? (
+					<Link href='/perfil' className='btn btn-primary btn-sm'>
+						Mi Cuenta
+					</Link>
+				) : (
+					<button
+						type='button'
+						onClick={handleComenzar}
+						className='btn btn-primary btn-sm'
+					>
+						Comenzar
+					</button>
+				)}
 			</div>
 		</header>
 	);

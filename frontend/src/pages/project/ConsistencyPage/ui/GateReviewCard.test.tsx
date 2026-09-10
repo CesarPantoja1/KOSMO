@@ -3,24 +3,28 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ReviewCard } from '@/entities/consistency';
 
-vi.mock('@/features/plantuml-viewer', () => ({
-	PlantUmlViewer: ({
-		source,
-		showControls,
-		fallbackContent,
-	}: {
-		source: string;
-		showControls?: boolean;
-		fallbackContent?: string;
-	}) => (
-		<div
-			data-testid='plantuml-viewer'
-			data-source={source}
-			data-controls={String(showControls ?? true)}
-			data-fallback={fallbackContent ?? ''}
-		/>
-	),
-}));
+vi.mock('@/features/plantuml-viewer', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@/features/plantuml-viewer')>();
+	return {
+		...actual,
+		PlantUmlViewer: ({
+			source,
+			showControls,
+			fallbackContent,
+		}: {
+			source: string;
+			showControls?: boolean;
+			fallbackContent?: string;
+		}) => (
+			<div
+				data-testid='plantuml-viewer'
+				data-source={source}
+				data-controls={String(showControls ?? true)}
+				data-fallback={fallbackContent ?? ''}
+			/>
+		),
+	};
+});
 
 import { GateReviewCard } from './GateReviewCard';
 
@@ -108,5 +112,31 @@ describe('GateReviewCard', () => {
 
 		expect(screen.queryAllByTestId('plantuml-viewer')).toHaveLength(0);
 		expect(screen.getByText('antes')).toBeInTheDocument();
+	});
+
+	it('renderiza los botones Descartar y Aplicar arriba y llama a los callbacks al pulsarlos', () => {
+		const handleApply = vi.fn();
+		const handleDiscard = vi.fn();
+
+		render(
+			<GateReviewCard
+				card={makeCard()}
+				busy={false}
+				onApply={handleApply}
+				onDiscard={handleDiscard}
+			/>,
+		);
+
+		const applyBtn = screen.getByRole('button', { name: 'Aplicar' });
+		const discardBtn = screen.getByRole('button', { name: 'Descartar' });
+
+		expect(applyBtn).toBeInTheDocument();
+		expect(discardBtn).toBeInTheDocument();
+
+		applyBtn.click();
+		expect(handleApply).toHaveBeenCalledTimes(1);
+
+		discardBtn.click();
+		expect(handleDiscard).toHaveBeenCalledTimes(1);
 	});
 });

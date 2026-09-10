@@ -73,6 +73,14 @@ class UserRepository(Protocol):
 
     async def update_password(self, *, user_id: str, hashed_password: str) -> None: ...
 
+    async def update_profile(
+        self,
+        *,
+        user_id: str,
+        name: str | None = None,
+        avatar_url: str | None = None,
+    ) -> None: ...
+
 
 class AuthorizationCodeStore(Protocol):
     async def store(self, entry: AuthorizationCode) -> None: ...

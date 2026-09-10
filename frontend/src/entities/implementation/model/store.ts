@@ -11,6 +11,7 @@ interface ImplementationStore {
 	logs: ImplementationLog[];
 	errorMessage: string | null;
 	implementations: Record<string, boolean>;
+	requiresReviewByFeature: Record<string, boolean>;
 	startGeneration: (
 		featureId: string,
 		featureTitle: string,
@@ -32,6 +33,7 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 	logs: [],
 	errorMessage: null,
 	implementations: {},
+	requiresReviewByFeature: {},
 
 	startGeneration: async (featureId, featureTitle, featureDisplayId) => {
 		set({
@@ -64,6 +66,10 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 					...state.implementations,
 					[featureId]: true,
 				},
+				requiresReviewByFeature: {
+					...state.requiresReviewByFeature,
+					[featureId]: false,
+				},
 			}));
 		} catch (error) {
 			set({
@@ -78,24 +84,58 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 	loadImplementation: async (featureId, featureTitle, featureDisplayId) => {
 		try {
 			const record = await fetchImplementation(featureId);
-			if (!record || record.status !== 'implemented') {
+			if (!record) {
+				set((state) => {
+					const nextRequires = { ...state.requiresReviewByFeature };
+					delete nextRequires[featureId];
+					return {
+						status: 'idle',
+						summary: null,
+						requiresReviewByFeature: nextRequires,
+					};
+				});
+				return;
+			}
+			if (record.status === 'failed') {
+				set((state) => ({
+					status: 'idle',
+					summary: null,
+					implementations: { ...state.implementations, [featureId]: false },
+				}));
+				return;
+			}
+			if (record.status !== 'implemented' && record.status !== 'requires_review') {
 				return;
 			}
 			const summary = buildSummary(
 				featureId,
 				featureTitle,
 				featureDisplayId,
-				{ generated_files: record.generatedFiles, traceability_edges: 0 },
+				{
+					generated_files: record.generatedFiles,
+					features_count: record.featuresCount,
+					screens_count: record.screensCount,
+					requirements_count: record.requirementsCount,
+					validations_passed: record.validationsPassed,
+					validations_total: record.validationsTotal,
+					traceability_edges: record.traceabilityEdgesCount,
+					technologies: record.technologies,
+				},
 				record.updatedAt,
 			);
+			const isRequiresReview = record.status === 'requires_review';
 			set((state) => ({
-				status: 'completed',
+				status: isRequiresReview ? 'requires_review' : 'completed',
 				summary,
 				progress: null,
 				currentThought: null,
 				implementations: {
 					...state.implementations,
 					[featureId]: true,
+				},
+				requiresReviewByFeature: {
+					...state.requiresReviewByFeature,
+					[featureId]: isRequiresReview,
 				},
 			}));
 		} catch {
@@ -111,6 +151,7 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 			currentThought: null,
 			logs: [],
 			errorMessage: null,
+			requiresReviewByFeature: {},
 		}),
 }));
 
@@ -123,6 +164,7 @@ export const clearImplementationStore = () => {
 		logs: [],
 		errorMessage: null,
 		implementations: {},
+		requiresReviewByFeature: {},
 	});
 };
 

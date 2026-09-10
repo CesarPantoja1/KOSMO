@@ -35,7 +35,7 @@ async def _run() -> int:
         repo = auth.user_repository
 
         try:
-            user = await register.execute(email=email, password=password)
+            user = await register.execute(name="Usuario Dev", email=email, password=password)
             status = "created"
         except UserAlreadyExistsError:
             existing = await repo.by_email(email)

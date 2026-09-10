@@ -1,4 +1,5 @@
 export interface RegisterRequest {
+	name: string;
 	email: string;
 	password: string;
 }
@@ -28,7 +29,9 @@ export interface LogoutRequest {
 
 export interface UserPublic {
 	id: string;
+	name: string;
 	email: string;
+	avatar_url?: string | null;
 	created_at: string;
 }
 
@@ -51,6 +54,9 @@ export interface TokenPairResponse {
 
 export interface PrincipalView {
 	subject: string;
+	name?: string | null;
+	email?: string | null;
+	avatar_url?: string | null;
 	scopes: string[];
 }
 

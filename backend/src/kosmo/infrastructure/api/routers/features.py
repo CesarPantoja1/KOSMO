@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
@@ -32,10 +33,9 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.infrastructure.api.composition import AppContainer
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
-from kosmo.infrastructure.api.implementation_broker import broker
 from kosmo.infrastructure.api.schemas import (
     CheckConsistencyRequestView,
     CreateCharacteristicRequest,
@@ -49,6 +49,7 @@ from kosmo.infrastructure.api.schemas import (
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/features",
     tags=["features"],
+    dependencies=[Depends(verify_project_owner)],
 )
 
 _generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
@@ -229,15 +230,17 @@ async def create_characteristic_manual(
     if output.is_saved and output.characteristic is not None:
         return {
             "is_saved": True,
-            "feature": _feature_to_response(output.characteristic).model_dump(),
+            "feature": _feature_to_response(output.characteristic, output.warnings).model_dump(),
             "origin": output.origin,
             "is_consistent": output.is_consistent,
+            "warnings": list(output.warnings),
         }
     return {
         "is_saved": False,
         "origin": output.origin,
         "is_consistent": output.is_consistent,
         "inconsistency_reason": output.inconsistency_reason,
+        "warnings": list(output.warnings),
     }
 
 
@@ -292,7 +295,7 @@ async def edit_characteristic_manual(
         )
 
     assert output.feature is not None
-    return _feature_to_response(output.feature)
+    return _feature_to_response(output.feature, output.warnings)
 
 
 @router.post(
@@ -336,7 +339,7 @@ async def save_selected_features(
     return [_feature_to_response(f) for f in output.features]
 
 
-def _feature_to_response(f: Any) -> FeatureResponse:
+def _feature_to_response(f: Any, warnings: Sequence[str] = ()) -> FeatureResponse:
     return FeatureResponse(
         id=str(f.id),
         project_id=str(f.project_id),
@@ -346,6 +349,7 @@ def _feature_to_response(f: Any) -> FeatureResponse:
         description=f.description,
         origin=f.origin,
         display_id=f.display_id,
+        warnings=list(warnings),
     )
 
 
@@ -368,10 +372,11 @@ def _check_feature_consistency(request: Request) -> CheckFeatureConsistencyUseCa
 async def delete_feature(
     project_id: str,
     feature_id: str,
-    _principal: Annotated[Principal, Depends(get_principal)],
+    principal: Annotated[Principal, Depends(get_principal)],
     uc: Annotated[DeleteFeatureUseCase, Depends(_delete_feature_uc)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> dict[str, str]:
+
     try:
         feature = await uc.execute(
             project_id=ProjectId(project_id),
@@ -384,11 +389,13 @@ async def delete_feature(
 
     # Eliminación del código generado en background: el frontend observa los eventos
     # en GET /implementations/impl_<feature_id>/events
-    broker.start_implementation(
+    broker_instance = container.codegen.implementation_broker
+    broker_instance.start_implementation(
         implementation_id=f"impl_{feature_id}",
         use_case=container.codegen.delete_feature_code,
         input_data=DeleteFeatureCodeInput(feature=feature),
         project_id=str(feature.project_id),
+        user_id=principal.subject,
     )
 
     return {"status": "deleted", "feature_id": feature_id}

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector  # pyright: ignore[reportMissingTypeStubs]
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects import postgresql as pg
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -16,6 +16,8 @@ class UserModel(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(pg.CITEXT(), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, server_default="")
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(512), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -211,6 +213,7 @@ class DocumentVersionModel(Base):
 
 class OutboxJobModel(Base):
     __tablename__ = "outbox_jobs"
+    __table_args__ = (Index("ix_outbox_pending", "status", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     job_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -333,3 +336,116 @@ class UserAiConfigModel(Base):
     is_custom: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class UserIntegrationModel(Base):
+    __tablename__ = "user_integrations"
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_integrations_user_provider"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    account_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    access_token_enc: Mapped[str] = mapped_column(Text(), nullable=False)
+    refresh_token_enc: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    scopes: Mapped[list[str]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class ProjectIntegrationModel(Base):
+    __tablename__ = "project_integrations"
+    __table_args__ = (UniqueConstraint("project_id", "provider", name="uq_project_integrations_project_provider"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="github")
+    repo_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    repo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    default_branch: Mapped[str] = mapped_column(String(100), nullable=False, default="main")
+    last_push_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_commit_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="not_created")
+    error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+
+    # Campos de despliegue en la nube (HU-24)
+    service_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    service_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    public_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    deploy_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="not_created",
+        server_default="not_created",
+    )
+    build_logs_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_deployed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    volumes: Mapped[list[dict[str, Any]]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    ports: Mapped[list[dict[str, Any]]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    env_vars: Mapped[list[dict[str, Any]]] = mapped_column(
+        pg.JSONB(),
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class CodeSyncLogModel(Base):
+    __tablename__ = "code_sync_logs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    commit_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="failed")
+    message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

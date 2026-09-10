@@ -4,8 +4,8 @@ import { forwardRef } from 'react';
 import { MaxEditor, MinEditor } from '@/shared/ui';
 
 import type { PlantUmlViewerProps } from '../model/types';
-import { useRender } from '../hooks/useRender';
-import { usePanZoom } from '../hooks/usePanZoom';
+import { useRender } from '../model/useRender';
+import { usePanZoom } from '../model/usePanZoom';
 import { ZOOM_MAX, ZOOM_MIN } from '../lib/zoom';
 
 export const PlantUmlViewer = forwardRef<HTMLDivElement, PlantUmlViewerProps>(

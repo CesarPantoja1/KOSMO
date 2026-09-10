@@ -8,8 +8,10 @@ from kosmo.contracts.llm.ports import LLMClient, PromptTemplate
 from kosmo.contracts.pipeline.phase_outputs import SuggestedFeature, SuggestFeaturesOutput
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.guardrails import DISCOVERY_SECTIONS
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository, FeatureRepository
+from kosmo.domain.sdd.document_converters import slugify_spanish
+from kosmo.domain.sdd.id_generator import IdGenerator
 
 _FEATURE_ID_PREFIX = re.compile(r"^\s*C\d+[\s:.–—-]+")
 
@@ -203,8 +205,6 @@ class SaveSelectedFeaturesUseCase:
         self._feature_repo = feature_repo
 
     async def execute(self, input_data: SaveSelectedFeaturesInput) -> SaveSelectedFeaturesOutput:
-        from kosmo.contracts.sdd.ids import FeatureId
-        from kosmo.domain.sdd.id_generator import IdGenerator
 
         existing = await self._feature_repo.list_by_project(input_data.project_id)
         next_num = max((f.number for f in existing), default=0) + 1
@@ -218,7 +218,7 @@ class SaveSelectedFeaturesUseCase:
                     project_id=input_data.project_id,
                     number=next_num,
                     title=title,
-                    slug=title.lower().replace(" ", "-"),
+                    slug=slugify_spanish(title) or f"feature-{next_num}",
                     description=str(item.get("description", "")),
                     origin=str(item.get("origin", "")),
                 )

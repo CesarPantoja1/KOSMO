@@ -79,4 +79,4 @@ markers = [
     "contract: schemathesis contra OpenAPI",
     "property: hypothesis sobre invariantes",
 ]
-addopts = "--cov=kosmo --cov-report=xml --cov-report=term-missing --cov-fail-under=60"
+addopts = "--cov=kosmo --cov-report=xml --cov-report=term-missing --cov-branch --cov-fail-under=60"

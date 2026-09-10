@@ -257,7 +257,29 @@ class InMemoryUserRepository:
         self.users[user_id] = User(
             id=existing.id,
             email=existing.email,
+            name=existing.name,
+            avatar_url=existing.avatar_url,
             hashed_password=hashed_password,
+            created_at=existing.created_at,
+            disabled_at=existing.disabled_at,
+        )
+
+    async def update_profile(
+        self,
+        *,
+        user_id: str,
+        name: str | None = None,
+        avatar_url: str | None = None,
+    ) -> None:
+        existing = self.users.get(user_id)
+        if existing is None:
+            return
+        self.users[user_id] = User(
+            id=existing.id,
+            email=existing.email,
+            name=name if name is not None else existing.name,
+            avatar_url=avatar_url if avatar_url is not None else existing.avatar_url,
+            hashed_password=existing.hashed_password,
             created_at=existing.created_at,
             disabled_at=existing.disabled_at,
         )
@@ -441,6 +463,7 @@ class InMemoryUnitOfWork:
         features: InMemoryFeatureRepository | None = None,
         requirements: InMemoryRequirementRepository | None = None,
         diagrams: InMemoryActivityDiagramRepository | None = None,
+        implementations: InMemoryFeatureImplementationRepository | None = None,
         chat: InMemoryChatRepository | None = None,
         traceability: InMemoryTraceabilityRepository | None = None,
         outbox: InMemoryOutbox | None = None,
@@ -450,6 +473,7 @@ class InMemoryUnitOfWork:
         self.features = features or InMemoryFeatureRepository()
         self.requirements = requirements or InMemoryRequirementRepository()
         self.diagrams = diagrams or InMemoryActivityDiagramRepository()
+        self.implementations = implementations or InMemoryFeatureImplementationRepository()
         self.chat = chat or InMemoryChatRepository()
         self.traceability = traceability or InMemoryTraceabilityRepository()
         self.outbox = outbox or InMemoryOutbox()
@@ -607,3 +631,177 @@ class InMemoryUserAiConfigRepository(UserAiConfigRepository):
 
     async def delete(self, user_id: str) -> None:
         self.configs.pop(user_id, None)
+
+
+class InMemoryUserIntegrationRepository:
+    """Implementa UserIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.user_integration import UserIntegration
+
+        self.integrations: dict[tuple[str, str], UserIntegration] = {}
+
+    async def get_by_user_and_provider(
+        self,
+        user_id: Any,
+        provider: Any,
+    ) -> Any:
+        from kosmo.contracts.integrations.user_integration import IntegrationProvider
+
+        provider_str = provider.value if isinstance(provider, IntegrationProvider) else str(provider)
+        return self.integrations.get((str(user_id), provider_str))
+
+    async def save(self, integration: Any) -> Any:
+        from kosmo.contracts.integrations.user_integration import IntegrationProvider
+
+        provider_str = (
+            integration.provider.value
+            if isinstance(integration.provider, IntegrationProvider)
+            else str(integration.provider)
+        )
+        self.integrations[(str(integration.user_id), provider_str)] = integration
+        return integration
+
+    async def delete(self, user_id: Any, provider: Any) -> bool:
+        from kosmo.contracts.integrations.user_integration import IntegrationProvider
+
+        provider_str = provider.value if isinstance(provider, IntegrationProvider) else str(provider)
+        existed = (str(user_id), provider_str) in self.integrations
+        self.integrations.pop((str(user_id), provider_str), None)
+        return existed
+
+    async def list_by_user(self, user_id: Any) -> list[Any]:
+        user_str = str(user_id)
+        return [i for (u, _), i in self.integrations.items() if u == user_str]
+
+
+class InMemoryUserGitHubIntegrationRepository:
+    """Implementa UserGitHubIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.github import UserGitHubIntegration
+
+        self.integrations: dict[str, UserGitHubIntegration] = {}
+
+    async def get_by_user_id(self, user_id: Any) -> Any:
+        return self.integrations.get(str(user_id))
+
+    async def save(self, integration: Any) -> None:
+        self.integrations[str(integration.user_id)] = integration
+
+    async def delete_by_user_id(self, user_id: Any) -> bool:
+        existed = str(user_id) in self.integrations
+        self.integrations.pop(str(user_id), None)
+        return existed
+
+
+class InMemoryProjectGitHubIntegrationRepository:
+    """Implementa ProjectGitHubIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.github import ProjectGitHubIntegration
+
+        self.integrations: dict[str, ProjectGitHubIntegration] = {}
+
+    async def get_by_project_id(self, project_id: Any) -> Any:
+        return self.integrations.get(str(project_id))
+
+    async def save(self, integration: Any) -> Any:
+        self.integrations[str(integration.project_id)] = integration
+        return integration
+
+    async def delete_by_project_id(self, project_id: Any) -> bool:
+        existed = str(project_id) in self.integrations
+        self.integrations.pop(str(project_id), None)
+        return existed
+
+
+class InMemoryCodeSyncLogRepository:
+    """Implementa CodeSyncLogRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.github import CodeSyncLog
+
+        self.logs: list[CodeSyncLog] = []
+
+    async def add_log(self, log: Any) -> None:
+        self.logs.append(log)
+
+    async def get_logs_by_project(self, project_id: Any) -> list[Any]:
+        project_str = str(project_id)
+        return [log for log in self.logs if str(log.project_id) == project_str]
+
+
+class InMemoryProjectDeploymentRepository:
+    """Implementa ProjectDeploymentRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.deployment import ProjectDeployment
+
+        self.deployments: dict[str, ProjectDeployment] = {}
+
+    async def get_by_project_id(self, project_id: Any) -> Any:
+        return self.deployments.get(str(project_id))
+
+    async def list_by_status(self, status: Any) -> list[Any]:
+        return [deployment for deployment in self.deployments.values() if deployment.status == status]
+
+    async def save(self, deployment: Any) -> Any:
+        self.deployments[str(deployment.project_id)] = deployment
+        return deployment
+
+    async def delete_by_project_id(self, project_id: Any) -> bool:
+        existed = str(project_id) in self.deployments
+        self.deployments.pop(str(project_id), None)
+        return existed
+
+
+class InMemoryUserDeploymentIntegrationRepository:
+    """Implementa UserDeploymentIntegrationRepository en memoria para tests unitarios."""
+
+    def __init__(self) -> None:
+        from kosmo.contracts.integrations.deployment import UserDeploymentIntegration
+
+        self.integrations: dict[tuple[str, str], UserDeploymentIntegration] = {}
+
+    async def get_by_user_id(self, user_id: Any, provider: Any = None) -> Any:
+        provider_val = getattr(provider, "value", str(provider)) if provider is not None else "railway"
+        return self.integrations.get((str(user_id), provider_val))
+
+    async def save(self, integration: Any) -> None:
+        provider_val = getattr(integration.provider, "value", str(integration.provider))
+        self.integrations[(str(integration.user_id), provider_val)] = integration
+
+    async def delete_by_user_id(self, user_id: Any, provider: Any = None) -> bool:
+        provider_val = getattr(provider, "value", str(provider)) if provider is not None else "railway"
+        key = (str(user_id), provider_val)
+        existed = key in self.integrations
+        self.integrations.pop(key, None)
+        return existed
+
+
+class InMemoryFeatureImplementationRepository:
+    def __init__(self) -> None:
+        self.implementations: dict[str, Any] = {}
+
+    async def by_feature_id(self, feature_id: Any) -> Any:
+        return self.implementations.get(str(feature_id))
+
+    async def by_id(self, implementation_id: Any) -> Any:
+        for impl in self.implementations.values():
+            if str(impl.id) == str(implementation_id):
+                return impl
+        return None
+
+    async def list_by_project(self, project_id: Any) -> list[Any]:
+        return [impl for impl in self.implementations.values() if str(impl.project_id) == str(project_id)]
+
+    async def list_by_status(self, status: Any) -> list[Any]:
+        return [impl for impl in self.implementations.values() if impl.status == status]
+
+    async def save(self, implementation: Any) -> Any:
+        self.implementations[str(implementation.feature_id)] = implementation
+        return implementation
+
+    async def delete(self, feature_id: Any) -> None:
+        self.implementations.pop(str(feature_id), None)

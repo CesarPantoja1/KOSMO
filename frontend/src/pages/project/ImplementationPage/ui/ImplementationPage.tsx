@@ -1,17 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
-import { AsideCharacteristic } from '@/widgets';
-import { Implementation, toast } from '@/shared/ui';
-import { Ai, ArrowLeft, CursorClickFill, SuccessCheckIcon, WarningIcon } from '@/shared/ui';
 import { formatApiError } from '@/shared/api';
-import { ImplementationLiveProgress } from './ImplementationLiveProgress';
+import {
+	Ai,
+	ArrowLeft,
+	CursorClickFill,
+	Implementation,
+	Loading,
+	SuccessCheckIcon,
+	toast,
+	WarningIcon,
+} from '@/shared/ui';
+import { AsideCharacteristic } from '@/widgets';
 
 const ImplementationPage = () => {
 	const characteristics = useCharacteristicStore((s) => s.currentCharacteristics);
@@ -25,6 +32,7 @@ const ImplementationPage = () => {
 	const progress = useImplementationStore((s) => s.progress);
 	const errorMessage = useImplementationStore((s) => s.errorMessage);
 	const implementations = useImplementationStore((s) => s.implementations);
+	const requiresReviewByFeature = useImplementationStore((s) => s.requiresReviewByFeature);
 	const startGeneration = useImplementationStore((s) => s.startGeneration);
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
 
@@ -34,6 +42,9 @@ const ImplementationPage = () => {
 	const hasCharacteristics = characteristics.length > 0;
 	const hasAnyImplementation = Object.values(implementations).some(Boolean);
 	const currentHasImpl = selectedId ? !!implementations[selectedId] : false;
+	const currentRequiresReview = selectedId
+		? !!requiresReviewByFeature[selectedId] || status === 'requires_review'
+		: false;
 	const selectedHasDiagram = selectedId ? !!hasDiagram[selectedId] : false;
 	const isGenerating = status === 'generating';
 
@@ -85,11 +96,17 @@ const ImplementationPage = () => {
 
 	return (
 		<>
-			{isGenerating && <ImplementationLiveProgress progress={progress} />}
+			{isGenerating && (
+				<Loading
+					title='Generando implementación'
+					description='Transformando requisitos y modelo en código funcional.'
+					messages={progress}
+				/>
+			)}
 
 			{status === 'failed' && errorMessage && (
 				<div className='mb-4 flex items-center gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3'>
-				<WarningIcon size={20} color='text-warning-600' />
+					<WarningIcon size={20} color='text-warning-600' />
 					<p className='text-sm text-warning-700'>{errorMessage}</p>
 				</div>
 			)}
@@ -145,6 +162,7 @@ const ImplementationPage = () => {
 								selectedId={selectedId}
 								onSelectCharacteristic={handleSelectCharacteristic}
 								hasIcon={implementations}
+								warningByFeature={requiresReviewByFeature}
 								icon={Implementation}
 							/>
 
@@ -227,34 +245,67 @@ const ImplementationPage = () => {
 								{selectedCharacteristic && currentHasImpl && (
 									<div className='flex flex-col flex-1 min-h-0 gap-3'>
 										<div className='flex flex-col gap-1 px-2'>
-											<div className='flex items-center gap-2'>
+											<div className='flex items-center gap-2 flex-wrap'>
 												<span className='text-base font-bold text-neutral-500'>
 													{selectedCharacteristic.display_id}
 												</span>
 												<span className='text-base font-semibold text-neutral-800'>
 													{selectedCharacteristic.title}
 												</span>
+												{currentRequiresReview && (
+													<span className='rounded-full bg-warning-100 text-warning-800 border border-warning-200 px-2.5 py-0.5 text-xs font-semibold'>
+														Requiere actualización
+													</span>
+												)}
 											</div>
 											<p className='text-neutral-500 text-sm'>
 												{selectedCharacteristic.description}
 											</p>
 										</div>
 
-										<div className='flex flex-col my-auto items-center gap-5 px-12'>
-											<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-success-50'>
-											<SuccessCheckIcon size={40} color='text-success-600' />
+										{currentRequiresReview ? (
+											<div className='flex flex-col my-auto items-center gap-5 px-12'>
+												<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-warning-50'>
+													<WarningIcon size={44} color='text-warning-600' />
+												</div>
+												<div className='flex flex-col items-center gap-2 text-center max-w-lg'>
+													<h3 className='text-neutral-800 text-lg font-semibold'>
+														Implementación desactualizada
+													</h3>
+													<p className='text-neutral-600 text-sm'>
+														Las especificaciones de esta funcionalidad (Descubrimiento, Requisitos o Modelo) cambiaron recientemente. El código generado previamente ya no coincide con los nuevos requisitos.
+													</p>
+													<p className='text-neutral-500 text-xs mt-1'>
+														Haz clic en «Regenerar implementación» para actualizar el código automáticamente con las nuevas reglas.
+													</p>
+												</div>
+												<div className='flex items-center gap-3 mt-2'>
+													<button onClick={handleGenerate} className='btn btn-ai'>
+														<Ai color='' size={18} />
+														Regenerar implementación
+													</button>
+													<Link href='/proyecto/codigo/resumen' className='btn btn-secondary'>
+														Ver código actual
+													</Link>
+												</div>
 											</div>
-											<div className='flex flex-col items-center gap-2 text-center max-w-md'>
-												<h3 className='text-neutral-800 text-lg font-semibold'>
-													Implementación generada
-												</h3>
-												<p className='text-neutral-500 text-sm'>
-													La estructura de esta funcionalidad ha sido generada
-													exitosamente. Puedes ver el resumen completo en el botón
-													&quot;Ver resumen&quot;.
-												</p>
+										) : (
+											<div className='flex flex-col my-auto items-center gap-5 px-12'>
+												<div className='flex h-20 w-20 items-center justify-center rounded-2xl bg-success-50'>
+													<SuccessCheckIcon size={40} color='text-success-600' />
+												</div>
+												<div className='flex flex-col items-center gap-2 text-center max-w-md'>
+													<h3 className='text-neutral-800 text-lg font-semibold'>
+														Implementación generada
+													</h3>
+													<p className='text-neutral-500 text-sm'>
+														La estructura de esta funcionalidad ha sido generada
+														exitosamente. Puedes ver el resumen completo en el botón
+														&quot;Ver resumen&quot;.
+													</p>
+												</div>
 											</div>
-										</div>
+										)}
 									</div>
 								)}
 							</div>

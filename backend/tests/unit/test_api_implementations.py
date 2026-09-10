@@ -1,7 +1,6 @@
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,6 +14,7 @@ from kosmo.contracts.auth import Principal
 from kosmo.contracts.sdd.codegen import (
     CodeWorkspace,
     FeatureImplementation,
+    FeatureImplementationStatus,
     OpenCodeEvent,
     OpenCodeEventType,
     ValidationStep,
@@ -31,8 +31,12 @@ from kosmo.infrastructure.api.main import app
 
 @pytest.fixture
 def mock_broker():
-    with patch("kosmo.infrastructure.api.routers.implementations.broker") as mock:
-        yield mock
+    from unittest.mock import AsyncMock, MagicMock
+
+    broker = MagicMock()
+    broker.is_running.return_value = False
+    broker.get_project_id = AsyncMock(return_value="prj_01")
+    return broker
 
 
 @pytest.fixture
@@ -64,7 +68,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
     }
 
     # Act
-    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01")
+    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01", broker=mock_broker)
     response = client.post(
         "/api/v1/implementations",
         json=payload,
@@ -82,6 +86,7 @@ def test_start_implementation(client: TestClient, mock_broker, valid_token_heade
     kwargs = mock_broker.start_implementation.call_args.kwargs
     assert kwargs["implementation_id"] == "impl_feat_01ULXGXXXX"
     assert kwargs["project_id"] == "prj_01"
+    assert kwargs["user_id"] == "usr_123"
 
 
 def test_stream_implementation_events(client: TestClient, mock_broker, valid_token_headers: dict[str, str]) -> None:
@@ -93,7 +98,7 @@ def test_stream_implementation_events(client: TestClient, mock_broker, valid_tok
     mock_broker.subscribe.side_effect = fake_subscribe
 
     # Act
-    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01")
+    app.dependency_overrides[get_container] = lambda: FakeContainer("/workspaces/prj_01", broker=mock_broker)
     with client.stream("GET", "/api/v1/implementations/impl_feat_01/events", headers=valid_token_headers) as response:
         assert response.status_code == 200
 
@@ -118,6 +123,20 @@ class FakeImplementationRepo:
             id=ImplementationId("impl_feat_01"),
             feature_id=FeatureId("feat_01"),
             project_id=ProjectId("prj_01"),
+            generated_files=self.generated_files,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def by_feature_id(self, feature_id: FeatureId) -> FeatureImplementation | None:
+        if str(feature_id) != "feat_01":
+            return None
+        now = datetime.now(UTC)
+        return FeatureImplementation(
+            id=ImplementationId("impl_feat_01"),
+            feature_id=FeatureId("feat_01"),
+            project_id=ProjectId("prj_01"),
+            status=FeatureImplementationStatus.IMPLEMENTED,
             generated_files=self.generated_files,
             created_at=now,
             updated_at=now,
@@ -165,12 +184,27 @@ class FakeWorkspaceRepo:
         )
 
 
+class FakeRequirementRepo:
+    async def by_feature_id(self, feature_id: FeatureId) -> str:
+        return "### Requisitos\n- REQ-01.01: Registrar\n- REQ-01.02: Listar"
+
+
+class FakeTraceabilityRepo:
+    async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
+        return {
+            "upstream": [{"type": "requirement", "id": "req_01"}],
+            "downstream": [{"type": "code", "id": "src/app/page.tsx"}],
+        }
+
+
 class FakeRepos:
     def __init__(self, workspace_dir: str) -> None:
-        self.implementations = FakeImplementationRepo(("src/app/page.tsx",))
+        self.implementations = FakeImplementationRepo(("src/app/page.tsx", "src/features/foo/components/Foo.tsx"))
         self.workspaces = FakeWorkspaceRepo(workspace_dir)
         self.features = FakeFeatureRepo()
         self.projects = FakeProjectRepo()
+        self.requirements = FakeRequirementRepo()
+        self.traceability = FakeTraceabilityRepo()
 
 
 class FakeValidateUseCase:
@@ -184,17 +218,25 @@ class FakeValidateUseCase:
 
 
 class FakeCodegen:
-    def __init__(self, validate_workspace: FakeValidateUseCase) -> None:
+    def __init__(self, validate_workspace: FakeValidateUseCase, broker: object | None = None) -> None:
+        from unittest.mock import MagicMock
+
         self.validate_workspace = validate_workspace
         self.generate_feature_implementation = object()
+        self.implementation_broker = broker or MagicMock()
 
 
 class FakeContainer:
-    def __init__(self, workspace_dir: str, validate_workspace: FakeValidateUseCase | None = None) -> None:
+    def __init__(
+        self,
+        workspace_dir: str,
+        validate_workspace: FakeValidateUseCase | None = None,
+        broker: object | None = None,
+    ) -> None:
         self.repos = FakeRepos(workspace_dir)
         if validate_workspace is None:
             validate_workspace = FakeValidateUseCase(_validation_output())
-        self.codegen = FakeCodegen(validate_workspace)
+        self.codegen = FakeCodegen(validate_workspace, broker=broker)
 
 
 def _validation_output(all_passed: bool = True) -> ValidateWorkspaceOutput:
@@ -392,19 +434,24 @@ class FakeConsistencyContainer:
 
 
 class FakeDeleteCodegen:
-    def __init__(self) -> None:
+    def __init__(self, broker: object | None = None) -> None:
+        from unittest.mock import MagicMock
+
         self.delete_feature_code = object()
+        self.implementation_broker = broker or MagicMock()
 
 
 class FakeDeleteContainer:
-    def __init__(self, feature: Feature) -> None:
+    def __init__(self, feature: Feature, broker: object | None = None) -> None:
         self.consistency = FakeConsistencyContainer(feature)
-        self.codegen = FakeDeleteCodegen()
+        self.codegen = FakeDeleteCodegen(broker=broker)
 
 
 def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
     client: TestClient,
 ) -> None:
+    from unittest.mock import MagicMock
+
     # Arrange
     feature = Feature(
         id=FeatureId("feat_del_api"),
@@ -414,17 +461,17 @@ def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
         description="Permite registrar productos",
         project_id=ProjectId("prj_01"),
     )
+    mock_broker = MagicMock()
     app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
-    fake_container = FakeDeleteContainer(feature)
+    fake_container = FakeDeleteContainer(feature, broker=mock_broker)
     app.dependency_overrides[get_container] = lambda: fake_container  # type: ignore[arg-type]
     app.state.container = fake_container  # type: ignore[attr-defined]
 
     # Act
-    with patch("kosmo.infrastructure.api.routers.features.broker") as mock_broker:
-        response = client.delete(
-            "/api/v1/projects/prj_01/features/feat_del_api",
-            headers={"Authorization": "Bearer mock"},
-        )
+    response = client.delete(
+        "/api/v1/projects/prj_01/features/feat_del_api",
+        headers={"Authorization": "Bearer mock"},
+    )
 
     # Assert — la feature se elimina de la especificación y el cleanup del código se agenda en background
     assert response.status_code == 200
@@ -434,3 +481,32 @@ def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
     assert kwargs["implementation_id"] == "impl_feat_del_api"
     assert kwargs["input_data"].feature.id == FeatureId("feat_del_api")
     assert kwargs["input_data"].feature.slug == "registrar-productos"
+    assert kwargs["user_id"] == "usr_123"
+
+
+def test_get_implementation_by_feature_returns_dynamic_metrics(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_123")
+    app.dependency_overrides[get_container] = lambda: FakeContainer(str(tmp_path / "workspaces" / "prj_01"))
+
+    # Act
+    response = client.get(
+        "/api/v1/implementations",
+        params={"feature_id": "feat_01"},
+        headers={"Authorization": "Bearer mock"},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["implementation_id"] == "impl_feat_01"
+    assert data["feature_id"] == "feat_01"
+    assert data["screens_count"] == 2
+    assert data["requirements_count"] == 2
+    assert data["validations_passed"] == 4
+    assert data["validations_total"] == 4
+    assert data["traceability_edges_count"] > 0
+    assert "Next.js" in data["technologies"]

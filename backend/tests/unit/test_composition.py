@@ -111,3 +111,25 @@ async def test_get_container_returns_container_from_app_state() -> None:
     assert container is components
 
     await components.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_build_app_components_configures_db_connection_pool() -> None:
+    # Arrange
+    settings = _make_settings()
+
+    # Act
+    components = build_app_components(settings)
+
+    try:
+        # Assert
+        from sqlalchemy.pool import QueuePool
+
+        pool = components.db_engine.pool
+        assert isinstance(pool, QueuePool)
+        assert pool.size() == 35
+        assert pool._max_overflow == 25
+        assert pool._recycle == 1800
+    finally:
+        await components.close()

@@ -4,7 +4,8 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Protocol
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
 from kosmo.contracts.sdd.ids import FeatureId, ImplementationId, ProjectId, WorkspaceId
 
@@ -31,6 +32,7 @@ class FileAction(StrEnum):
 
 
 class ValidationStep(StrEnum):
+    STRUCTURE = "structure"
     TYPECHECK = "typecheck"
     LINT = "lint"
     TESTS = "tests"
@@ -190,6 +192,22 @@ class PreviewPublisherPort(Protocol):
     async def publish(self, project_id: ProjectId) -> None: ...
 
     async def unpublish(self, project_id: ProjectId) -> None: ...
+
+
+@runtime_checkable
+class FileSystemReader(Protocol):
+    """Protocolo para operaciones de lectura del sistema de archivos desacopladas de infraestructura."""
+
+    def list_files(self, root: str | Path) -> tuple[str, ...]:
+        """Retorna las rutas relativas en formato POSIX de todos los archivos bajo root."""
+        ...
+
+    def read_text(self, path: str | Path) -> str | None:
+        """Lee el contenido de un archivo de texto en UTF-8 o retorna None si no existe o falla."""
+        ...
+
+
+FileSystemReaderPort = FileSystemReader
 
 
 class CodeRunnerPort(Protocol):

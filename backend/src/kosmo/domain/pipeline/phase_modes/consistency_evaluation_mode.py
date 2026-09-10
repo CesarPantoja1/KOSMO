@@ -45,16 +45,13 @@ _FIDELITY_RULES = (
     "termino. Este es un cambio semantico, no cosmetico.\n"
     "7. Si el cambio modifica una REGLA DE NEGOCIO o ALCANCE FUNCIONAL, TODOS "
     "los artefactos que implementan esa regla estan afectados.\n"
-    "8. Si el contenido contiene '[…contenido truncado…]', el texto fue "
-    "recortado. Si necesitas un fragmento que no aparece, indica en la rationale "
-    "que el cambio requiere revision manual.\n"
-    "9. Prohibido usar el caracter guion largo. Usa punto, coma o dos puntos.\n"
-    "10. ORTOGRAFIA: escribe en español correcto. Usa TODAS las tildes "
+    "8. Prohibido usar el caracter guion largo. Usa punto, coma o dos puntos.\n"
+    "9. ORTOGRAFIA: escribe en español correcto. Usa TODAS las tildes "
     "(á, é, í, ó, ú), dieresis (ü) y eñes (ñ). Revisa especialmente: "
     "descripción, característica, término, análisis, único, especifico, "
     "después, automático, método, código, acción, sección, razón, lógica, "
     "ortografía, número, género, ámbito, artículo.\n"
-    "11. Usa signos de puntuacion correctos: punto final en cada oracion, "
+    "10. Usa signos de puntuacion correctos: punto final en cada oracion, "
     "comas donde corresponda, mayuscula inicial.\n\n"
 )
 
@@ -434,19 +431,15 @@ class ConsistencyEvaluationMode:
         changes_text = "\n".join(
             f"### Cambio en '{c.section}'\n"
             f"**Descripcion:** {c.description}\n"
-            f"**Antes:**\n{c.diff.before[:15000]}{'[…truncado…]' if len(c.diff.before) > 15000 else ''}\n"
-            f"**Despues:**\n{c.diff.after[:15000]}{'[…truncado…]' if len(c.diff.after) > 15000 else ''}\n"
+            f"**Antes:**\n{c.diff.before}\n"
+            f"**Despues:**\n{c.diff.after}\n"
             for c in context.applied_changes
         )
         artifacts_text = "\n".join(
-            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", '
-            f'descripcion="{a.description[:12000]}'
-            f'{"[…truncado…]" if len(a.description) > 12000 else ""}"'
+            f'- [{a.artifact_type}] id={a.artifact_id}, titulo="{a.title}", descripcion="{a.description}"'
             for a in context.downstream_artifacts
         )
-        src = context.source_content
-        truncated = "\n[…contenido truncado…]" if len(src) > 30000 else ""
-        source_doc = (src[:30000] + truncated) if src else "(no disponible)"
+        source_doc = context.source_content or "(no disponible)"
 
         return (
             f"## Fase origen: {context.source_phase.value}\n"
@@ -513,16 +506,14 @@ def _render_changes(context: ConsistencyPhaseContext) -> str:
     return "\n".join(
         f"### Cambio en '{c.section}'\n"
         f"**Descripcion:** {c.description}\n"
-        f"**Antes:**\n{c.diff.before[:15000]}{'[…truncado…]' if len(c.diff.before) > 15000 else ''}\n"
-        f"**Despues:**\n{c.diff.after[:15000]}{'[…truncado…]' if len(c.diff.after) > 15000 else ''}\n"
+        f"**Antes:**\n{c.diff.before}\n"
+        f"**Despues:**\n{c.diff.after}\n"
         for c in context.applied_changes
     )
 
 
 def _render_source(context: ConsistencyPhaseContext) -> str:
-    src = context.source_content
-    truncated = "\n[…contenido truncado…]" if len(src) > 30000 else ""
-    return (src[:30000] + truncated) if src else "(no disponible)"
+    return context.source_content or "(no disponible)"
 
 
 _CORRECTION_SYSTEM_PROMPT = """Eres un analista experto en trazabilidad de requisitos de software.

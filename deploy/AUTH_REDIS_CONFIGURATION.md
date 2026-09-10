@@ -21,6 +21,18 @@ JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_SECONDS=604800
 AUTH_DISABLED=false
 
+# OAuth de GitHub y Railway. Los NEXT_PUBLIC_* se publican en el navegador;
+# no pongas secretos en ellos. Deben existir en ambos ambientes.
+GITHUB_CLIENT_ID=<id-oauth-de-github>
+GITHUB_CLIENT_SECRET=<secreto-oauth-de-github>
+NEXT_PUBLIC_GITHUB_CLIENT_ID=<mismo-id-publico-de-github>
+NEXT_PUBLIC_GITHUB_SCOPES=repo
+RAILWAY_CLIENT_ID=<id-oauth-de-railway>
+RAILWAY_CLIENT_SECRET=<secreto-oauth-de-railway>
+NEXT_PUBLIC_RAILWAY_CLIENT_ID=<mismo-id-publico-de-railway>
+NEXT_PUBLIC_RAILWAY_SCOPES=openid email profile offline_access workspace:admin
+NEXT_PUBLIC_DOMAIN_APP=https://<dominio-publico-del-ambiente>
+
 # Runtime y navegador
 ENV=staging
 LOG_LEVEL=INFO
@@ -41,6 +53,23 @@ openssl rand -base64 48 | tr '+/' '-_' | tr -d '='
 
 No uses `localhost` ni la IP pública de la VM en `REDIS_URL`: desde el
 contenedor backend el nombre correcto es `redis`.
+
+## OAuth: aplicaciones y callbacks
+
+Registra en **cada** OAuth App (GitHub y Railway) exactamente estas URLs de
+callback; no uses una URL comodín ni incluyas secretos en ellas:
+
+```text
+http://localhost:3000/perfil
+https://staging-kosmo.cespan.dev/perfil
+https://kosmo.cespan.dev/perfil
+```
+
+Para GitHub solicita únicamente `repo`. Para Railway usa una aplicación web
+confidencial y los scopes configurados en `NEXT_PUBLIC_RAILWAY_SCOPES`.
+`GITHUB_CLIENT_SECRET` y `RAILWAY_CLIENT_SECRET` permanecen solo en el secreto
+protegido del ambiente; los valores `NEXT_PUBLIC_*` se escriben al inicio del
+contenedor web en `runtime-config.js` y son deliberadamente públicos.
 
 ## Claves JWT de cada VM
 

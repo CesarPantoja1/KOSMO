@@ -83,9 +83,13 @@ class ContextBuilder:
                 instance=f"/api/v1/features/{feature_id}/chat",
             )
 
+        all_features = await self._feature_repo.list_by_project(feature.project_id)
+        other_features = tuple(f for f in all_features if f.id != feature.id)
+
         return FeatureChatContext(
             feature=feature,
             discovery_document=discovery_doc,
+            other_features=other_features,
         )
 
     async def build_requirement_chat_context(

@@ -34,7 +34,7 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
 from kosmo.domain.pipeline.context_builder import ContextBuilder
-from kosmo.infrastructure.api.dependencies.auth import get_principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
@@ -48,6 +48,7 @@ from kosmo.infrastructure.api.schemas import (
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}/discovery",
     tags=["discovery"],
+    dependencies=[Depends(verify_project_owner)],
 )
 
 _generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)

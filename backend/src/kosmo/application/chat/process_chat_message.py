@@ -7,12 +7,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from tenacity import (
-    retry,
-    retry_if_not_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from kosmo.application.consistency.trigger_downstream import trigger_downstream_evaluation
 from kosmo.contracts.ai.chat import (
@@ -40,7 +34,11 @@ from kosmo.domain.sdd.chat_edit_applier import (
     apply_markdown_suggestion,
     check_fragment_terms,
 )
-from kosmo.domain.sdd.document_converters import document_to_markdown, markdown_to_document
+from kosmo.domain.sdd.document_converters import (
+    document_to_markdown,
+    markdown_to_document,
+    slugify_spanish,
+)
 from kosmo.domain.sdd.id_generator import IdGenerator
 
 if TYPE_CHECKING:
@@ -119,7 +117,7 @@ class ProcessChatMessageUseCase:
 
         llm_start = time.monotonic()
         try:
-            assistant_msg = await self._invoke_agent_with_retry(
+            assistant_msg = await self._agent.execute_conversation(
                 skill_name=skill_name,
                 messages=messages,
                 context=input_data.context,
@@ -465,7 +463,7 @@ class ProcessChatMessageUseCase:
             updated = dataclasses.replace(
                 feature,
                 title=new_value,
-                slug=new_value.lower().replace(" ", "-"),
+                slug=slugify_spanish(new_value) or feature.slug,
             )
         else:
             updated = dataclasses.replace(feature, **{attr: new_value})
@@ -541,29 +539,6 @@ class ProcessChatMessageUseCase:
     @staticmethod
     def _elapsed_ms(start: float) -> int:
         return int((time.monotonic() - start) * 1000)
-
-    async def _invoke_agent_with_retry(
-        self,
-        skill_name: str,
-        messages: list[MensajeChat],
-        context: Any,
-        project_id: ProjectId,
-    ) -> MensajeChat:
-        @retry(
-            stop=stop_after_attempt(2),
-            wait=wait_exponential(multiplier=1, min=1, max=5),
-            retry=retry_if_not_exception_type(ValueError),
-            reraise=True,
-        )
-        async def _call() -> MensajeChat:
-            return await self._agent.execute_conversation(
-                skill_name=skill_name,
-                messages=messages,
-                context=context,
-                project_id=project_id,
-            )
-
-        return await _call()
 
     def _resolve_chat_skill(self, phase: SpecPhase) -> str:
         if self._skill_registry is not None:

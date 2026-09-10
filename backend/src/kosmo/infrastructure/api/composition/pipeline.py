@@ -105,6 +105,8 @@ def build_pipeline_components(
             default_provider=settings.llm_provider,
             default_model=settings.llm_model,
             default_api_key=api_key,
+            max_concurrency=settings.llm_max_concurrency,
+            cache_ttl_seconds=settings.user_ai_config_cache_ttl_seconds,
         )
     elif settings.llm_provider.lower() == "noop":
         llm_client = NoopLLMClient()
@@ -155,6 +157,7 @@ def build_pipeline_components(
         requirement_repo=repos.requirements,
         diagram_repo=repos.diagrams,
         document_repo=repos.documents,
+        implementation_repo=repos.implementations,
     )
 
     process_chat_message = ProcessChatMessageUseCase(
