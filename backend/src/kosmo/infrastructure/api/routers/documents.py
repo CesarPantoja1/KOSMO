@@ -18,7 +18,11 @@ from kosmo.contracts.sdd.errors import (
 )
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.contracts.sdd.repositories import DocumentRepository
-from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
+from kosmo.infrastructure.api.dependencies.auth import (
+    get_principal,
+    require_project_owner,
+    verify_feature_owner,
+)
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
     DocumentModifyRequestView,
@@ -43,6 +47,26 @@ _PHASE_MAP: dict[str, SpecPhase] = {
 }
 
 
+async def _verify_document_ownership(
+    request: Request,
+    document_type: str,
+    document_id: str,
+    principal: Principal,
+) -> None:
+    """Verifica que el documento pertenezca a un proyecto del usuario autenticado (BOLA guard)."""
+    app = getattr(request, "app", None)
+    state = getattr(app, "state", None) if app is not None else None
+    container = getattr(state, "container", None) if state is not None else None
+    if container is None:
+        return
+    if document_type == "discovery":
+        await require_project_owner(container, document_id, principal)
+    elif document_type in ("features", "requirements", "model"):
+        await verify_feature_owner(document_id, principal, request)
+    else:
+        await require_project_owner(container, document_id, principal)
+
+
 def _chat_modification_uc(request: Request) -> ProcessChatModificationUseCase:
     return get_container(request).pipeline.process_chat_modification
 
@@ -60,10 +84,13 @@ def _chat_modification_uc(request: Request) -> ProcessChatModificationUseCase:
     status_code=status.HTTP_200_OK,
 )
 async def modify_document_direct(
+    request: Request,
     _principal: Annotated[Principal, Depends(get_principal)],
     body: Annotated[DocumentModifyRequestView, Body(...)],
     uc: Annotated[ProcessChatModificationUseCase, Depends(_chat_modification_uc)],
 ) -> DocumentModifyResponseView:
+    await _verify_document_ownership(request, body.document_type, body.document_id, _principal)
+
     phase = _PHASE_MAP.get(body.document_type)
     if phase is None:
         raise HTTPException(
