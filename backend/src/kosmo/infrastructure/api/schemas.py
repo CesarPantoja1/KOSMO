@@ -344,6 +344,20 @@ class PrincipalView(BaseModel):
     )
 
 
+class RegisterResponse(BaseModel):
+    """Confirmación genérica de registro para mitigar enumeración de usuarios (CWE-204)."""
+
+    email: EmailStr = Field(
+        description="Correo electrónico asociado a la solicitud de registro.",
+        examples=["usuario@ejemplo.com"],
+    )
+    message: str = Field(
+        default="Si el correo no estaba registrado previamente, la cuenta ha sido creada exitosamente.",
+        description="Mensaje genérico de confirmación.",
+        examples=["Si el correo no estaba registrado previamente, la cuenta ha sido creada exitosamente."],
+    )
+
+
 class UserPublic(BaseModel):
     """Datos públicos del usuario recién registrado. No incluye información sensible."""
 

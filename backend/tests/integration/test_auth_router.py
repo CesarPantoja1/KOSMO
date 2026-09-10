@@ -263,24 +263,25 @@ def _full_login_flow(
     return token.json()
 
 
-def test_register_returns_201_and_user_payload(client: TestClient) -> None:
+def test_register_returns_201_and_generic_response(client: TestClient) -> None:
     response = client.post(
         "/api/v1/auth/register",
         json={"name": "Alice", "email": "alice@example.com", "password": "password-12345"},
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["name"] == "Alice"
     assert body["email"] == "alice@example.com"
-    assert "id" in body and "created_at" in body
+    assert "message" in body
 
 
-def test_register_rejects_duplicate_email_with_409(client: TestClient) -> None:
+def test_register_same_response_for_duplicate_email_prevents_enumeration(client: TestClient) -> None:
     payload = {"name": "Alice", "email": "alice@example.com", "password": "password-12345"}
-    client.post("/api/v1/auth/register", json=payload)
+    first = client.post("/api/v1/auth/register", json=payload)
     second = client.post("/api/v1/auth/register", json=payload)
-    assert second.status_code == 409
-    assert second.json()["detail"] == "Email ya registrado"
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json() == second.json()
+    assert first.json()["email"] == "alice@example.com"
 
 
 def test_register_rejects_short_password(client: TestClient) -> None:
