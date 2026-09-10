@@ -25,6 +25,10 @@ Una feature NO está implementada si solo existe su lógica. Toda feature debe e
    - Si la aplicación tiene múltiples actores o dominios (ej. Cliente vs Administrador), define `group` en el manifest y regístrala en `featureGroups` para que la navegación organice las secciones por actor.
 4. **Tests** de la lógica en Vitest (`tests/` o dentro del slice).
 
+**Desacople absoluto**: el shell (`layout`, navbar, home) y las demás features NO pueden importar
+nada del interior de otro slice. Eliminar una feature = borrar `src/features/<slug>/` + su import
+en el registro. Nada más.
+
 **Creatividad gobernada y componentes propios**: Si la feature necesita un componente visual especializado no presente en `src/components/ui/` (ej. una tarjeta de menú gastronómico, un selector de horarios médicos, un panel de estado de envío), **constrúyelo en `src/features/<slug>/components/`** usando las utilidades de Bootstrap 5 y consumiendo las variables CSS de los tokens (`var(--app-*)`).
 
 ---
@@ -85,6 +89,6 @@ Usa los componentes del catálogo como bloques de construcción principales:
 ## 4. Anti-Patrones Prohibidos
 
 - ❌ **No crees dashboards genéricos de tarjetas repetitivas** cuando la información requiere una tabla o timeline.
-- ❌ **No uses "Lorem Ipsum"** ni textos de bienvenida genéricos. Todo texto debe ser específico del dominio del negocio.
+- ❌ **No uses "Lorem Ipsum"** ni textos de bienvenida genéricos. Todo texto debe ser en español neutro y específico del dominio del negocio.
 - ❌ **No dejes pantallas vacías o stubs**: cada página debe permitir interactuar, capturar datos y ver resultados.
 - ❌ **No uses Tailwind CSS**: el proyecto usa 100% Bootstrap 5.
