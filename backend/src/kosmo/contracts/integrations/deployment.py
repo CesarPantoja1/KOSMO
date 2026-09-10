@@ -79,7 +79,7 @@ class VolumeConfig:
 
 @dataclass(frozen=True, slots=True)
 class PortSpec:
-    """EspecificaciÃ³n de puerto de escucha."""
+    """Especificación de puerto de escucha."""
 
     port: int
     protocol: str = "http"
@@ -120,7 +120,7 @@ class UserDeploymentIntegration:
 
 @dataclass(frozen=True, slots=True)
 class ProjectDeployment:
-    """VÃ­nculo de un proyecto de KOSMO con un servicio de despliegue remoto."""
+    """Vínculo de un proyecto de KOSMO con un servicio de despliegue remoto."""
 
     project_id: ProjectId
     provider: DeploymentProvider
