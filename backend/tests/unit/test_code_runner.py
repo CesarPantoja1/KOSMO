@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -25,7 +26,7 @@ async def test_run_step_success() -> None:
     mock_proc.returncode = 0
     mock_proc.communicate = AsyncMock(return_value=(b"", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)) as mock_exec:
         # Act
         result = await runner.run_step("/tmp/workspace", ValidationStep.TYPECHECK)
 
@@ -34,7 +35,7 @@ async def test_run_step_success() -> None:
         assert result.success is True
         assert result.exit_code == 0
         assert len(result.errors) == 0
-        mock_shell.assert_awaited_once()
+        mock_exec.assert_awaited_once()
 
 
 @pytest.mark.unit
@@ -47,7 +48,7 @@ async def test_run_step_typecheck_with_tsc_errors() -> None:
     mock_proc.returncode = 2
     mock_proc.communicate = AsyncMock(return_value=(raw_output, b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)):
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
         # Act
         result = await runner.run_step("/tmp/workspace", ValidationStep.TYPECHECK)
 
@@ -64,7 +65,6 @@ async def test_run_step_typecheck_with_tsc_errors() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_step_timeout_handling() -> None:
     # Arrange
@@ -79,14 +79,17 @@ async def test_run_step_timeout_handling() -> None:
         return (b"", b"")
 
     mock_proc.communicate = AsyncMock(side_effect=slow_communicate)
+    kill_proc = AsyncMock()
+    kill_proc.wait = AsyncMock(return_value=0)
+
+    async def fake_sub_exec(*args: object, **_kwargs: object) -> MagicMock:
+        if args and args[0] == "taskkill":
+            return kill_proc
+        return mock_proc
 
     with (
-        patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)),
+        patch("asyncio.create_subprocess_exec", side_effect=fake_sub_exec) as mock_sub_exec,
         patch("subprocess.run") as mock_sub_run,
-        patch(
-            "asyncio.create_subprocess_exec",
-            new=AsyncMock(return_value=AsyncMock(wait=AsyncMock(return_value=0))),
-        ) as mock_sub_exec,
     ):
         # Act
         result = await runner.run_step("/tmp/workspace", ValidationStep.TESTS, timeout_seconds=1)
@@ -122,7 +125,7 @@ async def test_run_command_executes_allowed_command() -> None:
     mock_proc.returncode = 0
     mock_proc.communicate = AsyncMock(return_value=(b"up to date", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)):
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
         # Act
         result = await runner.run_command("/tmp/workspace", "npm install")
 
@@ -145,7 +148,7 @@ async def test_run_pipeline_stops_on_first_failure_with_fail_fast(tmp_path) -> N
     mock_proc_fail.returncode = 2
     mock_proc_fail.communicate = AsyncMock(return_value=(typecheck_output, b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_fail)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_fail)) as mock_exec:
         # Act
         pipeline_result = await runner.run_pipeline(
             str(tmp_path),
@@ -164,7 +167,7 @@ async def test_run_pipeline_stops_on_first_failure_with_fail_fast(tmp_path) -> N
         assert pipeline_result.steps[0].step == ValidationStep.TYPECHECK
         assert pipeline_result.steps[0].success is False
         assert len(pipeline_result.error_summary) > 0
-        assert mock_shell.await_count == 1
+        assert mock_exec.await_count == 1
 
 
 @pytest.mark.unit
@@ -180,7 +183,7 @@ async def test_run_pipeline_comprehensive_diagnostics_executes_checks_and_skips_
     mock_proc_fail.returncode = 1
     mock_proc_fail.communicate = AsyncMock(return_value=(fail_output, b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_fail)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_fail)) as mock_exec:
         # Act
         pipeline_result = await runner.run_pipeline(
             str(tmp_path),
@@ -195,7 +198,7 @@ async def test_run_pipeline_comprehensive_diagnostics_executes_checks_and_skips_
         # Assert: TYPECHECK, LINT, TESTS executed (3), but BUILD skipped
         assert pipeline_result.all_passed is False
         assert len(pipeline_result.steps) == 3
-        assert mock_shell.await_count == 3
+        assert mock_exec.await_count == 3
         assert [s.step for s in pipeline_result.steps] == [
             ValidationStep.TYPECHECK,
             ValidationStep.LINT,
@@ -214,7 +217,7 @@ async def test_run_pipeline_all_success(tmp_path) -> None:
     mock_proc_ok.returncode = 0
     mock_proc_ok.communicate = AsyncMock(return_value=(b"ok", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_ok)) as mock_exec:
         # Act
         pipeline_result = await runner.run_pipeline(
             str(tmp_path),
@@ -227,7 +230,7 @@ async def test_run_pipeline_all_success(tmp_path) -> None:
         # Assert
         assert pipeline_result.all_passed is True
         assert len(pipeline_result.steps) == 2
-        assert mock_shell.await_count == 2
+        assert mock_exec.await_count == 2
         assert len(pipeline_result.error_summary) == 0
 
 
@@ -243,7 +246,7 @@ async def test_run_pipeline_logs_steps_with_run_id(tmp_path) -> None:
     mock_proc_ok.communicate = AsyncMock(return_value=(b"ok", b""))
 
     with (
-        patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)),
+        patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_ok)),
         capture_logs() as cap_logs,
     ):
         # Act
@@ -272,7 +275,7 @@ async def test_run_pipeline_runs_npm_install_when_node_modules_missing(tmp_path)
     mock_proc_ok.returncode = 0
     mock_proc_ok.communicate = AsyncMock(return_value=(b"added 200 packages", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_ok)) as mock_exec:
         # Act
         pipeline_result = await runner.run_pipeline(
             str(tmp_path),
@@ -281,9 +284,11 @@ async def test_run_pipeline_runs_npm_install_when_node_modules_missing(tmp_path)
 
         # Assert
         assert pipeline_result.all_passed is True
-        assert mock_shell.await_count == 2
-        assert mock_shell.call_args_list[0][0][0] == "npm install"
-        assert mock_shell.call_args_list[1][0][0] == "npx tsc --noEmit"
+        assert mock_exec.await_count == 2
+        assert Path(str(mock_exec.call_args_list[0][0][0])).stem.lower() == "npm"
+        assert mock_exec.call_args_list[0][0][1:] == ("install",)
+        assert Path(str(mock_exec.call_args_list[1][0][0])).stem.lower() == "npx"
+        assert mock_exec.call_args_list[1][0][1:] == ("tsc", "--noEmit")
 
 
 @pytest.mark.unit
@@ -297,13 +302,14 @@ async def test_run_pipeline_skips_install_when_node_modules_exists(tmp_path) -> 
     mock_proc_ok.returncode = 0
     mock_proc_ok.communicate = AsyncMock(return_value=(b"ok", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_ok)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_ok)) as mock_exec:
         # Act
         await runner.run_pipeline(str(tmp_path), steps=(ValidationStep.TYPECHECK,))
 
         # Assert
-        assert mock_shell.await_count == 1
-        assert mock_shell.call_args_list[0][0][0] == "npx tsc --noEmit"
+        assert mock_exec.await_count == 1
+        assert Path(str(mock_exec.call_args_list[0][0][0])).stem.lower() == "npx"
+        assert mock_exec.call_args_list[0][0][1:] == ("tsc", "--noEmit")
 
 
 @pytest.mark.unit
@@ -316,7 +322,7 @@ async def test_run_pipeline_fails_fast_when_npm_install_fails(tmp_path) -> None:
     mock_proc_fail.returncode = 1
     mock_proc_fail.communicate = AsyncMock(return_value=(b"npm ERR! network timeout", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc_fail)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc_fail)) as mock_exec:
         # Act
         pipeline_result = await runner.run_pipeline(
             str(tmp_path),
@@ -331,7 +337,7 @@ async def test_run_pipeline_fails_fast_when_npm_install_fails(tmp_path) -> None:
         # Assert
         assert pipeline_result.all_passed is False
         assert len(pipeline_result.steps) == 0
-        assert mock_shell.await_count == 1
+        assert mock_exec.await_count == 1
         assert any("npm install" in err for err in pipeline_result.error_summary)
         assert any("network timeout" in err for err in pipeline_result.error_summary)
 
@@ -345,7 +351,7 @@ async def test_run_command_failed_exit_code() -> None:
     mock_proc.returncode = 1
     mock_proc.communicate = AsyncMock(return_value=(b"failed install", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)):
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)):
         # Act
         result = await runner.run_command("/tmp/workspace", "npm install")
 
@@ -379,13 +385,13 @@ async def test_custom_step_commands() -> None:
     mock_proc.returncode = 0
     mock_proc.communicate = AsyncMock(return_value=(b"", b""))
 
-    with patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)) as mock_shell:
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)) as mock_exec:
         # Act
         await runner.run_step("/tmp/workspace", ValidationStep.TYPECHECK)
 
         # Assert
-        mock_shell.assert_awaited_once()
-        assert mock_shell.call_args[0][0] == "custom-tsc"
+        mock_exec.assert_awaited_once()
+        assert Path(str(mock_exec.call_args[0][0])).stem.lower() == "custom-tsc"
 
 
 @pytest.mark.unit
@@ -401,7 +407,7 @@ async def test_run_pipeline_uses_custom_and_default_step_timeouts() -> None:
 
     with (
         patch("pathlib.Path.is_dir", return_value=True),
-        patch("asyncio.create_subprocess_shell", new=AsyncMock(return_value=mock_proc)),
+        patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)),
         patch.object(runner, "run_step", wraps=runner.run_step) as spy_run_step,
     ):
         # Act
@@ -443,7 +449,7 @@ async def test_subprocess_code_runner_limits_concurrency_with_semaphore() -> Non
         mock_proc.communicate = AsyncMock(return_value=(b"", b""))
         return mock_proc
 
-    with patch("asyncio.create_subprocess_shell", side_effect=fake_subprocess):
+    with patch("asyncio.create_subprocess_exec", side_effect=fake_subprocess):
         # Act
         tasks = [runner.run_step("/tmp/workspace", ValidationStep.TYPECHECK) for _ in range(5)]
         results = await asyncio.gather(*tasks)
@@ -480,3 +486,40 @@ def test_get_runner_semaphore_handles_env_values(
 
     # Assert
     assert sem._value == expected_limit
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_command_prevents_shell_metacharacter_execution() -> None:
+    # Arrange: un comando con metacaracteres de shell (;, &&, |, ``, $())
+    runner = SubprocessCodeRunner()
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"output", b""))
+
+    with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)) as mock_exec:
+        # Act
+        result = await runner.run_command("/tmp/workspace", "npx tsc; cat /etc/passwd")
+
+        # Assert: create_subprocess_exec fue invocado con los metacaracteres como argumentos literales
+        assert result.success is True
+        mock_exec.assert_awaited_once()
+        args = mock_exec.call_args[0]
+        assert Path(str(args[0])).stem.lower() == "npx"
+        assert args[1:] == ("tsc;", "cat", "/etc/passwd")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_command_handles_executable_not_found() -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+
+    with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError("not found")):
+        # Act
+        result = await runner.run_command("/tmp/workspace", "npx tsc")
+
+        # Assert: FileNotFoundError produce un resultado fallido con exit code 127
+        assert result.success is False
+        assert result.exit_code == 127
+        assert "Executable 'npx' not found." in result.raw_output

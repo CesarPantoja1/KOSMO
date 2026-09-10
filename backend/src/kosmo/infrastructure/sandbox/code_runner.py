@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import os
 import shlex
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -139,14 +140,38 @@ class SubprocessCodeRunner(CodeRunnerPort):
     ) -> ValidationStepResult:
         start = time.perf_counter()
 
+        try:
+            tokens = shlex.split(command.strip(), posix=os.name != "nt")
+        except ValueError:
+            tokens = command.strip().split()
+
+        if not tokens:
+            raise UnallowedCommandError(f"Command '{command}' is empty.")
+
+        executable = shutil.which(tokens[0]) or tokens[0]
+
         async with self._semaphore:
-            proc = await asyncio.create_subprocess_shell(
-                command,
-                cwd=workspace_dir,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=self._clean_env(),
-            )
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    executable,
+                    *tokens[1:],
+                    cwd=workspace_dir,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                    env=self._clean_env(),
+                )
+            except FileNotFoundError:
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                error_msg = f"Executable '{tokens[0]}' not found."
+                return ValidationStepResult(
+                    step=step or ValidationStep.TESTS,
+                    success=False,
+                    duration_ms=duration_ms,
+                    exit_code=127,
+                    raw_output=error_msg,
+                    errors=(),
+                    error_messages=(error_msg,),
+                )
 
             try:
                 stdout, _ = await asyncio.wait_for(
