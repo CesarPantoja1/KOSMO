@@ -119,7 +119,7 @@ class ImplementationEventBroker:
                 self._project_ids.pop(implementation_id, None)
                 self._purge_tasks.pop(implementation_id, None)
             except asyncio.CancelledError:
-                pass
+                raise
 
         task = asyncio.create_task(_purge())
         self._cleanup_tasks.add(task)
@@ -231,14 +231,14 @@ class ImplementationEventBroker:
 
         effective_user_id = user_id or current_user_id.get()
 
+        redis = self._redis
         if project_id is not None:
             self._project_ids[implementation_id] = project_id
-            if self._redis is not None:
+            if redis is not None:
 
                 async def _persist_project_id() -> None:
                     try:
-                        assert self._redis is not None
-                        await self._redis.set(
+                        await redis.set(
                             f"kosmo:impl:{implementation_id}:project_id",
                             project_id,
                             ex=int(self._history_ttl_seconds),
