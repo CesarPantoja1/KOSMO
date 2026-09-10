@@ -121,3 +121,20 @@ def test_ai_config_providers_conforms_to_openapi_contract(
     assert len(data) > 0
     assert "value" in data[0]
     assert "models" in data[0]
+
+
+@pytest.mark.contract
+def test_openapi_json_accessible_in_development(client: TestClient) -> None:
+    response = client.get("/api/v1/openapi.json")
+    assert response.status_code == 200
+    assert response.json()["info"]["title"] == "KOSMO API"
+
+
+@pytest.mark.unit
+def test_openapi_route_not_found_when_disabled() -> None:
+    from fastapi import FastAPI
+
+    prod_app = FastAPI(openapi_url=None)
+    with TestClient(prod_app) as prod_client:
+        assert prod_client.get("/api/v1/openapi.json").status_code == 404
+        assert prod_client.get("/openapi.json").status_code == 404

@@ -321,7 +321,7 @@ app = FastAPI(
     servers=_SERVERS,
     docs_url="/docs" if settings.env != "production" else None,
     redoc_url="/redoc" if settings.env != "production" else None,
-    openapi_url="/api/v1/openapi.json",
+    openapi_url="/api/v1/openapi.json" if settings.env != "production" else None,
     lifespan=lifespan,
 )
 
