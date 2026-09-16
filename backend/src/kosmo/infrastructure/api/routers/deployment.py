@@ -4,6 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from kosmo.application.integrations.delete_deployment import (
+    DeleteDeploymentCommand,
+    DeleteDeploymentUseCase,
+)
 from kosmo.application.integrations.orchestrate_cloud_deployment import (
     OrchestrateCloudDeploymentCommand,
     OrchestrateCloudDeploymentUseCase,
@@ -22,6 +26,7 @@ from kosmo.contracts.integrations.deployment import (
 from kosmo.contracts.sdd.ids import ProjectId, UserId
 from kosmo.infrastructure.api.dependencies import (
     get_container,
+    get_delete_deployment_use_case,
     get_deployment_worker,
     get_orchestrate_cloud_deployment_use_case,
     get_principal,
@@ -181,3 +186,28 @@ async def deploy_to_railway(
         error_message=deployment.error_message,
         error_log_url=deployment.build_logs_url,
     )
+
+
+@router.delete(
+    "",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar despliegue del proyecto",
+    description="Elimina el servicio remoto en la nube y retira el registro de despliegue del proyecto.",
+)
+async def delete_project_deployment(
+    project_id: str,
+    request: Request,
+    principal: Annotated[Principal, Depends(get_principal)],
+    use_case: Annotated[DeleteDeploymentUseCase, Depends(get_delete_deployment_use_case)],
+) -> None:
+    container = get_container(request)
+    proj_id = ProjectId(project_id)
+
+    project = await container.repos.projects.by_id(proj_id)
+    _require_project_owner(project, principal, project_id)
+
+    cmd = DeleteDeploymentCommand(
+        project_id=proj_id,
+        provider=DeploymentProvider.RAILWAY,
+    )
+    await use_case.execute(principal, cmd)

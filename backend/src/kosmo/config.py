@@ -66,11 +66,6 @@ class Settings(BaseSettings):
     code_runner_base_url: str | None = None
     code_runner_token: SecretStr | None = None
     implementation_broker_ttl_seconds: float = 1800.0
-    preview_public_host_suffix: str | None = None
-    cloudflare_preview_api_token: SecretStr | None = None
-    cloudflare_preview_account_id: str | None = None
-    cloudflare_preview_zone_id: str | None = None
-    cloudflare_preview_tunnel_id: str | None = None
 
     # Integraciones
     github_client_id: str | None = None
@@ -126,17 +121,6 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:
         """Resuelve el contenido PEM: variable de entorno → lectura de archivo."""
-        cloudflare_preview_values = (
-            self.cloudflare_preview_api_token,
-            self.cloudflare_preview_account_id,
-            self.cloudflare_preview_zone_id,
-            self.cloudflare_preview_tunnel_id,
-        )
-        if any(value is not None for value in cloudflare_preview_values) and not all(
-            value is not None for value in cloudflare_preview_values
-        ):
-            raise ValueError("Debe configurar todas las variables CLOUDFLARE_PREVIEW_* o ninguna")
-
         if self.auth_disabled:
             if self.env == "production":
                 raise ValueError("AUTH_DISABLED no puede ser 'true' en entorno de producción.")

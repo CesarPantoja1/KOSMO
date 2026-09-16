@@ -2,7 +2,7 @@
 
 import { useCharacteristicStore } from '@/entities/characteristic';
 import type { ImplementationMetric } from '@/entities/implementation';
-import { fetchPreviewUrl, useImplementationStore } from '@/entities/implementation';
+import { useImplementationStore } from '@/entities/implementation';
 import { useRailwayOAuth } from '@/entities/integration';
 import { useProjectStore } from '@/entities/project';
 import { useProjectGithubRepo, type ProjectGithubViewState } from '@/features/github-sync';
@@ -13,7 +13,6 @@ import {
 	EntitiesIcon,
 	FlowIcon,
 	GitHub,
-	Load,
 	RulesIcon,
 	ScreensIcon,
 	ShieldCheckIcon,
@@ -25,7 +24,8 @@ import {
 import { GestionRepositorioGitHub } from '@/widgets';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+
 import type { PreconditionState } from '@/entities/deploy';
 import { useDeployStatus } from '@/entities/deploy';
 import { DeployPreconditionPanel } from './DeployPreconditionPanel';
@@ -99,8 +99,6 @@ const ImplementationSummaryPage = () => {
 	const router = useRouter();
 	const summary = useImplementationStore((s) => s.summary);
 	const requiresReviewByFeature = useImplementationStore((s) => s.requiresReviewByFeature);
-	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-	const [previewLoading, setPreviewLoading] = useState(false);
 
 	const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
 	const github = useProjectGithubRepo(currentProjectId);
@@ -120,25 +118,6 @@ const ImplementationSummaryPage = () => {
 			selectedCharacteristic.display_id,
 		);
 	}, [summary, selectedCharacteristic, loadImplementation]);
-
-	useEffect(() => {
-		const project = useProjectStore.getState().currentProject;
-		if (!project) return;
-		let cancelled = false;
-		fetchPreviewUrl(project.id)
-			.then((url) => {
-				if (!cancelled) setPreviewUrl(url);
-			})
-			.catch(() => {
-				if (!cancelled) setPreviewUrl(null);
-			})
-			.finally(() => {
-				if (!cancelled) setPreviewLoading(false);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
 
 	const refreshRailway = railway.refresh;
 	useEffect(() => {
@@ -301,33 +280,7 @@ const ImplementationSummaryPage = () => {
 								<p className='mt-2 max-w-sm text-sm text-neutral-500 leading-relaxed'>
 									{meta.subtitle}
 								</p>
-								{previewLoading ? (
-									<button
-										type='button'
-										disabled
-										className='btn btn-primary mt-4 py-2.5 px-6'
-									>
-										<Load size={16} />
-										Preparando vista previa…
-									</button>
-								) : previewUrl ? (
-									<a
-										href={previewUrl}
-										target='_blank'
-										rel='noopener noreferrer'
-										className='btn btn-primary mt-4 py-2.5 px-6 inline-flex items-center gap-2'
-									>
-										Ver aplicación
-									</a>
-								) : (
-									<button
-										type='button'
-										disabled
-										className='btn btn-primary mt-4 py-2.5 px-6 opacity-60'
-									>
-										Vista previa no disponible
-									</button>
-								)}
+
 							</div>
 						</div>
 
@@ -349,10 +302,12 @@ const ImplementationSummaryPage = () => {
 						{currentProjectId &&
 							(deploy.status && deploy.status.status !== 'idle' ? (
 								<DeployResultPanel
+									projectId={currentProjectId}
 									status={deploy.status}
 									error={deploy.error}
 									onRedeploy={() => deploy.deploy()}
 									deploying={deploy.deploying}
+									onDeleteSuccess={deploy.refresh}
 								/>
 							) : (
 								<DeployPreconditionPanel

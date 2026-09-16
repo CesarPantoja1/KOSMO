@@ -154,6 +154,7 @@ def build_app_components(settings: Settings) -> AppContainer:
         workspace_manager=workspace_manager,
         code_runner=code_runner,
         redis=redis,
+        integrations=integrations,
     )
 
     projects = build_project_components(

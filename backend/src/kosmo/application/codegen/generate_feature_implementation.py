@@ -31,11 +31,22 @@ from kosmo.application.codegen.register_code_traceability import (
     RegisterCodeTraceabilityInput,
     RegisterCodeTraceabilityUseCase,
 )
+from kosmo.application.integrations.orchestrate_cloud_deployment import (
+    OrchestrateCloudDeploymentCommand,
+    OrchestrateCloudDeploymentUseCase,
+)
 from kosmo.application.integrations.sync_github_repository import (
     SyncGitHubRepositoryCommand,
     SyncGitHubRepositoryUseCase,
 )
 from kosmo.contracts.ai.consistency import TraceabilityRepository
+from kosmo.contracts.auth import Principal
+from kosmo.contracts.integrations.deployment import (
+    DeploymentProvider,
+    DeploymentStatus,
+    DeploymentWorkerPort,
+    ProjectDeploymentRepository,
+)
 from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
@@ -170,6 +181,9 @@ class GenerateFeatureImplementationUseCase:
         fs_reader: FileSystemReader | None = None,
         context_builder: ImplementationContextBuilder | None = None,
         integration_analyzer: AnalyzeFeatureIntegrationUseCase | None = None,
+        orchestrate_cloud_deployment: OrchestrateCloudDeploymentUseCase | None = None,
+        project_deployment_repo: ProjectDeploymentRepository | None = None,
+        deployment_worker: DeploymentWorkerPort | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -181,6 +195,9 @@ class GenerateFeatureImplementationUseCase:
         self._project_repo = project_repo
         self._document_repo = document_repo
         self._sync_github_repository = sync_github_repository
+        self._orchestrate_cloud_deployment = orchestrate_cloud_deployment
+        self._project_deployment_repo = project_deployment_repo
+        self._deployment_worker = deployment_worker
         if fs_reader is not None:
             self._fs_reader: FileSystemReader = fs_reader
         elif isinstance(workspace_manager, FileSystemReader):
@@ -725,7 +742,7 @@ class GenerateFeatureImplementationUseCase:
                     OpenCodeEvent(
                         event_type=OpenCodeEventType.BUILD_PROGRESS,
                         session_id=session_id,
-                        data={"delta": "Guardando cambios y publicando vista previa...", "stage": "finishing"},
+                        data={"delta": "Guardando cambios...", "stage": "finishing"},
                     )
                 )
 
@@ -734,7 +751,6 @@ class GenerateFeatureImplementationUseCase:
                     feature.project_id,
                     commit_msg,
                 )
-                await self._workspace_manager.publish_preview(feature.project_id)
                 impl = dataclasses.replace(
                     impl,
                     status=FeatureImplementationStatus.IMPLEMENTED,
@@ -793,6 +809,77 @@ class GenerateFeatureImplementationUseCase:
                                         f"({sync_err}). Puedes sincronizar manualmente desde el resumen."
                                     ),
                                     "stage": "github_sync_warning",
+                                },
+                            )
+                        )
+
+                # Auto-despliegue en la nube si el proyecto ya cuenta con un despliegue previo
+                if (
+                    self._orchestrate_cloud_deployment is not None
+                    and self._project_deployment_repo is not None
+                    and self._project_repo is not None
+                ):
+                    try:
+                        proj = await self._project_repo.by_id(feature.project_id)
+                        if proj is not None and proj.owner_id:
+                            existing_deploy = await self._project_deployment_repo.get_by_project_id(feature.project_id)
+                            # Auto-redespliegue solo si ya fue desplegado previamente (tiene service_id)
+                            if (
+                                existing_deploy is not None
+                                and existing_deploy.service_id
+                                and existing_deploy.status != DeploymentStatus.NOT_CREATED
+                            ):
+                                await _emit(
+                                    OpenCodeEvent(
+                                        event_type=OpenCodeEventType.BUILD_PROGRESS,
+                                        session_id=session_id,
+                                        data={
+                                            "delta": "Actualizando despliegue en la nube...",
+                                            "stage": "deploying",
+                                        },
+                                    )
+                                )
+                                principal_mock = Principal(
+                                    subject=str(proj.owner_id),
+                                )
+                                deploy_cmd = OrchestrateCloudDeploymentCommand(
+                                    project_id=feature.project_id,
+                                    provider=existing_deploy.provider or DeploymentProvider.RAILWAY,
+                                )
+                                deploy_res = await self._orchestrate_cloud_deployment.execute(
+                                    principal_mock, deploy_cmd
+                                )
+                                if self._deployment_worker is not None:
+                                    self._deployment_worker.start_monitoring(
+                                        project_id=feature.project_id,
+                                        user_id=proj.owner_id,
+                                        provider=existing_deploy.provider or DeploymentProvider.RAILWAY,
+                                    )
+                                await _emit(
+                                    OpenCodeEvent(
+                                        event_type=OpenCodeEventType.BUILD_PROGRESS,
+                                        session_id=session_id,
+                                        data={
+                                            "delta": f"Deploy actualizado ({deploy_res.public_url or '...'})",
+                                            "stage": "deployed",
+                                            "deploy_url": deploy_res.public_url,
+                                        },
+                                    )
+                                )
+                    except Exception as deploy_err:
+                        _log.warning(
+                            "codegen.auto_deploy_failed",
+                            feature_id=str(feature.id),
+                            project_id=str(feature.project_id),
+                            error=str(deploy_err),
+                        )
+                        await _emit(
+                            OpenCodeEvent(
+                                event_type=OpenCodeEventType.BUILD_PROGRESS,
+                                session_id=session_id,
+                                data={
+                                    "delta": f"Nota: No se pudo auto-desplegar ({deploy_err}).",
+                                    "stage": "deploy_warning",
                                 },
                             )
                         )

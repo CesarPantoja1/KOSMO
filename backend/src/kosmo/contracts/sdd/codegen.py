@@ -172,8 +172,6 @@ class WorkspaceManagerPort(Protocol):
 
     async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None: ...
 
-    async def publish_preview(self, project_id: ProjectId) -> None: ...
-
     async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]: ...
 
     async def update_text_file(
@@ -184,14 +182,6 @@ class WorkspaceManagerPort(Protocol):
     ) -> None: ...
 
     async def revert_commit(self, project_id: ProjectId, commit: str) -> None: ...
-
-
-class PreviewPublisherPort(Protocol):
-    """Publica y retira el hostname externo de una preview de proyecto."""
-
-    async def publish(self, project_id: ProjectId) -> None: ...
-
-    async def unpublish(self, project_id: ProjectId) -> None: ...
 
 
 @runtime_checkable

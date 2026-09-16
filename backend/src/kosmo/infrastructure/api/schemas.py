@@ -970,12 +970,6 @@ class ValidateWorkspaceResponse(BaseModel):
     total_duration_ms: int = Field(default=0, description="Duración total en milisegundos")
 
 
-class ProjectPreviewResponse(BaseModel):
-    """URL de la vista previa del proyecto activo."""
-
-    url: str = Field(description="URL pública de la vista previa del proyecto")
-
-
 class AIModelInfoResponse(BaseModel):
     id: str
     display_name: str

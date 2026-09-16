@@ -1,5 +1,9 @@
 """Casos de uso para integraciones con servicios de terceros."""
 
+from kosmo.application.integrations.delete_deployment import (
+    DeleteDeploymentCommand,
+    DeleteDeploymentUseCase,
+)
 from kosmo.application.integrations.execute_ephemeral_validation import (
     EphemeralValidationError,
     ExecuteEphemeralValidationCommand,
@@ -39,6 +43,8 @@ from kosmo.application.integrations.sync_github_repository import (
 )
 
 __all__ = [
+    "DeleteDeploymentCommand",
+    "DeleteDeploymentUseCase",
     "EphemeralValidationError",
     "ExecuteEphemeralValidationCommand",
     "ExecuteEphemeralValidationResult",
