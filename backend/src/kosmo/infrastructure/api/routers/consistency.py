@@ -135,7 +135,10 @@ async def apply_consistency_evaluation(
     uc: Annotated[ApplyConsistencyEvaluationUseCase, Depends(_apply_evaluation_uc)],
 ) -> dict[str, Any]:
     try:
-        result = await uc.execute(ConsistencyEvaluationId(evaluation_id))
+        result = await uc.execute(
+            ConsistencyEvaluationId(evaluation_id),
+            project_id=ProjectId(project_id),
+        )
         return {**result, "project_id": project_id}
     except ConsistencyEvaluationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.problem.detail) from exc
@@ -156,7 +159,10 @@ async def discard_consistency_evaluation(
     uc: Annotated[DiscardConsistencyEvaluationUseCase, Depends(_discard_evaluation_uc)],
 ) -> dict[str, Any]:
     try:
-        result = await uc.execute(ConsistencyEvaluationId(evaluation_id))
+        result = await uc.execute(
+            ConsistencyEvaluationId(evaluation_id),
+            project_id=ProjectId(project_id),
+        )
         return {**result, "project_id": project_id}
     except ConsistencyEvaluationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.problem.detail) from exc
