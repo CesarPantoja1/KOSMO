@@ -74,14 +74,39 @@ DEFAULT_ALLOWED_COMMAND_PREFIXES: frozenset[str] = frozenset(
     }
 )
 
-SENSITIVE_ENV_VARS: frozenset[str] = frozenset(
+SAFE_ENV_VARS: frozenset[str] = frozenset(
     {
-        "DATABASE_URL",
-        "KOSMO_SECRET_KEY",
-        "JWT_SECRET",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "SECRET_KEY",
+        # Binarios y rutas del sistema operativo (Windows y POSIX)
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "SYSTEMDRIVE",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMDATA",
+        "COMMONPROGRAMFILES",
+        "COMMONPROGRAMFILES(X86)",
+        # Directorios de usuario y caché de herramientas
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        # Directorios temporales
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        # Runtime, localización y CI
+        "NODE_ENV",
+        "CI",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        # Configuraciones no sensibles de KOSMO
+        "KOSMO_WORKSPACES_DIR",
+        "KOSMO_MAX_CONCURRENT_RUNNERS",
     }
 )
 
@@ -111,7 +136,13 @@ class SubprocessCodeRunner(CodeRunnerPort):
 
     @staticmethod
     def _clean_env() -> dict[str, str]:
-        return {k: v for k, v in os.environ.items() if k not in SENSITIVE_ENV_VARS}
+        """Filtra el entorno del proceso padre permitiendo exclusivamente variables de la lista blanca.
+
+        Aplica una allowlist insensible a mayúsculas/minúsculas para prevenir la fuga de secretos
+        criptográficos (FERNET_MASTER_KEY, JWT keys), URLs de bases de datos y claves de API
+        hacia el entorno de subprocesos donde se ejecutan herramientas y dependencias de terceros.
+        """
+        return {k: v for k, v in os.environ.items() if k.upper() in SAFE_ENV_VARS}
 
     def _is_command_allowed(self, command: str) -> bool:
         stripped = command.strip()

@@ -12,6 +12,7 @@ from kosmo.contracts.sdd.codegen import (
     ValidationStep,
 )
 from kosmo.infrastructure.sandbox.code_runner import (
+    SAFE_ENV_VARS,
     SubprocessCodeRunner,
     UnallowedCommandError,
 )
@@ -523,3 +524,111 @@ async def test_run_command_handles_executable_not_found() -> None:
         assert result.success is False
         assert result.exit_code == 127
         assert "Executable 'npx' not found." in result.raw_output
+
+
+@pytest.mark.unit
+def test_clean_env_strips_all_sensitive_secrets() -> None:
+    # Arrange — Simulamos un entorno con secretos maestros y variables seguras
+    fake_env = {
+        "FERNET_MASTER_KEY": "super_secret_master_key_12345",
+        "JWT_PRIVATE_KEY_PEM": "-----BEGIN RSA PRIVATE KEY-----...",
+        "REDIS_URL": "redis://:secretpass@localhost:6379",
+        "REDIS_PASSWORD": "secret_redis_password",
+        "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
+        "OPENAI_API_KEY": "sk-proj-openai-secret-key",
+        "DEEPSEEK_API_KEY": "sk-deepseek-secret-key",
+        "GEMINI_API_KEY": "AIzaSy-gemini-key",
+        "GROQ_API_KEY": "gsk_groq_secret_key",
+        "GITHUB_CLIENT_SECRET": "gh_secret_987654",
+        "RAILWAY_CLIENT_SECRET": "railway_secret_token",
+        "LOGFIRE_TOKEN": "logfire_token_secret",
+        "KOSMO_SECRET_KEY": "kosmo_secret_key",
+        "SECRET_KEY": "django_secret_key",
+        # Variables seguras permitidas
+        "PATH": "/usr/local/bin:/usr/bin",
+        "HOME": "/home/developer",
+        "TEMP": "/tmp",
+        "NODE_ENV": "test",
+        "CI": "true",
+        "KOSMO_WORKSPACES_DIR": "/tmp/workspaces",
+    }
+
+    with patch("os.environ", fake_env):
+        # Act
+        cleaned = SubprocessCodeRunner._clean_env()
+
+    # Assert — Ningún secreto debe estar presente en el entorno limpio
+    sensitive_keys = {
+        "FERNET_MASTER_KEY",
+        "JWT_PRIVATE_KEY_PEM",
+        "REDIS_URL",
+        "REDIS_PASSWORD",
+        "DATABASE_URL",
+        "OPENAI_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "GITHUB_CLIENT_SECRET",
+        "RAILWAY_CLIENT_SECRET",
+        "LOGFIRE_TOKEN",
+        "KOSMO_SECRET_KEY",
+        "SECRET_KEY",
+    }
+    for secret_key in sensitive_keys:
+        assert secret_key not in SAFE_ENV_VARS
+        assert secret_key not in cleaned, f"Secreto {secret_key} se filtró al entorno del subproceso"
+
+    # Assert — Variables seguras permitidas sí deben conservarse
+    assert cleaned["PATH"] == "/usr/local/bin:/usr/bin"
+    assert cleaned["HOME"] == "/home/developer"
+    assert cleaned["NODE_ENV"] == "test"
+    assert cleaned["CI"] == "true"
+    assert cleaned["KOSMO_WORKSPACES_DIR"] == "/tmp/workspaces"
+
+
+@pytest.mark.unit
+def test_clean_env_case_insensitive_matching() -> None:
+    # Arrange — Variables con distintas combinaciones de mayúsculas/minúsculas
+    fake_env = {
+        "Path": "/usr/bin",
+        "path": "/bin",
+        "SystemRoot": "C:\\Windows",
+        "Temp": "C:\\Temp",
+        "node_env": "production",
+        "evil_token": "leak_me",
+    }
+
+    with patch("os.environ", fake_env):
+        # Act
+        cleaned = SubprocessCodeRunner._clean_env()
+
+    # Assert — Coincide de forma insensible a mayúsculas con SAFE_ENV_VARS
+    assert "Path" in cleaned or "path" in cleaned
+    assert "SystemRoot" in cleaned
+    assert "Temp" in cleaned
+    assert "node_env" in cleaned
+    assert "evil_token" not in cleaned
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_subprocess_exec_receives_allowlisted_clean_env() -> None:
+    # Arrange
+    runner = SubprocessCodeRunner()
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
+
+    with (
+        patch.dict("os.environ", {"FERNET_MASTER_KEY": "leak_test", "NODE_ENV": "test"}, clear=False),
+        patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)) as mock_exec,
+    ):
+        # Act
+        await runner.run_command("/tmp/workspace", "npx tsc")
+
+        # Assert — El parámetro env pasado a create_subprocess_exec no tiene el secreto
+        mock_exec.assert_awaited_once()
+        _, kwargs = mock_exec.call_args
+        env_passed = kwargs.get("env", {})
+        assert "FERNET_MASTER_KEY" not in env_passed
+        assert env_passed.get("NODE_ENV") == "test"
