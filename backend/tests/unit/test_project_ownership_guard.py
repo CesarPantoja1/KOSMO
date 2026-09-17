@@ -109,16 +109,34 @@ async def test_require_project_owner_raises_404_for_nonexistent_project() -> Non
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_require_project_owner_noop_when_container_lacks_repos() -> None:
+async def test_require_project_owner_raises_500_when_container_lacks_repos() -> None:
     # Arrange
     container = MagicMock(spec=[])  # container sin atributo 'repos'
     principal = Principal(subject="usr_alice", scopes=frozenset({"*"}))
 
-    # Act
-    result = await require_project_owner(container, "prj_01", principal)
+    # Act & Assert — fail-secure: debe levantar 500 y nunca pasar silenciosamente
+    with pytest.raises(HTTPException) as exc_info:
+        await require_project_owner(container, "prj_01", principal)
 
-    # Assert — noop para permitir mocks especializados de tests sin repos
-    assert result is None
+    assert exc_info.value.status_code == 500
+    assert "no disponible" in exc_info.value.detail
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_verify_feature_owner_raises_500_when_container_lacks_repos() -> None:
+    # Arrange
+    container = MagicMock(spec=[])
+    principal = Principal(subject="usr_alice", scopes=frozenset({"*"}))
+    request = MagicMock()
+    request.app.state.container = container
+
+    # Act & Assert — fail-secure: debe levantar 500
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_feature_owner("feat_01", principal, request)
+
+    assert exc_info.value.status_code == 500
+    assert "no disponible" in exc_info.value.detail
 
 
 @pytest.mark.unit

@@ -445,6 +445,7 @@ class FakeDeleteContainer:
     def __init__(self, feature: Feature, broker: object | None = None) -> None:
         self.consistency = FakeConsistencyContainer(feature)
         self.codegen = FakeDeleteCodegen(broker=broker)
+        self.repos = FakeRepos("")
 
 
 def test_delete_feature_dispara_eliminacion_de_codigo_en_background(
