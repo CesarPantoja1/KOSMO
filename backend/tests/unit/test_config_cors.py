@@ -9,6 +9,7 @@ from kosmo.config import Settings
 def _base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configura variables mínimas para construir Settings."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/kosmo_test")
+    monkeypatch.setenv("REDIS_URL", "redis://:test_redis_pass@localhost:6379/1")
     monkeypatch.setenv("LLM_PROVIDER", "noop")
     monkeypatch.setenv("LLM_MODEL", "noop")
 
