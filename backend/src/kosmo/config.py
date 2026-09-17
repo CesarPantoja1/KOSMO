@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # DSN de persistencia
     database_url: SecretStr
     redis_url: SecretStr | None = None
+    db_pool_size: int = 35
+    db_max_overflow: int = 25
+    db_pool_timeout: float = 45.0
+    db_pool_recycle: int = 1800
 
     # LLM BYOK
     llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]

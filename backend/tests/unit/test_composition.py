@@ -133,3 +133,49 @@ async def test_build_app_components_configures_db_connection_pool() -> None:
         assert pool._recycle == 1800
     finally:
         await components.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_build_app_components_scales_pool_for_multiple_workers() -> None:
+    # Arrange: 4 workers
+    settings = _make_settings()
+    settings.server_workers = 4
+
+    # Act
+    components = build_app_components(settings)
+
+    try:
+        from sqlalchemy.pool import QueuePool
+
+        pool = components.db_engine.pool
+        assert isinstance(pool, QueuePool)
+        # pool_size = max(5, 35 // 4) = 8 <= 10
+        assert pool.size() <= 10
+        assert pool.size() == 8
+        # max_overflow = max(3, 25 // 4) = 6
+        assert pool._max_overflow == 6
+    finally:
+        await components.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_build_app_components_pool_size_respects_floor() -> None:
+    # Arrange: muchos workers (20)
+    settings = _make_settings()
+    settings.server_workers = 20
+
+    # Act
+    components = build_app_components(settings)
+
+    try:
+        from sqlalchemy.pool import QueuePool
+
+        pool = components.db_engine.pool
+        assert isinstance(pool, QueuePool)
+        # Floor: pool_size >= 5, max_overflow >= 3
+        assert pool.size() == 5
+        assert pool._max_overflow == 3
+    finally:
+        await components.close()

@@ -101,13 +101,17 @@ class AppContainer:
 
 
 def build_app_components(settings: Settings) -> AppContainer:
+    workers = max(1, settings.server_workers)
+    pool_size = max(5, settings.db_pool_size // workers)
+    max_overflow = max(3, settings.db_max_overflow // workers)
+
     db_engine = create_async_engine(
         settings.database_url.get_secret_value(),
         pool_pre_ping=True,
-        pool_size=35,
-        max_overflow=25,
-        pool_timeout=45.0,
-        pool_recycle=1800,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_timeout=settings.db_pool_timeout,
+        pool_recycle=settings.db_pool_recycle,
         connect_args={"statement_cache_size": 0},
     )
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
