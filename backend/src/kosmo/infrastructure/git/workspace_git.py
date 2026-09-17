@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -27,11 +28,15 @@ def _run_git(
     workspace_path: Path | str,
     *,
     check: bool = True,
+    timeout: float | None = 60.0,
 ) -> subprocess.CompletedProcess[str]:
     """Helper interno para ejecutar comandos de Git dentro de un directorio de workspace."""
     cwd = Path(workspace_path).resolve()
     if not cwd.exists():
         raise GitError(f"El directorio del workspace no existe: {cwd}")
+
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
 
     try:
         res = subprocess.run(
@@ -42,9 +47,14 @@ def _run_git(
             encoding="utf-8",
             errors="replace",
             check=False,
+            timeout=timeout,
+            env=env,
         )
     except FileNotFoundError as e:
         raise GitError("Git no está instalado o no se encuentra en el PATH del sistema.") from e
+    except subprocess.TimeoutExpired as e:
+        sanitized_cmd = _sanitize_git_output(" ".join(cmd))
+        raise GitError(f"Tiempo de espera agotado al ejecutar el comando Git {sanitized_cmd}: {e}") from e
     except Exception as e:
         sanitized_cmd = _sanitize_git_output(" ".join(cmd))
         raise GitError(f"Error al ejecutar el comando Git {sanitized_cmd}: {e}") from e

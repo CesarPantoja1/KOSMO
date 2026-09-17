@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -374,3 +375,29 @@ def test_local_git_workspace_adapter_implements_protocol() -> None:
 
     auth_url = adapter.build_authenticated_url("https://github.com/octocat/repo.git", "token123")
     assert auth_url == "https://x-access-token:token123@github.com/octocat/repo.git"
+
+
+@pytest.mark.unit
+def test_git_run_timeout_raises_git_error() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        with (
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["git", "status"], timeout=1.0)),
+            pytest.raises(GitError, match="Tiempo de espera agotado"),
+        ):
+            git_status(path)
+
+
+@pytest.mark.unit
+def test_git_run_passes_git_terminal_prompt_zero() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = ""
+            mock_run.return_value.stderr = ""
+            git_status(path)
+            mock_run.assert_called_once()
+            env_arg = mock_run.call_args.kwargs.get("env")
+            assert env_arg is not None
+            assert env_arg.get("GIT_TERMINAL_PROMPT") == "0"
