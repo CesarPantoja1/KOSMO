@@ -24,6 +24,7 @@ from kosmo.contracts.audit import AuditEvent  # noqa: E402
 from kosmo.contracts.auth import (  # noqa: E402
     AuthorizationCode,
     RefreshConsumeResult,
+    TokenPair,
     User,
     UserAlreadyExistsError,  # noqa: E402
 )
@@ -107,6 +108,7 @@ class InMemoryStore:
         self.refresh: dict[str, tuple[str, str | None]] = {}
         self.revoked_access: set[str] = set()
         self.families: set[str] = set()
+        self.grace: dict[str, Any] = {}
 
     async def register_refresh(
         self,
@@ -126,7 +128,32 @@ class InMemoryStore:
         entry = self.refresh.pop(jti, None)
         if entry is None:
             return None
+        self.grace[jti] = "ROTATING"
         return RefreshConsumeResult(subject=entry[0], family_id=entry[1])
+
+    async def store_grace_period(
+        self,
+        *,
+        old_jti: str,
+        token_pair: TokenPair,
+        ttl_seconds: int = 30,  # noqa: ARG002
+    ) -> None:
+        self.grace[old_jti] = token_pair
+
+    async def get_grace_period(self, *, old_jti: str) -> TokenPair | None:
+        import asyncio
+
+        for _ in range(20):
+            entry = self.grace.get(old_jti)
+            if entry is None:
+                return None
+            if entry == "ROTATING":
+                await asyncio.sleep(0.01)
+                continue
+            if isinstance(entry, TokenPair):
+                return entry
+            return None
+        return None
 
     async def revoke_access(self, *, jti: str, ttl_seconds: int) -> None:
         if ttl_seconds <= 0:
@@ -193,6 +220,7 @@ def client() -> TestClient:
     app.state.container = SimpleNamespace(
         redis=None,
         auth=SimpleNamespace(
+            token_store=token_store,
             user_repository=user_repository,
             register_user=RegisterUser(user_repository=user_repository, password_hasher=hasher, audit_sink=audit_sink),
             authorize_with_pkce=AuthorizeWithPkce(
@@ -358,6 +386,18 @@ def test_refresh_rotates_pair_and_replay_revokes_family(client: TestClient) -> N
     )
     assert rotated.status_code == 200
     assert rotated.json()["refresh"]["jti"] != pair["refresh"]["jti"]
+
+    # En ventana de gracia: peticion concurrente con el token anterior devuelve 200 y el mismo par
+    replay_grace = client.post(
+        "/api/v1/auth/refresh",
+        json={"grant_type": "refresh_token", "refresh_token": pair["refresh"]["token"]},
+    )
+    assert replay_grace.status_code == 200
+    assert replay_grace.json()["refresh"]["jti"] == rotated.json()["refresh"]["jti"]
+
+    # Fuera de la ventana de gracia: reuso fraudulento revoca la familia y retorna 401
+    store = client.app.state.container.auth.token_store  # type: ignore[union-attr]
+    store.grace.clear()
 
     replay = client.post(
         "/api/v1/auth/refresh",

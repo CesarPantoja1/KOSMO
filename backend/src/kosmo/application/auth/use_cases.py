@@ -101,6 +101,13 @@ class RefreshTokenPair:
         claims = await asyncio.to_thread(self.verifier.verify, refresh_token, expected_type=TokenType.REFRESH)
         consumed = await self.revocation_store.consume_refresh(jti=claims.jti)
         if consumed is None:
+            grace_pair = await self.revocation_store.get_grace_period(old_jti=claims.jti)
+            if grace_pair is not None:
+                family = grace_pair.refresh.family_id or claims.family_id
+                if family is not None and not await self.revocation_store.is_family_alive(family_id=family):
+                    raise TokenRevokedError("Sesión revocada")
+                return grace_pair
+
             if claims.family_id is not None and await self.revocation_store.is_family_alive(family_id=claims.family_id):
                 await self.revocation_store.revoke_family(family_id=claims.family_id)
                 await self.audit_sink.record(
@@ -134,11 +141,19 @@ class RefreshTokenPair:
             token_type=TokenType.REFRESH,
             family_id=family,
         )
+        refresh_ttl = _seconds_until(new_refresh.expires_at)
         await self.revocation_store.register_refresh(
             jti=new_refresh.jti,
             subject=claims.subject,
-            ttl_seconds=_seconds_until(new_refresh.expires_at),
+            ttl_seconds=refresh_ttl,
             family_id=family,
+        )
+        pair = TokenPair(access=access, refresh=new_refresh)
+        grace_ttl = min(30, max(refresh_ttl, 1))
+        await self.revocation_store.store_grace_period(
+            old_jti=claims.jti,
+            token_pair=pair,
+            ttl_seconds=grace_ttl,
         )
         await self.audit_sink.record(
             AuditEvent(
@@ -149,7 +164,7 @@ class RefreshTokenPair:
             )
         )
         record_auth_event("token_refresh", user_id=claims.subject)
-        return TokenPair(access=access, refresh=new_refresh)
+        return pair
 
 
 @dataclass(frozen=True, slots=True)
