@@ -179,3 +179,33 @@ async def test_build_app_components_pool_size_respects_floor() -> None:
         assert pool._max_overflow == 3
     finally:
         await components.close()
+
+
+@pytest.mark.unit
+def test_build_auth_components_configures_redis_pool_and_timeouts() -> None:
+    from kosmo.infrastructure.api.composition.auth import build_auth_components
+    from tests.conftest import _FERNET_KEY, _PRIVATE_KEY_PEM, _PUBLIC_KEY_PEM
+
+    settings = Settings(
+        env="development",
+        database_url="postgresql+asyncpg://user:pass@localhost:5432/kosmo",
+        redis_url="redis://:pass@localhost:6379/0",
+        llm_provider="noop",
+        llm_model="noop",
+        embedding_provider="none",
+        auth_disabled=False,
+        jwt_private_key_pem=_PRIVATE_KEY_PEM,
+        jwt_public_key_pem=_PUBLIC_KEY_PEM,
+        fernet_master_key=_FERNET_KEY,
+        redis_max_connections=50,
+        redis_socket_timeout=10.0,
+        redis_socket_connect_timeout=5.0,
+    )
+    repos = RepositoryRegistry.build(async_sessionmaker())
+    auth = build_auth_components(settings, repos)
+
+    assert auth.redis is not None
+    pool = auth.redis.connection_pool
+    assert pool.max_connections == 50
+    assert pool.connection_kwargs.get("socket_timeout") == 10.0
+    assert pool.connection_kwargs.get("socket_connect_timeout") == 5.0

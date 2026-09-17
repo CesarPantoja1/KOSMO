@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     db_max_overflow: int = 25
     db_pool_timeout: float = 45.0
     db_pool_recycle: int = 1800
+    redis_max_connections: int = 50
+    redis_socket_timeout: float = 10.0
+    redis_socket_connect_timeout: float = 5.0
 
     # LLM BYOK
     llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
