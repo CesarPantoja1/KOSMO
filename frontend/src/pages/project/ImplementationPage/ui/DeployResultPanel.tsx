@@ -6,6 +6,7 @@ import {
 	Clock,
 	ComputerDesktop,
 	Load,
+	ModalConfirm,
 	Railway,
 	SuccessCheckIcon,
 	WarningIcon,
@@ -30,19 +31,19 @@ const DeployResultPanel = ({
 }) => {
 	const [copied, setCopied] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
-	const handleDelete = async () => {
-		if (window.confirm('¿Estás seguro de que deseas eliminar el despliegue? Esta acción eliminará el servicio en la nube.')) {
-			try {
-				setDeleting(true);
-				await deleteDeployment(projectId);
-				toast.success('Despliegue eliminado exitosamente');
-				onDeleteSuccess?.();
-			} catch {
-				toast.error('Error al eliminar el despliegue');
-			} finally {
-				setDeleting(false);
-			}
+	const handleConfirmDelete = async () => {
+		setShowConfirmDelete(false);
+		try {
+			setDeleting(true);
+			await deleteDeployment(projectId);
+			toast.success('Despliegue eliminado exitosamente');
+			onDeleteSuccess?.();
+		} catch {
+			toast.error('Error al eliminar el despliegue');
+		} finally {
+			setDeleting(false);
 		}
 	};
 
@@ -168,7 +169,7 @@ const DeployResultPanel = ({
 							<div className='flex gap-2'>
 								<button
 									type='button'
-									onClick={handleDelete}
+									onClick={() => setShowConfirmDelete(true)}
 									disabled={deleting || deploying}
 									className='btn btn-secondary btn-sm inline-flex items-center gap-1.5 text-error-600 hover:bg-error-50 hover:text-error-700 hover:border-error-200'
 								>
@@ -255,6 +256,17 @@ const DeployResultPanel = ({
 						)}
 					</div>
 				</div>
+			)}
+
+			{showConfirmDelete && (
+				<ModalConfirm
+					title='Eliminar despliegue'
+					description='¿Estás seguro de que deseas eliminar el despliegue? Esta acción eliminará el servicio en la nube.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setShowConfirmDelete(false)}
+					onConfirm={handleConfirmDelete}
+				/>
 			)}
 		</div>
 	);
