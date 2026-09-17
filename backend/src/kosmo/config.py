@@ -75,7 +75,7 @@ class Settings(BaseSettings):
 
     # API
     api_version: str = "v1"
-    cors_allowed_origins: str = "*"
+    cors_allowed_origins: str = "http://localhost:3000"
     auth_disabled: bool = False
     rate_limit_required: bool = False
     trusted_proxies: str = "127.0.0.1,::1,testclient,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
