@@ -152,6 +152,7 @@ async def test_orchestrate_deployment_success_initial(
     mock_deployment_client.trigger_deployment.assert_called_once_with(
         token="decrypted_railway_token",
         service_id="srv_railway_999",
+        commit_sha=None,
     )
 
     # Persistencia
@@ -215,6 +216,7 @@ async def test_orchestrate_deployment_reuses_existing_service_id(
     mock_deployment_client.trigger_deployment.assert_called_once_with(
         token="decrypted_token",
         service_id="srv_already_existing_123",
+        commit_sha=None,
     )
     assert result.service_id == "srv_already_existing_123"
     assert result.status == DeploymentStatus.BUILDING
@@ -447,3 +449,44 @@ async def test_orchestrate_deployment_auto_refreshes_token_on_auth_error():
         EncryptedSecret(ciphertext=base64.b64decode(updated_user_int.encrypted_refresh_token.encode("utf-8")))
     ).decode("utf-8")
     assert decrypted_new_rt == "rotated-refresh-token"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_orchestrate_deployment_passes_last_commit_hash(
+    use_case: OrchestrateCloudDeploymentUseCase,
+    mock_project_deployment_repo: AsyncMock,
+    mock_user_deployment_repo: AsyncMock,
+    mock_project_github_repo: AsyncMock,
+    mock_deployment_client: AsyncMock,
+    mock_cipher: MagicMock,
+    principal: Principal,
+):
+    project_id = ProjectId("prj_commit_test_01")
+    cmd = OrchestrateCloudDeploymentCommand(project_id=project_id)
+
+    mock_user_deployment_repo.get_by_user_id.return_value = UserDeploymentIntegration(
+        user_id=UserId(principal.subject),
+        provider=DeploymentProvider.RAILWAY,
+        encrypted_token=base64.b64encode(b"ciphertext_rw").decode("utf-8"),
+    )
+    mock_cipher.decrypt.return_value = b"decrypted_railway_token"
+
+    mock_project_github_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="inventory-app",
+        repo_url="https://github.com/octocat/inventory-app",
+        sync_status=GitHubSyncStatus.SYNCED,
+        last_commit_hash="abcdef1234567890",
+    )
+
+    mock_project_deployment_repo.get_by_project_id.return_value = None
+    mock_deployment_client.create_service.return_value = "srv_railway_999"
+
+    await use_case.execute(principal, cmd)
+
+    mock_deployment_client.trigger_deployment.assert_called_once_with(
+        token="decrypted_railway_token",
+        service_id="srv_railway_999",
+        commit_sha="abcdef1234567890",
+    )

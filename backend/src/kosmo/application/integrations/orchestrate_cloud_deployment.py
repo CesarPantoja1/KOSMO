@@ -137,12 +137,13 @@ class OrchestrateCloudDeploymentUseCase:
         default_env_vars = [
             EnvironmentVariable(key="NODE_ENV", value="production", is_secret=False),
             EnvironmentVariable(key="PORT", value="3000", is_secret=False),
+            EnvironmentVariable(key="HOSTNAME", value="0.0.0.0", is_secret=False),
             EnvironmentVariable(key="DATABASE_URL", value="file:/data/db.sqlite", is_secret=False),
         ]
         custom_env_vars: list[EnvironmentVariable] = []
         if cmd.environment_variables:
             for k, v in cmd.environment_variables.items():
-                if k not in {"NODE_ENV", "PORT", "DATABASE_URL"}:
+                if k not in {"NODE_ENV", "PORT", "HOSTNAME", "DATABASE_URL"}:
                     custom_env_vars.append(EnvironmentVariable(key=k, value=v, is_secret=False))
         all_env_vars = default_env_vars + custom_env_vars
 
@@ -178,6 +179,7 @@ class OrchestrateCloudDeploymentUseCase:
             await self._deployment_client.trigger_deployment(
                 token=current_token,
                 service_id=sid,
+                commit_sha=github_integration.last_commit_hash if github_integration else None,
             )
             return sid
 

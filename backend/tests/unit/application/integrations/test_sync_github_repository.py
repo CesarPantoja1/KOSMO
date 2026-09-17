@@ -138,6 +138,7 @@ async def test_sync_github_repository_incremental_push_success(
     # 1. No debe llamar a create_repository ni check_repository_exists porque es push incremental
     github_client.create_repository.assert_not_called()
     github_client.check_repository_exists.assert_not_called()
+    workspace_manager.commit_workspace.assert_awaited_once_with(project_id, "chore: sync project changes to repository")
 
     # 2. El remoto persistido queda limpio; el token se entrega solo al push.
     git_workspace.remote_add_or_update.assert_called_once_with(

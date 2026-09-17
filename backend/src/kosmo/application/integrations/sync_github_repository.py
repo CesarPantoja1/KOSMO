@@ -175,6 +175,12 @@ class SyncGitHubRepositoryUseCase:
                 )
                 await self._project_repo.save(project_integration)
 
+            # Consolidar cambios pendientes del workspace en git antes del push
+            await self._workspace_manager.commit_workspace(
+                cmd.project_id,
+                cmd.commit_message or "chore: sync project changes to repository",
+            )
+
             # La URL persistida del remoto nunca debe contener el token OAuth.
             # El adaptador usa el token exclusivamente para este push.
             self._git_workspace.remote_add_or_update(workspace.workspace_dir, "origin", repo_url)

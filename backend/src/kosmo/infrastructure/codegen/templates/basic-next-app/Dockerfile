@@ -1,11 +1,10 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 FROM base AS builder
 WORKDIR /app
@@ -23,14 +22,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_PATH=/data/db.sqlite
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs nextjs
 
 COPY --from=builder /app/public ./public
 
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
+RUN mkdir .next && chown nextjs:nodejs .next
 RUN mkdir -p /data && chown -R nextjs:nodejs /data
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -41,6 +37,7 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
 
