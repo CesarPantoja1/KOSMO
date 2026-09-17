@@ -70,7 +70,7 @@ services:
 
       JWT_PRIVATE_KEY_PATH: /tmp/kosmo-secrets/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /tmp/kosmo-secrets/jwt_public.pem
-      FERNET_MASTER_KEY: ${FERNET_MASTER_KEY:-qn9GZmTM--RH5MVh3kLmyS-oeHYCmnYCVPW9BRFLuik=}
+      FERNET_MASTER_KEY: ${FERNET_MASTER_KEY}
       JWT_ALGORITHM: RS256
       JWT_ISSUER: ${JWT_ISSUER:-kosmo}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-kosmo-api}
