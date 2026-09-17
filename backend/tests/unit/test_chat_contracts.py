@@ -193,8 +193,8 @@ class FakeChatRepository:
     async def create_session(self, session: ChatSession) -> ChatSession:
         return session
 
-    async def delete_session(self, session_id: ChatSessionId) -> None:
-        return None
+    async def delete_session(self, session_id: ChatSessionId, project_id: ProjectId) -> bool:  # noqa: ARG002
+        return True
 
     async def list_sessions(
         self,

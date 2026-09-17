@@ -547,9 +547,17 @@ class InMemoryChatRepository:
         self.sessions.append(session)
         return session
 
-    async def delete_session(self, session_id: ChatSessionId) -> None:
+    async def delete_session(self, session_id: ChatSessionId, project_id: ProjectId) -> bool:
+        session = next(
+            (s for s in self.sessions if s.id == session_id and str(s.project_id) == str(project_id)),
+            None,
+        )
+        if session is None:
+            return False
         self.sessions = [s for s in self.sessions if s.id != session_id]
         self._message_sessions = [(msg, sid) for msg, sid in self._message_sessions if sid != session_id]
+        self.messages = [msg for msg, _sid in self._message_sessions]
+        return True
 
     async def delete_by_project(self, project_id: ProjectId) -> None:
         project_sessions = {s.id for s in self.sessions if str(s.project_id) == str(project_id)}

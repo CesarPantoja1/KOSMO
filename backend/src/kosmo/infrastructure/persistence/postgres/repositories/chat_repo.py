@@ -1,9 +1,10 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.ai.chat import (
@@ -225,13 +226,29 @@ class SqlAlchemyChatRepository(ChatRepository):
             first[session_id] = content or ""
         return first
 
-    async def delete_session(self, session_id: ChatSessionId) -> None:
+    async def delete_session(self, session_id: ChatSessionId, project_id: ProjectId) -> bool:
         from sqlalchemy import delete
 
         async with self._session_ctx() as db:
-            await db.execute(delete(ChatMessageModel).where(ChatMessageModel.session_id == str(session_id)))
-            await db.execute(delete(ChatSessionModel).where(ChatSessionModel.id == str(session_id)))
+            result = cast(
+                CursorResult[Any],
+                await db.execute(
+                    delete(ChatSessionModel).where(
+                        ChatSessionModel.id == str(session_id),
+                        ChatSessionModel.project_id == str(project_id),
+                    )
+                ),
+            )
+            deleted = bool(result.rowcount > 0)
+            if deleted:
+                await db.execute(
+                    delete(ChatMessageModel).where(
+                        ChatMessageModel.session_id == str(session_id),
+                        ChatMessageModel.project_id == str(project_id),
+                    )
+                )
             await self._commit(db)
+            return deleted
 
     async def delete_by_project(self, project_id: ProjectId) -> None:
         from sqlalchemy import delete
