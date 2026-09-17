@@ -52,9 +52,9 @@ def get_handle_deployment_failure_use_case(request: Request) -> HandleDeployment
     return get_container(request).integrations.handle_deployment_failure
 
 
-
 def get_delete_deployment_use_case(request: Request) -> DeleteDeploymentUseCase:
     return get_container(request).integrations.delete_deployment
+
 
 def get_deployment_worker(request: Request) -> DeploymentPollingWorker:
     return get_container(request).integrations.deployment_worker

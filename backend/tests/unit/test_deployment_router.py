@@ -365,4 +365,3 @@ async def test_delete_project_deployment_not_owner_raises_404() -> None:
         )
 
     assert exc_info.value.status_code == 404
-
