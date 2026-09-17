@@ -796,3 +796,62 @@ async def test_sync_github_repository_push_executes_in_thread_without_blocking_e
     # Assert
     assert res.last_commit_hash == "commit_sha_threaded"
     assert loop_ticks >= 1, "The event loop must remain unblocked while git push executes in thread"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_adquiere_y_libera_workspace_lock(
+    use_case: SyncGitHubRepositoryUseCase,
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+) -> None:
+    project_id = ProjectId("proj-lock-sync-test")
+    user_id = UserId("usr-123")
+
+    project_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_url="https://github.com/octocat/my-repo.git",
+        repo_name="my-repo",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"token").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"decrypted_token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"),
+        project_id=project_id,
+        workspace_dir="/tmp/workspaces/proj-lock-sync-test",
+    )
+    git_workspace.push.return_value = "commit_sha_123"
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+    await use_case.execute(cmd, user_id)
+
+    workspace_manager.acquire_lock.assert_awaited_once_with(project_id)
+    workspace_manager.release_lock.assert_awaited_once_with(project_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_libera_workspace_lock_en_error(
+    use_case: SyncGitHubRepositoryUseCase,
+    user_repo: AsyncMock,
+    workspace_manager: AsyncMock,
+) -> None:
+    project_id = ProjectId("proj-lock-fail-test")
+    user_id = UserId("usr-123")
+
+    user_repo.get_by_user_id.return_value = None
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+    with pytest.raises(ValueError, match="no tiene su cuenta vinculada"):
+        await use_case.execute(cmd, user_id)
+
+    workspace_manager.acquire_lock.assert_awaited_once_with(project_id)
+    workspace_manager.release_lock.assert_awaited_once_with(project_id)
