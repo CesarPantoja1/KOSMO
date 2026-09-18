@@ -65,8 +65,12 @@ services:
       RAILWAY_CLIENT_SECRET: ${RAILWAY_CLIENT_SECRET:-}
 
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-kosmo}:${POSTGRES_PASSWORD:-kosmo}@postgres:5432/${POSTGRES_DB:-kosmo_dev}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-60}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-40}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-kosmo_dev_redis_secret}
       REDIS_URL: redis://:${REDIS_PASSWORD:-kosmo_dev_redis_secret}@redis:6379/0
+      REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-150}
+      LLM_MAX_CONCURRENCY: ${LLM_MAX_CONCURRENCY:-100}
 
       JWT_PRIVATE_KEY_PATH: /tmp/kosmo-secrets/jwt_private.pem
       JWT_PUBLIC_KEY_PATH: /tmp/kosmo-secrets/jwt_public.pem
@@ -177,6 +181,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: kosmo-postgres
+    command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-kosmo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kosmo}

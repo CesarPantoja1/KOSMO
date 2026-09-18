@@ -41,11 +41,11 @@ class Settings(BaseSettings):
     # DSN de persistencia
     database_url: SecretStr
     redis_url: SecretStr | None = None
-    db_pool_size: int = 35
-    db_max_overflow: int = 25
+    db_pool_size: int = 60
+    db_max_overflow: int = 40
     db_pool_timeout: float = 45.0
     db_pool_recycle: int = 1800
-    redis_max_connections: int = 50
+    redis_max_connections: int = 150
     redis_socket_timeout: float = 10.0
     redis_socket_connect_timeout: float = 5.0
 
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["anthropic", "openai", "gemini", "deepseek", "noop"]
     llm_model: str
     llm_api_key: SecretStr | None = None
-    llm_max_concurrency: int = 15
+    llm_max_concurrency: int = 100
     user_ai_config_cache_ttl_seconds: float = 60.0
 
     # Embeddings

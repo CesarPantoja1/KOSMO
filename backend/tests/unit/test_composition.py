@@ -128,8 +128,8 @@ async def test_build_app_components_configures_db_connection_pool() -> None:
 
         pool = components.db_engine.pool
         assert isinstance(pool, QueuePool)
-        assert pool.size() == 35
-        assert pool._max_overflow == 25
+        assert pool.size() == 60
+        assert pool._max_overflow == 40
         assert pool._recycle == 1800
     finally:
         await components.close()
@@ -150,11 +150,10 @@ async def test_build_app_components_scales_pool_for_multiple_workers() -> None:
 
         pool = components.db_engine.pool
         assert isinstance(pool, QueuePool)
-        # pool_size = max(5, 35 // 4) = 8 <= 10
-        assert pool.size() <= 10
-        assert pool.size() == 8
-        # max_overflow = max(3, 25 // 4) = 6
-        assert pool._max_overflow == 6
+        # pool_size = max(5, 60 // 4) = 15
+        assert pool.size() == 15
+        # max_overflow = max(3, 40 // 4) = 10
+        assert pool._max_overflow == 10
     finally:
         await components.close()
 
