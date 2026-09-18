@@ -107,3 +107,24 @@ async def test_with_heartbeat_cleans_up_on_early_break() -> None:
 
     # Assert: debe salir limpiamente sin dejar tareas colgadas
     assert first_item == "data: infinite\n\n"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_with_heartbeat_preserves_task_bound_cancel_scopes() -> None:
+    # Arrange: un generador que abre un scope de AnyIO (como httpx/pydantic-ai) a través de yields
+    import anyio
+
+    async def scoped_source() -> AsyncGenerator[str]:
+        async with anyio.create_task_group():
+            yield "data: chunk1\n\n"
+            await asyncio.sleep(0.01)
+            yield "data: chunk2\n\n"
+
+    # Act
+    collected: list[str] = []
+    async for item in with_heartbeat(scoped_source(), interval=1.0):
+        collected.append(item)
+
+    # Assert
+    assert collected == ["data: chunk1\n\n", "data: chunk2\n\n"]

@@ -32,37 +32,50 @@ _HEARTBEAT_INTERVAL: float = 15.0
 _HEARTBEAT_COMMENT: str = ": ping\n\n"
 
 
-async def _fetch_next(it: AsyncIterator[str]) -> str:
-    return await anext(it)
-
-
 async def with_heartbeat(
     source: AsyncIterator[str],
     interval: float = _HEARTBEAT_INTERVAL,
     heartbeat: str = _HEARTBEAT_COMMENT,
 ) -> AsyncGenerator[str]:
-    """Envuelve un iterador asíncrono emitiendo comentarios ping periódicos si no hay actividad."""
-    it = aiter(source)
-    task: asyncio.Task[str] | None = None
+    """Envuelve un iterador asíncrono emitiendo comentarios ping periódicos si no hay actividad.
+
+    Ejecuta el consumo de la fuente en una única tarea dedicada mediante una cola,
+    asegurando que context managers vinculados a tareas (como AnyIO cancel scopes y
+    conexiones HTTP/LLM) se inicien y finalicen dentro de la misma tarea asyncio.
+    """
+    sentinel = object()
+    queue: asyncio.Queue[tuple[object, Exception | None]] = asyncio.Queue()
+
+    async def producer() -> None:
+        try:
+            async for item in source:
+                await queue.put((item, None))
+        except Exception as exc:
+            await queue.put((sentinel, exc))
+        else:
+            await queue.put((sentinel, None))
+
+    producer_task = asyncio.create_task(producer())
     try:
         while True:
-            if task is None:
-                task = asyncio.create_task(_fetch_next(it))
-            done, _ = await asyncio.wait({task}, timeout=interval)
-            if done:
-                try:
-                    item = task.result()
-                except StopAsyncIteration:
+            try:
+                item, exc = await asyncio.wait_for(queue.get(), timeout=interval)
+            except TimeoutError:
+                if producer_task.done() and queue.empty():
                     break
-                task = None
-                yield item
-            else:
                 yield heartbeat
+                continue
+            if exc is not None:
+                raise exc
+            if item is sentinel:
+                break
+            assert isinstance(item, str)
+            yield item
     finally:
-        if task is not None and not task.done():
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
-                await task
+        if not producer_task.done():
+            producer_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await producer_task
 
 
 async def validate_chat_content(
