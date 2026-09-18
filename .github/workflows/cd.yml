@@ -187,7 +187,6 @@ jobs:
     outputs:
       opencode_image: ${{ steps.images.outputs.opencode }}
       code_runner_image: ${{ steps.images.outputs.code_runner }}
-      preview_image: ${{ steps.images.outputs.preview }}
 
     steps:
       - name: Checkout merged source
@@ -204,7 +203,6 @@ jobs:
           {
             echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}"
             echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}"
-            echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${{ needs.wait-for-ci.outputs.candidate_sha }}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
@@ -225,7 +223,6 @@ jobs:
         run: |
           docker buildx imagetools inspect "${{ steps.images.outputs.opencode }}"
           docker buildx imagetools inspect "${{ steps.images.outputs.code_runner }}"
-          docker buildx imagetools inspect "${{ steps.images.outputs.preview }}"
 
   deploy-production:
     name: Deploy Production
@@ -286,8 +283,7 @@ jobs:
             "KOSMO_WEB_IMAGE=${{ needs.build-frontend.outputs.web_image }}" \
             "KOSMO_API_IMAGE=${{ needs.build-backend.outputs.api_image }}" \
             "KOSMO_OPENCODE_IMAGE=${{ needs.build-opencode.outputs.opencode_image }}" \
-            "KOSMO_PREVIEW_IMAGE=${{ needs.build-opencode.outputs.preview_image }}" > "$work_dir/runtime.env"
-          printf '%s\n' "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" >> "$work_dir/runtime.env"
+            "KOSMO_CODE_RUNNER_IMAGE=${{ needs.build-opencode.outputs.code_runner_image }}" > "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
           # Staging below the destination keeps promotion as an atomic rename
@@ -374,13 +370,13 @@ jobs:
                fi
              done
              grep -q '^CLOUDFLARE_TUNNEL_TOKEN=.' .env
-             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
                  exit 1
                fi
              done
-             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN PREVIEW_PUBLIC_HOST_SUFFIX; do
+             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing required code-generation variable: ${key}" >&2
                  exit 1
@@ -406,7 +402,7 @@ jobs:
                -v "$PWD/secrets/jwt_private.pem:/run/kosmo-secrets/jwt_private.pem:ro" \
                -v "$PWD/secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro" \
                --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
-             docker compose -p kosmo -f compose.yaml up -d
+             docker compose -p kosmo -f compose.yaml up -d --remove-orphans
              # Reload the transferred Nginx configuration after app containers
              # have been recreated. --no-deps prevents an unnecessary restart
              # of frontend or backend.
