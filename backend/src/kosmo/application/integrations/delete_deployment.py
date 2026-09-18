@@ -62,7 +62,7 @@ class DeleteDeploymentUseCase:
         # 2. Consultar despliegue existente
         deployment = await self._project_deployment_repo.get_by_project_id(project_id)
         if deployment is None:
-            return True
+            return False
 
         # 3. Si existe servicio remoto, eliminarlo en la plataforma
         if deployment.service_id:
