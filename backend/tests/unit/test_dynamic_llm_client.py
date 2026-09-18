@@ -248,3 +248,39 @@ async def test_dynamic_client_semaphore_limits_concurrency(mock_repo, mock_ciphe
 
         assert len(results) == 6
         assert max_active <= 2
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_caches_with_hashed_api_key(dynamic_client, mock_repo):
+    import hashlib
+
+    user_id = "usr_key_hash_test"
+    current_user_id.set(user_id)
+    raw_api_key = "sk-super-secret-user-key-999"
+
+    mock_repo.by_user_id.return_value = UserAiConfig(
+        user_id=user_id,
+        provider=AIProvider.OPENAI,
+        model="gpt-4o",
+        encrypted_api_key=EncryptedSecret(ciphertext=b"enc_" + raw_api_key.encode("utf-8")),
+        is_custom=True,
+    )
+
+    mock_pydantic_client = AsyncMock()
+    mock_pydantic_client.complete.return_value = LLMResponse(text="ok")
+
+    with patch("kosmo.infrastructure.llm.dynamic_llm_client.PydanticAILLMClient", return_value=mock_pydantic_client):
+        prompt = PromptTemplate(system_prompt="sys", user_prompt="hello")
+        await dynamic_client.complete(prompt)
+
+        cached_keys = list(dynamic_client._clients.keys())
+        assert len(cached_keys) == 1
+        provider, model, key_hash = cached_keys[0]
+
+        assert provider == "openai"
+        assert model == "gpt-4o"
+        assert raw_api_key not in key_hash
+        assert raw_api_key not in str(cached_keys)
+        expected_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()[:16]
+        assert key_hash == expected_hash
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -143,6 +144,12 @@ class DynamicUserLLMClient(LLMClient):
         self._config_cache[user_id] = (now, provider, model, api_key)
         return (provider, model, api_key)
 
+    @staticmethod
+    def _hash_api_key(key: str | None) -> str:
+        if not key:
+            return "none"
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
     async def _resolve_client(self) -> LLMClient:
         user_id = current_user_id.get()
         provider, model, api_key = await self._resolve_config(user_id)
@@ -150,7 +157,7 @@ class DynamicUserLLMClient(LLMClient):
         if provider.lower() == "noop":
             return NoopLLMClient()
 
-        key_tuple = (provider, model, api_key)
+        key_tuple = (provider, model, self._hash_api_key(api_key))
         client = self._clients.get(key_tuple)
         if client is None:
             pydantic_model = build_pydantic_ai_model(provider, model, api_key)
