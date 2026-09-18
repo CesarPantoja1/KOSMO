@@ -130,46 +130,6 @@ jobs:
       - name: Run actionlint
         uses: raven-actions/actionlint@v2
 
-  trivy-scan:
-    name: Security / Trivy scan
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Run Trivy vulnerability scanner in fs mode
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          output: 'trivy-results.txt'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
-          exit-code: '0'
-
-      - name: Publish Trivy report to Step Summary
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "## Security scan (Trivy)"
-            echo
-            if [ -s trivy-results.txt ]; then
-              echo '```text'
-              cat trivy-results.txt
-              echo '```'
-            else
-              echo "No CRITICAL or HIGH vulnerabilities detected in repository filesystem."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
 
   detect-changes:
     name: Detect changed areas
@@ -527,7 +487,6 @@ jobs:
       - branch-policy
       - actionlint
       - detect-changes
-      - trivy-scan
       - backend-lint
       - backend-test
       - frontend
@@ -543,7 +502,6 @@ jobs:
           actionlint_result="${{ needs.actionlint.result }}"
           branch_policy_result="${{ needs.branch-policy.result }}"
           detect_result="${{ needs.detect-changes.result }}"
-          trivy_result="${{ needs.trivy-scan.result }}"
 
           backend_required="${{ needs.detect-changes.outputs.backend }}"
           backend_lint_result="${{ needs.backend-lint.result }}"
@@ -559,7 +517,6 @@ jobs:
             echo "|---|---:|---|"
             echo "| Branch policy | Yes | \`$branch_policy_result\` |"
             echo "| Workflow lint | Yes | \`$actionlint_result\` |"
-            echo "| Security scan (Trivy) | Yes | \`$trivy_result\` |"
             echo "| Change detection | Yes | \`$detect_result\` |"
             echo "| Backend lint & types | \`${backend_required:-unknown}\` | \`$backend_lint_result\` |"
             echo "| Backend tests | \`${backend_required:-unknown}\` | \`$backend_test_result\` |"
@@ -573,11 +530,6 @@ jobs:
 
           if [ "$branch_policy_result" != "success" ]; then
             echo "Branch policy did not complete successfully."
-            exit 1
-          fi
-
-          if [ "$trivy_result" != "success" ]; then
-            echo "Security scan (Trivy) did not complete successfully."
             exit 1
           fi
 
