@@ -54,8 +54,10 @@ class DeleteDeploymentUseCase:
         user_id = UserId(principal.subject)
 
         # 1. Cancelar monitoreo activo si existe
-        if self._deployment_worker is not None and self._deployment_worker.is_monitoring(project_id):
-            self._deployment_worker.cancel_monitoring(project_id)
+        if self._deployment_worker is not None:
+            is_monitoring = getattr(self._deployment_worker, "is_monitoring", None)
+            if is_monitoring is None or is_monitoring(project_id):
+                self._deployment_worker.cancel_monitoring(project_id)
 
         # 2. Consultar despliegue existente
         deployment = await self._project_deployment_repo.get_by_project_id(project_id)

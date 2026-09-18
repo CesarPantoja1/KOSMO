@@ -3,22 +3,24 @@ from __future__ import annotations
 import base64
 import contextlib
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 import structlog
 
+from kosmo.application.integrations.delete_deployment import (
+    DeleteDeploymentCommand,
+    DeleteDeploymentUseCase,
+)
 from kosmo.contracts.ai.chat import ChatRepository
 from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluationRepository,
     TraceabilityRepository,
 )
+from kosmo.contracts.auth import Principal
 from kosmo.contracts.auth.secrets import EncryptedSecret, SecretCipher
 from kosmo.contracts.integrations.deployment import (
-    DeploymentProvider,
     DeploymentProviderPort,
     DeploymentWorkerPort,
     ProjectDeploymentRepository,
-    UserDeploymentIntegration,
     UserDeploymentIntegrationRepository,
 )
 from kosmo.contracts.integrations.github import (
@@ -75,6 +77,7 @@ class DeleteProjectUseCase:
         deployment_client: DeploymentProviderPort | None = None,
         deployment_worker: DeploymentWorkerPort | None = None,
         cipher: SecretCipher | None = None,
+        delete_deployment: DeleteDeploymentUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
@@ -95,6 +98,21 @@ class DeleteProjectUseCase:
         self._deployment_worker = deployment_worker
         self._cipher = cipher
 
+        if delete_deployment is None and (
+            project_deployment_repo is not None
+            and user_deployment_repo is not None
+            and deployment_client is not None
+            and cipher is not None
+        ):
+            delete_deployment = DeleteDeploymentUseCase(
+                project_deployment_repo=project_deployment_repo,
+                user_deployment_repo=user_deployment_repo,
+                deployment_client=deployment_client,
+                cipher=cipher,
+                deployment_worker=deployment_worker,
+            )
+        self._delete_deployment = delete_deployment
+
     async def execute(self, input_data: DeleteProjectInput) -> None:
         project = await self._project_repo.by_id(input_data.project_id)
         if project is None or str(project.owner_id) != str(input_data.owner_id):
@@ -102,16 +120,6 @@ class DeleteProjectUseCase:
                 project_id=str(input_data.project_id),
                 instance=f"/api/v1/projects/{input_data.project_id}",
             )
-
-        if self._deployment_worker is not None:
-            try:
-                self._deployment_worker.cancel_monitoring(input_data.project_id)
-            except Exception:
-                _log.warning(
-                    "delete_project.cancel_monitoring_failed",
-                    project_id=str(input_data.project_id),
-                    exc_info=True,
-                )
 
         await self._cleanup_railway_deployment(input_data.project_id, input_data.owner_id)
         await self._cleanup_github_repository(input_data.project_id, input_data.owner_id)
@@ -152,80 +160,25 @@ class DeleteProjectUseCase:
         )
 
     async def _cleanup_railway_deployment(self, project_id: ProjectId, owner_id: UserId) -> None:
-        if self._project_deployment_repo is None:
+        if self._delete_deployment is not None:
+            with contextlib.suppress(Exception):
+                await self._delete_deployment.execute(
+                    Principal(subject=str(owner_id)),
+                    DeleteDeploymentCommand(project_id=project_id),
+                )
             return
-        try:
-            deployment = await self._project_deployment_repo.get_by_project_id(project_id)
-            if (
-                deployment is not None
-                and deployment.service_id
-                and self._user_deployment_repo is not None
-                and self._deployment_client is not None
-                and self._cipher is not None
-            ):
-                user_integration = await self._user_deployment_repo.get_by_user_id(owner_id, DeploymentProvider.RAILWAY)
-                if user_integration is not None and user_integration.encrypted_token:
-                    raw_bytes = base64.b64decode(user_integration.encrypted_token.encode("utf-8"))
-                    token = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_bytes)).decode("utf-8")
-                    try:
-                        await self._deployment_client.delete_service(token, deployment.service_id)
-                        _log.info(
-                            "delete_project.railway_deployment_deleted",
-                            project_id=str(project_id),
-                            service_id=deployment.service_id,
-                        )
-                    except Exception:
-                        if user_integration.encrypted_refresh_token:
-                            try:
-                                raw_rt = base64.b64decode(user_integration.encrypted_refresh_token.encode("utf-8"))
-                                rt = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_rt)).decode("utf-8")
-                                new_dto = await self._deployment_client.refresh_access_token(rt)
-                                if new_dto.access_token:
-                                    token = new_dto.access_token
-                                    enc_acc = base64.b64encode(
-                                        self._cipher.encrypt(token.encode("utf-8")).ciphertext
-                                    ).decode("utf-8")
-                                    enc_ref = user_integration.encrypted_refresh_token
-                                    if new_dto.refresh_token:
-                                        enc_ref = base64.b64encode(
-                                            self._cipher.encrypt(new_dto.refresh_token.encode("utf-8")).ciphertext
-                                        ).decode("utf-8")
-                                    await self._user_deployment_repo.save(
-                                        UserDeploymentIntegration(
-                                            user_id=user_integration.user_id,
-                                            provider=user_integration.provider,
-                                            encrypted_token=enc_acc,
-                                            provider_username=user_integration.provider_username,
-                                            encrypted_refresh_token=enc_ref,
-                                            scopes=user_integration.scopes,
-                                            updated_at=datetime.now(UTC),
-                                        )
-                                    )
-                                    await self._deployment_client.delete_service(token, deployment.service_id)
-                                    _log.info(
-                                        "delete_project.railway_deployment_deleted",
-                                        project_id=str(project_id),
-                                        service_id=deployment.service_id,
-                                    )
-                            except Exception:
-                                _log.warning(
-                                    "delete_project.railway_cleanup_failed",
-                                    project_id=str(project_id),
-                                    exc_info=True,
-                                )
-                        else:
-                            _log.warning(
-                                "delete_project.railway_cleanup_failed",
-                                project_id=str(project_id),
-                                exc_info=True,
-                            )
-        except Exception:
-            _log.warning(
-                "delete_project.railway_cleanup_failed",
-                project_id=str(project_id),
-                exc_info=True,
-            )
-        finally:
+
+        if self._deployment_worker is not None:
+            try:
+                self._deployment_worker.cancel_monitoring(project_id)
+            except Exception:
+                _log.warning(
+                    "delete_project.cancel_monitoring_failed",
+                    project_id=str(project_id),
+                    exc_info=True,
+                )
+
+        if self._project_deployment_repo is not None:
             with contextlib.suppress(Exception):
                 await self._project_deployment_repo.delete_by_project_id(project_id)
 

@@ -169,6 +169,7 @@ def build_app_components(settings: Settings) -> AppContainer:
         railway_client=integrations.railway_client,
         deployment_worker=integrations.deployment_worker,
         cipher=cipher,
+        delete_deployment=integrations.delete_deployment,
     )
 
     return AppContainer(
