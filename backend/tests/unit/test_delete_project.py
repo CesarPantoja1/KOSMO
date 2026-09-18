@@ -158,6 +158,7 @@ def _make_uc(
     deployment_worker: Any | None = None,
     cipher: Any | None = None,
     delete_deployment: Any | None = None,
+    delete_github_repo: Any | None = None,
 ) -> DeleteProjectUseCase:
     return DeleteProjectUseCase(
         project_repo=project_repo,
@@ -179,6 +180,7 @@ def _make_uc(
         deployment_worker=deployment_worker,
         cipher=cipher,
         delete_deployment=delete_deployment,
+        delete_github_repo=delete_github_repo,
     )
 
 
@@ -651,4 +653,41 @@ async def test_delete_project_delegates_to_injected_delete_deployment() -> None:
     principal, cmd = delete_deployment_spy.executed_commands[0]
     assert principal.subject == str(_OWNER)
     assert cmd.project_id == project.id
+    assert await project_repo.by_id(project.id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_delete_project_delegates_to_injected_delete_github_repo() -> None:
+    project = _a_project("prj_delegation_gh")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(project)
+
+    class _DeleteGitHubRepoSpy:
+        def __init__(self) -> None:
+            self.executed_commands: list[Any] = []
+
+        async def execute(self, cmd: Any) -> bool:
+            self.executed_commands.append(cmd)
+            return True
+
+    delete_github_spy = _DeleteGitHubRepoSpy()
+    use_case = _make_uc(
+        project_repo,
+        InMemoryFeatureRepository(),
+        InMemoryRequirementRepository(),
+        InMemoryActivityDiagramRepository(),
+        InMemoryDocumentRepository(),
+        InMemoryChatRepository(),
+        InMemoryConsistencyEvaluationRepository(),
+        InMemoryTraceabilityRepository(),
+        delete_github_repo=delete_github_spy,
+    )
+
+    await use_case.execute(DeleteProjectInput(project_id=project.id, owner_id=_OWNER))
+
+    assert len(delete_github_spy.executed_commands) == 1
+    cmd = delete_github_spy.executed_commands[0]
+    assert cmd.project_id == project.id
+    assert cmd.owner_id == _OWNER
     assert await project_repo.by_id(project.id) is None

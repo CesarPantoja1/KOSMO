@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import base64
 import contextlib
 from dataclasses import dataclass
 
@@ -10,13 +7,17 @@ from kosmo.application.integrations.delete_deployment import (
     DeleteDeploymentCommand,
     DeleteDeploymentUseCase,
 )
+from kosmo.application.integrations.delete_github_repository import (
+    DeleteGitHubRepositoryCommand,
+    DeleteGitHubRepositoryUseCase,
+)
 from kosmo.contracts.ai.chat import ChatRepository
 from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluationRepository,
     TraceabilityRepository,
 )
 from kosmo.contracts.auth import Principal
-from kosmo.contracts.auth.secrets import EncryptedSecret, SecretCipher
+from kosmo.contracts.auth.secrets import SecretCipher
 from kosmo.contracts.integrations.deployment import (
     DeploymentProviderPort,
     DeploymentWorkerPort,
@@ -78,6 +79,7 @@ class DeleteProjectUseCase:
         deployment_worker: DeploymentWorkerPort | None = None,
         cipher: SecretCipher | None = None,
         delete_deployment: DeleteDeploymentUseCase | None = None,
+        delete_github_repo: DeleteGitHubRepositoryUseCase | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._feature_repo = feature_repo
@@ -112,6 +114,20 @@ class DeleteProjectUseCase:
                 deployment_worker=deployment_worker,
             )
         self._delete_deployment = delete_deployment
+
+        if delete_github_repo is None and (
+            project_github_repo is not None
+            and user_github_repo is not None
+            and github_client is not None
+            and cipher is not None
+        ):
+            delete_github_repo = DeleteGitHubRepositoryUseCase(
+                project_github_repo=project_github_repo,
+                user_github_repo=user_github_repo,
+                github_client=github_client,
+                cipher=cipher,
+            )
+        self._delete_github_repo = delete_github_repo
 
     async def execute(self, input_data: DeleteProjectInput) -> None:
         project = await self._project_repo.by_id(input_data.project_id)
@@ -169,68 +185,22 @@ class DeleteProjectUseCase:
             return
 
         if self._deployment_worker is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._deployment_worker.cancel_monitoring(project_id)
-            except Exception:
-                _log.warning(
-                    "delete_project.cancel_monitoring_failed",
-                    project_id=str(project_id),
-                    exc_info=True,
-                )
 
         if self._project_deployment_repo is not None:
             with contextlib.suppress(Exception):
                 await self._project_deployment_repo.delete_by_project_id(project_id)
 
     async def _cleanup_github_repository(self, project_id: ProjectId, owner_id: UserId) -> None:
-        if self._project_github_repo is None:
+        if self._delete_github_repo is not None:
+            with contextlib.suppress(Exception):
+                await self._delete_github_repo.execute(
+                    DeleteGitHubRepositoryCommand(project_id=project_id, owner_id=owner_id)
+                )
             return
-        try:
-            integration = await self._project_github_repo.get_by_project_id(project_id)
-            if (
-                integration is not None
-                and (integration.repo_name or integration.repo_url)
-                and self._user_github_repo is not None
-                and self._github_client is not None
-                and self._cipher is not None
-            ):
-                user_github = await self._user_github_repo.get_by_user_id(owner_id)
-                if user_github is not None and user_github.encrypted_token:
-                    raw_bytes = base64.b64decode(user_github.encrypted_token.encode("utf-8"))
-                    token = self._cipher.decrypt(EncryptedSecret(ciphertext=raw_bytes)).decode("utf-8")
 
-                    owner = user_github.github_username
-                    repo_name = integration.repo_name
-                    if not repo_name and integration.repo_url:
-                        cleaned = integration.repo_url.rstrip("/").removesuffix(".git")
-                        parts = cleaned.split("/")
-                        if len(parts) >= 2:
-                            if not owner:
-                                owner = parts[-2]
-                            repo_name = parts[-1]
-
-                    if owner and repo_name:
-                        try:
-                            await self._github_client.delete_repository(token, owner, repo_name)
-                            _log.info(
-                                "delete_project.github_repo_deleted",
-                                project_id=str(project_id),
-                                owner=owner,
-                                repo_name=repo_name,
-                            )
-                        except Exception:
-                            _log.warning(
-                                "delete_project.github_cleanup_failed",
-                                project_id=str(project_id),
-                                exc_info=True,
-                            )
-        except Exception:
-            _log.warning(
-                "delete_project.github_cleanup_failed",
-                project_id=str(project_id),
-                exc_info=True,
-            )
-        finally:
+        if self._project_github_repo is not None:
             with contextlib.suppress(Exception):
                 await self._project_github_repo.delete_by_project_id(project_id)
 
