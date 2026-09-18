@@ -253,8 +253,8 @@ class DynamicUserLLMClient(LLMClient):
         temperature: float = 0.1,
         max_tokens: int = 8192,
     ) -> AsyncGenerator[StreamedTypedResult[T]]:
+        client = await self._resolve_client()
         async with self._semaphore:
-            client = await self._resolve_client()
             stream_fn: Any = getattr(client, "stream_typed", None)
             if callable(stream_fn):
                 try:

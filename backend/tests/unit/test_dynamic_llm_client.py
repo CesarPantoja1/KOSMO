@@ -283,3 +283,50 @@ async def test_dynamic_client_caches_with_hashed_api_key(dynamic_client, mock_re
         assert raw_api_key not in str(cached_keys)
         expected_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()[:16]
         assert key_hash == expected_hash
+
+
+@pytest.mark.asyncio
+async def test_dynamic_client_stream_typed_resolves_client_before_semaphore(dynamic_client, mock_repo):
+    # Arrange
+    events: list[str] = []
+    original_resolve = dynamic_client._resolve_client
+
+    async def traced_resolve():
+        events.append("resolve")
+        return await original_resolve()
+
+    original_acquire = dynamic_client._semaphore.acquire
+
+    async def traced_acquire():
+        events.append("acquire")
+        return await original_acquire()
+
+    dynamic_client._resolve_client = traced_resolve
+    dynamic_client._semaphore.acquire = traced_acquire
+
+    current_user_id.set(None)
+    mock_repo.by_user_id.return_value = None
+
+    class FakeStreamedResult:
+        async def stream_text(self, *, delta: bool = False):  # noqa: ARG002
+            yield "chunk"
+
+        async def get_data(self):
+            return "done"
+
+    @asynccontextmanager
+    async def fake_stream_typed(*_args, **_kwargs):
+        yield FakeStreamedResult()
+
+    mock_pydantic_client = AsyncMock()
+    mock_pydantic_client.stream_typed = fake_stream_typed
+
+    with patch("kosmo.infrastructure.llm.dynamic_llm_client.PydanticAILLMClient", return_value=mock_pydantic_client):
+        prompt = PromptTemplate(system_prompt="sys", user_prompt="hello")
+        async with dynamic_client.stream_typed(prompt=prompt, output_type=str) as streamed:
+            async for _ in streamed.stream_text():
+                pass
+
+    # Assert: client resolution must execute strictly before acquiring the concurrency semaphore
+    assert events == ["resolve", "acquire"]
+
