@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -295,12 +296,125 @@ def git_revert_commit(workspace_path: Path | str, commit: str) -> None:
     _run_git(["git", "revert", "--no-edit", commit], workspace_path, check=True)
 
 
+async def run_git_async(
+    cmd: list[str],
+    workspace_path: Path | str,
+    *,
+    check: bool = True,
+    timeout: float | None = 60.0,
+) -> subprocess.CompletedProcess[str]:
+    """Helper interno asíncrono para ejecutar comandos de Git fuera del event loop principal."""
+    return await asyncio.to_thread(_run_git, cmd, workspace_path, check=check, timeout=timeout)
+
+
+async def git_init_async(
+    workspace_path: Path | str,
+    initial_branch: str = "main",
+    user_name: str = "KOSMO Bot",
+    user_email: str = "bot@kosmo.ai",
+) -> None:
+    """Versión asíncrona de git_init."""
+    await asyncio.to_thread(git_init, workspace_path, initial_branch, user_name, user_email)
+
+
+async def git_add_async(workspace_path: Path | str, pattern: str = ".") -> None:
+    """Versión asíncrona de git_add."""
+    await asyncio.to_thread(git_add, workspace_path, pattern)
+
+
+async def git_commit_async(
+    workspace_path: Path | str,
+    message: str,
+    *,
+    allow_empty: bool = False,
+) -> bool:
+    """Versión asíncrona de git_commit."""
+    return await asyncio.to_thread(git_commit, workspace_path, message, allow_empty=allow_empty)
+
+
+async def git_rollback_async(workspace_path: Path | str) -> None:
+    """Versión asíncrona de git_rollback."""
+    await asyncio.to_thread(git_rollback, workspace_path)
+
+
+async def git_status_async(workspace_path: Path | str) -> str:
+    """Versión asíncrona de git_status."""
+    return await asyncio.to_thread(git_status, workspace_path)
+
+
+async def git_is_clean_async(workspace_path: Path | str) -> bool:
+    """Versión asíncrona de git_is_clean."""
+    return await asyncio.to_thread(git_is_clean, workspace_path)
+
+
+async def git_has_commits_async(workspace_path: Path | str) -> bool:
+    """Versión asíncrona de git_has_commits."""
+    return await asyncio.to_thread(git_has_commits, workspace_path)
+
+
+async def git_head_hash_async(workspace_path: Path | str) -> str | None:
+    """Versión asíncrona de git_head_hash."""
+    return await asyncio.to_thread(git_head_hash, workspace_path)
+
+
+async def git_current_branch_async(workspace_path: Path | str) -> str:
+    """Versión asíncrona de git_current_branch."""
+    return await asyncio.to_thread(git_current_branch, workspace_path)
+
+
+async def git_remote_add_or_update_async(
+    workspace_path: Path | str,
+    name: str = "origin",
+    url: str = "",
+) -> None:
+    """Versión asíncrona de git_remote_add_or_update."""
+    await asyncio.to_thread(git_remote_add_or_update, workspace_path, name=name, url=url)
+
+
+async def git_remote_get_url_async(
+    workspace_path: Path | str,
+    name: str = "origin",
+) -> str | None:
+    """Versión asíncrona de git_remote_get_url."""
+    return await asyncio.to_thread(git_remote_get_url, workspace_path, name=name)
+
+
+async def git_push_async(
+    workspace_path: Path | str,
+    remote: str = "origin",
+    branch: str | None = None,
+    *,
+    token: str | None = None,
+    force_with_lease: bool = False,
+    set_upstream: bool = True,
+) -> str:
+    """Versión asíncrona de git_push."""
+    return await asyncio.to_thread(
+        git_push,
+        workspace_path,
+        remote=remote,
+        branch=branch,
+        token=token,
+        force_with_lease=force_with_lease,
+        set_upstream=set_upstream,
+    )
+
+
+async def git_revert_commit_async(workspace_path: Path | str, commit: str) -> None:
+    """Versión asíncrona de git_revert_commit."""
+    await asyncio.to_thread(git_revert_commit, workspace_path, commit)
+
+
 class LocalGitWorkspaceAdapter:
     """Adaptador de infraestructura para operaciones Git en el workspace local."""
 
     def remote_add_or_update(self, workspace_path: str, name: str, url: str) -> None:
         """Añade un remoto al repositorio local o actualiza su URL si ya existe."""
         git_remote_add_or_update(workspace_path, name=name, url=url)
+
+    async def remote_add_or_update_async(self, workspace_path: str, name: str, url: str) -> None:
+        """Añade un remoto al repositorio local o actualiza su URL asíncronamente."""
+        await asyncio.to_thread(self.remote_add_or_update, workspace_path, name=name, url=url)
 
     def build_authenticated_url(self, repo_url: str, token: str) -> str:
         """Construye una URL HTTPS autenticada utilizando el token provisto."""
@@ -316,3 +430,14 @@ class LocalGitWorkspaceAdapter:
     ) -> str:
         """Ejecuta git push sin persistir credenciales en el remoto local."""
         return git_push(workspace_path, remote=remote, branch=branch, token=token)
+
+    async def push_async(
+        self,
+        workspace_path: str,
+        remote: str = "origin",
+        branch: str | None = None,
+        *,
+        token: str | None = None,
+    ) -> str:
+        """Ejecuta git push asíncronamente sin persistir credenciales en el remoto local."""
+        return await asyncio.to_thread(self.push, workspace_path, remote=remote, branch=branch, token=token)
