@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 
 from kosmo.config import Settings
 from kosmo.contracts.telemetry import (
@@ -15,7 +16,11 @@ from kosmo.contracts.telemetry import (
     set_telemetry_provider,
     traced,
 )
-from kosmo.infrastructure.telemetry.bootstrap import configure_telemetry
+from kosmo.infrastructure.telemetry.bootstrap import (
+    configure_telemetry,
+    instrument_app,
+    instrument_prometheus,
+)
 from kosmo.infrastructure.telemetry.otel import OpenTelemetryProvider
 
 
@@ -270,3 +275,35 @@ def test_opentelemetry_provider_record_codegen_and_llm_metrics() -> None:
     provider.record_codegen_retries(retries_count=3, success=False)
     provider.record_llm_tokens(tokens=1200, model="gpt-4o-mini", user_id="usr_01")
     provider.record_llm_tokens(tokens=300, model="", user_id=None)
+
+
+@pytest.mark.unit
+def test_instrument_app_is_idempotent() -> None:
+    # Arrange
+    from unittest.mock import MagicMock
+
+    from sqlalchemy.ext.asyncio import AsyncEngine
+
+    app = FastAPI()
+    settings = Settings()
+    engine = MagicMock(spec=AsyncEngine)
+
+    # Act
+    instrument_app(settings, app=app, db_engine=engine)
+    instrument_app(settings, app=app, db_engine=engine)
+
+    # Assert
+    assert getattr(app.state, "_kosmo_instrumented", False) is True
+
+
+@pytest.mark.unit
+def test_instrument_prometheus_is_idempotent() -> None:
+    # Arrange
+    app = FastAPI()
+
+    # Act
+    instrument_prometheus(app)
+    instrument_prometheus(app)
+
+    # Assert
+    assert getattr(app.state, "_kosmo_prometheus_instrumented", False) is True
