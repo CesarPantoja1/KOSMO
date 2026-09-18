@@ -855,3 +855,52 @@ async def test_sync_github_repository_libera_workspace_lock_en_error(
 
     workspace_manager.acquire_lock.assert_awaited_once_with(project_id)
     workspace_manager.release_lock.assert_awaited_once_with(project_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_skip_lock_and_skip_validation(
+    use_case: SyncGitHubRepositoryUseCase,
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+) -> None:
+    # Arrange
+    project_id = ProjectId("proj-skip-lock-test")
+    user_id = UserId("usr-123")
+
+    project_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_url="https://github.com/octocat/my-repo.git",
+        repo_name="my-repo",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    project_repo.save.side_effect = lambda integration: integration
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"token").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"decrypted_token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"),
+        project_id=project_id,
+        workspace_dir="/tmp/workspaces/proj-skip-lock-test",
+    )
+    git_workspace.push.return_value = "commit_sha_skip"
+
+    cmd = SyncGitHubRepositoryCommand(
+        project_id=project_id,
+        skip_lock=True,
+        skip_validation=True,
+    )
+
+    # Act
+    result = await use_case.execute(cmd, user_id)
+
+    # Assert
+    workspace_manager.acquire_lock.assert_not_called()
+    workspace_manager.release_lock.assert_not_called()
+    assert result.last_commit_hash == "commit_sha_skip"

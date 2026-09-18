@@ -22,6 +22,7 @@ from kosmo.application.integrations.sync_github_repository import (
     SyncGitHubRepositoryUseCase,
 )
 from kosmo.contracts.auth import Principal
+from kosmo.contracts.auth.context import current_user_id
 from kosmo.contracts.integrations.deployment import (
     DeploymentProvider,
     DeploymentStatus,
@@ -39,6 +40,7 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceManagerPort,
 )
 from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.ids import UserId
 from kosmo.contracts.sdd.repositories import ProjectRepository
 from kosmo.contracts.telemetry import record_codegen_duration, record_codegen_retries
 from kosmo.domain.sdd.document_converters import slugify_spanish
@@ -140,7 +142,9 @@ class PostDeployService:
         if self._sync_github_repository is not None and self._project_repo is not None:
             try:
                 proj = await self._project_repo.by_id(feature.project_id)
-                if proj is not None and proj.owner_id:
+                caller_user_id = current_user_id.get()
+                effective_user_id = UserId(caller_user_id) if caller_user_id else (proj.owner_id if proj else None)
+                if proj is not None and effective_user_id:
                     await emit_event(
                         OpenCodeEvent(
                             event_type=OpenCodeEventType.BUILD_PROGRESS,
@@ -151,12 +155,16 @@ class PostDeployService:
                             },
                         )
                     )
+                    repo_slug = proj.slug or f"project-{feature.project_id}"
                     sync_cmd = SyncGitHubRepositoryCommand(
                         project_id=feature.project_id,
                         project_name=proj.name if proj else None,
+                        repo_name=repo_slug,
                         commit_message=commit_msg,
+                        skip_lock=True,
+                        skip_validation=True,
                     )
-                    sync_res = await self._sync_github_repository.execute(sync_cmd, proj.owner_id)
+                    sync_res = await self._sync_github_repository.execute(sync_cmd, effective_user_id)
                     await emit_event(
                         OpenCodeEvent(
                             event_type=OpenCodeEventType.BUILD_PROGRESS,

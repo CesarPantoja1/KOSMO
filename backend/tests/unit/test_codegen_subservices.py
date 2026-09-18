@@ -444,6 +444,94 @@ async def test_post_deploy_service_handle_success() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.unit
+async def test_post_deploy_service_handle_success_triggers_auto_github_sync() -> None:
+    # Arrange
+    from unittest.mock import AsyncMock, MagicMock
+
+    from kosmo.application.integrations.sync_github_repository import SyncGitHubRepositoryUseCase
+    from kosmo.contracts.sdd.ids import UserId
+
+    feature = _a_feature()
+    impl = _an_impl(feature)
+    impl_repo = InMemoryFeatureImplementationRepository()
+    await impl_repo.save(impl)
+    ws_manager = _FakeWorkspaceManager()
+
+    traceability_repo = InMemoryTraceabilityRepository()
+    req_repo = InMemoryRequirementRepository()
+    register_traceability = RegisterCodeTraceabilityUseCase(
+        traceability_repo=traceability_repo,
+        requirement_repo=req_repo,
+    )
+
+    project_repo = AsyncMock()
+    project = MagicMock()
+    project.id = feature.project_id
+    project.name = "My App"
+    project.slug = "my-app"
+    project.owner_id = UserId("usr_test_owner")
+    project_repo.by_id.return_value = project
+
+    mock_sync_github = AsyncMock(spec=SyncGitHubRepositoryUseCase)
+    mock_sync_result = MagicMock()
+    mock_sync_result.repo_url = "https://github.com/owner/my-app.git"
+    mock_sync_result.last_commit_hash = "abc123commit"
+    mock_sync_github.execute.return_value = mock_sync_result
+
+    service = PostDeployService(
+        workspace_manager=ws_manager,
+        implementation_repo=impl_repo,
+        register_traceability=register_traceability,
+        project_repo=project_repo,
+        sync_github_repository=mock_sync_github,
+    )
+
+    events: list[OpenCodeEvent] = []
+
+    async def _emit(ev: OpenCodeEvent) -> None:
+        events.append(ev)
+
+    val_result = ValidationRunResult(
+        steps=(ValidationStepResult(step=ValidationStep.STRUCTURE, success=True),),
+        all_passed=True,
+    )
+
+    # Act
+    result = await service.handle_success(
+        feature=feature,
+        impl=impl,
+        workspace=None,
+        session_id="oc_test_sess",
+        generated_files={"src/app/page.tsx"},
+        req_markdown="REQ-1.1",
+        validation_result=val_result,
+        retry_history=(),
+        attempt=1,
+        val_duration=2.5,
+        total_start=0.0,
+        emit_event=_emit,
+    )
+
+    # Assert
+    assert result.success is True
+    assert result.status == FeatureImplementationStatus.IMPLEMENTED
+    mock_sync_github.execute.assert_awaited_once()
+    sync_cmd, user_id_arg = mock_sync_github.execute.call_args[0]
+    assert sync_cmd.project_id == feature.project_id
+    assert sync_cmd.skip_lock is True
+    assert sync_cmd.skip_validation is True
+    assert sync_cmd.repo_name == "my-app"
+    assert user_id_arg == UserId("usr_test_owner")
+
+    # Verifica que se emitio el evento de github_synced
+    synced_events = [ev for ev in events if ev.data.get("stage") == "github_synced"]
+    assert len(synced_events) == 1
+    assert synced_events[0].data["repo_url"] == "https://github.com/owner/my-app.git"
+    assert synced_events[0].data["commit_hash"] == "abc123commit"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
 async def test_post_deploy_service_handle_failure() -> None:
     feature = _a_feature()
     impl = _an_impl(feature)

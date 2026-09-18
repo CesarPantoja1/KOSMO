@@ -38,6 +38,8 @@ class SyncGitHubRepositoryCommand:
     repo_name: str | None = None
     is_public: bool = True
     commit_message: str | None = None
+    skip_lock: bool = False
+    skip_validation: bool = False
 
 
 class SyncGitHubRepositoryUseCase:
@@ -70,7 +72,8 @@ class SyncGitHubRepositoryUseCase:
         cmd: SyncGitHubRepositoryCommand,
         user_id: UserId,
     ) -> ProjectGitHubIntegration:
-        await self._workspace_manager.acquire_lock(cmd.project_id)
+        if not cmd.skip_lock:
+            await self._workspace_manager.acquire_lock(cmd.project_id)
         try:
             if cmd.is_public is False:
                 raise ValueError(
@@ -111,7 +114,7 @@ class SyncGitHubRepositoryUseCase:
             try:
                 # El workspace debe ser válido antes de provocar efectos externos. De este
                 # modo una plantilla rota no crea ni publica un repositorio remoto vacío.
-                if self._ephemeral_validator is not None:
+                if not cmd.skip_validation and self._ephemeral_validator is not None:
                     val_res = await self._ephemeral_validator.execute(
                         ExecuteEphemeralValidationCommand(
                             workspace_path=workspace.workspace_dir,
@@ -252,5 +255,6 @@ class SyncGitHubRepositoryUseCase:
                 await self._sync_log_repo.add_log(log)
                 raise
         finally:
-            with contextlib.suppress(Exception):
-                await self._workspace_manager.release_lock(cmd.project_id)
+            if not cmd.skip_lock:
+                with contextlib.suppress(Exception):
+                    await self._workspace_manager.release_lock(cmd.project_id)
