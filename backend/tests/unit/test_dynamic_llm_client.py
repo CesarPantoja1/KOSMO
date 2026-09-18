@@ -283,4 +283,3 @@ async def test_dynamic_client_caches_with_hashed_api_key(dynamic_client, mock_re
         assert raw_api_key not in str(cached_keys)
         expected_hash = hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()[:16]
         assert key_hash == expected_hash
-

@@ -468,4 +468,3 @@ async def test_local_git_workspace_adapter_async_methods() -> None:
         pushed_hash = await adapter.push_async(str(ws_path), remote="origin", branch="main")
         head = await git_head_hash_async(ws_path)
         assert pushed_hash == head
-

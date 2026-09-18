@@ -155,12 +155,17 @@ async def get_implementation_by_feature(
     try:
         trace_repo = getattr(container.repos, "traceability", None)
         if trace_repo is not None:
-            impact = await trace_repo.get_impact(str(impl.feature_id))
-            traceability_edges_count += len(impact.get("upstream", [])) + len(impact.get("downstream", []))
-            for req_code in req_matches:
-                req_key = f"{impl.feature_id}:{req_code.upper()}"
-                req_impact = await trace_repo.get_impact(req_key)
-                traceability_edges_count += len(req_impact.get("upstream", [])) + len(req_impact.get("downstream", []))
+            artifact_keys = [str(impl.feature_id)] + [
+                f"{impl.feature_id}:{req_code.upper()}" for req_code in req_matches
+            ]
+            if hasattr(trace_repo, "get_impact_batch"):
+                batch_impact = await trace_repo.get_impact_batch(artifact_keys)
+                for impact in batch_impact.values():
+                    traceability_edges_count += len(impact.get("upstream", [])) + len(impact.get("downstream", []))
+            else:
+                for key in artifact_keys:
+                    impact = await trace_repo.get_impact(key)
+                    traceability_edges_count += len(impact.get("upstream", [])) + len(impact.get("downstream", []))
     except Exception:
         _log.debug("implementations.traceability_count_failed", feature_id=str(impl.feature_id), exc_info=True)
         traceability_edges_count = 0

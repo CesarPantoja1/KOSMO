@@ -388,18 +388,21 @@ class InMemoryTraceabilityRepository:
     def __init__(self) -> None:
         self.edges: list[tuple[str, str, str, str, str]] = []
 
+    async def get_impact_batch(self, artifact_ids: list[str]) -> dict[str, dict[str, list[dict[str, str]]]]:
+        results: dict[str, dict[str, list[dict[str, str]]]] = {
+            aid: {"upstream": [], "downstream": []} for aid in artifact_ids
+        }
+        artifact_set = set(artifact_ids)
+        for source_type, source_id, target_type, target_id, origin in self.edges:
+            if target_id in artifact_set:
+                results[target_id]["upstream"].append({"type": source_type, "id": source_id, "origin": origin})
+            if source_id in artifact_set:
+                results[source_id]["downstream"].append({"type": target_type, "id": target_id, "origin": origin})
+        return results
+
     async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
-        upstream = [
-            {"type": source_type, "id": source_id, "origin": origin}
-            for source_type, source_id, _target_type, target_id, origin in self.edges
-            if target_id == artifact_id
-        ]
-        downstream = [
-            {"type": target_type, "id": target_id, "origin": origin}
-            for _source_type, source_id, target_type, target_id, origin in self.edges
-            if source_id == artifact_id
-        ]
-        return {"upstream": upstream, "downstream": downstream}
+        batch = await self.get_impact_batch([artifact_id])
+        return batch.get(artifact_id, {"upstream": [], "downstream": []})
 
     async def add_edge(
         self,
