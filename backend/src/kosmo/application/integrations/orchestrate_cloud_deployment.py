@@ -40,7 +40,6 @@ class OrchestrateCloudDeploymentCommand:
     environment_variables: dict[str, str] | None = None
 
 
-OrquestarDespliegueNubeCommand = OrchestrateCloudDeploymentCommand
 DeployRailwayCommand = OrchestrateCloudDeploymentCommand
 
 
@@ -229,5 +228,4 @@ class OrchestrateCloudDeploymentUseCase:
         return deployment
 
 
-OrquestarDespliegueNubeUseCase = OrchestrateCloudDeploymentUseCase
 DeployRailwayUseCase = OrchestrateCloudDeploymentUseCase

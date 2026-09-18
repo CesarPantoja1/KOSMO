@@ -19,7 +19,6 @@ from kosmo.application.integrations.link_deployment_provider import (
     LinkDeploymentPlatformUseCase,
     LinkDeploymentProviderCommand,
     LinkDeploymentProviderUseCase,
-    VincularPlataformaDespliegueUseCase,
 )
 from kosmo.application.integrations.link_github_account import (
     LinkGitHubAccountCommand,
@@ -34,8 +33,6 @@ from kosmo.application.integrations.orchestrate_cloud_deployment import (
     DeployRailwayUseCase,
     OrchestrateCloudDeploymentCommand,
     OrchestrateCloudDeploymentUseCase,
-    OrquestarDespliegueNubeCommand,
-    OrquestarDespliegueNubeUseCase,
 )
 from kosmo.application.integrations.sync_github_repository import (
     SyncGitHubRepositoryCommand,
@@ -53,7 +50,6 @@ __all__ = [
     "LinkDeploymentPlatformUseCase",
     "LinkDeploymentProviderCommand",
     "LinkDeploymentProviderUseCase",
-    "VincularPlataformaDespliegueUseCase",
     "LinkGitHubAccountCommand",
     "LinkGitHubAccountUseCase",
     "HandleDeploymentFailureCommand",
@@ -64,8 +60,6 @@ __all__ = [
     "DeployRailwayUseCase",
     "OrchestrateCloudDeploymentCommand",
     "OrchestrateCloudDeploymentUseCase",
-    "OrquestarDespliegueNubeCommand",
-    "OrquestarDespliegueNubeUseCase",
     "SyncGitHubRepositoryCommand",
     "SyncGitHubRepositoryUseCase",
 ]

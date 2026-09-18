@@ -6,8 +6,6 @@ import pytest
 from kosmo.application.integrations.orchestrate_cloud_deployment import (
     OrchestrateCloudDeploymentCommand,
     OrchestrateCloudDeploymentUseCase,
-    OrquestarDespliegueNubeCommand,
-    OrquestarDespliegueNubeUseCase,
 )
 from kosmo.contracts.auth.principal import Principal
 from kosmo.contracts.auth.secrets import EncryptedSecret
@@ -350,7 +348,7 @@ async def test_orchestrate_deployment_full_integration_with_fakes():
     mock_client = AsyncMock()
     mock_client.create_service.return_value = "srv_live_123"
 
-    use_case = OrquestarDespliegueNubeUseCase(
+    use_case = OrchestrateCloudDeploymentUseCase(
         project_deployment_repo=project_repo,
         user_deployment_repo=user_repo,
         project_github_repo=github_repo,
@@ -359,7 +357,7 @@ async def test_orchestrate_deployment_full_integration_with_fakes():
     )
 
     # Act
-    cmd = OrquestarDespliegueNubeCommand(project_id=project_id)
+    cmd = OrchestrateCloudDeploymentCommand(project_id=project_id)
     deployment = await use_case.execute(principal, cmd)
 
     # Assert
