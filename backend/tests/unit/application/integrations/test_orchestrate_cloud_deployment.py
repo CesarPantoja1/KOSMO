@@ -488,3 +488,65 @@ async def test_orchestrate_deployment_passes_last_commit_hash(
         service_id="srv_railway_999",
         commit_sha="abcdef1234567890",
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_orchestrate_deployment_autosyncs_workspace_when_sync_use_case_injected(
+    mock_project_deployment_repo: AsyncMock,
+    mock_user_deployment_repo: AsyncMock,
+    mock_project_github_repo: AsyncMock,
+    mock_deployment_client: AsyncMock,
+    mock_cipher: MagicMock,
+    principal: Principal,
+):
+    # Arrange
+    project_id = ProjectId("prj_autosync_test_01")
+    cmd = OrchestrateCloudDeploymentCommand(project_id=project_id)
+    mock_sync_use_case = AsyncMock()
+
+    use_case = OrchestrateCloudDeploymentUseCase(
+        project_deployment_repo=mock_project_deployment_repo,
+        user_deployment_repo=mock_user_deployment_repo,
+        project_github_repo=mock_project_github_repo,
+        deployment_client=mock_deployment_client,
+        cipher=mock_cipher,
+        sync_github_use_case=mock_sync_use_case,
+    )
+
+    mock_user_deployment_repo.get_by_user_id.return_value = UserDeploymentIntegration(
+        user_id=UserId(principal.subject),
+        provider=DeploymentProvider.RAILWAY,
+        encrypted_token=base64.b64encode(b"ciphertext_rw").decode("utf-8"),
+    )
+    mock_cipher.decrypt.return_value = b"decrypted_railway_token"
+
+    mock_project_github_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="inventory-app",
+        repo_url="https://github.com/octocat/inventory-app",
+        sync_status=GitHubSyncStatus.SYNCED,
+        last_commit_hash="old_commit_111",
+    )
+
+    mock_sync_use_case.execute.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="inventory-app",
+        repo_url="https://github.com/octocat/inventory-app",
+        sync_status=GitHubSyncStatus.SYNCED,
+        last_commit_hash="new_autosynced_commit_222",
+    )
+
+    mock_project_deployment_repo.get_by_project_id.return_value = None
+    mock_deployment_client.create_service.return_value = "srv_railway_999"
+
+    # Act
+    await use_case.execute(principal, cmd)
+
+    # Assert
+    mock_sync_use_case.execute.assert_called_once()
+    mock_deployment_client.trigger_deployment.assert_called_once_with(
+        token="decrypted_railway_token",
+        service_id="srv_railway_999",
+        commit_sha="new_autosynced_commit_222",
+    )

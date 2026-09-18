@@ -5,6 +5,10 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from kosmo.application.integrations.sync_github_repository import (
+    SyncGitHubRepositoryCommand,
+    SyncGitHubRepositoryUseCase,
+)
 from kosmo.contracts.auth.principal import Principal
 from kosmo.contracts.auth.secrets import EncryptedSecret, SecretCipher
 from kosmo.contracts.integrations.deployment import (
@@ -53,12 +57,14 @@ class OrchestrateCloudDeploymentUseCase:
         project_github_repo: ProjectGitHubIntegrationRepository,
         deployment_client: DeploymentProviderPort,
         cipher: SecretCipher,
+        sync_github_use_case: SyncGitHubRepositoryUseCase | None = None,
     ) -> None:
         self._project_deployment_repo = project_deployment_repo
         self._user_deployment_repo = user_deployment_repo
         self._project_github_repo = project_github_repo
         self._deployment_client = deployment_client
         self._cipher = cipher
+        self._sync_github_use_case = sync_github_use_case
 
     async def _refresh_user_token(self, user_integration: UserDeploymentIntegration) -> str:
         """Renueva el token de acceso utilizando el refresh token cifrado del usuario y actualiza la base de datos."""
@@ -131,6 +137,22 @@ class OrchestrateCloudDeploymentUseCase:
                 "El proyecto no cuenta con un repositorio remoto de GitHub sincronizado. "
                 "Debes sincronizar el código con GitHub antes de publicar en la nube."
             )
+
+        # Autosincronizar cambios pendientes de infraestructura (ej. Dockerfile, config) antes de disparar el despliegue
+        if self._sync_github_use_case is not None:
+            try:
+                sync_cmd = SyncGitHubRepositoryCommand(
+                    project_id=cmd.project_id,
+                    commit_message="chore: sync latest project configuration before deployment",
+                )
+                updated_github = await self._sync_github_use_case.execute(sync_cmd, UserId(principal.subject))
+                if updated_github and updated_github.last_commit_hash:
+                    github_integration = updated_github
+            except Exception as sync_err:
+                logger.warning(
+                    "No se pudo autosincronizar el repositorio de GitHub antes de desplegar: %s",
+                    sync_err,
+                )
 
         # 4. Configurar variables de entorno predeterminadas y personalizadas
         default_env_vars = [

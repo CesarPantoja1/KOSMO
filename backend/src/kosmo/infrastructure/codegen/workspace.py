@@ -334,6 +334,34 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
             if site_file.exists() and site_config_content is not None:
                 site_file.write_text(site_config_content, encoding="utf-8")
 
+            # Sincronizar y reparar infraestructura de despliegue (Dockerfile, next.config.ts, db/index.ts)
+            tmpl_dockerfile = self._template_dir / "Dockerfile" if self._template_dir else None
+            target_dockerfile = target_dir / "Dockerfile"
+            if tmpl_dockerfile and tmpl_dockerfile.exists():
+                needs_update = False
+                if not target_dockerfile.exists():
+                    needs_update = True
+                else:
+                    cur_df = target_dockerfile.read_text(encoding="utf-8")
+                    if "--ignore-scripts" in cur_df or "better-sqlite3" not in cur_df:
+                        needs_update = True
+                if needs_update:
+                    target_dockerfile.write_text(tmpl_dockerfile.read_text(encoding="utf-8"), encoding="utf-8")
+
+            tmpl_next_config = self._template_dir / "next.config.ts" if self._template_dir else None
+            target_next_config = target_dir / "next.config.ts"
+            if tmpl_next_config and tmpl_next_config.exists() and target_next_config.exists():
+                cur_nc = target_next_config.read_text(encoding="utf-8")
+                if "serverExternalPackages" not in cur_nc:
+                    target_next_config.write_text(tmpl_next_config.read_text(encoding="utf-8"), encoding="utf-8")
+
+            tmpl_db_index = self._template_dir / "src" / "db" / "index.ts" if self._template_dir else None
+            target_db_index = target_dir / "src" / "db" / "index.ts"
+            if tmpl_db_index and tmpl_db_index.exists() and target_db_index.exists():
+                cur_db = target_db_index.read_text(encoding="utf-8")
+                if "fallbackErr" not in cur_db:
+                    target_db_index.write_text(tmpl_db_index.read_text(encoding="utf-8"), encoding="utf-8")
+
             # Generar las skills en .opencode/skills si no existen
             skills_dir = target_dir / ".opencode" / "skills"
             for skill_name, skill_content in skills_map.items():
@@ -345,9 +373,11 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
             if self._git_init:
                 with contextlib.suppress(Exception):
                     git_init(target_dir)
+                    git_add(target_dir)
                     if not git_has_commits(target_dir):
-                        git_add(target_dir)
                         git_commit(target_dir, "chore: initialize workspace template and configurations")
+                    else:
+                        git_commit(target_dir, "chore: update build and database deployment configuration")
 
         await asyncio.to_thread(_init_disk_workspace)
 

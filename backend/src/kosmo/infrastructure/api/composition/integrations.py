@@ -117,6 +117,7 @@ def build_integrations_components(
         project_github_repo=repos.project_integrations,
         deployment_client=railway_client,
         cipher=cipher,
+        sync_github_use_case=sync_github_repository,
     )
 
     monitor_deployment_status = MonitorDeploymentStatusUseCase(

@@ -19,7 +19,12 @@ function openSqliteDatabase(): Database.Database {
     return new Database(cleanPath);
   } catch (err) {
     console.warn(`[db] No se pudo abrir base de datos en '${cleanPath}':`, err);
-    return new Database(":memory:");
+    try {
+      return new Database(":memory:");
+    } catch (fallbackErr) {
+      console.warn("[db] No se pudo abrir base de datos en memoria:", fallbackErr);
+      throw err;
+    }
   }
 }
 
