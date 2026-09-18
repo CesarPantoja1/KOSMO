@@ -36,12 +36,25 @@ _AUTH_ERROR_KEYWORDS = (
 )
 
 
+def mask_user_id(user_id: str | None) -> str:
+    """Enmascara y trunca un user_id para registrarlo en logs de forma anónima."""
+    if not user_id:
+        return "anonymous"
+    cleaned = user_id.strip()
+    if not cleaned:
+        return "anonymous"
+    if len(cleaned) <= 6:
+        return f"{cleaned[0]}***{cleaned[-1]}" if len(cleaned) >= 2 else "***"
+    return f"{cleaned[:4]}***{cleaned[-4:]}"
+
+
 def is_ai_auth_error(exc: Exception) -> bool:
     if isinstance(exc, AIProviderAuthError):
         return True
     err_str = str(exc).lower()
     type_str = type(exc).__name__.lower()
     return any(keyword in err_str or keyword in type_str for keyword in _AUTH_ERROR_KEYWORDS)
+
 
 
 def build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
@@ -139,7 +152,12 @@ class DynamicUserLLMClient(LLMClient):
                 model = user_config.model
                 api_key = raw_key.decode("utf-8")
         except Exception:
-            _log.warning("dynamic_llm_client.resolve_user_config_failed", user_id=user_id, exc_info=True)
+            _log.warning(
+                "dynamic_llm_client.resolve_user_config_failed",
+                user_id=mask_user_id(user_id),
+                exc_info=True,
+            )
+
 
         self._config_cache[user_id] = (now, provider, model, api_key)
         return (provider, model, api_key)
