@@ -329,4 +329,3 @@ async def test_dynamic_client_stream_typed_resolves_client_before_semaphore(dyna
 
     # Assert: client resolution must execute strictly before acquiring the concurrency semaphore
     assert events == ["resolve", "acquire"]
-

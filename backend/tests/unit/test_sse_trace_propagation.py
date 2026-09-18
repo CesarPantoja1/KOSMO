@@ -61,6 +61,7 @@ async def test_sse_chat_response_handshake_and_headers_include_trace_id() -> Non
 
     async def fake_stream(_input_data):
         from kosmo.application.chat.process_chat_message import ChatStreamChunk
+
         yield ChatStreamChunk(content="Hello world")
 
     chat_uc.execute_stream = fake_stream
@@ -141,7 +142,7 @@ async def test_sse_chat_response_error_event_includes_trace_id() -> None:
 async def test_sse_consistency_response_handshake_includes_trace_id() -> None:
     # Arrange
     async def dummy_gen() -> AsyncGenerator[str]:
-        yield "data: {\"type\": \"progress\"}\n\n"
+        yield 'data: {"type": "progress"}\n\n'
 
     # Act
     response = await sse_consistency_response(dummy_gen())

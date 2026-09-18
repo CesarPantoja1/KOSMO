@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -313,3 +314,106 @@ def test_project_generation_rate_limiter_resolves_feature_id() -> None:
 
         res2 = client.post("/features/feat_abc/chat")
         assert res2.status_code == 429
+
+
+class _StallingRedis:
+    def __init__(self, delay: float = 0.05) -> None:
+        self.delay = delay
+
+    async def eval(self, *args: object, **kwargs: object) -> int:
+        await asyncio.sleep(self.delay)
+        return 1
+
+    async def ttl(self, *args: object, **kwargs: object) -> int:
+        await asyncio.sleep(self.delay)
+        return 60
+
+
+@pytest.mark.unit
+def test_ip_rate_limiter_timeout_in_eval_bypasses_in_dev(monkeypatch: pytest.MonkeyPatch) -> None:
+    import kosmo.infrastructure.api.dependencies.rate_limit as rl
+
+    monkeypatch.setattr(rl, "_REDIS_EVAL_TIMEOUT_SECONDS", 0.01)
+
+    limiter = IpRateLimiter(1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=_StallingRedis(delay=0.05),
+        settings=SimpleNamespace(env="development", rate_limit_required=False),
+    )
+
+    @app.get("/probe", dependencies=[Depends(limiter)])
+    async def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        res = client.get("/probe")
+        assert res.status_code == 200
+
+
+@pytest.mark.unit
+def test_ip_rate_limiter_timeout_in_eval_fails_closed_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    import kosmo.infrastructure.api.dependencies.rate_limit as rl
+
+    monkeypatch.setattr(rl, "_REDIS_EVAL_TIMEOUT_SECONDS", 0.01)
+
+    limiter = IpRateLimiter(1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=_StallingRedis(delay=0.05),
+        settings=SimpleNamespace(env="production", rate_limit_required=False),
+    )
+
+    @app.get("/probe", dependencies=[Depends(limiter)])
+    async def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        res = client.get("/probe")
+        assert res.status_code == 503
+        assert "temporalmente no disponible" in res.json()["detail"]
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_timeout_bypasses_in_dev(monkeypatch: pytest.MonkeyPatch) -> None:
+    import kosmo.infrastructure.api.dependencies.rate_limit as rl
+
+    monkeypatch.setattr(rl, "_REDIS_EVAL_TIMEOUT_SECONDS", 0.01)
+
+    limiter = ProjectGenerationRateLimiter(requests_per_hour=1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=_StallingRedis(delay=0.05),
+        settings=SimpleNamespace(env="development", rate_limit_required=False),
+    )
+
+    @app.post("/projects/{project_id}/generate", dependencies=[Depends(limiter)])
+    async def generate(project_id: str) -> dict[str, object]:
+        return {"ok": True, "project_id": project_id}
+
+    with TestClient(app) as client:
+        res = client.post("/projects/prj_123/generate")
+        assert res.status_code == 200
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_timeout_fails_closed_in_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    import kosmo.infrastructure.api.dependencies.rate_limit as rl
+
+    monkeypatch.setattr(rl, "_REDIS_EVAL_TIMEOUT_SECONDS", 0.01)
+
+    limiter = ProjectGenerationRateLimiter(requests_per_hour=1)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=_StallingRedis(delay=0.05),
+        settings=SimpleNamespace(env="production", rate_limit_required=False),
+    )
+
+    @app.post("/projects/{project_id}/generate", dependencies=[Depends(limiter)])
+    async def generate(project_id: str) -> dict[str, object]:
+        return {"ok": True, "project_id": project_id}
+
+    with TestClient(app) as client:
+        res = client.post("/projects/prj_123/generate")
+        assert res.status_code == 503
+        assert "temporalmente no disponible" in res.json()["detail"]

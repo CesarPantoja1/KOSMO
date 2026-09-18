@@ -11,5 +11,3 @@ __all__ = [
     "instrument_app",
     "instrument_prometheus",
 ]
-
-

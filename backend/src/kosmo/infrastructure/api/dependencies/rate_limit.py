@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import inspect
 import ipaddress
@@ -14,6 +15,7 @@ from kosmo.infrastructure.api.dependencies.container import get_container
 
 _log = structlog.get_logger("kosmo.rate_limit")
 _DEFAULT_TRUSTED_PROXIES = "127.0.0.1,::1,testclient,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+_REDIS_EVAL_TIMEOUT_SECONDS: float = 1.0
 
 
 def _should_fail_closed(container: Any) -> bool:
@@ -101,9 +103,23 @@ class IpRateLimiter:
         client_ip = _resolve_client_ip(request, container)
         key = f"auth:ip_rate:{request.url.path}:{client_ip}"
         try:
-            count = int(await redis.eval(self._LUA_SCRIPT, 1, key, str(self._limit), "60"))
+
+            async def _run_eval() -> int:
+                eval_res = redis.eval(self._LUA_SCRIPT, 1, key, str(self._limit), "60")
+                if inspect.isawaitable(eval_res):
+                    eval_res = await eval_res
+                return int(eval_res)
+
+            count = await asyncio.wait_for(_run_eval(), timeout=_REDIS_EVAL_TIMEOUT_SECONDS)
             if count > self._limit:
-                ttl = int(await redis.ttl(key))
+
+                async def _run_ttl() -> int:
+                    ttl_res = redis.ttl(key)
+                    if inspect.isawaitable(ttl_res):
+                        ttl_res = await ttl_res
+                    return int(ttl_res)
+
+                ttl = await asyncio.wait_for(_run_ttl(), timeout=_REDIS_EVAL_TIMEOUT_SECONDS)
                 retry_after = max(ttl, 1)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -202,22 +218,32 @@ class ProjectGenerationRateLimiter:
 
         key = f"gen:rate:{project_id}"
         try:
-            eval_res = redis.eval(self._LUA_SCRIPT, 1, key, str(limit), "3600")
-            if inspect.isawaitable(eval_res):
-                eval_res = await eval_res
-            try:
-                count = int(eval_res)
-            except (TypeError, ValueError):
+
+            async def _run_eval() -> int | None:
+                eval_res = redis.eval(self._LUA_SCRIPT, 1, key, str(limit), "3600")
+                if inspect.isawaitable(eval_res):
+                    eval_res = await eval_res
+                try:
+                    return int(eval_res)
+                except (TypeError, ValueError):
+                    return None
+
+            count = await asyncio.wait_for(_run_eval(), timeout=_REDIS_EVAL_TIMEOUT_SECONDS)
+            if count is None:
                 return
 
             if count > limit:
-                ttl_res = redis.ttl(key)
-                if inspect.isawaitable(ttl_res):
-                    ttl_res = await ttl_res
-                try:
-                    ttl = int(ttl_res)
-                except (TypeError, ValueError):
-                    ttl = 60
+
+                async def _run_ttl() -> int:
+                    ttl_res = redis.ttl(key)
+                    if inspect.isawaitable(ttl_res):
+                        ttl_res = await ttl_res
+                    try:
+                        return int(ttl_res)
+                    except (TypeError, ValueError):
+                        return 60
+
+                ttl = await asyncio.wait_for(_run_ttl(), timeout=_REDIS_EVAL_TIMEOUT_SECONDS)
                 retry_after = max(ttl, 1)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
