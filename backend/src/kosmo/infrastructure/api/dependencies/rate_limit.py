@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import inspect
 import ipaddress
 from typing import Any, cast
 
@@ -7,6 +9,7 @@ import structlog
 from fastapi import HTTPException, Request, status
 from redis.exceptions import RedisError
 
+from kosmo.contracts.sdd.ids import FeatureId
 from kosmo.infrastructure.api.dependencies.container import get_container
 
 _log = structlog.get_logger("kosmo.rate_limit")
@@ -17,9 +20,9 @@ def _should_fail_closed(container: Any) -> bool:
     settings = getattr(container, "settings", None)
     if settings is None:
         return False
-    return bool(
-        getattr(settings, "rate_limit_required", False) or getattr(settings, "env", "") in ("production", "staging")
-    )
+    rl_req = getattr(settings, "rate_limit_required", False)
+    env = getattr(settings, "env", "")
+    return (rl_req is True) or (isinstance(env, str) and env in ("production", "staging"))
 
 
 def _is_trusted_proxy(host: str, trusted_proxies_cfg: str) -> bool:
@@ -132,13 +135,52 @@ class ProjectGenerationRateLimiter:
         return current
     """
 
-    def __init__(self, requests_per_hour: int) -> None:
+    def __init__(self, requests_per_hour: int | None = None) -> None:
         self._limit = requests_per_hour
 
     async def __call__(self, request: Request, project_id: str = "") -> None:
+        try:
+            container = get_container(request)
+        except Exception:
+            app = getattr(request, "app", None)
+            container = getattr(getattr(app, "state", None), "container", None)
+
+        if container is None:
+            return
+
         if not project_id:
-            project_id = request.path_params.get("project_id", "unknown")
-        container = get_container(request)
+            raw_path_params = getattr(request, "path_params", None)
+            if isinstance(raw_path_params, dict):
+                pid_val = cast(dict[str, Any], raw_path_params).get("project_id")
+                if isinstance(pid_val, str) and pid_val:
+                    project_id = pid_val
+            if not project_id:
+                state = getattr(request, "state", None)
+                state_pid = getattr(state, "project_id", None)
+                if isinstance(state_pid, str):
+                    project_id = state_pid
+        if not project_id:
+            raw_path_params = getattr(request, "path_params", None)
+            if isinstance(raw_path_params, dict):
+                feat_val = cast(dict[str, Any], raw_path_params).get("feature_id")
+                if isinstance(feat_val, str) and feat_val:
+                    feature_id = feat_val
+                    repos = getattr(container, "repos", None)
+                    feature_repo = getattr(repos, "features", None)
+                    if feature_repo is not None and hasattr(feature_repo, "by_id"):
+                        with contextlib.suppress(Exception):
+                            feature = await feature_repo.by_id(FeatureId(feature_id))
+                            if feature is not None:
+                                project_id = str(feature.project_id)
+                                state = getattr(request, "state", None)
+                                if state is not None:
+                                    state.project_id = project_id
+                    if not project_id:
+                        project_id = f"feat_{feature_id}"
+
+        if not project_id:
+            project_id = "unknown"
+
         redis = cast(Any, getattr(container, "redis", None))
         fail_closed = _should_fail_closed(container)
 
@@ -152,11 +194,30 @@ class ProjectGenerationRateLimiter:
             _log.warning("rate_limit.bypassed_no_redis", project_id=project_id)
             return
 
+        limit = self._limit
+        if limit is None:
+            settings = getattr(container, "settings", None)
+            raw_limit = getattr(settings, "generation_rate_limit_per_hour", None)
+            limit = raw_limit if isinstance(raw_limit, int) and not isinstance(raw_limit, bool) else 120
+
         key = f"gen:rate:{project_id}"
         try:
-            count = int(await redis.eval(self._LUA_SCRIPT, 1, key, str(self._limit), "3600"))
-            if count > self._limit:
-                ttl = int(await redis.ttl(key))
+            eval_res = redis.eval(self._LUA_SCRIPT, 1, key, str(limit), "3600")
+            if inspect.isawaitable(eval_res):
+                eval_res = await eval_res
+            try:
+                count = int(eval_res)
+            except (TypeError, ValueError):
+                return
+
+            if count > limit:
+                ttl_res = redis.ttl(key)
+                if inspect.isawaitable(ttl_res):
+                    ttl_res = await ttl_res
+                try:
+                    ttl = int(ttl_res)
+                except (TypeError, ValueError):
+                    ttl = 60
                 retry_after = max(ttl, 1)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,

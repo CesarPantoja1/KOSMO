@@ -238,3 +238,78 @@ def test_rate_limiter_ignores_malformed_ip_from_trusted_proxy() -> None:
     # Falls back safely to 127.0.0.1
     assert "auth:ip_rate:/probe:127.0.0.1" in mock_redis._counts
     assert "auth:ip_rate:/probe:invalid_ip_injection" not in mock_redis._counts
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_blocks_after_exceeding_limit() -> None:
+    mock_redis = _MockRedis()
+    limiter = ProjectGenerationRateLimiter(requests_per_hour=2)
+    app = FastAPI()
+    app.state.container = SimpleNamespace(redis=mock_redis, settings=SimpleNamespace())
+
+    @app.post("/projects/{project_id}/generate", dependencies=[Depends(limiter)])
+    async def generate(project_id: str) -> dict[str, str]:
+        return {"project_id": project_id}
+
+    with TestClient(app) as client:
+        res1 = client.post("/projects/prj_1/generate")
+        assert res1.status_code == 200
+
+        res2 = client.post("/projects/prj_1/generate")
+        assert res2.status_code == 200
+
+        res3 = client.post("/projects/prj_1/generate")
+        assert res3.status_code == 429
+        assert "Retry-After" in res3.headers
+        assert "Limite de generaciones excedido" in res3.json()["detail"]
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_uses_settings_default() -> None:
+    mock_redis = _MockRedis()
+    limiter = ProjectGenerationRateLimiter()
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=mock_redis,
+        settings=SimpleNamespace(generation_rate_limit_per_hour=1),
+    )
+
+    @app.post("/projects/{project_id}/generate", dependencies=[Depends(limiter)])
+    async def generate(project_id: str) -> dict[str, str]:
+        return {"project_id": project_id}
+
+    with TestClient(app) as client:
+        res1 = client.post("/projects/prj_1/generate")
+        assert res1.status_code == 200
+
+        res2 = client.post("/projects/prj_1/generate")
+        assert res2.status_code == 429
+
+
+@pytest.mark.unit
+def test_project_generation_rate_limiter_resolves_feature_id() -> None:
+    mock_redis = _MockRedis()
+    limiter = ProjectGenerationRateLimiter(requests_per_hour=1)
+
+    class _MockFeatureRepo:
+        async def by_id(self, fid: object) -> object:
+            return SimpleNamespace(project_id="prj_resolved_from_feature")
+
+    app = FastAPI()
+    app.state.container = SimpleNamespace(
+        redis=mock_redis,
+        settings=SimpleNamespace(),
+        repos=SimpleNamespace(features=_MockFeatureRepo()),
+    )
+
+    @app.post("/features/{feature_id}/chat", dependencies=[Depends(limiter)])
+    async def feature_chat(feature_id: str) -> dict[str, str]:
+        return {"feature_id": feature_id}
+
+    with TestClient(app) as client:
+        res1 = client.post("/features/feat_abc/chat")
+        assert res1.status_code == 200
+        assert "gen:rate:prj_resolved_from_feature" in mock_redis._counts
+
+        res2 = client.post("/features/feat_abc/chat")
+        assert res2.status_code == 429

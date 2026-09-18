@@ -52,7 +52,7 @@ router = APIRouter(
     dependencies=[Depends(verify_project_owner)],
 )
 
-_generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 def _generate_features(request: Request) -> GenerateFeaturesUseCase:
@@ -157,6 +157,7 @@ async def suggest_features(
     project_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[SuggestFeaturesUseCase, Depends(_suggest_features)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> list[FeatureSuggestionResponse]:
     try:
         output = await use_case.execute(SuggestFeaturesInput(project_id=ProjectId(project_id)))

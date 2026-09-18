@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from kosmo.application.codegen.generate_feature_implementation import (
@@ -18,6 +18,7 @@ from kosmo.domain.codegen.path_safety import UnsafePathError, ensure_safe_path
 from kosmo.infrastructure.api.composition import AppContainer
 from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     GenerateImplementationRequest,
     GenerateImplementationResponse,
@@ -30,6 +31,8 @@ from kosmo.infrastructure.api.schemas import (
 _log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/implementations", tags=["Implementations"])
+
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 async def _require_project_owner(container: AppContainer, project_id: ProjectId, principal: Principal) -> None:
@@ -61,6 +64,7 @@ async def _owned_implementation(
 )
 async def start_implementation(
     request: GenerateImplementationRequest,
+    http_request: Request,
     principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> GenerateImplementationResponse:
@@ -72,6 +76,7 @@ async def start_implementation(
     if feature is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Característica no encontrada")
     await _require_project_owner(container, feature.project_id, principal)
+    await _generation_rate_limiter(http_request, project_id=str(feature.project_id))
 
     input_data = GenerateFeatureImplementationInput(
         feature_id=feature_id_obj,

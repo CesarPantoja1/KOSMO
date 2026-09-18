@@ -24,6 +24,7 @@ from kosmo.infrastructure.api.dependencies.auth import (
     verify_feature_owner,
 )
 from kosmo.infrastructure.api.dependencies.container import get_container
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     DocumentModifyRequestView,
     DocumentModifyResponseView,
@@ -38,6 +39,8 @@ router = APIRouter(
         404: {"model": HttpErrorResponse, "description": "Documento no encontrado"},
     },
 )
+
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 _PHASE_MAP: dict[str, SpecPhase] = {
     "discovery": SpecPhase.DESCUBRIMIENTO,
@@ -90,6 +93,11 @@ async def modify_document_direct(
     uc: Annotated[ProcessChatModificationUseCase, Depends(_chat_modification_uc)],
 ) -> DocumentModifyResponseView:
     await _verify_document_ownership(request, body.document_type, body.document_id, _principal)
+
+    state = getattr(request, "state", None)
+    raw_pid = getattr(state, "project_id", None)
+    target_project_id = raw_pid if isinstance(raw_pid, str) and raw_pid else body.document_id
+    await _generation_rate_limiter(request, project_id=str(target_project_id))
 
     phase = _PHASE_MAP.get(body.document_type)
     if phase is None:

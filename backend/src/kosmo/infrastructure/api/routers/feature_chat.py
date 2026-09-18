@@ -29,6 +29,7 @@ from kosmo.contracts.sdd.errors import (
 from kosmo.contracts.sdd.ids import ChatSessionId, FeatureId
 from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_feature_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     ChatHistoryResponse,
     ChatResponse,
@@ -44,6 +45,8 @@ router = APIRouter(
         status.HTTP_404_NOT_FOUND: {"description": "Característica o proyecto no encontrado."},
     },
 )
+
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 def _chat_uc(request: Request) -> ProcessChatMessageUseCase:
@@ -87,6 +90,7 @@ async def process_feature_chat_message(
     chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
     context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> ChatResponse:
     from kosmo.infrastructure.api.async_generation import validate_chat_content
 
@@ -201,6 +205,7 @@ async def stream_feature_chat_message(
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
     chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
     context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> StreamingResponse:
     from kosmo.infrastructure.api.async_generation import sse_chat_response
 

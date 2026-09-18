@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     cors_allowed_origins: str = "http://localhost:3000"
     auth_disabled: bool = False
     rate_limit_required: bool = False
+    generation_rate_limit_per_hour: int = 120
     trusted_proxies: str = "127.0.0.1,::1,testclient,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     server_workers: int = Field(default=1, validation_alias="WORKERS")
 

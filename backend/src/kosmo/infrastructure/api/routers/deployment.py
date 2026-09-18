@@ -31,6 +31,7 @@ from kosmo.infrastructure.api.dependencies import (
     get_orchestrate_cloud_deployment_use_case,
     get_principal,
 )
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 from kosmo.infrastructure.api.schemas import (
     DeployRailwayRequest,
     DeployStatusEnum,
@@ -39,6 +40,8 @@ from kosmo.infrastructure.api.schemas import (
 from kosmo.infrastructure.integrations.deployment_worker import DeploymentPollingWorker
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/deploy", tags=["deploy"])
+
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 def _require_project_owner(project: object, principal: Principal, project_id: str) -> None:
@@ -118,6 +121,7 @@ async def deploy_to_railway(
     use_case: Annotated[OrchestrateCloudDeploymentUseCase, Depends(get_orchestrate_cloud_deployment_use_case)],
     worker: Annotated[DeploymentPollingWorker, Depends(get_deployment_worker)],
     body: DeployRailwayRequest | None = None,
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> ProjectDeployStatusResponse:
     container = get_container(request)
     proj_id = ProjectId(project_id)

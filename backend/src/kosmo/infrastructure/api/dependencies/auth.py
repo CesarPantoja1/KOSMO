@@ -97,6 +97,7 @@ async def verify_feature_owner(
             detail=f"Característica '{feature_id}' no encontrada.",
         )
     await require_project_owner(container, feature.project_id, principal)
+    request.state.project_id = str(feature.project_id)
     return feature
 
 
