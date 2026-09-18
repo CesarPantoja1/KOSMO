@@ -1,15 +1,20 @@
 import asyncio
 import contextlib
+import json
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from ulid import ULID
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
 from kosmo.application.integrations.recover_pending_deployments import recover_pending_deployments
@@ -334,6 +339,71 @@ async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
             "instance": problem.instance,
             "trace_id": problem.trace_id,
             "violations": [{"loc": v.loc, "msg": v.msg, "input": v.input} for v in problem.violations],
+        },
+        media_type="application/problem+json",
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    status_code = exc.status_code
+    try:
+        title = HTTPStatus(status_code).phrase
+    except ValueError:
+        title = "HTTP Error"
+
+    detail = exc.detail if exc.detail else title
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "type": f"urn:kosmo:error:{status_code}",
+            "title": title,
+            "status": status_code,
+            "detail": detail,
+            "instance": request.url.path,
+            "trace_id": ULID().hex,
+            "violations": [],
+        },
+        headers=getattr(exc, "headers", None),
+        media_type="application/problem+json",
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    status_code = 422
+    violations: list[dict[str, Any]] = []
+    for err in exc.errors():
+        inp: Any = err.get("input")
+        safe_input: Any
+        if isinstance(inp, (str, int, float, bool, type(None))):
+            safe_input = inp
+        else:
+            try:
+                json.dumps(inp)
+                safe_input = inp
+            except (TypeError, ValueError):
+                safe_input = str(inp)
+
+        violations.append(
+            {
+                "loc": [str(x) for x in err.get("loc", [])],
+                "msg": str(err.get("msg", "")),
+                "input": safe_input,
+            }
+        )
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "type": "urn:kosmo:validation:error",
+            "title": "Error de validación",
+            "status": status_code,
+            "detail": "El formato o contenido de la solicitud es inválido",
+            "instance": request.url.path,
+            "trace_id": ULID().hex,
+            "violations": violations,
         },
         media_type="application/problem+json",
     )
