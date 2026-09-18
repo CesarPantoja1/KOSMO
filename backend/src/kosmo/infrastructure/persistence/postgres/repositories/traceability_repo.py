@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.contracts.sdd.ids import FeatureId, RequirementId
@@ -101,15 +101,11 @@ class SqlAlchemyTraceabilityRepository:
 
     async def delete_by_entity_id(self, entity_id: str) -> None:
         async with self._session_ctx() as session:
-            from sqlalchemy import or_
-
-            stmt = select(TraceabilityEdgeModel).where(
+            stmt = delete(TraceabilityEdgeModel).where(
                 or_(
                     TraceabilityEdgeModel.source_id == entity_id,
                     TraceabilityEdgeModel.target_id == entity_id,
                 )
             )
-            result = await session.execute(stmt)
-            for edge in result.scalars().all():
-                await session.delete(edge)
+            await session.execute(stmt)
             await self._commit(session)
