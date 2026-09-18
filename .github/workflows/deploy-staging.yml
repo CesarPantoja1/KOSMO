@@ -324,7 +324,6 @@ jobs:
     outputs:
       opencode_image_amd64: ${{ steps.images.outputs.opencode }}
       code_runner_image_amd64: ${{ steps.images.outputs.code_runner }}
-      preview_image_amd64: ${{ steps.images.outputs.preview }}
 
     steps:
       - name: Checkout release source
@@ -339,7 +338,6 @@ jobs:
           {
             echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}-amd64"
             echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}-amd64"
-            echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${GITHUB_SHA}-amd64"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -370,15 +368,6 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.code_runner }}
 
-      - name: Build and publish preview image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: ./docker/preview
-          file: ./docker/preview/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.images.outputs.preview }}
-
   build-opencode-arm64:
     name: Build code-generation images (ARM64)
     needs: wait-for-ci
@@ -390,7 +379,6 @@ jobs:
     outputs:
       opencode_image_arm64: ${{ steps.images.outputs.opencode }}
       code_runner_image_arm64: ${{ steps.images.outputs.code_runner }}
-      preview_image_arm64: ${{ steps.images.outputs.preview }}
 
     steps:
       - name: Checkout release source
@@ -405,7 +393,6 @@ jobs:
           {
             echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}-arm64"
             echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}-arm64"
-            echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${GITHUB_SHA}-arm64"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -436,15 +423,6 @@ jobs:
           push: true
           tags: ${{ steps.images.outputs.code_runner }}
 
-      - name: Build and publish ARM64 preview image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: ./docker/preview
-          file: ./docker/preview/Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ${{ steps.images.outputs.preview }}
-
   publish-opencode-manifests:
     name: Publish code-generation multi-architecture manifests
     needs:
@@ -457,7 +435,6 @@ jobs:
     outputs:
       opencode_image: ${{ steps.images.outputs.opencode }}
       code_runner_image: ${{ steps.images.outputs.code_runner }}
-      preview_image: ${{ steps.images.outputs.preview }}
 
     steps:
       - name: Define immutable image manifest references
@@ -469,7 +446,6 @@ jobs:
           {
             echo "opencode=${REGISTRY}/${owner}/kosmo-opencode:sha-${GITHUB_SHA}"
             echo "code_runner=${REGISTRY}/${owner}/kosmo-code-runner:sha-${GITHUB_SHA}"
-            echo "preview=${REGISTRY}/${owner}/kosmo-preview:sha-${GITHUB_SHA}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -494,10 +470,6 @@ jobs:
             --tag "${{ steps.images.outputs.code_runner }}" \
             "${{ needs.build-opencode.outputs.code_runner_image_amd64 }}" \
             "${{ needs.build-opencode-arm64.outputs.code_runner_image_arm64 }}"
-          docker buildx imagetools create \
-            --tag "${{ steps.images.outputs.preview }}" \
-            "${{ needs.build-opencode.outputs.preview_image_amd64 }}" \
-            "${{ needs.build-opencode-arm64.outputs.preview_image_arm64 }}"
 
   deploy-staging:
     name: Deploy Staging
@@ -594,12 +566,10 @@ jobs:
           STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
           STAGING_CODEGEN_ENV_FILE: ${{ secrets.STAGING_CODEGEN_ENV_FILE }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.STAGING_CLOUDFLARE_TUNNEL_TOKEN }}
-          CLOUDFLARE_PREVIEW_API_TOKEN: ${{ secrets.STAGING_PREVIEW_CLOUDFLARE_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$STAGING_ENV_FILE"
           test -n "$STAGING_CODEGEN_ENV_FILE"
-          test -n "$CLOUDFLARE_PREVIEW_API_TOKEN"
           work_dir="${RUNNER_TEMP}/kosmo-staging-deploy"
           install -d -m 700 "$work_dir"
           # GitHub Environment secrets may not end in a newline. Preserve the
@@ -612,13 +582,7 @@ jobs:
             "KOSMO_API_IMAGE=${{ needs.publish-backend-manifest.outputs.api_image }}" \
             "KOSMO_OPENCODE_IMAGE=${{ needs.publish-opencode-manifests.outputs.opencode_image }}" \
             "KOSMO_CODE_RUNNER_IMAGE=${{ needs.publish-opencode-manifests.outputs.code_runner_image }}" \
-            "KOSMO_PREVIEW_IMAGE=${{ needs.publish-opencode-manifests.outputs.preview_image }}" \
-            "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" \
-            "PREVIEW_PUBLIC_HOST_SUFFIX=preview-staging-kosmo.cespan.dev" \
-            "CLOUDFLARE_PREVIEW_API_TOKEN=${CLOUDFLARE_PREVIEW_API_TOKEN}" \
-            "CLOUDFLARE_PREVIEW_ACCOUNT_ID=${{ vars.STAGING_CLOUDFLARE_ACCOUNT_ID }}" \
-            "CLOUDFLARE_PREVIEW_ZONE_ID=${{ vars.STAGING_CLOUDFLARE_ZONE_ID }}" \
-            "CLOUDFLARE_PREVIEW_TUNNEL_ID=${{ vars.STAGING_CLOUDFLARE_TUNNEL_ID }}" > "$work_dir/runtime.env"
+            "CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}" > "$work_dir/runtime.env"
           chmod 600 "$work_dir/application.env" "$work_dir/runtime.env"
 
           ssh -i "$SSH_DIR/id_ed25519" \
@@ -670,7 +634,7 @@ jobs:
                  exit 1
                fi
              done
-             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE KOSMO_PREVIEW_IMAGE; do
+             for key in KOSMO_WEB_IMAGE KOSMO_API_IMAGE KOSMO_OPENCODE_IMAGE KOSMO_CODE_RUNNER_IMAGE; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing generated deployment variable: ${key}" >&2
                  exit 1
@@ -679,12 +643,6 @@ jobs:
              for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing required code-generation variable: ${key}" >&2
-                 exit 1
-               fi
-             done
-             for key in PREVIEW_PUBLIC_HOST_SUFFIX CLOUDFLARE_PREVIEW_API_TOKEN CLOUDFLARE_PREVIEW_ACCOUNT_ID CLOUDFLARE_PREVIEW_ZONE_ID CLOUDFLARE_PREVIEW_TUNNEL_ID; do
-               if ! grep -q "^${key}=." .env; then
-                 echo "Missing required staging preview variable: ${key}" >&2
                  exit 1
                fi
              done
