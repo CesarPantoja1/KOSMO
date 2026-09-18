@@ -148,3 +148,6 @@ class BuildService:
         generated_files.update(collect_workspace_feature_files(workspace_dir, feature_slug, self._fs_reader))
         record_codegen_duration("build", time.monotonic() - build_start, status="success")
         return generated_files
+
+
+ExecutionService = BuildService

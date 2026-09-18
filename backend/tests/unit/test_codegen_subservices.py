@@ -488,3 +488,47 @@ async def test_post_deploy_service_handle_failure() -> None:
     assert result.status == FeatureImplementationStatus.REQUIRES_REVIEW
     assert ws_manager.rollback_called is True
     assert any(ev.event_type == OpenCodeEventType.ERROR for ev in events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_execution_and_verification_subservice_aliases_and_injection() -> None:
+    from kosmo.application.codegen import (
+        BuildService,
+        ExecutionService,
+        GenerateFeatureImplementationUseCase,
+        ValidationService,
+        VerificationService,
+    )
+
+    assert ExecutionService is BuildService
+    assert VerificationService is ValidationService
+
+    exec_srv = ExecutionService(
+        opencode_client=_FakeOpenCodeClient(),
+        context_builder=ImplementationContextBuilder(),
+        workspace_manager=_FakeWorkspaceManager(),
+        fs_reader=NullFileSystemReader(),
+    )
+    verif_srv = VerificationService(
+        code_runner=_FakeCodeRunner(ValidationRunResult(all_passed=True, steps=())),
+        opencode_client=_FakeOpenCodeClient(),
+        context_builder=ImplementationContextBuilder(),
+        implementation_repo=InMemoryFeatureImplementationRepository(),
+        fs_reader=NullFileSystemReader(),
+    )
+
+    use_case = GenerateFeatureImplementationUseCase(
+        feature_repo=InMemoryFeatureRepository(),
+        requirement_repo=InMemoryRequirementRepository(),
+        activity_diagram_repo=None,  # type: ignore[arg-type]
+        workspace_manager=_FakeWorkspaceManager(),
+        opencode_client=_FakeOpenCodeClient(),
+        code_runner=_FakeCodeRunner(ValidationRunResult(all_passed=True, steps=())),
+        implementation_repo=InMemoryFeatureImplementationRepository(),
+        traceability_repo=InMemoryTraceabilityRepository(),
+        execution_service=exec_srv,
+        verification_service=verif_srv,
+    )
+    assert use_case._build_service is exec_srv
+    assert use_case._validation_service is verif_srv

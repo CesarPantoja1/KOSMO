@@ -215,3 +215,6 @@ class ValidationService:
             impl=impl,
             duration_seconds=val_duration,
         )
+
+
+VerificationService = ValidationService

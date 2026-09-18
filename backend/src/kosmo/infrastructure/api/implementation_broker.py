@@ -51,7 +51,6 @@ class ImplementationEventBroker:
         self._history_ttl_seconds = history_ttl_seconds
         self._orphan_idle_timeout_seconds = orphan_idle_timeout_seconds
 
-
     @property
     def is_distributed(self) -> bool:
         return self._redis is not None
@@ -327,9 +326,7 @@ class ImplementationEventBroker:
                         yield event
             else:
                 idle_time += 1.0
-                is_active_task = (
-                    implementation_id in self._tasks and not self._tasks[implementation_id].done()
-                )
+                is_active_task = implementation_id in self._tasks and not self._tasks[implementation_id].done()
                 if not is_active_task and idle_time >= self._orphan_idle_timeout_seconds:
                     _log.warning(
                         "implementation_broker.redis_stream_orphan_idle_timeout",
@@ -355,7 +352,6 @@ class ImplementationEventBroker:
                             break
                     except Exception:
                         pass
-
 
     async def subscribe(self, implementation_id: str) -> AsyncGenerator[OpenCodeEvent]:
         """Se suscribe al flujo de eventos para una implementación dada."""

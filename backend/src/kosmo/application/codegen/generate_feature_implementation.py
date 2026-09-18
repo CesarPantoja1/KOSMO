@@ -19,6 +19,7 @@ from kosmo.application.codegen.analyze_ux_context import (
 )
 from kosmo.application.codegen.build_service import (
     BuildService,
+    ExecutionService,
     OpenCodeGenerationError,
     raise_for_opencode_error,
 )
@@ -40,6 +41,7 @@ from kosmo.application.codegen.register_code_traceability import (
 )
 from kosmo.application.codegen.validation_service import (
     ValidationService,
+    VerificationService,
 )
 from kosmo.application.integrations.orchestrate_cloud_deployment import (
     OrchestrateCloudDeploymentUseCase,
@@ -118,6 +120,8 @@ _get_existing_db_schema_context = get_existing_db_schema_context
 _raise_for_opencode_error = raise_for_opencode_error
 
 __all__ = [
+    "BuildService",
+    "ExecutionService",
     "GenerateFeatureImplementationInput",
     "GenerateFeatureImplementationOutput",
     "GenerateFeatureImplementationUseCase",
@@ -125,6 +129,10 @@ __all__ = [
     "MissingRequirementsError",
     "OpenCodeGenerationError",
     "OpenCodeUnavailableError",
+    "PlanningService",
+    "PostDeployService",
+    "ValidationService",
+    "VerificationService",
     "_NullFileSystemReader",
     "_collect_workspace_feature_files",
     "_get_existing_db_schema_context",
@@ -181,6 +189,8 @@ class GenerateFeatureImplementationUseCase:
         build_service: BuildService | None = None,
         validation_service: ValidationService | None = None,
         post_deploy_service: PostDeployService | None = None,
+        execution_service: ExecutionService | None = None,
+        verification_service: VerificationService | None = None,
     ) -> None:
         self._feature_repo = feature_repo
         self._requirement_repo = requirement_repo
@@ -229,19 +239,28 @@ class GenerateFeatureImplementationUseCase:
             ux_analyzer=self._ux_analyzer,
             implementation_repo=self._implementation_repo,
         )
-        self._build_service = build_service or BuildService(
-            opencode_client=self._opencode_client,
-            context_builder=self._context_builder,
-            workspace_manager=self._workspace_manager,
-            fs_reader=self._fs_reader,
+        self._build_service = (
+            build_service
+            or execution_service
+            or BuildService(
+                opencode_client=self._opencode_client,
+                context_builder=self._context_builder,
+                workspace_manager=self._workspace_manager,
+                fs_reader=self._fs_reader,
+            )
         )
-        self._validation_service = validation_service or ValidationService(
-            code_runner=self._code_runner,
-            opencode_client=self._opencode_client,
-            context_builder=self._context_builder,
-            implementation_repo=self._implementation_repo,
-            fs_reader=self._fs_reader,
+        self._validation_service = (
+            validation_service
+            or verification_service
+            or ValidationService(
+                code_runner=self._code_runner,
+                opencode_client=self._opencode_client,
+                context_builder=self._context_builder,
+                implementation_repo=self._implementation_repo,
+                fs_reader=self._fs_reader,
+            )
         )
+
         self._post_deploy_service = post_deploy_service or PostDeployService(
             workspace_manager=self._workspace_manager,
             implementation_repo=self._implementation_repo,

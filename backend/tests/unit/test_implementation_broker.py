@@ -505,4 +505,3 @@ async def test_broker_redis_stream_orphan_idle_timeout_defaults_to_60s() -> None
     broker = ImplementationEventBroker()
     assert broker._orphan_idle_timeout_seconds == 60.0
     assert _ORPHAN_IDLE_TIMEOUT_SECONDS == 60.0
-
