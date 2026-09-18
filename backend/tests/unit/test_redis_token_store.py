@@ -112,3 +112,65 @@ async def test_redis_token_store_consume_refresh_returns_none_when_missing() -> 
     # Assert
     assert res is None
     mock_redis.delete.assert_awaited_once_with("auth:grace:jti_missing")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_redis_token_store_grace_period_resolves_after_25_iterations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import kosmo.infrastructure.persistence.redis.token_store as ts
+
+    monkeypatch.setattr(ts, "_GRACE_POLL_INTERVAL_SECONDS", 0.0001)
+
+    mock_redis = MagicMock(spec=Redis)
+    payload = json.dumps(
+        {
+            "access_token": "acc_1",
+            "access_jti": "jti_1",
+            "access_expires_at": datetime.now(UTC).isoformat(),
+            "access_family_id": "fam_1",
+            "refresh_token": "ref_1",
+            "refresh_jti": "jti_ref_1",
+            "refresh_expires_at": datetime.now(UTC).isoformat(),
+            "refresh_family_id": "fam_1",
+        }
+    ).encode("utf-8")
+
+    # 25 rotating responses, then valid payload (would fail under old 20-iteration limit)
+    mock_redis.get = AsyncMock(side_effect=[b"ROTATING"] * 25 + [payload])
+
+    store = RedisTokenRevocationStore(mock_redis)
+    result = await store.get_grace_period(old_jti="old_jti_01")
+
+    assert result is not None
+    assert result.access.token == "acc_1"
+    assert mock_redis.get.await_count == 26
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_redis_token_store_grace_period_times_out_and_logs_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import kosmo.infrastructure.persistence.redis.token_store as ts
+
+    monkeypatch.setattr(ts, "_GRACE_POLL_INTERVAL_SECONDS", 0.0001)
+
+    mock_redis = MagicMock(spec=Redis)
+    mock_redis.get = AsyncMock(return_value=b"ROTATING")
+
+    warning_logged: list[tuple[str, dict[str, object]]] = []
+    mock_logger = MagicMock()
+    mock_logger.warning = MagicMock(side_effect=lambda event, **kwargs: warning_logged.append((event, kwargs)))
+    monkeypatch.setattr(ts, "_log", mock_logger)
+
+    store = RedisTokenRevocationStore(mock_redis)
+    result = await store.get_grace_period(old_jti="old_jti_01")
+
+    assert result is None
+    assert mock_redis.get.await_count == 30
+    assert len(warning_logged) == 1
+    assert warning_logged[0][0] == "token_store.grace_period_timeout_still_rotating"
+    assert warning_logged[0][1]["old_jti"] == "old_jti_01"
+    assert warning_logged[0][1]["waited_seconds"] == pytest.approx(30 * 0.0001)

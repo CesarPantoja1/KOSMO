@@ -2,15 +2,21 @@ import asyncio
 import json
 from datetime import datetime
 
+import structlog
 from redis.asyncio import Redis
 
 from kosmo.contracts.auth import IssuedToken, RefreshConsumeResult, TokenPair, TokenType
+
+_log = structlog.get_logger("kosmo.auth.token_store")
 
 _REFRESH_PREFIX = "auth:refresh:"
 _REVOKED_ACCESS_PREFIX = "auth:revoked:access:"
 _FAMILY_PREFIX = "auth:family:"
 _GRACE_PREFIX = "auth:grace:"
 _FAMILY_SEPARATOR = "|"
+
+_GRACE_POLL_INTERVAL_SECONDS: float = 0.05
+_GRACE_POLL_MAX_ATTEMPTS: int = 30
 
 
 class RedisTokenRevocationStore:
@@ -77,13 +83,13 @@ class RedisTokenRevocationStore:
 
     async def get_grace_period(self, *, old_jti: str) -> TokenPair | None:
         key = _GRACE_PREFIX + old_jti
-        for _ in range(20):
+        for _ in range(_GRACE_POLL_MAX_ATTEMPTS):
             raw = await self._client.get(key)
             if raw is None:
                 return None
             val = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
             if val == "ROTATING":
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(_GRACE_POLL_INTERVAL_SECONDS)
                 continue
             try:
                 data = json.loads(val)
@@ -105,6 +111,12 @@ class RedisTokenRevocationStore:
                 )
             except (json.JSONDecodeError, KeyError):
                 return None
+
+        _log.warning(
+            "token_store.grace_period_timeout_still_rotating",
+            old_jti=old_jti,
+            waited_seconds=_GRACE_POLL_MAX_ATTEMPTS * _GRACE_POLL_INTERVAL_SECONDS,
+        )
         return None
 
     async def revoke_access(self, *, jti: str, ttl_seconds: int) -> None:
