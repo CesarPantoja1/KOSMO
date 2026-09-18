@@ -414,6 +414,19 @@ _Message = dict[str, Any]
 _ASGIApp = Callable[[_Scope, Callable[[], Awaitable[_Message]], Callable[[_Message], Awaitable[None]]], Awaitable[None]]
 
 
+_PERMISSIONS_POLICY = (
+    b"accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+)
+_CSP_DEV = (
+    b"default-src 'self'; "
+    b"img-src 'self' data: https://fastapi.tiangolo.com; "
+    b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    b"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    b"frame-ancestors 'none'"
+)
+_CSP_PROD = b"default-src 'none'; frame-ancestors 'none'"
+
+
 class SecurityHeadersMiddleware:
     """Inyecta encabezados HTTP de seguridad defensivos en las respuestas."""
 
@@ -442,6 +455,11 @@ class SecurityHeadersMiddleware:
                     raw_headers.append((b"x-frame-options", b"DENY"))
                 if b"referrer-policy" not in names:
                     raw_headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                if b"permissions-policy" not in names:
+                    raw_headers.append((b"permissions-policy", _PERMISSIONS_POLICY))
+                if b"content-security-policy" not in names:
+                    csp = _CSP_PROD if self._is_production else _CSP_DEV
+                    raw_headers.append((b"content-security-policy", csp))
                 if self._is_production and b"strict-transport-security" not in names:
                     raw_headers.append((b"strict-transport-security", b"max-age=63072000; includeSubDomains"))
 

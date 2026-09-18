@@ -156,6 +156,9 @@ def test_security_headers_present_in_responses(client: TestClient) -> None:
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "accelerometer=()" in response.headers["permissions-policy"]
+    assert "default-src 'self'" in response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
 @pytest.mark.unit
@@ -177,3 +180,31 @@ def test_security_headers_middleware_production_hsts() -> None:
         assert res.headers["x-frame-options"] == "DENY"
         assert res.headers["referrer-policy"] == "strict-origin-when-cross-origin"
         assert "max-age=63072000" in res.headers["strict-transport-security"]
+        assert "accelerometer=()" in res.headers["permissions-policy"]
+        assert res.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+
+
+@pytest.mark.unit
+def test_security_headers_middleware_preserves_custom_headers() -> None:
+    from fastapi import FastAPI
+    from fastapi.responses import PlainTextResponse
+
+    from kosmo.infrastructure.api.main import SecurityHeadersMiddleware
+
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityHeadersMiddleware, is_production=False)
+
+    @test_app.get("/custom")
+    def custom() -> PlainTextResponse:
+        return PlainTextResponse(
+            "custom",
+            headers={
+                "content-security-policy": "default-src 'self'; script-src 'self'",
+                "permissions-policy": "camera=*",
+            },
+        )
+
+    with TestClient(test_app) as test_client:
+        res = test_client.get("/custom")
+        assert res.headers["content-security-policy"] == "default-src 'self'; script-src 'self'"
+        assert res.headers["permissions-policy"] == "camera=*"
