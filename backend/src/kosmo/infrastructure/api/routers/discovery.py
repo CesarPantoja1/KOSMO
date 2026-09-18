@@ -24,6 +24,7 @@ from kosmo.application.discovery import (
     SaveDiscoveryInput,
     SaveDiscoveryUseCase,
 )
+from kosmo.application.pipeline.context_builder import ContextBuilder
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
@@ -33,7 +34,6 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
-from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter

@@ -16,6 +16,7 @@ from kosmo.application.features import (
     GetFeatureChatHistoryInput,
     GetFeatureChatHistoryUseCase,
 )
+from kosmo.application.pipeline.context_builder import ContextBuilder
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import SpecPhase
@@ -26,7 +27,6 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ChatSessionId, FeatureId
-from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_feature_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import (
