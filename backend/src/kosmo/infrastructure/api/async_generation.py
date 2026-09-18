@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import TYPE_CHECKING
 
 import structlog
@@ -25,6 +27,42 @@ if TYPE_CHECKING:
     )
 
 _log = structlog.get_logger(__name__)
+
+_HEARTBEAT_INTERVAL: float = 15.0
+_HEARTBEAT_COMMENT: str = ": ping\n\n"
+
+
+async def _fetch_next(it: AsyncIterator[str]) -> str:
+    return await anext(it)
+
+
+async def with_heartbeat(
+    source: AsyncIterator[str],
+    interval: float = _HEARTBEAT_INTERVAL,
+    heartbeat: str = _HEARTBEAT_COMMENT,
+) -> AsyncGenerator[str]:
+    """Envuelve un iterador asíncrono emitiendo comentarios ping periódicos si no hay actividad."""
+    it = aiter(source)
+    task: asyncio.Task[str] | None = None
+    try:
+        while True:
+            if task is None:
+                task = asyncio.create_task(_fetch_next(it))
+            done, _ = await asyncio.wait({task}, timeout=interval)
+            if done:
+                try:
+                    item = task.result()
+                except StopAsyncIteration:
+                    break
+                task = None
+                yield item
+            else:
+                yield heartbeat
+    finally:
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
+                await task
 
 
 async def validate_chat_content(
@@ -166,7 +204,7 @@ async def sse_chat_response(
                 )
 
     return StreamingResponse(
-        event_stream(),
+        with_heartbeat(event_stream()),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
@@ -180,7 +218,7 @@ async def sse_consistency_response(
             yield chunk
 
     return StreamingResponse(
-        event_stream(),  # type: ignore[reportArgumentType]
+        with_heartbeat(event_stream()),
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
