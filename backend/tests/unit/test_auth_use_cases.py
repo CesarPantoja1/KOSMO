@@ -217,3 +217,49 @@ def test_verifier_rejects_tampered_token() -> None:
 
     with pytest.raises(InvalidTokenError):
         verifier.verify(bogus, expected_type=TokenType.ACCESS)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_verify_access_token_detects_subsequent_revocation_immediately() -> None:
+    # Arrange
+    issuer, verifier = _build_codec()
+    store = InMemoryStore()
+    issue = IssueTokenPair(issuer=issuer, revocation_store=store)
+    verify = VerifyAccessToken(verifier=verifier, revocation_store=store)
+
+    pair = await issue.execute(subject="user-1", scopes=frozenset({"read"}))
+
+    # Primera verificación: válida
+    principal = await verify.execute(pair.access.token)
+    assert principal.subject == "user-1"
+
+    # Revocación externa (p. ej., en otro worker o proceso)
+    await store.revoke_access(jti=pair.access.jti, ttl_seconds=300)
+
+    # Segunda verificación: debe detectar la revocación de inmediato sin caché en memoria
+    with pytest.raises(TokenRevokedError, match="Access token revoked"):
+        await verify.execute(pair.access.token)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_verify_access_token_detects_family_revocation_immediately() -> None:
+    # Arrange
+    issuer, verifier = _build_codec()
+    store = InMemoryStore()
+    issue = IssueTokenPair(issuer=issuer, revocation_store=store)
+    verify = VerifyAccessToken(verifier=verifier, revocation_store=store)
+
+    pair = await issue.execute(subject="user-1", scopes=frozenset({"read"}))
+
+    # Primera verificación: válida
+    principal = await verify.execute(pair.access.token)
+    assert principal.subject == "user-1"
+
+    # Revocación de la sesión/familia externa
+    await store.revoke_family(family_id=pair.access.family_id)  # type: ignore[arg-type]
+
+    # Segunda verificación: debe rechazar la sesión revocada inmediatamente
+    with pytest.raises(TokenRevokedError, match="Session revoked"):
+        await verify.execute(pair.access.token)

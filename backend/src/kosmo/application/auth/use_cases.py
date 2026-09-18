@@ -48,20 +48,6 @@ class IssueTokenPair:
         return TokenPair(access=access, refresh=refresh)
 
 
-_JTI_CACHE: dict[str, bool] = {}
-_JTI_CACHE_MAX = 1000
-
-
-def _jti_is_cached_revoked(jti: str) -> bool | None:
-    return _JTI_CACHE.get(jti)
-
-
-def _jti_cache_set(jti: str, revoked: bool) -> None:
-    if len(_JTI_CACHE) >= _JTI_CACHE_MAX:
-        _JTI_CACHE.pop(next(iter(_JTI_CACHE)))
-    _JTI_CACHE[jti] = revoked
-
-
 @dataclass(frozen=True, slots=True)
 class VerifyAccessToken:
     verifier: TokenVerifier
@@ -70,22 +56,11 @@ class VerifyAccessToken:
     async def execute(self, token: str) -> Principal:
         claims = await asyncio.to_thread(self.verifier.verify, token, expected_type=TokenType.ACCESS)
 
-        cached = _jti_is_cached_revoked(claims.jti)
-        if cached:
-            raise TokenRevokedError("Access token revoked")
-        if cached is False and claims.family_id is not None:
-            family_cached = _jti_is_cached_revoked(claims.family_id)
-            if family_cached:
-                raise TokenRevokedError("Session revoked")
-
         if await self.revocation_store.is_access_revoked(jti=claims.jti):
-            _jti_cache_set(claims.jti, True)
             raise TokenRevokedError("Access token revoked")
         if claims.family_id is not None and not await self.revocation_store.is_family_alive(family_id=claims.family_id):
-            _jti_cache_set(claims.family_id, True)
             raise TokenRevokedError("Session revoked")
 
-        _jti_cache_set(claims.jti, False)
         return Principal(subject=claims.subject, scopes=claims.scopes)
 
 
