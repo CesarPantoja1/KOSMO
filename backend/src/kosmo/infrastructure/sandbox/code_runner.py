@@ -18,6 +18,7 @@ from kosmo.contracts.sdd.codegen import (
     ValidationStepResult,
 )
 from kosmo.domain.codegen.parse_validation_output import parse_step_output
+from kosmo.infrastructure.telemetry.metrics import ACTIVE_CODE_RUNNERS
 
 _log = structlog.get_logger("kosmo.sandbox.code_runner")
 
@@ -182,51 +183,55 @@ class SubprocessCodeRunner(CodeRunnerPort):
         executable = shutil.which(tokens[0]) or tokens[0]
 
         async with self._semaphore:
+            ACTIVE_CODE_RUNNERS.inc()
             try:
-                proc = await asyncio.create_subprocess_exec(
-                    executable,
-                    *tokens[1:],
-                    cwd=workspace_dir,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT,
-                    env=self._clean_env(),
-                )
-            except FileNotFoundError:
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        executable,
+                        *tokens[1:],
+                        cwd=workspace_dir,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                        env=self._clean_env(),
+                    )
+                except FileNotFoundError:
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    error_msg = f"Executable '{tokens[0]}' not found."
+                    return ValidationStepResult(
+                        step=step or ValidationStep.TESTS,
+                        success=False,
+                        duration_ms=duration_ms,
+                        exit_code=127,
+                        raw_output=error_msg,
+                        errors=(),
+                        error_messages=(error_msg,),
+                    )
+
+                try:
+                    stdout, _ = await asyncio.wait_for(
+                        proc.communicate(),
+                        timeout=float(timeout_seconds),
+                    )
+                except TimeoutError:
+                    await self._kill_process_tree(proc)
+
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
+                    return ValidationStepResult(
+                        step=step or ValidationStep.TESTS,
+                        success=False,
+                        duration_ms=duration_ms,
+                        exit_code=-1,
+                        raw_output=timeout_msg,
+                        errors=(),
+                        error_messages=(timeout_msg,),
+                    )
+
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                error_msg = f"Executable '{tokens[0]}' not found."
-                return ValidationStepResult(
-                    step=step or ValidationStep.TESTS,
-                    success=False,
-                    duration_ms=duration_ms,
-                    exit_code=127,
-                    raw_output=error_msg,
-                    errors=(),
-                    error_messages=(error_msg,),
-                )
-
-            try:
-                stdout, _ = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=float(timeout_seconds),
-                )
-            except TimeoutError:
-                await self._kill_process_tree(proc)
-
-                duration_ms = int((time.perf_counter() - start) * 1000)
-                timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
-                return ValidationStepResult(
-                    step=step or ValidationStep.TESTS,
-                    success=False,
-                    duration_ms=duration_ms,
-                    exit_code=-1,
-                    raw_output=timeout_msg,
-                    errors=(),
-                    error_messages=(timeout_msg,),
-                )
-
-            duration_ms = int((time.perf_counter() - start) * 1000)
-            raw_output = stdout.decode("utf-8", errors="replace")
-            exit_code = proc.returncode if proc.returncode is not None else 0
+                raw_output = stdout.decode("utf-8", errors="replace")
+                exit_code = proc.returncode if proc.returncode is not None else 0
+            finally:
+                ACTIVE_CODE_RUNNERS.dec()
 
         if step is not None:
             return parse_step_output(

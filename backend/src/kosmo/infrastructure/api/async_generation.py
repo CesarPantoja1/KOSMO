@@ -19,6 +19,7 @@ from kosmo.application.chat.validate_phase_context import (
 from kosmo.contracts.ai.chat import ModificacionChat
 from kosmo.contracts.sdd.document import SpecPhase
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
+from kosmo.infrastructure.telemetry.metrics import ACTIVE_SSE_CONNECTIONS
 
 if TYPE_CHECKING:
     from kosmo.application.chat.process_chat_message import (
@@ -55,6 +56,7 @@ async def with_heartbeat(
         else:
             await queue.put((sentinel, None))
 
+    ACTIVE_SSE_CONNECTIONS.inc()
     producer_task = asyncio.create_task(producer())
     try:
         while True:
@@ -72,6 +74,7 @@ async def with_heartbeat(
             assert isinstance(item, str)
             yield item
     finally:
+        ACTIVE_SSE_CONNECTIONS.dec()
         if not producer_task.done():
             producer_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
