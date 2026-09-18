@@ -56,7 +56,6 @@ def is_ai_auth_error(exc: Exception) -> bool:
     return any(keyword in err_str or keyword in type_str for keyword in _AUTH_ERROR_KEYWORDS)
 
 
-
 def build_pydantic_ai_model(provider: str, model: str, api_key: str | None) -> object:
     prov = provider.lower()
     if prov == "deepseek":
@@ -157,7 +156,6 @@ class DynamicUserLLMClient(LLMClient):
                 user_id=mask_user_id(user_id),
                 exc_info=True,
             )
-
 
         self._config_cache[user_id] = (now, provider, model, api_key)
         return (provider, model, api_key)

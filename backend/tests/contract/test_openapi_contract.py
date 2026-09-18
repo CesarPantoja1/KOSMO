@@ -127,10 +127,17 @@ def test_ai_config_providers_conforms_to_openapi_contract(
 def test_traceability_navigation_endpoint_conforms_to_openapi_contract(
     schema: schemathesis.openapi.OpenApiSchema,
 ) -> None:
+    # Legacy compatibility route
     path = "/api/v1/traceability/{entity_id}/navigation"
     assert path in schema
     operation = schema[path]["get"]
     assert operation.tags == ["Traceability"]
+
+    # Canonical project-nested REST route
+    canonical_path = "/api/v1/projects/{project_id}/traceability/{entity_id}/navigation"
+    assert canonical_path in schema
+    canonical_op = schema[canonical_path]["get"]
+    assert canonical_op.tags == ["Traceability"]
 
 
 @pytest.mark.contract

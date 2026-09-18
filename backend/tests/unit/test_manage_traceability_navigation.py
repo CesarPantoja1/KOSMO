@@ -239,12 +239,41 @@ async def test_traceability_navigation_endpoint_blocks_cross_tenant_access() -> 
         res_intruder = client.get("/api/v1/traceability/feat_owner/navigation?level=requisitos")
         assert res_intruder.status_code == 404
 
-    # 3. Owner user -> 200
+    # 3. Owner user -> 200 (Legacy route)
     app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_owner")
     with TestClient(app) as client:
         res_owner = client.get("/api/v1/traceability/feat_owner/navigation?level=requisitos")
         assert res_owner.status_code == 200
         assert res_owner.json()["permitted"] is False
         assert "Owner Feature" in res_owner.json()["source_entity_name"]
+
+    # 4. Canonical nested route: /api/v1/projects/{project_id}/traceability/{entity_id}/navigation
+    app.dependency_overrides.clear()
+    with TestClient(app) as client:
+        # 4.1 Unauthenticated -> 401
+        res = client.get(f"/api/v1/projects/{owner_proj.id}/traceability/feat_owner/navigation?level=requisitos")
+        assert res.status_code == 401
+
+        # 4.2 Intruder -> 404 (declarative verify_project_owner guard)
+        app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_intruder")
+        res_intruder = client.get(
+            f"/api/v1/projects/{owner_proj.id}/traceability/feat_owner/navigation?level=requisitos"
+        )
+        assert res_intruder.status_code == 404
+
+        # 4.3 Wrong project for feature -> 404
+        app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_owner")
+        res_wrong_proj = client.get(
+            "/api/v1/projects/proj_different/traceability/feat_owner/navigation?level=requisitos"
+        )
+        assert res_wrong_proj.status_code == 404
+
+        # 4.4 Authorized owner -> 200
+        res_canonical_owner = client.get(
+            f"/api/v1/projects/{owner_proj.id}/traceability/feat_owner/navigation?level=requisitos"
+        )
+        assert res_canonical_owner.status_code == 200
+        assert res_canonical_owner.json()["permitted"] is False
+        assert "Owner Feature" in res_canonical_owner.json()["source_entity_name"]
 
     app.dependency_overrides.clear()
