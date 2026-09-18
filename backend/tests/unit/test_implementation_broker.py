@@ -463,3 +463,46 @@ async def test_broker_is_running_reflects_task_state() -> None:
     # Cleanup
     await broker.aclose()
     assert broker.is_running("impl_running") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_redis_stream_orphan_idle_timeout_releases_subscriber() -> None:
+    from typing import Any, cast
+
+    fake_redis = _FakeRedis()
+    stream_key = "kosmo:impl:impl_orphan:events"
+    # Pre-populate stream with 1 event but NO terminal marker "_done" (simulating aborted/crashed task)
+    await fake_redis.xadd(
+        stream_key,
+        {
+            "event_type": "plan_progress",
+            "session_id": "sess_orphan",
+            "data": "{}",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "run_id": "run_orphan",
+        },
+    )
+
+    broker = ImplementationEventBroker(
+        redis=cast(Any, fake_redis),
+        orphan_idle_timeout_seconds=2.0,
+    )
+    # No task registered in broker process
+    assert broker.is_running("impl_orphan") is False
+
+    events = await _collect(broker, "impl_orphan")
+    # Yielded the available event and exited cleanly after orphan_idle_timeout
+    assert len(events) == 1
+    assert events[0].event_type == OpenCodeEventType.PLAN_PROGRESS
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_redis_stream_orphan_idle_timeout_defaults_to_60s() -> None:
+    from kosmo.infrastructure.api.implementation_broker import _ORPHAN_IDLE_TIMEOUT_SECONDS
+
+    broker = ImplementationEventBroker()
+    assert broker._orphan_idle_timeout_seconds == 60.0
+    assert _ORPHAN_IDLE_TIMEOUT_SECONDS == 60.0
+
