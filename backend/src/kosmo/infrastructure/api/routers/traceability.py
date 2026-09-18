@@ -13,7 +13,7 @@ from kosmo.infrastructure.api.dependencies.auth import get_principal, require_pr
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.schemas import TraceabilityNavigationOutputView
 
-router = APIRouter(prefix="/traceability", tags=["Traceability"])
+router = APIRouter(prefix="/api/v1/traceability", tags=["Traceability"])
 
 
 def _manage_traceability_navigation(request: Request) -> ManageTraceabilityNavigationUseCase:

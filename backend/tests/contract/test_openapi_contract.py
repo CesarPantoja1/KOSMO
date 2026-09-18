@@ -124,6 +124,16 @@ def test_ai_config_providers_conforms_to_openapi_contract(
 
 
 @pytest.mark.contract
+def test_traceability_navigation_endpoint_conforms_to_openapi_contract(
+    schema: schemathesis.openapi.OpenApiSchema,
+) -> None:
+    path = "/api/v1/traceability/{entity_id}/navigation"
+    assert path in schema
+    operation = schema[path]["get"]
+    assert operation.tags == ["Traceability"]
+
+
+@pytest.mark.contract
 def test_openapi_json_accessible_in_development(client: TestClient) -> None:
     response = client.get("/api/v1/openapi.json")
     assert response.status_code == 200
