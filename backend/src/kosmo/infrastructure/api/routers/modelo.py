@@ -23,11 +23,14 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 
 router = APIRouter(
     prefix="/api/v1/features/{feature_id}/diagram",
     tags=["modelo"],
 )
+
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 class GenerateDiagramRequest(BaseModel):
@@ -73,6 +76,7 @@ async def generate_diagram(
     body: GenerateDiagramRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: GenerateActivityDiagramUseCase = get_container(request).modelo.generate_diagram
@@ -96,6 +100,7 @@ async def propagate_to_model(
     body: GenerateDiagramRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: GenerateActivityDiagramUseCase = get_container(request).modelo.generate_diagram

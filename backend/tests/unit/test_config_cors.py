@@ -9,6 +9,7 @@ from kosmo.config import Settings
 def _base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configura variables mínimas para construir Settings."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/kosmo_test")
+    monkeypatch.setenv("REDIS_URL", "redis://:test_redis_pass@localhost:6379/1")
     monkeypatch.setenv("LLM_PROVIDER", "noop")
     monkeypatch.setenv("LLM_MODEL", "noop")
 
@@ -77,6 +78,16 @@ def test_cors_production_rejects_origin_without_scheme(monkeypatch: pytest.Monke
 
 
 @pytest.mark.unit
+def test_cors_default_is_localhost_3000(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.delenv("CORS_ALLOWED_ORIGINS", raising=False)
+
+    settings = Settings(_env_file=None)
+    assert settings.cors_allowed_origins == "http://localhost:3000"
+    assert settings.parsed_cors_origins == ["http://localhost:3000"]
+
+
+@pytest.mark.unit
 def test_cors_middleware_integration() -> None:
     from fastapi.testclient import TestClient
 
@@ -93,6 +104,41 @@ def test_cors_middleware_integration() -> None:
     assert response.status_code == 200
     assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
     assert response.headers.get("access-control-allow-credentials") == "true"
+
+
+@pytest.mark.unit
+def test_cors_middleware_wildcard_disables_allow_credentials() -> None:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.testclient import TestClient
+
+    test_app = FastAPI()
+    test_origins = ["*"]
+    allow_credentials = "*" not in test_origins
+
+    test_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=test_origins,
+        allow_credentials=allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @test_app.get("/test")
+    def _test() -> dict[str, str]:
+        return {"status": "ok"}
+
+    client = TestClient(test_app)
+    response = client.options(
+        "/test",
+        headers={
+            "Origin": "http://evil.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "*"
+    assert response.headers.get("access-control-allow-credentials") is None
 
 
 # ---------------------------------------------------------------------------

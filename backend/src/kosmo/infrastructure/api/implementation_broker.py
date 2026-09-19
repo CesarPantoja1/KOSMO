@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 _log = structlog.get_logger(__name__)
+_ORPHAN_IDLE_TIMEOUT_SECONDS: float = 60.0
 
 
 class StreamUseCase(Protocol):
@@ -27,7 +28,12 @@ class StreamUseCase(Protocol):
 class ImplementationEventBroker:
     """Broker en memoria o distribuido (Redis Streams) para enrutar eventos de generación SSE."""
 
-    def __init__(self, history_ttl_seconds: float = 1800, redis: Redis | None = None) -> None:
+    def __init__(
+        self,
+        history_ttl_seconds: float = 1800,
+        redis: Redis | None = None,
+        orphan_idle_timeout_seconds: float = _ORPHAN_IDLE_TIMEOUT_SECONDS,
+    ) -> None:
         self._redis = redis
         # Colas activas por cada id de implementación (puede haber múltiples subscriptores locales)
         self._queues: dict[str, list[asyncio.Queue[OpenCodeEvent | None]]] = {}
@@ -43,6 +49,7 @@ class ImplementationEventBroker:
         # Tasks de purga indexadas por implementation_id para cancelación en reintentos
         self._purge_tasks: dict[str, asyncio.Task[None]] = {}
         self._history_ttl_seconds = history_ttl_seconds
+        self._orphan_idle_timeout_seconds = orphan_idle_timeout_seconds
 
     @property
     def is_distributed(self) -> bool:
@@ -319,11 +326,23 @@ class ImplementationEventBroker:
                         yield event
             else:
                 idle_time += 1.0
+                is_active_task = implementation_id in self._tasks and not self._tasks[implementation_id].done()
+                if not is_active_task and idle_time >= self._orphan_idle_timeout_seconds:
+                    _log.warning(
+                        "implementation_broker.redis_stream_orphan_idle_timeout",
+                        implementation_id=implementation_id,
+                        idle_seconds=idle_time,
+                    )
+                    break
                 if idle_time >= idle_timeout:
-                    _log.warning("implementation_broker.redis_stream_idle_timeout", implementation_id=implementation_id)
+                    _log.warning(
+                        "implementation_broker.redis_stream_idle_timeout",
+                        implementation_id=implementation_id,
+                        idle_seconds=idle_time,
+                    )
                     break
                 if idle_time >= 30.0:
-                    if implementation_id in self._tasks and not self._tasks[implementation_id].done():
+                    if is_active_task:
                         continue
                     try:
                         if not await self._redis.exists(stream_key):

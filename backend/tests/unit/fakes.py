@@ -18,7 +18,7 @@ from kosmo.contracts.ai.consistency import (
     ConsistencyEvaluationStatus,
 )
 from kosmo.contracts.audit.events import AuditEvent
-from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, User, UserAlreadyExistsError
+from kosmo.contracts.auth import AuthorizationCode, RefreshConsumeResult, TokenPair, User, UserAlreadyExistsError
 from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
 from kosmo.contracts.sdd.feature import Feature
@@ -316,6 +316,7 @@ class InMemoryStore:
         self.refresh: dict[str, tuple[str, str | None]] = {}
         self.revoked_access: set[str] = set()
         self.families: set[str] = set()
+        self.grace: dict[str, Any] = {}
 
     async def register_refresh(
         self,
@@ -335,7 +336,32 @@ class InMemoryStore:
         entry = self.refresh.pop(jti, None)
         if entry is None:
             return None
+        self.grace[jti] = "ROTATING"
         return RefreshConsumeResult(subject=entry[0], family_id=entry[1])
+
+    async def store_grace_period(
+        self,
+        *,
+        old_jti: str,
+        token_pair: TokenPair,
+        ttl_seconds: int = 30,  # noqa: ARG002
+    ) -> None:
+        self.grace[old_jti] = token_pair
+
+    async def get_grace_period(self, *, old_jti: str) -> TokenPair | None:
+        import asyncio
+
+        for _ in range(20):
+            entry = self.grace.get(old_jti)
+            if entry is None:
+                return None
+            if entry == "ROTATING":
+                await asyncio.sleep(0.01)
+                continue
+            if isinstance(entry, TokenPair):
+                return entry
+            return None
+        return None
 
     async def revoke_access(self, *, jti: str, ttl_seconds: int) -> None:
         if ttl_seconds <= 0:
@@ -362,18 +388,21 @@ class InMemoryTraceabilityRepository:
     def __init__(self) -> None:
         self.edges: list[tuple[str, str, str, str, str]] = []
 
+    async def get_impact_batch(self, artifact_ids: list[str]) -> dict[str, dict[str, list[dict[str, str]]]]:
+        results: dict[str, dict[str, list[dict[str, str]]]] = {
+            aid: {"upstream": [], "downstream": []} for aid in artifact_ids
+        }
+        artifact_set = set(artifact_ids)
+        for source_type, source_id, target_type, target_id, origin in self.edges:
+            if target_id in artifact_set:
+                results[target_id]["upstream"].append({"type": source_type, "id": source_id, "origin": origin})
+            if source_id in artifact_set:
+                results[source_id]["downstream"].append({"type": target_type, "id": target_id, "origin": origin})
+        return results
+
     async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]:
-        upstream = [
-            {"type": source_type, "id": source_id, "origin": origin}
-            for source_type, source_id, _target_type, target_id, origin in self.edges
-            if target_id == artifact_id
-        ]
-        downstream = [
-            {"type": target_type, "id": target_id, "origin": origin}
-            for _source_type, source_id, target_type, target_id, origin in self.edges
-            if source_id == artifact_id
-        ]
-        return {"upstream": upstream, "downstream": downstream}
+        batch = await self.get_impact_batch([artifact_id])
+        return batch.get(artifact_id, {"upstream": [], "downstream": []})
 
     async def add_edge(
         self,
@@ -547,9 +576,17 @@ class InMemoryChatRepository:
         self.sessions.append(session)
         return session
 
-    async def delete_session(self, session_id: ChatSessionId) -> None:
+    async def delete_session(self, session_id: ChatSessionId, project_id: ProjectId) -> bool:
+        session = next(
+            (s for s in self.sessions if s.id == session_id and str(s.project_id) == str(project_id)),
+            None,
+        )
+        if session is None:
+            return False
         self.sessions = [s for s in self.sessions if s.id != session_id]
         self._message_sessions = [(msg, sid) for msg, sid in self._message_sessions if sid != session_id]
+        self.messages = [msg for msg, _sid in self._message_sessions]
+        return True
 
     async def delete_by_project(self, project_id: ProjectId) -> None:
         project_sessions = {s.id for s in self.sessions if str(s.project_id) == str(project_id)}

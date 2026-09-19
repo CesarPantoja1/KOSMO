@@ -14,7 +14,8 @@ from kosmo.contracts.auth import (
     TokenRevokedError,
 )
 from kosmo.contracts.auth.context import current_user_id
-from kosmo.contracts.sdd.ids import ProjectId
+from kosmo.contracts.sdd.feature import Feature
+from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.contracts.sdd.project import Project
 from kosmo.infrastructure.api.dependencies.container import get_container
 
@@ -47,13 +48,16 @@ async def require_project_owner(
     container: Any,
     project_id: ProjectId | str,
     principal: Principal,
-) -> Project | None:
+) -> Project:
     """Verifica que el proyecto exista y pertenezca al usuario autenticado (IDOR / BOLA guard).
 
     Si no existe o pertenece a otro usuario, responde 404 para ocultar su existencia.
     """
     if not hasattr(container, "repos") or not hasattr(container.repos, "projects"):
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno de configuración: repositorio de proyectos no disponible.",
+        )
     pid = ProjectId(str(project_id))
     project = await container.repos.projects.by_id(pid)
     if project is None or str(getattr(project, "owner_id", "")) != principal.subject:
@@ -72,6 +76,29 @@ async def verify_project_owner(
     """Dependencia FastAPI para routers con {project_id} en el path."""
     container = get_container(request)
     await require_project_owner(container, project_id, principal)
+
+
+async def verify_feature_owner(
+    feature_id: str,
+    principal: Annotated[Principal, Depends(get_principal)],
+    request: Request,
+) -> Feature:
+    """Dependencia FastAPI para routers con {feature_id} en el path (BOLA guard)."""
+    container = get_container(request)
+    if not hasattr(container, "repos") or not hasattr(container.repos, "features"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno de configuración: repositorio de características no disponible.",
+        )
+    feature = await container.repos.features.by_id(FeatureId(feature_id))
+    if feature is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Característica '{feature_id}' no encontrada.",
+        )
+    await require_project_owner(container, feature.project_id, principal)
+    request.state.project_id = str(feature.project_id)
+    return feature
 
 
 def require_scopes(

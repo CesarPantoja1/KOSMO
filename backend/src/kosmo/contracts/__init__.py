@@ -161,7 +161,7 @@ from kosmo.contracts.sdd.codegen import (
     WorkspaceStatus,
 )
 from kosmo.contracts.sdd.document import SpecPhase
-from kosmo.contracts.sdd.errors import DiagramNotFoundError
+from kosmo.contracts.sdd.errors import ChatSessionNotFoundError, DiagramNotFoundError
 from kosmo.contracts.sdd.feature import Feature
 from kosmo.contracts.sdd.ids import (
     ActivityDiagramId,
@@ -236,6 +236,7 @@ __all__ = [
     "ChatRepository",
     "ChatRole",
     "ChatSessionId",
+    "ChatSessionNotFoundError",
     "CodeRunnerPort",
     "CodeWorkspace",
     "ConsistencyEvaluationOutput",

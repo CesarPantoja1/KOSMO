@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import os
 import shlex
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from kosmo.contracts.sdd.codegen import (
     ValidationStepResult,
 )
 from kosmo.domain.codegen.parse_validation_output import parse_step_output
+from kosmo.infrastructure.telemetry.metrics import ACTIVE_CODE_RUNNERS
 
 _log = structlog.get_logger("kosmo.sandbox.code_runner")
 
@@ -73,14 +75,39 @@ DEFAULT_ALLOWED_COMMAND_PREFIXES: frozenset[str] = frozenset(
     }
 )
 
-SENSITIVE_ENV_VARS: frozenset[str] = frozenset(
+SAFE_ENV_VARS: frozenset[str] = frozenset(
     {
-        "DATABASE_URL",
-        "KOSMO_SECRET_KEY",
-        "JWT_SECRET",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "SECRET_KEY",
+        # Binarios y rutas del sistema operativo (Windows y POSIX)
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "SYSTEMDRIVE",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMDATA",
+        "COMMONPROGRAMFILES",
+        "COMMONPROGRAMFILES(X86)",
+        # Directorios de usuario y caché de herramientas
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        # Directorios temporales
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        # Runtime, localización y CI
+        "NODE_ENV",
+        "CI",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        # Configuraciones no sensibles de KOSMO
+        "KOSMO_WORKSPACES_DIR",
+        "KOSMO_MAX_CONCURRENT_RUNNERS",
     }
 )
 
@@ -110,7 +137,13 @@ class SubprocessCodeRunner(CodeRunnerPort):
 
     @staticmethod
     def _clean_env() -> dict[str, str]:
-        return {k: v for k, v in os.environ.items() if k not in SENSITIVE_ENV_VARS}
+        """Filtra el entorno del proceso padre permitiendo exclusivamente variables de la lista blanca.
+
+        Aplica una allowlist insensible a mayúsculas/minúsculas para prevenir la fuga de secretos
+        criptográficos (FERNET_MASTER_KEY, JWT keys), URLs de bases de datos y claves de API
+        hacia el entorno de subprocesos donde se ejecutan herramientas y dependencias de terceros.
+        """
+        return {k: v for k, v in os.environ.items() if k.upper() in SAFE_ENV_VARS}
 
     def _is_command_allowed(self, command: str) -> bool:
         stripped = command.strip()
@@ -139,38 +172,66 @@ class SubprocessCodeRunner(CodeRunnerPort):
     ) -> ValidationStepResult:
         start = time.perf_counter()
 
-        async with self._semaphore:
-            proc = await asyncio.create_subprocess_shell(
-                command,
-                cwd=workspace_dir,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=self._clean_env(),
-            )
+        try:
+            tokens = shlex.split(command.strip(), posix=os.name != "nt")
+        except ValueError:
+            tokens = command.strip().split()
 
+        if not tokens:
+            raise UnallowedCommandError(f"Command '{command}' is empty.")
+
+        executable = shutil.which(tokens[0]) or tokens[0]
+
+        async with self._semaphore:
+            ACTIVE_CODE_RUNNERS.inc()
             try:
-                stdout, _ = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=float(timeout_seconds),
-                )
-            except TimeoutError:
-                await self._kill_process_tree(proc)
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        executable,
+                        *tokens[1:],
+                        cwd=workspace_dir,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                        env=self._clean_env(),
+                    )
+                except FileNotFoundError:
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    error_msg = f"Executable '{tokens[0]}' not found."
+                    return ValidationStepResult(
+                        step=step or ValidationStep.TESTS,
+                        success=False,
+                        duration_ms=duration_ms,
+                        exit_code=127,
+                        raw_output=error_msg,
+                        errors=(),
+                        error_messages=(error_msg,),
+                    )
+
+                try:
+                    stdout, _ = await asyncio.wait_for(
+                        proc.communicate(),
+                        timeout=float(timeout_seconds),
+                    )
+                except TimeoutError:
+                    await self._kill_process_tree(proc)
+
+                    duration_ms = int((time.perf_counter() - start) * 1000)
+                    timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
+                    return ValidationStepResult(
+                        step=step or ValidationStep.TESTS,
+                        success=False,
+                        duration_ms=duration_ms,
+                        exit_code=-1,
+                        raw_output=timeout_msg,
+                        errors=(),
+                        error_messages=(timeout_msg,),
+                    )
 
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                timeout_msg = f"Command '{command}' timed out after {timeout_seconds} seconds."
-                return ValidationStepResult(
-                    step=step or ValidationStep.TESTS,
-                    success=False,
-                    duration_ms=duration_ms,
-                    exit_code=-1,
-                    raw_output=timeout_msg,
-                    errors=(),
-                    error_messages=(timeout_msg,),
-                )
-
-            duration_ms = int((time.perf_counter() - start) * 1000)
-            raw_output = stdout.decode("utf-8", errors="replace")
-            exit_code = proc.returncode if proc.returncode is not None else 0
+                raw_output = stdout.decode("utf-8", errors="replace")
+                exit_code = proc.returncode if proc.returncode is not None else 0
+            finally:
+                ACTIVE_CODE_RUNNERS.dec()
 
         if step is not None:
             return parse_step_output(

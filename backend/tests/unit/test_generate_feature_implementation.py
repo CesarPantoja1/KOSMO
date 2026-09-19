@@ -70,7 +70,6 @@ class FakeWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         self.locked_projects: set[str] = set()
         self.rollback_called_for: set[str] = set()
         self.commit_called_for: list[tuple[str, str]] = []
-        self.preview_published_for: set[str] = set()
         self.manifest: tuple[str, ...] = ("package.json", "tsconfig.json", "src/index.ts")
 
     def list_files(self, root: str | Path) -> tuple[str, ...]:
@@ -125,9 +124,6 @@ class FakeWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
     async def commit_workspace(self, project_id: ProjectId, message: str) -> str | None:
         self.commit_called_for.append((str(project_id), message))
         return "hash_commit"
-
-    async def publish_preview(self, project_id: ProjectId) -> None:
-        self.preview_published_for.add(str(project_id))
 
     async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]:
         return ()
@@ -441,7 +437,6 @@ async def test_generate_feature_implementation_success() -> None:
     assert len(workspace_manager.commit_called_for) == 1
     assert workspace_manager.commit_called_for[0][0] == str(prj_id)
     assert "C01" in workspace_manager.commit_called_for[0][1]
-    assert str(prj_id) in workspace_manager.preview_published_for
 
 
 @pytest.mark.asyncio

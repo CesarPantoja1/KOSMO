@@ -210,9 +210,13 @@ class ApplyConsistencyEvaluationUseCase:
         self._diagram_repo = diagram_repo
         self._implementation_repo = implementation_repo
 
-    async def execute(self, evaluation_id: ConsistencyEvaluationId) -> dict[str, object]:
+    async def execute(
+        self,
+        evaluation_id: ConsistencyEvaluationId,
+        project_id: ProjectId | None = None,
+    ) -> dict[str, object]:
         row = await self._evaluation_repo.by_id(evaluation_id)
-        if row is None:
+        if row is None or (project_id is not None and str(row.project_id) != str(project_id)):
             raise ConsistencyEvaluationNotFoundError(evaluation_id=str(evaluation_id))
 
         if row.status != ConsistencyEvaluationStatus.COMPLETED:
@@ -283,9 +287,13 @@ class DiscardConsistencyEvaluationUseCase:
     def __init__(self, evaluation_repo: ConsistencyEvaluationRepository) -> None:
         self._evaluation_repo = evaluation_repo
 
-    async def execute(self, evaluation_id: ConsistencyEvaluationId) -> dict[str, object]:
+    async def execute(
+        self,
+        evaluation_id: ConsistencyEvaluationId,
+        project_id: ProjectId | None = None,
+    ) -> dict[str, object]:
         row = await self._evaluation_repo.by_id(evaluation_id)
-        if row is None:
+        if row is None or (project_id is not None and str(row.project_id) != str(project_id)):
             raise ConsistencyEvaluationNotFoundError(evaluation_id=str(evaluation_id))
         if row.status != ConsistencyEvaluationStatus.COMPLETED:
             raise ConsistencyStaleError(
@@ -332,9 +340,9 @@ class BulkResolveConsistencyUseCase:
         for row in rows:
             try:
                 if action == "apply":
-                    await self._apply_uc.execute(row.id)
+                    await self._apply_uc.execute(row.id, project_id=project_id)
                 else:
-                    await self._discard_uc.execute(row.id)
+                    await self._discard_uc.execute(row.id, project_id=project_id)
             except (ConsistencyStaleError, ConsistencyEvaluationNotFoundError, ProjectNotFoundError):
                 skipped += 1
                 continue

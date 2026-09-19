@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -33,6 +34,18 @@ _AUTH_ERROR_KEYWORDS = (
     "401",
     "403",
 )
+
+
+def mask_user_id(user_id: str | None) -> str:
+    """Enmascara y trunca un user_id para registrarlo en logs de forma anónima."""
+    if not user_id:
+        return "anonymous"
+    cleaned = user_id.strip()
+    if not cleaned:
+        return "anonymous"
+    if len(cleaned) <= 6:
+        return f"{cleaned[0]}***{cleaned[-1]}" if len(cleaned) >= 2 else "***"
+    return f"{cleaned[:4]}***{cleaned[-4:]}"
 
 
 def is_ai_auth_error(exc: Exception) -> bool:
@@ -138,10 +151,20 @@ class DynamicUserLLMClient(LLMClient):
                 model = user_config.model
                 api_key = raw_key.decode("utf-8")
         except Exception:
-            _log.warning("dynamic_llm_client.resolve_user_config_failed", user_id=user_id, exc_info=True)
+            _log.warning(
+                "dynamic_llm_client.resolve_user_config_failed",
+                user_id=mask_user_id(user_id),
+                exc_info=True,
+            )
 
         self._config_cache[user_id] = (now, provider, model, api_key)
         return (provider, model, api_key)
+
+    @staticmethod
+    def _hash_api_key(key: str | None) -> str:
+        if not key:
+            return "none"
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
     async def _resolve_client(self) -> LLMClient:
         user_id = current_user_id.get()
@@ -150,7 +173,7 @@ class DynamicUserLLMClient(LLMClient):
         if provider.lower() == "noop":
             return NoopLLMClient()
 
-        key_tuple = (provider, model, api_key)
+        key_tuple = (provider, model, self._hash_api_key(api_key))
         client = self._clients.get(key_tuple)
         if client is None:
             pydantic_model = build_pydantic_ai_model(provider, model, api_key)
@@ -246,8 +269,8 @@ class DynamicUserLLMClient(LLMClient):
         temperature: float = 0.1,
         max_tokens: int = 8192,
     ) -> AsyncGenerator[StreamedTypedResult[T]]:
+        client = await self._resolve_client()
         async with self._semaphore:
-            client = await self._resolve_client()
             stream_fn: Any = getattr(client, "stream_typed", None)
             if callable(stream_fn):
                 try:

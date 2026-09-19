@@ -112,20 +112,17 @@ paths:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
         "201":
-          description: Cuenta creada exitosamente. Devuelve los datos publicos del usuario.
+          description: Confirmacion generica de registro (mitiga enumeracion de usuarios CWE-204)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserPublic"
-        "409":
-          description: Email ya registrado en el sistema
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          description: Datos de registro invalidos
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthErrorResponse"
-              example:
-                error: email_already_registered
-                error_description: Email ya registrado
         "429":
           description: Rate limit excedido
           content:
@@ -2616,6 +2613,19 @@ components:
           nullable: true
           description: JWT de tipo refresh a revocar junto con el access token
       required: []
+
+    RegisterResponse:
+      type: object
+      description: Confirmacion generica de registro para mitigar enumeracion de usuarios (CWE-204)
+      properties:
+        email:
+          type: string
+          format: email
+          example: usuario@ejemplo.com
+        message:
+          type: string
+          example: Si el correo no estaba registrado previamente, la cuenta ha sido creada exitosamente.
+      required: [email, message]
 
     UserPublic:
       type: object

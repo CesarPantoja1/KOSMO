@@ -344,6 +344,20 @@ class PrincipalView(BaseModel):
     )
 
 
+class RegisterResponse(BaseModel):
+    """Confirmación genérica de registro para mitigar enumeración de usuarios (CWE-204)."""
+
+    email: EmailStr = Field(
+        description="Correo electrónico asociado a la solicitud de registro.",
+        examples=["usuario@ejemplo.com"],
+    )
+    message: str = Field(
+        default="Si el correo no estaba registrado previamente, la cuenta ha sido creada exitosamente.",
+        description="Mensaje genérico de confirmación.",
+        examples=["Si el correo no estaba registrado previamente, la cuenta ha sido creada exitosamente."],
+    )
+
+
 class UserPublic(BaseModel):
     """Datos públicos del usuario recién registrado. No incluye información sensible."""
 
@@ -954,12 +968,6 @@ class ValidateWorkspaceResponse(BaseModel):
     failed_step: str | None = Field(default=None, description="Primer paso que falló, si hubo")
     error_summary: list[str] = Field(default_factory=list, description="Resumen de errores")
     total_duration_ms: int = Field(default=0, description="Duración total en milisegundos")
-
-
-class ProjectPreviewResponse(BaseModel):
-    """URL de la vista previa del proyecto activo."""
-
-    url: str = Field(description="URL pública de la vista previa del proyecto")
 
 
 class AIModelInfoResponse(BaseModel):

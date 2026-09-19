@@ -45,7 +45,7 @@ _TEST_DEFAULTS: dict[str, str] = {
     "LLM_MODEL": "noop",
     # DSNs de infraestructura: valores stub; los tests deben usar fakes en memoria.
     "DATABASE_URL": "postgresql+asyncpg://kosmo:kosmo@localhost:5432/kosmo_test",
-    "REDIS_URL": "redis://localhost:6379/1",
+    "REDIS_URL": "redis://:test_redis_pass@localhost:6379/1",
     "OTEL_SERVICE_NAME": "kosmo-backend-test",
     "OTEL_ENVIRONMENT": "development",
 }

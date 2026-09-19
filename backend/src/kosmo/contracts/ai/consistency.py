@@ -12,6 +12,7 @@ from kosmo.contracts.sdd.ids import ConsistencyEvaluationId, FeatureId, ProjectI
 
 class TraceabilityRepository(Protocol):
     async def get_impact(self, artifact_id: str) -> dict[str, list[dict[str, str]]]: ...
+    async def get_impact_batch(self, artifact_ids: list[str]) -> dict[str, dict[str, list[dict[str, str]]]]: ...
     async def add_edge(
         self,
         source_type: str,

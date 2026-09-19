@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 import schemathesis
 from fastapi.testclient import TestClient
 
+from kosmo.contracts.auth import Principal
+from kosmo.infrastructure.api.dependencies.auth import get_principal
 from kosmo.infrastructure.api.main import app
 
 
@@ -13,8 +17,11 @@ def schema() -> schemathesis.openapi.OpenApiSchema:
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
-    return TestClient(app)
+def client() -> Generator[TestClient]:
+    app.dependency_overrides[get_principal] = lambda: Principal(subject="usr_contract")
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.pop(get_principal, None)
 
 
 @pytest.mark.contract
@@ -114,3 +121,97 @@ def test_ai_config_providers_conforms_to_openapi_contract(
     assert len(data) > 0
     assert "value" in data[0]
     assert "models" in data[0]
+
+
+@pytest.mark.contract
+def test_traceability_navigation_endpoint_conforms_to_openapi_contract(
+    schema: schemathesis.openapi.OpenApiSchema,
+) -> None:
+    # Legacy compatibility route
+    path = "/api/v1/traceability/{entity_id}/navigation"
+    assert path in schema
+    operation = schema[path]["get"]
+    assert operation.tags == ["Traceability"]
+
+    # Canonical project-nested REST route
+    canonical_path = "/api/v1/projects/{project_id}/traceability/{entity_id}/navigation"
+    assert canonical_path in schema
+    canonical_op = schema[canonical_path]["get"]
+    assert canonical_op.tags == ["Traceability"]
+
+
+@pytest.mark.contract
+def test_openapi_json_accessible_in_development(client: TestClient) -> None:
+    response = client.get("/api/v1/openapi.json")
+    assert response.status_code == 200
+    assert response.json()["info"]["title"] == "KOSMO API"
+
+
+@pytest.mark.unit
+def test_openapi_route_not_found_when_disabled() -> None:
+    from fastapi import FastAPI
+
+    prod_app = FastAPI(openapi_url=None)
+    with TestClient(prod_app) as prod_client:
+        assert prod_client.get("/api/v1/openapi.json").status_code == 404
+        assert prod_client.get("/openapi.json").status_code == 404
+
+
+@pytest.mark.contract
+def test_security_headers_present_in_responses(client: TestClient) -> None:
+    response = client.get("/health")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "accelerometer=()" in response.headers["permissions-policy"]
+    assert "default-src 'self'" in response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
+@pytest.mark.unit
+def test_security_headers_middleware_production_hsts() -> None:
+    from fastapi import FastAPI
+
+    from kosmo.infrastructure.api.main import SecurityHeadersMiddleware
+
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityHeadersMiddleware, is_production=True)
+
+    @test_app.get("/ping")
+    def ping() -> dict[str, str]:
+        return {"pong": "ok"}
+
+    with TestClient(test_app) as test_client:
+        res = test_client.get("/ping")
+        assert res.headers["x-content-type-options"] == "nosniff"
+        assert res.headers["x-frame-options"] == "DENY"
+        assert res.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert "max-age=63072000" in res.headers["strict-transport-security"]
+        assert "accelerometer=()" in res.headers["permissions-policy"]
+        assert res.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+
+
+@pytest.mark.unit
+def test_security_headers_middleware_preserves_custom_headers() -> None:
+    from fastapi import FastAPI
+    from fastapi.responses import PlainTextResponse
+
+    from kosmo.infrastructure.api.main import SecurityHeadersMiddleware
+
+    test_app = FastAPI()
+    test_app.add_middleware(SecurityHeadersMiddleware, is_production=False)
+
+    @test_app.get("/custom")
+    def custom() -> PlainTextResponse:
+        return PlainTextResponse(
+            "custom",
+            headers={
+                "content-security-policy": "default-src 'self'; script-src 'self'",
+                "permissions-policy": "camera=*",
+            },
+        )
+
+    with TestClient(test_app) as test_client:
+        res = test_client.get("/custom")
+        assert res.headers["content-security-policy"] == "default-src 'self'; script-src 'self'"
+        assert res.headers["permissions-policy"] == "camera=*"

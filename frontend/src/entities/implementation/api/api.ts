@@ -267,21 +267,6 @@ export const fetchImplementation = async (
 	return toRecord((await res.json()) as Parameters<typeof toRecord>[0]);
 };
 
-export const fetchPreviewUrl = async (projectId: string): Promise<string | null> => {
-	const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/preview`, {
-		headers: authHeaders(),
-		cache: 'no-store',
-	});
-	if (res.status === 404) {
-		return null;
-	}
-	if (!res.ok) {
-		throw parseApiError(res, await res.json().catch(() => null));
-	}
-	const data = (await res.json()) as { url: string };
-	return data.url;
-};
-
 export const generateImplementation = async (
 	featureId: string,
 	featureTitle: string,

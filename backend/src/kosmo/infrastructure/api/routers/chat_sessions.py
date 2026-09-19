@@ -140,10 +140,15 @@ async def create_chat_session(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_chat_session(
-    project_id: str,  # noqa: ARG001 — el id valida la ruta bajo el proyecto
+    project_id: str,
     session_id: str,
     _principal: Annotated[Principal, Depends(get_principal)],
     uc: Annotated[DeleteChatSessionUseCase, Depends(_delete_uc)],
 ) -> Response:
-    await uc.execute(DeleteChatSessionInput(session_id=ChatSessionId(session_id)))
+    await uc.execute(
+        DeleteChatSessionInput(
+            session_id=ChatSessionId(session_id),
+            project_id=ProjectId(project_id),
+        )
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

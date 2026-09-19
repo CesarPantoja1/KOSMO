@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import base64
+import time
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -138,6 +140,7 @@ async def test_sync_github_repository_incremental_push_success(
     # 1. No debe llamar a create_repository ni check_repository_exists porque es push incremental
     github_client.create_repository.assert_not_called()
     github_client.check_repository_exists.assert_not_called()
+    workspace_manager.commit_workspace.assert_awaited_once_with(project_id, "chore: sync project changes to repository")
 
     # 2. El remoto persistido queda limpio; el token se entrega solo al push.
     git_workspace.remote_add_or_update.assert_called_once_with(
@@ -726,3 +729,178 @@ async def test_sync_github_repository_rejects_private_repository(
         await use_case.execute(cmd, user_id)
 
     assert "No se permiten repositorios privados" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_push_executes_in_thread_without_blocking_event_loop(
+    use_case: SyncGitHubRepositoryUseCase,
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+) -> None:
+    # Arrange
+    project_id = ProjectId("proj-thread-test")
+    user_id = UserId("usr-thread")
+
+    existing_integration = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="thread-app",
+        repo_url="https://github.com/octocat/thread-app.git",
+        is_public=True,
+        default_branch="main",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    project_repo.get_by_project_id.return_value = existing_integration
+    project_repo.save.side_effect = lambda integration: integration
+
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"token").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"decrypted_token"
+
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"),
+        project_id=project_id,
+        workspace_dir="/tmp/workspaces/proj-thread-test",
+    )
+
+    # Simulate a slow network push (50ms)
+    def _slow_push(*_args: object, **_kwargs: object) -> str:
+        time.sleep(0.05)
+        return "commit_sha_threaded"
+
+    git_workspace.push.side_effect = _slow_push
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+
+    # Concurrently running coroutine on event loop
+    loop_ticks = 0
+
+    async def _event_loop_ticker() -> None:
+        nonlocal loop_ticks
+        for _ in range(3):
+            await asyncio.sleep(0.01)
+            loop_ticks += 1
+
+    # Act: run use case concurrently with ticker
+    sync_task = asyncio.create_task(use_case.execute(cmd, user_id))
+    ticker_task = asyncio.create_task(_event_loop_ticker())
+
+    res, _ = await asyncio.gather(sync_task, ticker_task)
+
+    # Assert
+    assert res.last_commit_hash == "commit_sha_threaded"
+    assert loop_ticks >= 1, "The event loop must remain unblocked while git push executes in thread"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_adquiere_y_libera_workspace_lock(
+    use_case: SyncGitHubRepositoryUseCase,
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+) -> None:
+    project_id = ProjectId("proj-lock-sync-test")
+    user_id = UserId("usr-123")
+
+    project_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_url="https://github.com/octocat/my-repo.git",
+        repo_name="my-repo",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"token").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"decrypted_token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"),
+        project_id=project_id,
+        workspace_dir="/tmp/workspaces/proj-lock-sync-test",
+    )
+    git_workspace.push.return_value = "commit_sha_123"
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+    await use_case.execute(cmd, user_id)
+
+    workspace_manager.acquire_lock.assert_awaited_once_with(project_id)
+    workspace_manager.release_lock.assert_awaited_once_with(project_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_libera_workspace_lock_en_error(
+    use_case: SyncGitHubRepositoryUseCase,
+    user_repo: AsyncMock,
+    workspace_manager: AsyncMock,
+) -> None:
+    project_id = ProjectId("proj-lock-fail-test")
+    user_id = UserId("usr-123")
+
+    user_repo.get_by_user_id.return_value = None
+
+    cmd = SyncGitHubRepositoryCommand(project_id=project_id)
+    with pytest.raises(ValueError, match="no tiene su cuenta vinculada"):
+        await use_case.execute(cmd, user_id)
+
+    workspace_manager.acquire_lock.assert_awaited_once_with(project_id)
+    workspace_manager.release_lock.assert_awaited_once_with(project_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_sync_github_repository_skip_lock_and_skip_validation(
+    use_case: SyncGitHubRepositoryUseCase,
+    project_repo: AsyncMock,
+    user_repo: AsyncMock,
+    git_workspace: MagicMock,
+    workspace_manager: AsyncMock,
+    cipher: MagicMock,
+) -> None:
+    # Arrange
+    project_id = ProjectId("proj-skip-lock-test")
+    user_id = UserId("usr-123")
+
+    project_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_url="https://github.com/octocat/my-repo.git",
+        repo_name="my-repo",
+        sync_status=GitHubSyncStatus.SYNCED,
+    )
+    project_repo.save.side_effect = lambda integration: integration
+    user_repo.get_by_user_id.return_value = UserGitHubIntegration(
+        user_id=user_id,
+        github_username="octocat",
+        encrypted_token=base64.b64encode(b"token").decode("utf-8"),
+    )
+    cipher.decrypt.return_value = b"decrypted_token"
+    workspace_manager.ensure_workspace.return_value = CodeWorkspace(
+        id=WorkspaceId("ws-1"),
+        project_id=project_id,
+        workspace_dir="/tmp/workspaces/proj-skip-lock-test",
+    )
+    git_workspace.push.return_value = "commit_sha_skip"
+
+    cmd = SyncGitHubRepositoryCommand(
+        project_id=project_id,
+        skip_lock=True,
+        skip_validation=True,
+    )
+
+    # Act
+    result = await use_case.execute(cmd, user_id)
+
+    # Assert
+    workspace_manager.acquire_lock.assert_not_called()
+    workspace_manager.release_lock.assert_not_called()
+    assert result.last_commit_hash == "commit_sha_skip"

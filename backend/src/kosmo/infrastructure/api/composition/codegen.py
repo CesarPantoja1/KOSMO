@@ -14,7 +14,6 @@ from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCas
 from kosmo.config import Settings
 from kosmo.contracts.sdd.codegen import CodeRunnerPort, FileSystemReader
 from kosmo.infrastructure.api.implementation_broker import ImplementationEventBroker
-from kosmo.infrastructure.cloudflare.preview import CloudflareTunnelPreviewPublisher
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalFileSystemReader, LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
@@ -25,6 +24,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
     from kosmo.application.integrations.sync_github_repository import SyncGitHubRepositoryUseCase
+    from kosmo.infrastructure.api.composition.integrations import IntegrationsComponents
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,21 +57,6 @@ def build_workspace_manager(
     fs_reader: FileSystemReader | None = None,
 ) -> LocalWorkspaceManager:
     """Construye el administrador local de workspaces con soporte opcional de previews en Cloudflare."""
-    preview_publisher = None
-    if (
-        settings.cloudflare_preview_api_token is not None
-        and settings.cloudflare_preview_account_id is not None
-        and settings.cloudflare_preview_zone_id is not None
-        and settings.cloudflare_preview_tunnel_id is not None
-        and settings.preview_public_host_suffix is not None
-    ):
-        preview_publisher = CloudflareTunnelPreviewPublisher(
-            api_token=settings.cloudflare_preview_api_token.get_secret_value(),
-            account_id=settings.cloudflare_preview_account_id,
-            zone_id=settings.cloudflare_preview_zone_id,
-            tunnel_id=settings.cloudflare_preview_tunnel_id,
-            host_suffix=settings.preview_public_host_suffix,
-        )
     reader = fs_reader or LocalFileSystemReader()
     return LocalWorkspaceManager(
         workspaces_root=settings.kosmo_workspaces_dir,
@@ -79,7 +64,6 @@ def build_workspace_manager(
         mcp_url=settings.kosmo_mcp_base_url,
         project_repo=repos.projects,
         code_runner=code_runner,
-        preview_publisher=preview_publisher,
         fs_reader=reader,
     )
 
@@ -93,6 +77,7 @@ def build_codegen_components(
     code_runner: CodeRunnerPort | None = None,
     fs_reader: FileSystemReader | None = None,
     redis: Redis | None = None,
+    integrations: IntegrationsComponents | None = None,
 ) -> CodegenComponents:
     runner = code_runner or build_code_runner(settings)
     reader = fs_reader or LocalFileSystemReader()
@@ -130,6 +115,9 @@ def build_codegen_components(
         sync_github_repository=sync_github_repository,
         fs_reader=reader,
         integration_analyzer=integration_analyzer,
+        orchestrate_cloud_deployment=integrations.orchestrate_cloud_deployment if integrations else None,
+        project_deployment_repo=repos.project_deployments,
+        deployment_worker=integrations.deployment_worker if integrations else None,
     )
     implementation_broker = broker or ImplementationEventBroker(
         history_ttl_seconds=settings.implementation_broker_ttl_seconds,

@@ -196,6 +196,15 @@ class FakeTraceabilityRepo:
             "downstream": [{"type": "code", "id": "src/app/page.tsx"}],
         }
 
+    async def get_impact_batch(self, artifact_ids: list[str]) -> dict[str, dict[str, list[dict[str, str]]]]:
+        return {
+            aid: {
+                "upstream": [{"type": "requirement", "id": "req_01"}],
+                "downstream": [{"type": "code", "id": "src/app/page.tsx"}],
+            }
+            for aid in artifact_ids
+        }
+
 
 class FakeRepos:
     def __init__(self, workspace_dir: str) -> None:
@@ -445,6 +454,7 @@ class FakeDeleteContainer:
     def __init__(self, feature: Feature, broker: object | None = None) -> None:
         self.consistency = FakeConsistencyContainer(feature)
         self.codegen = FakeDeleteCodegen(broker=broker)
+        self.repos = FakeRepos("")
 
 
 def test_delete_feature_dispara_eliminacion_de_codigo_en_background(

@@ -28,11 +28,14 @@ from kosmo.contracts.sdd.ids import FeatureId, ProjectId
 from kosmo.domain.pipeline.feature_resolver import resolve_feature_id
 from kosmo.infrastructure.api.dependencies.auth import get_principal, require_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
+from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
 
 router = APIRouter(
     prefix="/api/v1/features/{feature_id}/requirements",
     tags=["requirements"],
 )
+
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 class GenerateRequirementsRequest(BaseModel):
@@ -75,6 +78,7 @@ async def generate_requirements(
     body: GenerateRequirementsRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: GenerateEARSUseCase = get_container(request).requirements.generate_ears
@@ -198,6 +202,7 @@ async def refine_requirements(
     body: RefineRequirementsRequest,
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> dict[str, Any]:
     fid = await _get_feature_id(request, body.project_id, feature_id, _principal)
     uc: RefineRequirementsUseCase = get_container(request).requirements.refine_requirements
@@ -251,6 +256,7 @@ async def regenerate_requirements(
     _principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
     project_id: str = Query(...),
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> RegenerateRequirementsResponse:
     container = get_container(request)
     await require_project_owner(container, project_id, _principal)
