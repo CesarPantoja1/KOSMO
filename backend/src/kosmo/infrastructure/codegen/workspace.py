@@ -343,7 +343,11 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
                     needs_update = True
                 else:
                     cur_df = target_dockerfile.read_text(encoding="utf-8")
-                    if "--ignore-scripts" in cur_df or "better-sqlite3" not in cur_df:
+                    if (
+                        "npm rebuild better-sqlite3" not in cur_df
+                        or "better-sqlite3" not in cur_df
+                        or "python3 make g++" not in cur_df
+                    ):
                         needs_update = True
                 if needs_update:
                     target_dockerfile.write_text(tmpl_dockerfile.read_text(encoding="utf-8"), encoding="utf-8")
@@ -359,7 +363,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
             target_db_index = target_dir / "src" / "db" / "index.ts"
             if tmpl_db_index and tmpl_db_index.exists() and target_db_index.exists():
                 cur_db = target_db_index.read_text(encoding="utf-8")
-                if "fallbackErr" not in cur_db:
+                if "syncSchema" not in cur_db:
                     target_db_index.write_text(tmpl_db_index.read_text(encoding="utf-8"), encoding="utf-8")
 
             # Generar las skills en .opencode/skills si no existen

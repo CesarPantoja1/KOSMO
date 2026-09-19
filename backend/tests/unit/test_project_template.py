@@ -227,7 +227,8 @@ def test_dockerfile_configuration_supports_native_addons() -> None:
 
     # Assert
     assert "python3 make g++" in dockerfile
-    assert "--ignore-scripts" not in dockerfile
+    assert "--ignore-scripts" in dockerfile
+    assert "npm rebuild better-sqlite3" in dockerfile
     assert "better-sqlite3" in dockerfile
 
 
@@ -256,19 +257,27 @@ async def test_local_workspace_manager_repairs_existing_workspace_dockerfile_and
 
         # Crear archivos rotos preexistentes (simulando proyecto ya creado como nc-disc)
         broken_dockerfile = target_dir / "Dockerfile"
-        broken_dockerfile.write_text("FROM node:20-slim\nRUN npm ci --ignore-scripts\n", encoding="utf-8")
+        broken_dockerfile.write_text("FROM node:20-slim\nRUN npm ci\n", encoding="utf-8")
         outdated_next_config = target_dir / "next.config.ts"
         outdated_next_config.write_text("export default { reactStrictMode: true };\n", encoding="utf-8")
+        outdated_db_dir = target_dir / "src" / "db"
+        outdated_db_dir.mkdir(parents=True, exist_ok=True)
+        outdated_db_index = outdated_db_dir / "index.ts"
+        outdated_db_index.write_text("export const sqlite = null;\n", encoding="utf-8")
 
         # Act
         await manager.ensure_workspace(project_id)
 
         # Assert
         repaired_df = broken_dockerfile.read_text(encoding="utf-8")
-        assert "--ignore-scripts" not in repaired_df
+        assert "--ignore-scripts" in repaired_df
+        assert "npm rebuild better-sqlite3" in repaired_df
         assert "python3 make g++" in repaired_df
         assert "better-sqlite3" in repaired_df
 
         repaired_nc = outdated_next_config.read_text(encoding="utf-8")
         assert "serverExternalPackages" in repaired_nc
         assert "better-sqlite3" in repaired_nc
+
+        repaired_db = outdated_db_index.read_text(encoding="utf-8")
+        assert "syncSchema" in repaired_db
