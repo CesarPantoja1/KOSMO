@@ -363,7 +363,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
             target_db_index = target_dir / "src" / "db" / "index.ts"
             if tmpl_db_index and tmpl_db_index.exists() and target_db_index.exists():
                 cur_db = target_db_index.read_text(encoding="utf-8")
-                if "syncSchema" not in cur_db:
+                if "syncSchema" not in cur_db or "(exported as any)" in cur_db:
                     target_db_index.write_text(tmpl_db_index.read_text(encoding="utf-8"), encoding="utf-8")
 
             # Generar las skills en .opencode/skills si no existen

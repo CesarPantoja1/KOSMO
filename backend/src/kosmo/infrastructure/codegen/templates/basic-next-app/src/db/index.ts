@@ -44,7 +44,7 @@ export function syncSchema(
   for (const exported of Object.values(schemaObject)) {
     if (!exported || typeof exported !== "object") continue;
     try {
-      if (is(exported, SQLiteTable) || (exported as any)?._?.name) {
+      if (is(exported, SQLiteTable) || (exported as { _?: { name?: string } })._?.name) {
         const table = exported as SQLiteTable;
         const tableName = getTableName(table);
         if (!tableName) continue;
