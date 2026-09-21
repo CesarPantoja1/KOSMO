@@ -24,6 +24,7 @@ from kosmo.application.discovery import (
     SaveDiscoveryInput,
     SaveDiscoveryUseCase,
 )
+from kosmo.application.pipeline.context_builder import ContextBuilder
 from kosmo.contracts.auth import Principal
 from kosmo.contracts.pipeline.phase_errors import PhaseTransitionError
 from kosmo.contracts.sdd.document import RichTextDocument, SpecPhase
@@ -33,7 +34,6 @@ from kosmo.contracts.sdd.errors import (
     ProjectNotFoundError,
 )
 from kosmo.contracts.sdd.ids import ChatSessionId, ProjectId
-from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.infrastructure.api.dependencies.auth import get_principal, verify_project_owner
 from kosmo.infrastructure.api.dependencies.container import get_container
 from kosmo.infrastructure.api.dependencies.rate_limit import ProjectGenerationRateLimiter
@@ -51,7 +51,7 @@ router = APIRouter(
     dependencies=[Depends(verify_project_owner)],
 )
 
-_generation_rate_limiter = ProjectGenerationRateLimiter(requests_per_hour=20)
+_generation_rate_limiter = ProjectGenerationRateLimiter()
 
 
 def _generate_discovery(request: Request) -> GenerateDiscoveryUseCase:
@@ -222,8 +222,8 @@ async def refine_discovery(
     project_id: str,
     payload: Annotated[RefineDiscoveryRequest, Body(...)],
     _principal: Annotated[Principal, Depends(get_principal)],
-    _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[RefineDiscoveryUseCase, Depends(_refine_discovery)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> DiscoveryResponse:
     try:
         output = await use_case.execute(
@@ -296,6 +296,7 @@ async def process_chat_message(
     chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
     context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> ChatResponse:
     from kosmo.infrastructure.api.async_generation import validate_chat_content
 
@@ -409,6 +410,7 @@ async def stream_chat_message(
     validate_uc: Annotated[ValidatePhaseContextUseCase, Depends(_validate_phase_context)],
     chat_uc: Annotated[ProcessChatMessageUseCase, Depends(_chat_uc)],
     context_builder: Annotated[ContextBuilder, Depends(_context_builder)],
+    _rate: Annotated[None, Depends(_generation_rate_limiter)] = None,
 ) -> StreamingResponse:
     from kosmo.infrastructure.api.async_generation import sse_chat_response
 

@@ -19,6 +19,7 @@ Una feature NO está implementada si solo existe su lógica. Toda feature debe e
 2. **Slice autocontenido** en `src/features/<slug>/`:
    - `manifest.ts` — `{ slug, title, description, route, icon }` (icono de `lucide-react`).
    - `logic.ts` — lógica de negocio pura, tipada, sin I/O ni React.
+   - `actions.ts` — Server Actions (`"use server"`) para persistencia y mutaciones reales en SQLite (`db`) con `revalidatePath`.
    - `components/` — componentes de la UI de la feature (usando `src/components/ui/` y clases de Bootstrap).
    - `index.ts` — exports públicos del slice.
 3. **Registro de navegación**: importar el manifest en `src/lib/feature-registry.ts`.
@@ -90,5 +91,6 @@ Usa los componentes del catálogo como bloques de construcción principales:
 
 - ❌ **No crees dashboards genéricos de tarjetas repetitivas** cuando la información requiere una tabla o timeline.
 - ❌ **No uses "Lorem Ipsum"** ni textos de bienvenida genéricos. Todo texto debe ser en español neutro y específico del dominio del negocio.
+- ❌ **No uses persistencia simulada con arrays en memoria o `useState` sin base de datos**: todo formulario que registre o modifique datos debe invocar una Server Action en `actions.ts` conectada a SQLite con Drizzle ORM.
 - ❌ **No dejes pantallas vacías o stubs**: cada página debe permitir interactuar, capturar datos y ver resultados.
 - ❌ **No uses Tailwind CSS**: el proyecto usa 100% Bootstrap 5.

@@ -5,8 +5,18 @@ from collections.abc import Callable
 from typing import Any
 
 from opentelemetry import metrics, trace
+from ulid import ULID
 
 from kosmo.contracts.telemetry import TelemetryPort
+
+
+def get_current_trace_id() -> str:
+    """Obtiene el identificador de traza actual de OpenTelemetry en formato hex (32 chars) o un fallback ULID."""
+    span = trace.get_current_span()
+    context = span.get_span_context()
+    if context.is_valid:
+        return format(context.trace_id, "032x")
+    return ULID().hex
 
 
 class OpenTelemetryProvider(TelemetryPort):

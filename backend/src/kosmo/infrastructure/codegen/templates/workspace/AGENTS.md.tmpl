@@ -41,12 +41,26 @@ actualiza el test junto con la implementación y vuelve a validar.
 - `.opencode/skills/kosmo-nextjs/SKILL.md`: Next.js 16 App Router con Server Components y APIs.
 - `.opencode/skills/kosmo-ui/SKILL.md`: UI funcional con Bootstrap 5, mapa navegacional y diseño consistente.
 
+## Persistencia 100% Real y Cero Mocks (NON-NEGOTIABLE)
+Toda funcionalidad que involucre datos persistentes DEBE leer y escribir en la base de datos SQLite real mediante Drizzle ORM (`src/db/`).
+1. **CERO MOCKS EN RUNTIME**:
+   - PROHIBIDO el uso de arrays en memoria (`let items = []`), `useState` como única persistencia de negocio, o datos dummy simulados al enviar formularios o ejecutar acciones.
+   - Todo envío de formulario, creación, actualización o eliminación DEBE ejecutar una mutación real en SQLite (`db.insert()`, `db.update()`, `db.delete()`).
+2. **Mutaciones con Server Actions (`"use server"`)**:
+   - Para mutar datos, crea Server Actions en `src/features/<slug>/actions.ts` con directiva `"use server"` al inicio del archivo.
+   - La acción importa `db` desde `@/db`, valida datos con `logic.ts`, ejecuta la mutación con Drizzle, llama a `revalidatePath('/<slug>')` de Next.js para refrescar la UI automáticamente, y retorna el resultado `{ success: true, ... }` o `{ success: false, error: ... }`.
+   - **PROHIBIDO importar `@/db` en componentes de cliente (`'use client'`)**: Los Client Components llaman a la Server Action asíncrona importada desde `./actions`.
+3. **Lectura de Datos en Server Components**:
+   - `src/app/<slug>/page.tsx` es un Server Component asíncrono (`async function`) que consulta directamente los datos reales de la BD con `db.select()` y los pasa como props a los componentes interactivos.
+4. **Semillas de Datos Maestros (Seed Data)**:
+   - Si la feature depende de catálogos o entidades maestras (ej. tipos de productos, sucursales, roles, categorías), la consulta o acción debe verificar si la tabla está vacía y auto-insertar registros iniciales realistas para que la app sea 100% interactiva desde el primer despliegue.
+
 ## UI, Navegación y Diseño con Bootstrap 5 (NON-NEGOTIABLE)
 Toda feature termina con una pantalla funcional que el usuario puede abrir y usar.
 **PROHIBIDO el uso de Tailwind CSS.**
 
 1. **Ruta y slice**: `src/app/<slug>/page.tsx` + `src/features/<slug>/` con `manifest.ts`,
-   `logic.ts` y `components/`. Registrar el manifest en `src/lib/feature-registry.ts`
+   `logic.ts`, `actions.ts` y `components/`. Registrar el manifest en `src/lib/feature-registry.ts`
    (en el array `features` o agrupado en `featureGroups` según rol o dominio funcional).
 2. **Desacople y Entidades Compartidas**:
    - Los slices en `src/features/<slug>/` no se importan directamente entre sí.

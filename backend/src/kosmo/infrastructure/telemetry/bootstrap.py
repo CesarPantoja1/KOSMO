@@ -11,6 +11,7 @@ del API público en :mod:`kosmo.contracts.telemetry`.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 from typing import TYPE_CHECKING, Any
@@ -87,14 +88,17 @@ def configure_telemetry(settings: Settings) -> None:
 
 
 def instrument_prometheus(app: FastAPI) -> None:
-    """Instrumenta FastAPI con prometheus-fastapi-instrumentator antes del startup."""
+    """Instrumenta FastAPI con prometheus-fastapi-instrumentator antes del startup de manera idempotente."""
+    if getattr(app.state, "_kosmo_prometheus_instrumented", False):
+        return
     try:
         from prometheus_fastapi_instrumentator import (  # pyright: ignore[reportMissingImports]
             Instrumentator,  # pyright: ignore[reportUnknownVariableType]
         )
 
         Instrumentator().instrument(app).expose(app)  # pyright: ignore[reportUnknownMemberType]
-    except ImportError:
+        app.state._kosmo_prometheus_instrumented = True
+    except (ImportError, Exception):
         pass
 
 
@@ -104,10 +108,22 @@ def instrument_app(
     app: FastAPI,
     db_engine: AsyncEngine,
 ) -> None:
-    """Aplica auto-instrumentación a los componentes IO en lifespan."""
+    """Aplica auto-instrumentación a los componentes IO en lifespan de manera idempotente."""
 
     del settings
+    if getattr(app.state, "_kosmo_instrumented", False):
+        return
+
     fastapi_kwargs: dict[str, Any] = {"capture_headers": False}
-    logfire.instrument_fastapi(app, **fastapi_kwargs)
-    logfire.instrument_sqlalchemy(engine=db_engine)
-    logfire.instrument_redis(capture_statement=False)
+    try:
+        logfire.instrument_fastapi(app, **fastapi_kwargs)
+    except ValueError as exc:
+        if "already been instrumented" not in str(exc):
+            raise
+
+    with contextlib.suppress(Exception):
+        logfire.instrument_sqlalchemy(engine=db_engine)
+    with contextlib.suppress(Exception):
+        logfire.instrument_redis(capture_statement=False)
+
+    app.state._kosmo_instrumented = True

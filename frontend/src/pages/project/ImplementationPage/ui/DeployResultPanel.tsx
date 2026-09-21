@@ -1,10 +1,12 @@
 'use client';
 
 import type { ProjectDeployStatusResponse } from '@/entities/deploy';
+import { deleteDeployment } from '@/entities/deploy';
 import {
 	Clock,
 	ComputerDesktop,
 	Load,
+	ModalConfirm,
 	Railway,
 	SuccessCheckIcon,
 	WarningIcon,
@@ -13,17 +15,37 @@ import { toast } from '@/shared/ui';
 import { useCallback, useState } from 'react';
 
 const DeployResultPanel = ({
+	projectId,
 	status,
 	error,
 	onRedeploy,
 	deploying = false,
+	onDeleteSuccess,
 }: {
+	projectId: string;
 	status: ProjectDeployStatusResponse;
 	error: string | null;
 	onRedeploy?: () => void;
 	deploying?: boolean;
+	onDeleteSuccess?: () => void;
 }) => {
 	const [copied, setCopied] = useState(false);
+	const [deleting, setDeleting] = useState(false);
+	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+	const handleConfirmDelete = async () => {
+		setShowConfirmDelete(false);
+		try {
+			setDeleting(true);
+			await deleteDeployment(projectId);
+			toast.success('Despliegue eliminado exitosamente');
+			onDeleteSuccess?.();
+		} catch {
+			toast.error('Error al eliminar el despliegue');
+		} finally {
+			setDeleting(false);
+		}
+	};
 
 	const handleCopy = useCallback(async () => {
 		if (!status.deploy_url) return;
@@ -144,24 +166,41 @@ const DeployResultPanel = ({
 							<span className='text-xs text-neutral-500'>
 								¿Subiste nuevos cambios a GitHub?
 							</span>
-							<button
-								type='button'
-								onClick={onRedeploy}
-								disabled={deploying}
-								className='btn btn-secondary btn-sm inline-flex items-center gap-1.5'
-							>
-								{deploying ? (
-									<>
-										<Load size={14} />
-										Actualizando...
-									</>
-								) : (
-									<>
-										<Railway size={14} color='text-railway-700' />
-										Actualizar despliegue
-									</>
-								)}
-							</button>
+							<div className='flex gap-2'>
+								<button
+									type='button'
+									onClick={() => setShowConfirmDelete(true)}
+									disabled={deleting || deploying}
+									className='btn btn-secondary btn-sm inline-flex items-center gap-1.5 text-error-600 hover:bg-error-50 hover:text-error-700 hover:border-error-200'
+								>
+									{deleting ? (
+										<>
+											<Load size={14} />
+											Eliminando...
+										</>
+									) : (
+										'Eliminar despliegue'
+									)}
+								</button>
+								<button
+									type='button'
+									onClick={onRedeploy}
+									disabled={deploying || deleting}
+									className='btn btn-secondary btn-sm inline-flex items-center gap-1.5'
+								>
+									{deploying ? (
+										<>
+											<Load size={14} />
+											Actualizando...
+										</>
+									) : (
+										<>
+											<Railway size={14} color='text-railway-700' />
+											Actualizar despliegue
+										</>
+									)}
+								</button>
+							</div>
 						</div>
 					)}
 				</div>
@@ -217,6 +256,17 @@ const DeployResultPanel = ({
 						)}
 					</div>
 				</div>
+			)}
+
+			{showConfirmDelete && (
+				<ModalConfirm
+					title='Eliminar despliegue'
+					description='¿Estás seguro de que deseas eliminar el despliegue? Esta acción eliminará el servicio en la nube.'
+					cancelText='Cancelar'
+					confirmText='Eliminar'
+					onCancel={() => setShowConfirmDelete(false)}
+					onConfirm={handleConfirmDelete}
+				/>
 			)}
 		</div>
 	);

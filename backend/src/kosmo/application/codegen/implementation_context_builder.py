@@ -379,19 +379,22 @@ class ImplementationContextBuilder:
             f"{disp_info}"
             "Propón un plan de implementación detallando los archivos a crear y modificar.\n"
             "OBLIGATORIO: la feature DEBE entregar una solución 100% FUNCIONAL DE EXTREMO A EXTREMO "
-            "(Frontend + Backend + Base de Datos). El plan debe incluir:\n"
-            "1. El slice en `src/features/<slug>/` (manifest.ts, logic.ts, components/). Si la feature opera "
-            "sobre entidades comunes de negocio, coloca la entidad/tipos en `src/domain/<entidad>/` "
-            "para compartirla.\n"
+            "(Frontend + Backend + Base de Datos con persistencia real, CERO MOCKS). El plan debe incluir:\n"
+            "1. El slice en `src/features/<slug>/` (manifest.ts, logic.ts, actions.ts, components/). "
+            "Si la feature opera sobre entidades comunes de negocio, coloca la entidad/tipos en "
+            "`src/domain/<entidad>/` para compartirla.\n"
             "2. La ruta navegable y página principal en `src/app/<slug>/page.tsx` con export default "
-            "que renderice la vista interactiva (formularios, listas, acciones).\n"
-            "3. El registro del manifest en `src/lib/feature-registry.ts` "
+            "que renderice la vista interactiva (formularios, listas, acciones) con lectura directa de base de datos.\n"
+            "3. Las Server Actions en `src/features/<slug>/actions.ts` con 'use server' para toda "
+            "inserción/modificación, usando Drizzle ORM con `@/db` y `revalidatePath('/<slug>')`. "
+            "PROHIBIDO usar arrays en memoria o useState como persistencia.\n"
+            "4. El registro del manifest en `src/lib/feature-registry.ts` "
             "(IMPORTANTE: añade la feature al array `features` o `featureGroups` existente sin eliminar las "
             "features previas; la navegación del shell se deriva del registro).\n"
-            "4. Los tests de la lógica en Vitest.\n"
-            "5. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
-            "para declarar las tablas con Drizzle ORM y la integración de lectura/escritura "
-            "(reutilizando tablas si ya existen).\n"
+            "5. Los tests de la lógica en Vitest.\n"
+            "6. Si la feature maneja persistencia de datos, incluye la modificación de `src/db/schema.ts` "
+            "para declarar las tablas con Drizzle ORM y auto-seeding de catálogos maestros iniciales si "
+            "la tabla está vacía.\n"
             "Lee las skills `kosmo-ui`, `kosmo-design-tokens`, `kosmo-layout-patterns`, "
             "`kosmo-nextjs` y `kosmo-drizzle` antes de planificar."
         )
@@ -417,6 +420,11 @@ class ImplementationContextBuilder:
                 ),
                 FileOperation(
                     action=FileAction.CREATE,
+                    path=f"src/features/{feature_slug}/actions.ts",
+                    description=f"Server actions de persistencia para {feature.title}",
+                ),
+                FileOperation(
+                    action=FileAction.CREATE,
                     path=f"src/features/{feature_slug}/manifest.ts",
                     description=f"Manifiesto de integración de {feature.title}",
                 ),
@@ -437,6 +445,11 @@ class ImplementationContextBuilder:
                 action=FileAction.CREATE,
                 path=f"src/features/{feature_slug}/logic.ts",
                 description=f"Lógica de negocio y tipos para {feature.title}",
+            ),
+            FileOperation(
+                action=FileAction.CREATE,
+                path=f"src/features/{feature_slug}/actions.ts",
+                description=f"Server actions de persistencia y mutación para {feature.title}",
             ),
             FileOperation(
                 action=FileAction.CREATE,
@@ -498,30 +511,34 @@ class ImplementationContextBuilder:
             f"{disp_info}"
             "Implementa el código y las pruebas respetando el plan aprobado.\n"
             "OBLIGATORIO: entrega una funcionalidad 100% OPERATIVA Y COMPLETA "
-            "(Frontend + Backend + Base de Datos) usando Bootstrap 5:\n"
-            "1. Frontend interactivo en `src/app/<slug>/page.tsx`: DEBE contener `export default` y "
-            "renderizar la vista operativa de la feature con componentes funcionales (formularios con captura "
-            "de datos, tablas de registros, botones de acción con respuesta real, feedback de error/éxito "
+            "(Frontend + Backend + Base de Datos con PERSISTENCIA REAL, CERO MOCKS) usando Bootstrap 5:\n"
+            "1. Frontend interactivo en `src/app/<slug>/page.tsx`: Server Component con `export default` que "
+            "consulte datos iniciales reales con `db.select()` y renderice la vista operativa con componentes "
+            "funcionales (formularios conectados a Server Actions, tablas de registros reales, feedback de error/éxito "
             "y estados de carga). PROHIBIDO dejar páginas vacías o stubs que provoquen error 404 al navegar.\n"
-            "2. Lógica de negocio y backend en `src/features/<slug>/logic.ts` (con tests exhaustivos en Vitest) "
-            "y Server Actions o API routes si se requiere. Si la lógica corresponde a una entidad compartida, "
-            "colócala en `src/domain/`.\n"
-            "3. Componentes en `src/features/<slug>/components/` usando el design system de "
+            "2. Server Actions en `src/features/<slug>/actions.ts` con directiva 'use server': para toda mutación "
+            "o formulario. DEBEN ejecutar operaciones reales en SQLite con `db.insert()`/`db.update()` de Drizzle y "
+            "llamar a `revalidatePath('/<slug>')`. PROHIBIDO el uso de arrays en memoria (`let items = []`) o "
+            "`useState` simulado como persistencia. NUNCA importes `@/db` en componentes de cliente ('use client').\n"
+            "3. Lógica de negocio pura en `src/features/<slug>/logic.ts` (con tests exhaustivos en Vitest). "
+            "Si la lógica corresponde a una entidad compartida, colócala en `src/domain/`.\n"
+            "4. Componentes en `src/features/<slug>/components/` usando el design system de "
             "`src/components/ui/` (Button, Card, DataTable, Table, Stat, Calendar, Timeline, "
             "Steps, Tabs, Modal, Drawer, Dropdown, FileUpload, Alert, Badge, BadgeStatus, Toast, "
             "Skeleton, Spinner, Switch, Checkbox, RadioGroup, etc.) y clases de Bootstrap 5. "
             "Si la feature requiere componentes visuales especializados del negocio no presentes en el catálogo, "
             "constrúyelos en `src/features/<slug>/components/` consumiendo las variables CSS "
             "del proyecto (`var(--app-*)`). PROHIBIDO el uso de Tailwind CSS.\n"
-            "4. Registro del manifest en `src/lib/feature-registry.ts` "
+            "5. Registro del manifest en `src/lib/feature-registry.ts` "
             "(IMPORTANTE: importa el manifest del nuevo slice y añádelo al array `features` existente "
             "o a `featureGroups` con su grupo de navegación correspondiente "
             "sin borrar ni sobrescribir las entradas de features anteriores; "
             "la navegación depende de este catálogo).\n"
-            "5. Actualiza `src/lib/site.ts` con el nombre, descripción y arquetipo reales del proyecto.\n"
-            "6. Persistencia de datos: Si la feature maneja persistencia, define o extiende las tablas en "
-            "`src/db/schema.ts` usando `drizzle-orm/sqlite-core` y consume `db` desde `src/db/index.ts`. "
-            "No dupliques tablas existentes para la misma entidad de negocio.\n"
+            "6. Actualiza `src/lib/site.ts` con el nombre, descripción y arquetipo reales del proyecto.\n"
+            "7. Persistencia y tablas: Define o extiende las tablas en `src/db/schema.ts` usando "
+            "`drizzle-orm/sqlite-core` y consume `db` desde `src/db/index.ts`. Si la feature depende de un catálogo "
+            "o datos maestros (ej. lista de productos, sucursales, tipos), incluye un seed inicial automático "
+            "si la tabla está vacía para que la app esté lista para operar desde el primer despliegue.\n"
             "La UI debe adaptarse a la naturaleza del negocio (ver visión y directivas UX), "
             "mantener el modelo mental del usuario (navegación del registro, estados vacío/error/loading) "
             "y usar textos en español neutro con los mensajes de validación reales de la lógica. "

@@ -1,15 +1,20 @@
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator
+import json
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from ulid import ULID
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
 from kosmo.application.integrations.recover_pending_deployments import recover_pending_deployments
@@ -38,7 +43,6 @@ from kosmo.infrastructure.api.routers.requirements import router as requirements
 from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.routers.traceability import router as traceability_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
-from kosmo.infrastructure.codegen.workspace import recover_orphan_previews
 from kosmo.infrastructure.persistence.postgres.outbox import OutboxHandler, run_outbox_worker
 from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
 
@@ -295,12 +299,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             deployment_worker=components.integrations.deployment_worker,
         )
 
-    # Reconciliación best-effort de previews huérfanas tras un reinicio del backend:
-    # limpiar marcadores en .preview-active/ y entradas en .preview-ports.json
-    # cuyos workspaces ya no existen en disco o en la base de datos.
-    with contextlib.suppress(Exception):
-        await recover_orphan_previews(components.codegen.workspace_manager)
-
     instrument_app(settings, app=app, db_engine=components.db_engine)
     try:
         yield
@@ -321,7 +319,7 @@ app = FastAPI(
     servers=_SERVERS,
     docs_url="/docs" if settings.env != "production" else None,
     redoc_url="/redoc" if settings.env != "production" else None,
-    openapi_url="/api/v1/openapi.json",
+    openapi_url="/api/v1/openapi.json" if settings.env != "production" else None,
     lifespan=lifespan,
 )
 
@@ -346,14 +344,145 @@ async def spec_error_handler(_request: Request, exc: SpecError) -> JSONResponse:
     )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    status_code = exc.status_code
+    try:
+        title = HTTPStatus(status_code).phrase
+    except ValueError:
+        title = "HTTP Error"
+
+    detail = exc.detail if exc.detail else title
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "type": f"urn:kosmo:error:{status_code}",
+            "title": title,
+            "status": status_code,
+            "detail": detail,
+            "instance": request.url.path,
+            "trace_id": ULID().hex,
+            "violations": [],
+        },
+        headers=getattr(exc, "headers", None),
+        media_type="application/problem+json",
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    status_code = 422
+    violations: list[dict[str, Any]] = []
+    for err in exc.errors():
+        inp: Any = err.get("input")
+        safe_input: Any
+        if isinstance(inp, (str, int, float, bool, type(None))):
+            safe_input = inp
+        else:
+            try:
+                json.dumps(inp)
+                safe_input = inp
+            except (TypeError, ValueError):
+                safe_input = str(inp)
+
+        violations.append(
+            {
+                "loc": [str(x) for x in err.get("loc", [])],
+                "msg": str(err.get("msg", "")),
+                "input": safe_input,
+            }
+        )
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "type": "urn:kosmo:validation:error",
+            "title": "Error de validación",
+            "status": status_code,
+            "detail": "El formato o contenido de la solicitud es inválido",
+            "instance": request.url.path,
+            "trace_id": ULID().hex,
+            "violations": violations,
+        },
+        media_type="application/problem+json",
+    )
+
+
+_Scope = dict[str, Any]
+_Message = dict[str, Any]
+_ASGIApp = Callable[[_Scope, Callable[[], Awaitable[_Message]], Callable[[_Message], Awaitable[None]]], Awaitable[None]]
+
+
+_PERMISSIONS_POLICY = (
+    b"accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+)
+_CSP_DEV = (
+    b"default-src 'self'; "
+    b"img-src 'self' data: https://fastapi.tiangolo.com; "
+    b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    b"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    b"frame-ancestors 'none'"
+)
+_CSP_PROD = b"default-src 'none'; frame-ancestors 'none'"
+
+
+class SecurityHeadersMiddleware:
+    """Inyecta encabezados HTTP de seguridad defensivos en las respuestas."""
+
+    def __init__(self, app: _ASGIApp, is_production: bool = False) -> None:
+        self.app = app
+        self._is_production = is_production
+
+    async def __call__(
+        self,
+        scope: _Scope,
+        receive: Callable[[], Awaitable[_Message]],
+        send: Callable[[_Message], Awaitable[None]],
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: _Message) -> None:
+            if message["type"] == "http.response.start":
+                raw_headers = list(message.get("headers", []))
+                names = {h[0].lower() for h in raw_headers}
+
+                if b"x-content-type-options" not in names:
+                    raw_headers.append((b"x-content-type-options", b"nosniff"))
+                if b"x-frame-options" not in names:
+                    raw_headers.append((b"x-frame-options", b"DENY"))
+                if b"referrer-policy" not in names:
+                    raw_headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                if b"permissions-policy" not in names:
+                    raw_headers.append((b"permissions-policy", _PERMISSIONS_POLICY))
+                if b"content-security-policy" not in names:
+                    csp = _CSP_PROD if self._is_production else _CSP_DEV
+                    raw_headers.append((b"content-security-policy", csp))
+                if self._is_production and b"strict-transport-security" not in names:
+                    raw_headers.append((b"strict-transport-security", b"max-age=63072000; includeSubDomains"))
+
+                message["headers"] = raw_headers
+
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+_allow_credentials = "*" not in settings.parsed_cors_origins
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.parsed_cors_origins,
-    allow_credentials=True,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    is_production=settings.env == "production",
+)
 app.add_middleware(RequestLoggingMiddleware)
 
 if not settings.auth_disabled:

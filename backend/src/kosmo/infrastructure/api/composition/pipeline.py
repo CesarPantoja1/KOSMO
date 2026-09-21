@@ -14,6 +14,7 @@ from kosmo.application.chat.process_chat_modification import ProcessChatModifica
 from kosmo.application.chat.validate_phase_context import ValidatePhaseContextUseCase
 from kosmo.application.consistency.evaluate_consistency import EvaluateConsistencyUseCase
 from kosmo.application.knowledge import ConsolidateKnowledgePatterns
+from kosmo.application.pipeline.context_builder import ContextBuilder
 from kosmo.application.pipeline.kosmo_agent import KOSMOAgent
 from kosmo.config import Settings
 from kosmo.contracts.ai.chat import ChatRepository
@@ -21,7 +22,6 @@ from kosmo.contracts.ai.consistency import ConsistencyEvaluator, TraceabilityRep
 from kosmo.contracts.llm.ports import Embedder, LLMClient
 from kosmo.contracts.memory.agent_memory import AgentMemoryPort, KnowledgePatternStore
 from kosmo.contracts.pipeline.orchestrator_ports import AgentPort
-from kosmo.domain.pipeline.context_builder import ContextBuilder
 from kosmo.domain.pipeline.knowledge_tool_registry import KnowledgeToolRegistry
 from kosmo.domain.pipeline.skill_registry import SkillRegistry
 from kosmo.infrastructure.api.composition.skill_registration import build_skill_registry

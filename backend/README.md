@@ -393,7 +393,7 @@ Toda respuesta 4xx/5xx usa **RFC 7807 Problem Detail** con `Content-Type: applic
 | Base de datos | PostgreSQL 16 (SQLAlchemy 2.0 asyncio + asyncpg, pgvector) |
 | Cache / Sesiones | Redis 7 (token store, rate limiting, login attempts) |
 | Autenticación | Argon2id (OWASP 2025), RS256 JWT, Fernet (AES-128-CBC) |
-| IA / Agentes | pydantic-ai 1.86, LangGraph 1.1, DeepSeek (compatible OpenAI) |
+| IA / Agentes | pydantic-ai (>=1.86), máquina de estados propia (Pipeline Modes), proveedores BYOK (DeepSeek, OpenAI, Anthropic, Gemini) |
 | Observabilidad | structlog, OpenTelemetry, Logfire |
 | Validación | Pydantic 2.7 |
 | IDs | ULID vía `python-ulid` (prohibido `ulid-py`) |

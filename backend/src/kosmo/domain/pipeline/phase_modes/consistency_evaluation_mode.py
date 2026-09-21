@@ -327,33 +327,37 @@ CONSISTENCY_FEATURES_MODEL_PROMPT = build_consistency_prompt(
 CONSISTENCY_VALIDATE_CREATE_FEATURE_PROMPT = (
     "Eres un analista de trazabilidad de software.\n"
     "Tu tarea es analizar un documento de Descubrimiento completo y una nueva "
-    "caracteristica propuesta, realizando DOS tareas en una sola respuesta:\n\n"
+    "característica propuesta, realizando DOS tareas en una sola respuesta:\n\n"
     "1. DERIVA EL ORIGEN: identifica las secciones del Descubrimiento que "
-    "fundamentan esta caracteristica. Recorre todas las secciones del documento "
-    "(Vision, Espacio del problema, Actores, Propuesta de valor, Metas del "
+    "fundamentan esta característica. Recorre todas las secciones del documento "
+    "(Visión, Espacio del problema, Actores, Propuesta de valor, Metas del "
     "producto, Alcance, Reglas de negocio y cualquier otra presente). "
     "Devuelve una cadena de trazabilidad en el campo 'origin' con el formato:\n"
-    '   "Derivado de [seccion(es)] del descubrimiento."\n'
-    "   Si la caracteristica no se relaciona claramente con ninguna seccion, usa:\n"
-    '   "Sin relacion directa con las secciones del descubrimiento."\n\n'
-    "2. VERIFICA COHERENCIA: determina si la caracteristica es consistente con "
-    "el contenido de TODAS las secciones del Descubrimiento. Si la caracteristica "
-    "contradice explicitamente la vision, el alcance declarado, los actores "
+    '   "Derivado de [sección(es)] del descubrimiento."\n'
+    "   Si la característica no se relaciona claramente con ninguna sección, usa:\n"
+    '   "Sin relación directa con las secciones del descubrimiento."\n\n'
+    "2. VERIFICA COHERENCIA: determina si la característica es consistente con "
+    "el contenido de TODAS las secciones del Descubrimiento. Si la característica "
+    "contradice explícitamente la visión, el alcance declarado, los actores "
     "identificados, las metas definidas o cualquier regla de negocio, indica "
     "is_consistent=false y explica el motivo en el campo 'reason'.\n\n"
-    "Responde UNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
+    "REGLAS DE REDACCIÓN Y ORTOGRAFÍA:\n"
+    "- Redacta en español formal con impecable ortografía, gramática y todas las tildes normativas.\n"
+    "- Presta especial atención a: 'característica', 'descripción', 'sección', "
+    "'relación', 'semántica', 'propósito', 'inyección', 'además', 'amplía', 'más allá'.\n\n"
+    "Responde ÚNICAMENTE con el siguiente JSON, sin markdown ni texto adicional:\n"
     "{\n"
     '  "origin": "<cadena de trazabilidad derivada>",\n'
     '  "is_consistent": true,\n'
     '  "reason": ""\n'
     "}\n\n"
-    "Si la caracteristica NO es consistente:\n"
+    "Si la característica NO es consistente:\n"
     "{\n"
     '  "origin": "<cadena de trazabilidad derivada>",\n'
     '  "is_consistent": false,\n'
-    '  "reason": "<explicacion clara de la contradiccion, en español>"\n'
+    '  "reason": "<explicación clara de la contradicción, en español con ortografía y tildes correctas>"\n'
     "}\n\n"
-    "IMPORTANTE: Siempre incluye el campo origin. No uses el caracter guion largo (—)."
+    "IMPORTANTE: Siempre incluye el campo origin. No uses el carácter guion largo (—)."
 )
 
 

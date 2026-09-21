@@ -212,9 +212,11 @@ def test_build_fallback_plan_operations() -> None:
     )
     # Manifest without feature-registry.ts -> CREATE
     ops_create = builder.build_fallback_plan_operations(feat, "reportes", ("package.json",))
-    assert len(ops_create) == 5
+    assert len(ops_create) == 6
     registry_op = next(op for op in ops_create if op.path == "src/lib/feature-registry.ts")
     assert registry_op.action == FileAction.CREATE
+    actions_op = next(op for op in ops_create if op.path == "src/features/reportes/actions.ts")
+    assert actions_op.action == FileAction.CREATE
 
     # Manifest with feature-registry.ts -> MODIFY
     ops_modify = builder.build_fallback_plan_operations(
@@ -248,6 +250,8 @@ def test_build_prompts() -> None:
     assert "REQ-01: Al hacer click" in plan_prompt
     assert "stateDiagram-v2" in plan_prompt
     assert "src/features/<slug>/" in plan_prompt
+    assert "CERO MOCKS" in plan_prompt
+    assert "actions.ts" in plan_prompt
 
     build_prompt = builder.build_build_prompt(
         feature=feat,
@@ -259,6 +263,8 @@ def test_build_prompts() -> None:
     )
     assert "- [create] src/app/facturacion/page.tsx" in build_prompt
     assert "Bootstrap 5" in build_prompt
+    assert "PERSISTENCIA REAL, CERO MOCKS" in build_prompt
+    assert "actions.ts" in build_prompt
 
     validation_result = ValidationRunResult(
         steps=(

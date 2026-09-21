@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kosmo.domain.sdd.id_generator import IdGenerator
@@ -55,12 +55,20 @@ class OutboxStore:
             session.add(model)
             await self._commit(session)
 
-    async def dequeue(self) -> OutboxJobModel | None:
+    async def dequeue(self, *, max_attempts: int = _MAX_ATTEMPTS) -> OutboxJobModel | None:
         assert self._session_factory is not None
         async with self._session_factory() as session:
             stmt = (
                 select(OutboxJobModel)
-                .where(OutboxJobModel.status == "pending")
+                .where(
+                    or_(
+                        OutboxJobModel.status == "pending",
+                        and_(
+                            OutboxJobModel.status == "failed",
+                            OutboxJobModel.attempts < max_attempts,
+                        ),
+                    )
+                )
                 .order_by(OutboxJobModel.created_at)
                 .limit(1)
                 .with_for_update(skip_locked=True)
@@ -80,7 +88,13 @@ class OutboxStore:
             await session.execute(update(OutboxJobModel).where(OutboxJobModel.id == job_id).values(status="done"))
             await session.commit()
 
-    async def mark_failed(self, job_id: str, *, error: str | None = None) -> None:
+    async def mark_failed(
+        self,
+        job_id: str,
+        *,
+        error: str | None = None,
+        max_attempts: int = _MAX_ATTEMPTS,
+    ) -> None:
         assert self._session_factory is not None
         async with self._session_factory() as session:
             stmt = select(OutboxJobModel).where(OutboxJobModel.id == job_id).with_for_update()
@@ -89,7 +103,7 @@ class OutboxStore:
             if model is None:
                 return
             current_attempts = model.attempts or 0
-            if current_attempts >= _MAX_ATTEMPTS:
+            if current_attempts >= max_attempts:
                 model.status = "dead"
             else:
                 model.status = "failed"
@@ -125,7 +139,10 @@ async def run_outbox_worker(
                     attempts=job.attempts,
                     exc_info=True,
                 )
-                await store.mark_failed(job.id, error=error_msg)
+                try:
+                    await store.mark_failed(job.id, error=error_msg, max_attempts=max_attempts)
+                except TypeError:
+                    await store.mark_failed(job.id, error=error_msg)
 
                 if (job.attempts or 0) < max_attempts:
                     now = asyncio.get_running_loop().time()
@@ -145,7 +162,10 @@ async def run_outbox_worker(
         while True:
             await semaphore.acquire()
             try:
-                job = await store.dequeue()
+                try:
+                    job = await store.dequeue(max_attempts=max_attempts)
+                except TypeError:
+                    job = await store.dequeue()
             except Exception:
                 semaphore.release()
                 _log.warning("outbox.worker_dequeue_error", exc_info=True)

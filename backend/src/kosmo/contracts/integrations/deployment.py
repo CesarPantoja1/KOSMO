@@ -189,7 +189,12 @@ class DeploymentProviderPort(Protocol):
 
     async def configure_volume(self, token: str, service_id: str, volume: VolumeConfig) -> None: ...
 
-    async def trigger_deployment(self, token: str, service_id: str) -> None: ...
+    async def trigger_deployment(
+        self,
+        token: str,
+        service_id: str,
+        commit_sha: str | None = None,
+    ) -> None: ...
 
     async def get_service_status(
         self,
