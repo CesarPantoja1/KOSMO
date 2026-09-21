@@ -426,7 +426,7 @@ jobs:
                if docker exec kosmo-nginx wget -q -O /dev/null \
                     --header="Host: kosmo.cespan.dev" http://127.0.0.1/ && \
                   docker exec kosmo-nginx wget -q -O /dev/null \
-                    --header="Host: kosmo.cespan.dev" http://127.0.0.1/api/v1/openapi.json; then
+                    --header="Host: kosmo.cespan.dev" http://127.0.0.1/api/v1/ai-config/providers; then
                  docker compose -p kosmo -f compose.yaml ps
                  exit 0
                fi
@@ -451,7 +451,7 @@ jobs:
 
           for endpoint in \
             'https://kosmo.cespan.dev/' \
-            'https://kosmo.cespan.dev/api/v1/openapi.json'; do
+            'https://kosmo.cespan.dev/api/v1/ai-config/providers'; do
             echo "Checking ${endpoint}"
             curl --fail --show-error --silent --location \
               --retry 12 --retry-all-errors --retry-delay 5 --max-time 20 \
