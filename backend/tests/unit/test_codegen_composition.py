@@ -130,7 +130,11 @@ def test_build_codegen_components_uses_remote_runner_when_configured(tmp_path) -
 
 @pytest.mark.unit
 def test_production_rejects_shared_opencode_fallback() -> None:
-    settings = _make_settings(env="production", auth_disabled=False)
+    settings = _make_settings(
+        env="production",
+        auth_disabled=False,
+        redis_url=SecretStr("redis://:test-password@localhost:6379/0"),
+    )
     with pytest.raises(ValueError, match="lanzador aislado"):
         build_codegen_components(settings, _make_repos())
 
@@ -140,6 +144,7 @@ def test_production_wires_isolated_client_from_own_token() -> None:
     settings = _make_settings(
         env="production",
         auth_disabled=False,
+        redis_url=SecretStr("redis://:test-password@localhost:6379/0"),
         opencode_launcher_base_url="http://launcher:8082",
         opencode_launcher_token=SecretStr("launcher-secret"),
         fernet_master_key=SecretStr(FernetSecretCipher.generate_master_key()),
