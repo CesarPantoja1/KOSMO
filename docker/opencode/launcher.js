@@ -54,7 +54,7 @@ function writeSecret(containerId, filename, value) {
   const args = secretExecArgs(containerId, filename);
   const secret = Buffer.from(value, "utf8");
   return new Promise((resolve, reject) => {
-    const child = spawn("docker", args, { stdio: ["pipe", "ignore", "pipe"],
+    const child = spawn("/usr/local/bin/docker", args, { stdio: ["pipe", "ignore", "pipe"],
       env: { ...process.env, DOCKER_HOST: `unix://${socketPath}` } });
     let diagnostic = "";
     child.stderr.on("data", (chunk) => {

@@ -161,11 +161,11 @@ jobs:
             "$RUNNER_TEMP"/kosmo-opencode-smoke-*) ;;
             *) exit 1 ;;
           esac
-          trap 'docker rm -f kosmo-ci-opencode-launcher >/dev/null 2>&1 || true; docker network rm kosmo-ci-codegen >/dev/null 2>&1 || true; rm -rf -- "$smoke_root"' EXIT
+          trap 'docker rm -f kosmo-ci-opencode-launcher >/dev/null 2>&1 || true; docker network rm kosmo-ci-codegen >/dev/null 2>&1 || true; sudo rm -rf -- "$smoke_root"' EXIT
           mkdir -p "$smoke_root/workspaces/prj_smoke_ci"
           printf '{}\n' > "$smoke_root/workspaces/prj_smoke_ci/opencode.json"
-          sudo chown -R 1000:1000 "$smoke_root/workspaces"
           chmod 0750 "$smoke_root/workspaces"
+          sudo chown -R 1000:1000 "$smoke_root/workspaces"
           docker network create kosmo-ci-codegen
           docker run -d --name kosmo-ci-opencode-launcher \
             --user 0:1000 --read-only --cap-drop ALL \
@@ -184,6 +184,10 @@ jobs:
           for attempt in $(seq 1 20); do
             if docker exec kosmo-ci-opencode-launcher node -e "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
               break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              docker logs --tail 100 kosmo-ci-opencode-launcher
+              exit 1
             fi
             sleep 1
           done

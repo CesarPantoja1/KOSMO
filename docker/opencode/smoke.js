@@ -18,37 +18,35 @@ if (!/^prj_smoke_[a-zA-Z0-9_-]{1,80}$/.test(projectId) || !token ||
   throw new Error("OpenCode smoke configuration is incomplete");
 }
 
-function backendPython(script) {
-  const backendName = stack === "production" ? "kosmo-backend" : "kosmo-staging-backend";
-  execFileSync("docker", ["exec", "--user", "1000:1000", backendName,
-    "python", "-c", script, projectId], { encoding: "utf8" });
-}
-
 function createFixture() {
-  backendPython(`
+  const backendName = stack === "production" ? "kosmo-backend" : "kosmo-staging-backend";
+  execFileSync("/usr/local/bin/docker", ["exec", "-i", "--user", "1000:1000", backendName,
+    "/opt/venv/bin/python", "-c", `
 from pathlib import Path
 import re, sys
-name = sys.argv[1]
+name = sys.stdin.read()
 if not re.fullmatch(r"prj_smoke_[a-zA-Z0-9_-]{1,80}", name):
     raise SystemExit(2)
 project = Path("/workspaces") / name
 project.mkdir()
 project.chmod(0o750)
 (project / "opencode.json").write_text("{}", encoding="utf-8")
-`);
+`], { input: projectId, encoding: "utf8" });
 }
 
 function removeFixture() {
-  backendPython(`
+  const backendName = stack === "production" ? "kosmo-backend" : "kosmo-staging-backend";
+  execFileSync("/usr/local/bin/docker", ["exec", "-i", "--user", "1000:1000", backendName,
+    "/opt/venv/bin/python", "-c", `
 from pathlib import Path
 import re, shutil, sys
-name = sys.argv[1]
+name = sys.stdin.read()
 root = Path("/workspaces").resolve()
 project = (root / name).resolve()
 if not re.fullmatch(r"prj_smoke_[a-zA-Z0-9_-]{1,80}", name) or project.parent != root:
     raise SystemExit(2)
 shutil.rmtree(project)
-`);
+`], { input: projectId, encoding: "utf8" });
 }
 
 async function launcherRequest(route, method = "GET", body) {
@@ -63,8 +61,8 @@ async function launcherRequest(route, method = "GET", body) {
 async function main() {
   const created = await launcherRequest("/jobs", "POST", {
     project_id: projectId,
-    provider: "openai",
-    model: "gpt-4o",
+    provider: "deepseek",
+    model: "deepseek-flash",
     api_key: fakeKey,
   });
   if (created.status !== 201) throw new Error(`Launcher rejected smoke job (${created.status}): ${await created.text()}`);
@@ -86,13 +84,13 @@ async function main() {
           if (!provider.ok) throw new Error(`OpenCode provider catalog failed (${provider.status})`);
           const catalog = await provider.json();
           if (!Array.isArray(catalog.all)) throw new Error("OpenCode provider catalog is malformed");
-          if (!catalog.all.some((entry) => entry.id === "openai" && entry.models && entry.models["gpt-4o"])) {
+          if (!catalog.all.some((entry) => entry.id === "deepseek" && entry.models && entry.models["deepseek-flash"])) {
             throw new Error("The smoke model is missing from OpenCode's provider catalog");
           }
 
-          const metadata = execFileSync("docker", ["inspect", job.job_id], { encoding: "utf8" });
+          const metadata = execFileSync("/usr/local/bin/docker", ["inspect", job.job_id], { encoding: "utf8" });
           if (metadata.includes(fakeKey)) throw new Error("Provider key leaked into Docker metadata");
-          const mode = execFileSync("docker", ["exec", "--user", "1000:1000", job.job_id,
+          const mode = execFileSync("/usr/local/bin/docker", ["exec", "--user", "1000:1000", job.job_id,
             "stat", "-c", "%u:%g %a", "/run/kosmo-secrets/provider-key"], { encoding: "utf8" }).trim();
           if (mode !== "1000:1000 600") throw new Error(`Provider key file has unsafe permissions: ${mode}`);
           console.info("Isolated OpenCode started, loaded provider config, and kept the fake key out of metadata.");
@@ -105,7 +103,7 @@ async function main() {
       if (status.ok) {
         const state = await status.json();
         if (state.status === "exited" || state.oom_killed) {
-          const logs = execFileSync("docker", ["logs", "--tail", "20", job.job_id], { encoding: "utf8" });
+          const logs = execFileSync("/usr/local/bin/docker", ["logs", "--tail", "20", job.job_id], { encoding: "utf8" });
           throw new Error(`OpenCode exited during smoke: ${logs.replaceAll(fakeKey, "[REDACTED]")}`);
         }
       }
