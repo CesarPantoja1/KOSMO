@@ -65,6 +65,7 @@ strict = ["src/kosmo"]
 exclude = [
     "**/__pycache__",
     "**/.venv",
+    "**/node_modules",
 ]
 pythonVersion = "3.13"
 venvPath = "."

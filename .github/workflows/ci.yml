@@ -133,6 +133,9 @@ jobs:
       - name: Test isolated OpenCode launcher
         run: node --test docker/opencode/launcher.test.js
 
+      - name: Check isolated code runner syntax
+        run: node --check docker/code-runner/server.js
+
   opencode-integration:
     name: OpenCode isolated startup
     needs: detect-changes
@@ -206,6 +209,7 @@ jobs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
       opencode: ${{ steps.changes.outputs.opencode }}
+      generated_app: ${{ steps.changes.outputs.generated_app }}
 
     steps:
       - name: Checkout repository
@@ -271,11 +275,20 @@ jobs:
           backend=false
           frontend=false
           opencode=false
+          generated_app=false
 
           while IFS= read -r file; do
             case "$file" in
               docker/opencode/*|.github/workflows/ci.yml)
                 opencode=true
+                ;;
+            esac
+            case "$file" in
+              backend/src/kosmo/infrastructure/codegen/templates/basic-next-app/*|\
+              docker/code-runner/*|\
+              backend/src/kosmo/infrastructure/sandbox/remote_code_runner.py|\
+              .github/workflows/ci.yml)
+                generated_app=true
                 ;;
             esac
             case "$file" in
@@ -310,6 +323,7 @@ jobs:
             echo "backend=$backend"
             echo "frontend=$frontend"
             echo "opencode=$opencode"
+            echo "generated_app=$generated_app"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -326,7 +340,27 @@ jobs:
             echo "- Backend required: \`$backend\`"
             echo "- Frontend required: \`$frontend\`"
             echo "- OpenCode startup required: \`$opencode\`"
+            echo "- Generated app build required: \`$generated_app\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  generated-app-build:
+    name: Generated app / Docker build
+    needs: detect-changes
+    if: needs.detect-changes.outputs.generated_app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build the generated app like Railway
+        run: docker build -t kosmo-generated-app:ci backend/src/kosmo/infrastructure/codegen/templates/basic-next-app
 
   backend-lint:
     name: Backend / Lint & types
@@ -560,6 +594,7 @@ jobs:
       - actionlint
       - detect-changes
       - opencode-integration
+      - generated-app-build
       - backend-lint
       - backend-test
       - frontend
@@ -577,6 +612,8 @@ jobs:
           detect_result="${{ needs.detect-changes.result }}"
           opencode_required="${{ needs.detect-changes.outputs.opencode }}"
           opencode_result="${{ needs.opencode-integration.result }}"
+          generated_app_required="${{ needs.detect-changes.outputs.generated_app }}"
+          generated_app_result="${{ needs.generated-app-build.result }}"
 
           backend_required="${{ needs.detect-changes.outputs.backend }}"
           backend_lint_result="${{ needs.backend-lint.result }}"
@@ -594,6 +631,7 @@ jobs:
             echo "| Workflow lint | Yes | \`$actionlint_result\` |"
             echo "| Change detection | Yes | \`$detect_result\` |"
             echo "| OpenCode startup | \`$opencode_required\` | \`$opencode_result\` |"
+            echo "| Generated app Docker build | \`$generated_app_required\` | \`$generated_app_result\` |"
             echo "| Backend lint & types | \`${backend_required:-unknown}\` | \`$backend_lint_result\` |"
             echo "| Backend tests | \`${backend_required:-unknown}\` | \`$backend_test_result\` |"
             echo "| Frontend | \`${frontend_required:-unknown}\` | \`$frontend_result\` |"
@@ -641,8 +679,22 @@ jobs:
               ;;
           esac
 
+          case "$generated_app_required" in
+            true|false)
+              ;;
+            *)
+              echo "Invalid or missing generated app change-detection output."
+              exit 1
+              ;;
+          esac
+
           if [ "$opencode_required" = "true" ] && [ "$opencode_result" != "success" ]; then
             echo "OpenCode integration smoke was required but did not succeed."
+            exit 1
+          fi
+
+          if [ "$generated_app_required" = "true" ] && [ "$generated_app_result" != "success" ]; then
+            echo "Generated app Docker build was required but did not succeed."
             exit 1
           fi
 

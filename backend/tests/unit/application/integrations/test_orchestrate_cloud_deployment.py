@@ -13,6 +13,7 @@ from kosmo.contracts.integrations.deployment import (
     DeploymentAccountNotLinkedError,
     DeploymentAuthenticationError,
     DeploymentOAuthToken,
+    DeploymentPreconditionError,
     DeploymentProvider,
     DeploymentRepositoryMissingError,
     DeploymentStatus,
@@ -550,3 +551,46 @@ async def test_orchestrate_deployment_autosyncs_workspace_when_sync_use_case_inj
         service_id="srv_railway_999",
         commit_sha="new_autosynced_commit_222",
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_orchestrate_deployment_does_not_trigger_railway_when_sync_fails(
+    mock_project_deployment_repo: AsyncMock,
+    mock_user_deployment_repo: AsyncMock,
+    mock_project_github_repo: AsyncMock,
+    mock_deployment_client: AsyncMock,
+    mock_cipher: MagicMock,
+    principal: Principal,
+):
+    project_id = ProjectId("prj_autosync_fail_01")
+    mock_sync_use_case = AsyncMock()
+    mock_sync_use_case.execute.side_effect = RuntimeError("GitHub push failed")
+    use_case = OrchestrateCloudDeploymentUseCase(
+        project_deployment_repo=mock_project_deployment_repo,
+        user_deployment_repo=mock_user_deployment_repo,
+        project_github_repo=mock_project_github_repo,
+        deployment_client=mock_deployment_client,
+        cipher=mock_cipher,
+        sync_github_use_case=mock_sync_use_case,
+    )
+    mock_user_deployment_repo.get_by_user_id.return_value = UserDeploymentIntegration(
+        user_id=UserId(principal.subject),
+        provider=DeploymentProvider.RAILWAY,
+        encrypted_token=base64.b64encode(b"ciphertext_rw").decode("utf-8"),
+    )
+    mock_cipher.decrypt.return_value = b"decrypted_railway_token"
+    mock_project_github_repo.get_by_project_id.return_value = ProjectGitHubIntegration(
+        project_id=project_id,
+        repo_name="inventory-app",
+        repo_url="https://github.com/octocat/inventory-app",
+        sync_status=GitHubSyncStatus.SYNCED,
+        last_commit_hash="old_commit_111",
+    )
+
+    with pytest.raises(DeploymentPreconditionError, match="validar y sincronizar"):
+        await use_case.execute(principal, OrchestrateCloudDeploymentCommand(project_id=project_id))
+
+    mock_deployment_client.create_service.assert_not_called()
+    mock_deployment_client.trigger_deployment.assert_not_called()
+    mock_project_deployment_repo.save.assert_not_called()

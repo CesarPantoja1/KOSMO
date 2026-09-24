@@ -24,6 +24,7 @@ def test_default_template_directory_exists_and_has_required_files() -> None:
 
     expected_files = [
         "package.json",
+        "package-lock.json",
         "tsconfig.json",
         "next.config.ts",
         "drizzle.config.ts",
@@ -118,6 +119,17 @@ def test_package_json_structure_and_dependencies() -> None:
 
 
 @pytest.mark.unit
+def test_template_lockfile_matches_package_json() -> None:
+    package = json.loads((DEFAULT_TEMPLATE_DIR / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((DEFAULT_TEMPLATE_DIR / "package-lock.json").read_text(encoding="utf-8"))
+    root = lock["packages"][""]
+
+    assert lock["lockfileVersion"] >= 2
+    assert root["dependencies"] == package["dependencies"]
+    assert root["devDependencies"] == package["devDependencies"]
+
+
+@pytest.mark.unit
 def test_tsconfig_json_has_strict_configuration() -> None:
     # Arrange
     tsconfig_file = DEFAULT_TEMPLATE_DIR / "tsconfig.json"
@@ -197,6 +209,7 @@ async def test_local_workspace_manager_copies_default_template() -> None:
         ws_dir = Path(ws.workspace_dir)
 
         assert (ws_dir / "package.json").exists()
+        assert (ws_dir / "package-lock.json").exists()
         assert (ws_dir / "tsconfig.json").exists()
         assert (ws_dir / "next.config.ts").exists()
         assert (ws_dir / "drizzle.config.ts").exists()
