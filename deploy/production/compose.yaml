@@ -91,7 +91,9 @@ services:
     image: ${KOSMO_OPENCODE_IMAGE:?KOSMO_OPENCODE_IMAGE must be set}
     container_name: kosmo-opencode-launcher
     init: true
-    user: "0:0"
+    # UID 0 owns the Docker socket; GID 1000 can traverse workspaces (0750).
+    # Capabilities remain dropped and the workspace mount remains read-only.
+    user: "0:1000"
     entrypoint: ["node", "/usr/local/bin/opencode-launcher.js"]
     environment:
       OPENCODE_LAUNCHER_TOKEN: ${OPENCODE_LAUNCHER_TOKEN:?OPENCODE_LAUNCHER_TOKEN must be set}

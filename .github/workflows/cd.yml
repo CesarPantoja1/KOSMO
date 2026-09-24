@@ -406,6 +406,9 @@ jobs:
                -v "$PWD/secrets/jwt_public.pem:/run/kosmo-secrets/jwt_public.pem:ro" \
                --entrypoint alembic "${{ needs.build-backend.outputs.api_image }}" upgrade head
              docker compose -p kosmo -f compose.yaml up -d --remove-orphans
+             # Health only checks Docker access; verify the launcher can actually
+             # traverse the 0750 project workspace before declaring deployment healthy.
+             docker exec kosmo-opencode-launcher node -e "require(\"node:fs\").readdirSync(\"/workspaces\")"
              # Reload the transferred Nginx configuration after app containers
              # have been recreated. --no-deps prevents an unnecessary restart
              # of frontend or backend.

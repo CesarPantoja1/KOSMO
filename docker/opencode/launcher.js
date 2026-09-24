@@ -111,6 +111,16 @@ function ownedJobId(jobs, candidate) {
   const job = jobs.find((item) => item.Id === candidate);
   return job && validContainerId(job.Id) ? job.Id : null;
 }
+function workspaceReadError(error, missingMessage) {
+  if (error && (error.code === "EACCES" || error.code === "EPERM")) {
+    return Object.assign(new Error("El servicio de generación no tiene permisos para leer el workspace del proyecto."),
+      { status: 503 });
+  }
+  if (error && error.code === "ENOENT") {
+    return Object.assign(new Error(missingMessage), { status: 422 });
+  }
+  return Object.assign(new Error("No se pudo verificar el workspace del proyecto."), { status: 503 });
+}
 
 function buildJobConfig(input, password) {
   const workspace = path.posix.join(workspaceRoot, input.project_id);
@@ -162,21 +172,30 @@ async function createJob(input) {
   try {
     visibleRoot = fs.realpathSync("/workspaces");
     visibleWorkspace = fs.realpathSync(path.join("/workspaces", input.project_id));
-  } catch {
-    throw Object.assign(new Error("Workspace de proyecto no encontrado"), { status: 422 });
+  } catch (error) {
+    throw workspaceReadError(error, "Workspace de proyecto no encontrado");
   }
-  if (path.dirname(visibleWorkspace) !== visibleRoot || !fs.statSync(visibleWorkspace).isDirectory()) {
+  if (path.dirname(visibleWorkspace) !== visibleRoot) {
+    throw Object.assign(new Error("Workspace de proyecto inválido"), { status: 422 });
+  }
+  let workspaceStat;
+  try { workspaceStat = fs.statSync(visibleWorkspace); }
+  catch (error) { throw workspaceReadError(error, "Workspace de proyecto no encontrado"); }
+  if (!workspaceStat.isDirectory()) {
     throw Object.assign(new Error("Workspace de proyecto inválido"), { status: 422 });
   }
   const projectConfigPath = path.join(visibleWorkspace, "opencode.json");
   let projectConfigStat;
   try { projectConfigStat = fs.lstatSync(projectConfigPath); }
-  catch { throw Object.assign(new Error("Configuración OpenCode del proyecto no encontrada"), { status: 422 }); }
+  catch (error) { throw workspaceReadError(error, "Configuración OpenCode del proyecto no encontrada"); }
   if (!projectConfigStat.isFile() || projectConfigStat.isSymbolicLink()) {
     throw Object.assign(new Error("Configuración OpenCode del proyecto inválida"), { status: 422 });
   }
   let projectConfig;
-  try { projectConfig = JSON.parse(fs.readFileSync(projectConfigPath, "utf8")); }
+  let projectConfigContent;
+  try { projectConfigContent = fs.readFileSync(projectConfigPath, "utf8"); }
+  catch (error) { throw workspaceReadError(error, "Configuración OpenCode del proyecto no encontrada"); }
+  try { projectConfig = JSON.parse(projectConfigContent); }
   catch { throw Object.assign(new Error("Configuración OpenCode del proyecto inválida"), { status: 422 }); }
   if (!projectConfig || typeof projectConfig !== "object" || Array.isArray(projectConfig) ||
       "model" in projectConfig || "small_model" in projectConfig || "provider" in projectConfig) {
@@ -266,4 +285,4 @@ if (require.main === module) {
   server.listen(port, "0.0.0.0");
 }
 
-module.exports = { buildJobConfig, tarFile, validId, validModel, validContainerId, ownedJobId };
+module.exports = { buildJobConfig, tarFile, validId, validModel, validContainerId, ownedJobId, workspaceReadError };
