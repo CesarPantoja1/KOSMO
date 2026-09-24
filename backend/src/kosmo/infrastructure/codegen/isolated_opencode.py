@@ -6,7 +6,7 @@ import contextvars
 import dataclasses
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -116,14 +116,19 @@ class IsolatedOpenCodeClient:
                     await client.validate_model(provider.value, model)
                     self._active.set((job_id, client, heartbeat))
                     return
-                with contextlib.suppress(httpx.HTTPError, ValueError):
+                state: dict[str, Any] = {}
+                try:
                     status = await self._launcher.get(f"/jobs/{job_id}")
                     if status.is_success:
-                        state = status.json()
-                        if state.get("oom_killed"):
-                            raise UserCodegenConfigError("OpenCode superó el máximo de 1 GiB de RAM al iniciar.")
-                        if state.get("status") == "exited":
-                            raise RuntimeError("OpenCode terminó inesperadamente antes de iniciar.")
+                        payload = status.json()
+                        if isinstance(payload, dict):
+                            state = cast("dict[str, Any]", payload)
+                except (httpx.HTTPError, ValueError):
+                    pass
+                if state.get("oom_killed"):
+                    raise UserCodegenConfigError("OpenCode superó el máximo de 1 GiB de RAM al iniciar.")
+                if state.get("status") == "exited":
+                    raise RuntimeError("OpenCode terminó inesperadamente antes de iniciar.")
                 await asyncio.sleep(2)
             raise RuntimeError("OpenCode no inició correctamente en el contenedor aislado.")
         except BaseException:

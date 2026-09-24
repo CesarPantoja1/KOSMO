@@ -165,3 +165,45 @@ async def test_oom_error_explains_one_gib_limit(cipher: FernetSecretCipher) -> N
         heartbeat.cancel()
         client._active.set(None)
         await client.aclose()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_startup_oom_is_reported_immediately(cipher: FernetSecretCipher, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = UserAiConfig(
+        user_id="owner-1",
+        provider=AIProvider.DEEPSEEK,
+        model="deepseek-flash",
+        encrypted_api_key=cipher.encrypt(b"sk-personal"),
+    )
+    client = make_client(config, cipher)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                201,
+                json={"job_id": "a" * 64, "base_url": "http://job:4096", "password": "ephemeral"},
+            )
+        return httpx.Response(200, json={"status": "exited", "oom_killed": True})
+
+    await client._launcher.aclose()
+    client._launcher = httpx.AsyncClient(base_url="http://launcher:8082", transport=httpx.MockTransport(handler))
+
+    class UnavailableOpenCode:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        async def health_check(self) -> bool:
+            return False
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr(isolated_opencode, "OpenCodeHttpClient", UnavailableOpenCode)
+    user_token = current_user_id.set("owner-1")
+    try:
+        with pytest.raises(UserCodegenConfigError, match="1 GiB"):
+            await client.start_job("/workspaces/prj_123")
+    finally:
+        current_user_id.reset(user_token)
+        await client.aclose()
