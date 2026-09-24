@@ -77,7 +77,7 @@ SUPPORTED_PROVIDERS: tuple[AIProviderInfo, ...] = (
         label="DeepSeek",
         models=(
             AIModelInfo(id="deepseek-v4-pro", display_name="DeepSeek V4 Pro", tier="flagship"),
-            AIModelInfo(id="deepseek-v4-flash", display_name="DeepSeek V4 Flash", tier="fast"),
+            AIModelInfo(id="deepseek-flash", display_name="DeepSeek Flash", tier="fast"),
         ),
     ),
 )

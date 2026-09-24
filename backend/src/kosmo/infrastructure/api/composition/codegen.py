@@ -14,11 +14,13 @@ from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCas
 from kosmo.config import Settings
 from kosmo.contracts.sdd.codegen import CodeRunnerPort, FileSystemReader
 from kosmo.infrastructure.api.implementation_broker import ImplementationEventBroker
+from kosmo.infrastructure.codegen.isolated_opencode import IsolatedOpenCodeClient
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalFileSystemReader, LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
 from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
+from kosmo.infrastructure.security.fernet_vault import FernetSecretCipher
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -35,7 +37,7 @@ class CodegenComponents:
     validate_workspace: ValidateWorkspaceUseCase
     delete_feature_code: DeleteFeatureCodeUseCase
     workspace_manager: LocalWorkspaceManager
-    opencode_client: OpenCodeHttpClient
+    opencode_client: OpenCodeHttpClient | IsolatedOpenCodeClient
     code_runner: CodeRunnerPort
     implementation_broker: ImplementationEventBroker
 
@@ -82,20 +84,32 @@ def build_codegen_components(
     runner = code_runner or build_code_runner(settings)
     reader = fs_reader or LocalFileSystemReader()
     ws_manager = workspace_manager or build_workspace_manager(settings, repos, code_runner=runner, fs_reader=reader)
-    opencode_client = OpenCodeHttpClient(
-        base_url=settings.opencode_base_url,
-        server_username=settings.opencode_server_username,
-        server_password=(
-            settings.opencode_server_password.get_secret_value()
-            if settings.opencode_server_password is not None
-            else None
-        ),
-        model=settings.opencode_model,
-        timeout_seconds=settings.opencode_timeout_seconds,
-        read_timeout_seconds=settings.opencode_read_timeout_seconds,
-        connect_timeout_seconds=settings.opencode_connect_timeout_seconds,
-        write_timeout_seconds=settings.opencode_write_timeout_seconds,
-    )
+    if settings.env in {"staging", "production"} and not settings.opencode_launcher_base_url:
+        raise ValueError("La implementación en staging/producción requiere el lanzador aislado de OpenCode.")
+    if settings.opencode_launcher_base_url:
+        if settings.fernet_master_key is None or settings.opencode_launcher_token is None:
+            raise ValueError("La implementación aislada requiere FERNET_MASTER_KEY y OPENCODE_LAUNCHER_TOKEN.")
+        opencode_client: OpenCodeHttpClient | IsolatedOpenCodeClient = IsolatedOpenCodeClient(
+            launcher_url=settings.opencode_launcher_base_url,
+            launcher_token=settings.opencode_launcher_token.get_secret_value(),
+            config_repo=repos.user_ai_configs,
+            cipher=FernetSecretCipher(settings.fernet_master_key.get_secret_value()),
+        )
+    else:
+        opencode_client = OpenCodeHttpClient(
+            base_url=settings.opencode_base_url,
+            server_username=settings.opencode_server_username,
+            server_password=(
+                settings.opencode_server_password.get_secret_value()
+                if settings.opencode_server_password is not None
+                else None
+            ),
+            model=settings.opencode_model,
+            timeout_seconds=settings.opencode_timeout_seconds,
+            read_timeout_seconds=settings.opencode_read_timeout_seconds,
+            connect_timeout_seconds=settings.opencode_connect_timeout_seconds,
+            write_timeout_seconds=settings.opencode_write_timeout_seconds,
+        )
     integration_analyzer = AnalyzeFeatureIntegrationUseCase(
         feature_repo=repos.features,
         document_repo=repos.documents,

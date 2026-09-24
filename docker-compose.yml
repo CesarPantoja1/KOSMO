@@ -94,7 +94,7 @@ services:
 
       OPENCODE_BASE_URL: http://opencode:4096
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-kosmo-dev-password}
-      OPENCODE_MODEL: ${OPENCODE_MODEL:-deepseek/deepseek-v4-flash}
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-deepseek/deepseek-flash}
       OPENCODE_TIMEOUT_SECONDS: ${OPENCODE_TIMEOUT_SECONDS:-900.0}
       OPENCODE_READ_TIMEOUT_SECONDS: ${OPENCODE_READ_TIMEOUT_SECONDS:-900.0}
       OPENCODE_CONNECT_TIMEOUT_SECONDS: ${OPENCODE_CONNECT_TIMEOUT_SECONDS:-30.0}
@@ -154,7 +154,7 @@ services:
     command: >
       sh -c 'npm install -g --prefix /home/node/opencode opencode-ai@latest &&
             mkdir -p /home/node/.config/opencode &&
-            printf "{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-v4-flash\"},\"permission\":{\"read\":{\"*\":\"allow\"},\"edit\":{\"*\":\"allow\"},\"bash\":\"deny\",\"external_directory\":\"deny\",\"websearch\":\"allow\"}}\n" "$${OPENCODE_SERVER_PASSWORD}" > /home/node/.config/opencode/opencode.json &&
+            printf "{\"server\":{\"password\":\"%s\",\"model\":\"deepseek/deepseek-flash\"},\"permission\":{\"read\":{\"*\":\"allow\"},\"edit\":{\"*\":\"allow\"},\"bash\":\"deny\",\"external_directory\":\"deny\",\"websearch\":\"allow\"}}\n" "$${OPENCODE_SERVER_PASSWORD}" > /home/node/.config/opencode/opencode.json &&
             export PATH=/home/node/opencode/bin:$$PATH &&
             opencode serve --hostname 0.0.0.0 --port 4096'
     restart: unless-stopped

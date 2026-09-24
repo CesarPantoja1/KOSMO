@@ -61,6 +61,8 @@ class Settings(BaseSettings):
 
     # Codegen (OpenCode)
     opencode_base_url: str = "http://127.0.0.1:4096"
+    opencode_launcher_base_url: str | None = None
+    opencode_launcher_token: SecretStr | None = None
     opencode_server_username: str = "opencode"
     opencode_server_password: SecretStr | None = None
     opencode_model: str | None = None

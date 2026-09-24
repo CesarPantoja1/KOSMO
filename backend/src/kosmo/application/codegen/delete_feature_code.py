@@ -112,6 +112,7 @@ class DeleteFeatureCodeUseCase:
                 return
 
             session_id: str | None = None
+            job_started = False
             try:
                 for attempt in range(1, input_data.max_fix_attempts + 2):
                     if attempt == 1:
@@ -143,6 +144,12 @@ class DeleteFeatureCodeUseCase:
 
                     if attempt > input_data.max_fix_attempts:
                         break
+
+                    if not job_started:
+                        start_job = getattr(self._opencode_client, "start_job", None)
+                        if start_job is not None:
+                            await start_job(workspace.workspace_dir)
+                            job_started = True
 
                     if not await self._opencode_client.health_check():
                         _log.warning(
@@ -188,10 +195,29 @@ class DeleteFeatureCodeUseCase:
                     },
                     run_id=run_id,
                 )
+            except Exception as exc:
+                if commit_hash is not None:
+                    with contextlib.suppress(Exception):
+                        await self._workspace_manager.revert_commit(feature.project_id, commit_hash)
+                _log.exception("delete_feature_code.failed", feature_id=str(feature.id), run_id=run_id)
+                yield OpenCodeEvent(
+                    event_type=OpenCodeEventType.ERROR,
+                    session_id=session_id or "",
+                    data={
+                        "error": f"No se pudo reparar la aplicación tras eliminar la funcionalidad: {exc}",
+                        "status": "delete_reverted",
+                    },
+                    run_id=run_id,
+                )
             finally:
                 if session_id is not None:
                     with contextlib.suppress(Exception):
                         await self._opencode_client.close_session(session_id)
+                if job_started:
+                    stop_job = getattr(self._opencode_client, "stop_job", None)
+                    if stop_job is not None:
+                        with contextlib.suppress(Exception):
+                            await stop_job()
         finally:
             with contextlib.suppress(Exception):
                 await self._workspace_manager.release_lock(feature.project_id)

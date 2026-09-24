@@ -16,17 +16,21 @@ from kosmo.infrastructure.api.composition.codegen import (
     build_workspace_manager,
 )
 from kosmo.infrastructure.api.implementation_broker import ImplementationEventBroker
+from kosmo.infrastructure.codegen.isolated_opencode import IsolatedOpenCodeClient
 from kosmo.infrastructure.codegen.opencode_client import OpenCodeHttpClient
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager
 from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
 from kosmo.infrastructure.sandbox.remote_code_runner import RemoteCodeRunner
+from kosmo.infrastructure.security.fernet_vault import FernetSecretCipher
 
 _CODEGEN_ENV_VARS = (
     "OPENCODE_BASE_URL",
     "OPENCODE_SERVER_PASSWORD",
     "OPENCODE_SERVER_USERNAME",
     "OPENCODE_MODEL",
+    "OPENCODE_LAUNCHER_BASE_URL",
+    "OPENCODE_LAUNCHER_TOKEN",
     "KOSMO_WORKSPACES_DIR",
     "KOSMO_MCP_BASE_URL",
     "CODE_RUNNER_BASE_URL",
@@ -122,6 +126,31 @@ def test_build_codegen_components_uses_remote_runner_when_configured(tmp_path) -
 
     assert isinstance(components.code_runner, RemoteCodeRunner)
     assert components.code_runner._base_url == "http://runner.local:8081"
+
+
+@pytest.mark.unit
+def test_production_rejects_shared_opencode_fallback() -> None:
+    settings = _make_settings(
+        env="production",
+        auth_disabled=False,
+        redis_url=SecretStr("redis://:test-password@localhost:6379/0"),
+    )
+    with pytest.raises(ValueError, match="lanzador aislado"):
+        build_codegen_components(settings, _make_repos())
+
+
+@pytest.mark.unit
+def test_production_wires_isolated_client_from_own_token() -> None:
+    settings = _make_settings(
+        env="production",
+        auth_disabled=False,
+        redis_url=SecretStr("redis://:test-password@localhost:6379/0"),
+        opencode_launcher_base_url="http://launcher:8082",
+        opencode_launcher_token=SecretStr("launcher-secret"),
+        fernet_master_key=SecretStr(FernetSecretCipher.generate_master_key()),
+    )
+    components = build_codegen_components(settings, _make_repos())
+    assert isinstance(components.opencode_client, IsolatedOpenCodeClient)
 
 
 @pytest.mark.unit
