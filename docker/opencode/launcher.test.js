@@ -9,7 +9,7 @@ process.env.KOSMO_STACK = "test";
 process.env.KOSMO_NETWORK = "kosmo-test-network";
 process.env.KOSMO_WORKSPACES_HOST_PATH = "/opt/kosmo/test/workspaces";
 
-const { buildJobConfig, tarFile, validId, validModel } = require("./launcher");
+const { buildJobConfig, tarFile, validId, validModel, validContainerId, ownedJobId } = require("./launcher");
 
 test("job mounts one project and never exposes provider key in Docker metadata", () => {
   const config = buildJobConfig(
@@ -44,4 +44,14 @@ test("only safe project and model identifiers are accepted", () => {
   assert.equal(validId("../secrets"), false);
   assert.equal(validModel("deepseek-flash"), true);
   assert.equal(validModel("model;cat /etc/passwd"), false);
+});
+
+test("only an owned canonical Docker ID can reach Docker job routes", () => {
+  const id = "a".repeat(64);
+  const jobs = [{ Id: id }];
+  assert.equal(validContainerId(id), true);
+  assert.equal(validContainerId("../etc/passwd"), false);
+  assert.equal(ownedJobId(jobs, id), id);
+  assert.equal(ownedJobId(jobs, "b".repeat(64)), null);
+  assert.equal(ownedJobId([{ Id: "../etc/passwd" }], "../etc/passwd"), null);
 });

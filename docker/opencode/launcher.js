@@ -63,6 +63,7 @@ function tarFile(name, content) {
 }
 
 function putArchive(containerId, filename, value) {
+  if (!validContainerId(containerId)) throw new Error("Invalid Docker container ID");
   const archive = tarFile(filename, value);
   return new Promise((resolve, reject) => {
     const request = http.request({ socketPath,
@@ -85,10 +86,11 @@ async function listJobs() {
   return docker("GET", `/containers/json?all=1&filters=${containerFilters()}`);
 }
 async function removeJob(id) {
-  try { await docker("DELETE", `/containers/${id}?force=1&v=1`); }
+  if (!validContainerId(id)) throw new Error("Invalid Docker container ID");
+  try { await docker("DELETE", `/containers/${encodeURIComponent(id)}?force=1&v=1`); }
   catch (error) { if (!String(error).includes("(404)")) throw error; }
   leases.delete(id);
-  console.info(JSON.stringify({ event: "opencode.job_removed", job_id: id }));
+  console.info(JSON.stringify({ event: "opencode.job_removed" }));
 }
 async function reapAbandoned() {
   const now = Date.now();
@@ -103,7 +105,12 @@ async function reapAbandoned() {
 
 function validId(value) { return typeof value === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value); }
 function validModel(value) { return typeof value === "string" && /^[a-zA-Z0-9_.:-]{1,100}$/.test(value); }
+function validContainerId(value) { return typeof value === "string" && /^[a-f0-9]{64}$/.test(value); }
 const providers = new Set(["openai", "anthropic", "google", "deepseek"]);
+function ownedJobId(jobs, candidate) {
+  const job = jobs.find((item) => item.Id === candidate);
+  return job && validContainerId(job.Id) ? job.Id : null;
+}
 
 function buildJobConfig(input, password) {
   const workspace = path.posix.join(workspaceRoot, input.project_id);
@@ -177,6 +184,7 @@ async function createJob(input) {
   }
   const config = buildJobConfig(input, password);
   const created = await docker("POST", `/containers/create?name=${id}`, JSON.stringify(config));
+  if (!validContainerId(created.Id)) throw new Error("Invalid Docker container ID");
   try {
     await docker("POST", `/containers/${created.Id}/start`);
     await putArchive(created.Id, "provider-key", input.api_key.trim());
@@ -228,20 +236,23 @@ const server = http.createServer(async (request, response) => {
     const match = /^\/jobs\/([a-f0-9]{64})(\/heartbeat)?$/.exec(request.url || "");
     if (match && request.method === "POST" && match[2]) {
       const jobs = await listJobs();
-      if (!jobs.some((job) => job.Id === match[1])) return reply(response, 404, { error: "Trabajo no encontrado" });
-      leases.set(match[1], Date.now());
+      const jobId = ownedJobId(jobs, match[1]);
+      if (!jobId) return reply(response, 404, { error: "Trabajo no encontrado" });
+      leases.set(jobId, Date.now());
       return reply(response, 200, { ok: true });
     }
     if (match && request.method === "GET" && !match[2]) {
       const jobs = await listJobs();
-      if (!jobs.some((job) => job.Id === match[1])) return reply(response, 404, { error: "Trabajo no encontrado" });
-      const detail = await docker("GET", `/containers/${match[1]}/json`);
+      const jobId = ownedJobId(jobs, match[1]);
+      if (!jobId) return reply(response, 404, { error: "Trabajo no encontrado" });
+      const detail = await docker("GET", `/containers/${encodeURIComponent(jobId)}/json`);
       return reply(response, 200, { status: detail.State.Status, oom_killed: detail.State.OOMKilled });
     }
     if (match && request.method === "DELETE" && !match[2]) {
       const jobs = await listJobs();
-      if (!jobs.some((job) => job.Id === match[1])) return reply(response, 404, { error: "Trabajo no encontrado" });
-      await removeJob(match[1]);
+      const jobId = ownedJobId(jobs, match[1]);
+      if (!jobId) return reply(response, 404, { error: "Trabajo no encontrado" });
+      await removeJob(jobId);
       return reply(response, 200, { ok: true });
     }
     reply(response, 404, { error: "Ruta no encontrada" });
@@ -255,4 +266,4 @@ if (require.main === module) {
   server.listen(port, "0.0.0.0");
 }
 
-module.exports = { buildJobConfig, tarFile, validId, validModel };
+module.exports = { buildJobConfig, tarFile, validId, validModel, validContainerId, ownedJobId };

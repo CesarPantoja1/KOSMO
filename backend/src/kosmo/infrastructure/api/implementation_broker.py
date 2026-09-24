@@ -151,24 +151,24 @@ class ImplementationEventBroker:
         current_task = asyncio.current_task()
         heartbeat_task: asyncio.Task[None] | None = None
         active_key = f"kosmo:impl:{implementation_id}:active"
+        redis = self._redis
         try:
-            if self._redis is not None:
+            if redis is not None:
                 with contextlib.suppress(Exception):
-                    await self._redis.delete(f"kosmo:impl:{implementation_id}:events")
-                    await self._redis.set(active_key, "1", ex=90)
+                    await redis.delete(f"kosmo:impl:{implementation_id}:events")
+                    await redis.set(active_key, "1", ex=90)
 
                 async def _heartbeat() -> None:
-                    assert self._redis is not None
                     while True:
                         await asyncio.sleep(20)
                         with contextlib.suppress(Exception):
-                            await self._redis.set(active_key, "1", ex=90)
+                            await redis.set(active_key, "1", ex=90)
                             stream_key = f"kosmo:impl:{implementation_id}:events"
-                            if await self._redis.exists(stream_key):
-                                await self._redis.expire(stream_key, int(self._history_ttl_seconds))
+                            if await redis.exists(stream_key):
+                                await redis.expire(stream_key, int(self._history_ttl_seconds))
                             project_key = f"kosmo:impl:{implementation_id}:project_id"
-                            if await self._redis.exists(project_key):
-                                await self._redis.expire(project_key, int(self._history_ttl_seconds))
+                            if await redis.exists(project_key):
+                                await redis.expire(project_key, int(self._history_ttl_seconds))
 
                 heartbeat_task = asyncio.create_task(_heartbeat())
 
