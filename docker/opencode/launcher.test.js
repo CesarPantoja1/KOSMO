@@ -9,7 +9,7 @@ process.env.KOSMO_STACK = "test";
 process.env.KOSMO_NETWORK = "kosmo-test-network";
 process.env.KOSMO_WORKSPACES_HOST_PATH = "/opt/kosmo/test/workspaces";
 
-const { buildJobConfig, tarFile, validId, validModel, validContainerId, ownedJobId,
+const { buildJobConfig, secretExecArgs, validId, validModel, validContainerId, ownedJobId,
   workspaceReadError } = require("./launcher");
 
 test("job mounts one project and never exposes provider key in Docker metadata", () => {
@@ -30,14 +30,14 @@ test("job mounts one project and never exposes provider key in Docker metadata",
   assert.ok(config.HostConfig.Tmpfs["/run/kosmo-secrets"].includes("size=1m"));
 });
 
-test("secret tar entry is owned by the unprivileged job user with mode 0600", () => {
-  const archive = tarFile("provider-key", "sk-sensitive");
-  const readOctal = (start, length) => parseInt(archive.toString("ascii", start, start + length), 8);
-  assert.equal(readOctal(100, 8), 0o600);
-  assert.equal(readOctal(108, 8), 1000);
-  assert.equal(readOctal(116, 8), 1000);
-  assert.equal(archive.toString("utf8", 512, 524), "sk-sensitive");
-  archive.fill(0);
+test("secret injection uses stdin and mode 0600, never Docker metadata or arguments", () => {
+  const id = "a".repeat(64);
+  const args = secretExecArgs(id, "provider-key");
+  assert.deepEqual(args.slice(0, 5), ["exec", "-i", "--user", "1000:1000", id]);
+  assert.match(args.at(-1), /umask 077; cat > \/run\/kosmo-secrets\/provider-key/);
+  assert.ok(!JSON.stringify(args).includes("sk-sensitive"));
+  assert.throws(() => secretExecArgs(id, "../escape"), /Invalid secret filename/);
+  assert.throws(() => secretExecArgs("../escape", "ready"), /Invalid Docker container ID/);
 });
 
 test("only safe project and model identifiers are accepted", () => {

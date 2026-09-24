@@ -133,6 +133,66 @@ jobs:
       - name: Test isolated OpenCode launcher
         run: node --test docker/opencode/launcher.test.js
 
+  opencode-integration:
+    name: OpenCode isolated startup
+    needs: detect-changes
+    if: needs.detect-changes.outputs.opencode == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build pinned OpenCode image
+        run: docker build -f docker/opencode/Dockerfile -t kosmo-opencode:ci docker/opencode
+
+      - name: Start a real isolated job with a fake key and no prompt
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_root="$(mktemp -d "$RUNNER_TEMP/kosmo-opencode-smoke-XXXXXX")"
+          case "$smoke_root" in
+            "$RUNNER_TEMP"/kosmo-opencode-smoke-*) ;;
+            *) exit 1 ;;
+          esac
+          trap 'docker rm -f kosmo-ci-opencode-launcher >/dev/null 2>&1 || true; docker network rm kosmo-ci-codegen >/dev/null 2>&1 || true; sudo rm -rf -- "$smoke_root"' EXIT
+          mkdir -p "$smoke_root/workspaces/prj_smoke_ci"
+          printf '{}\n' > "$smoke_root/workspaces/prj_smoke_ci/opencode.json"
+          chmod 0750 "$smoke_root/workspaces"
+          sudo chown -R 1000:1000 "$smoke_root/workspaces"
+          docker network create kosmo-ci-codegen
+          docker run -d --name kosmo-ci-opencode-launcher \
+            --user 0:1000 --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --memory 256m --cpus 0.5 --pids-limit 64 \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m \
+            --network kosmo-ci-codegen \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -v "$smoke_root/workspaces:/workspaces:ro" \
+            -e OPENCODE_LAUNCHER_TOKEN=ci-only-token \
+            -e KOSMO_OPENCODE_IMAGE=kosmo-opencode:ci \
+            -e KOSMO_STACK=ci \
+            -e KOSMO_NETWORK=kosmo-ci-codegen \
+            -e KOSMO_WORKSPACES_HOST_PATH="$smoke_root/workspaces" \
+            --entrypoint node kosmo-opencode:ci /usr/local/bin/opencode-launcher.js
+          for attempt in $(seq 1 20); do
+            if docker exec kosmo-ci-opencode-launcher node -e "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              docker logs --tail 100 kosmo-ci-opencode-launcher
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec kosmo-ci-opencode-launcher node /usr/local/bin/opencode-smoke.js prj_smoke_ci
+
 
   detect-changes:
     name: Detect changed areas
@@ -145,6 +205,7 @@ jobs:
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
+      opencode: ${{ steps.changes.outputs.opencode }}
 
     steps:
       - name: Checkout repository
@@ -209,8 +270,14 @@ jobs:
 
           backend=false
           frontend=false
+          opencode=false
 
           while IFS= read -r file; do
+            case "$file" in
+              docker/opencode/*|.github/workflows/ci.yml)
+                opencode=true
+                ;;
+            esac
             case "$file" in
               .github/workflows/ci.yml|\
               deploy/**|\
@@ -242,6 +309,7 @@ jobs:
           {
             echo "backend=$backend"
             echo "frontend=$frontend"
+            echo "opencode=$opencode"
           } >> "$GITHUB_OUTPUT"
 
           {
@@ -257,6 +325,7 @@ jobs:
             echo
             echo "- Backend required: \`$backend\`"
             echo "- Frontend required: \`$frontend\`"
+            echo "- OpenCode startup required: \`$opencode\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   backend-lint:
@@ -490,6 +559,7 @@ jobs:
       - branch-policy
       - actionlint
       - detect-changes
+      - opencode-integration
       - backend-lint
       - backend-test
       - frontend
@@ -505,6 +575,8 @@ jobs:
           actionlint_result="${{ needs.actionlint.result }}"
           branch_policy_result="${{ needs.branch-policy.result }}"
           detect_result="${{ needs.detect-changes.result }}"
+          opencode_required="${{ needs.detect-changes.outputs.opencode }}"
+          opencode_result="${{ needs.opencode-integration.result }}"
 
           backend_required="${{ needs.detect-changes.outputs.backend }}"
           backend_lint_result="${{ needs.backend-lint.result }}"
@@ -521,6 +593,7 @@ jobs:
             echo "| Branch policy | Yes | \`$branch_policy_result\` |"
             echo "| Workflow lint | Yes | \`$actionlint_result\` |"
             echo "| Change detection | Yes | \`$detect_result\` |"
+            echo "| OpenCode startup | \`$opencode_required\` | \`$opencode_result\` |"
             echo "| Backend lint & types | \`${backend_required:-unknown}\` | \`$backend_lint_result\` |"
             echo "| Backend tests | \`${backend_required:-unknown}\` | \`$backend_test_result\` |"
             echo "| Frontend | \`${frontend_required:-unknown}\` | \`$frontend_result\` |"
@@ -558,6 +631,20 @@ jobs:
               exit 1
               ;;
           esac
+
+          case "$opencode_required" in
+            true|false)
+              ;;
+            *)
+              echo "Invalid or missing OpenCode change-detection output."
+              exit 1
+              ;;
+          esac
+
+          if [ "$opencode_required" = "true" ] && [ "$opencode_result" != "success" ]; then
+            echo "OpenCode integration smoke was required but did not succeed."
+            exit 1
+          fi
 
           if [ "$backend_required" = "true" ]; then
             if [ "$backend_lint_result" != "success" ]; then

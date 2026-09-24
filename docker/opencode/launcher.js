@@ -1,12 +1,13 @@
 "use strict";
 
 // This service is the only application component allowed to access Docker.
-// Provider credentials are copied into a job's tmpfs via Docker's archive API,
+// Provider credentials are streamed through docker exec stdin into job tmpfs,
 // never placed in container environment, command line, labels, or logs.
 const http = require("node:http");
 const crypto = require("node:crypto");
 const path = require("node:path");
 const fs = require("node:fs");
+const { spawn } = require("node:child_process");
 
 const socketPath = "/var/run/docker.sock";
 const token = process.env.OPENCODE_LAUNCHER_TOKEN;
@@ -42,40 +43,34 @@ function docker(method, route, body) {
   });
 }
 
-function tarFile(name, content) {
-  const data = Buffer.from(content, "utf8");
-  const header = Buffer.alloc(512);
-  function ascii(value, offset, length) { header.write(value, offset, Math.min(length, Buffer.byteLength(value)), "ascii"); }
-  function octal(value, offset, length) { ascii(value.toString(8).padStart(length - 1, "0") + "\0", offset, length); }
-  ascii(name, 0, 100);
-  octal(0o600, 100, 8);
-  octal(1000, 108, 8);
-  octal(1000, 116, 8);
-  octal(data.length, 124, 12);
-  octal(Math.floor(Date.now() / 1000), 136, 12);
-  header.fill(32, 148, 156);
-  header[156] = 48;
-  ascii("ustar\0", 257, 6);
-  ascii("00", 263, 2);
-  const checksum = header.reduce((sum, byte) => sum + byte, 0);
-  octal(checksum, 148, 8);
-  return Buffer.concat([header, data, Buffer.alloc((512 - data.length % 512) % 512), Buffer.alloc(1024)]);
+function secretExecArgs(containerId, filename) {
+  if (!validContainerId(containerId)) throw new Error("Invalid Docker container ID");
+  if (filename !== "provider-key" && filename !== "ready") throw new Error("Invalid secret filename");
+  return ["exec", "-i", "--user", "1000:1000", containerId, "/bin/sh", "-c",
+    `umask 077; cat > /run/kosmo-secrets/${filename}`];
 }
 
-function putArchive(containerId, filename, value) {
-  if (!validContainerId(containerId)) throw new Error("Invalid Docker container ID");
-  const archive = tarFile(filename, value);
+function writeSecret(containerId, filename, value) {
+  const args = secretExecArgs(containerId, filename);
+  const secret = Buffer.from(value, "utf8");
   return new Promise((resolve, reject) => {
-    const request = http.request({ socketPath,
-      path: `/v1.41/containers/${containerId}/archive?path=/run/kosmo-secrets`, method: "PUT",
-      headers: { "Content-Type": "application/x-tar", "Content-Length": archive.length } }, (response) => {
-      response.resume();
-      response.on("end", () => response.statusCode >= 300 ? reject(new Error("Secret injection failed")) : resolve());
+    const child = spawn("/usr/local/bin/docker", args, { stdio: ["pipe", "ignore", "pipe"],
+      env: { ...process.env, DOCKER_HOST: `unix://${socketPath}` } });
+    let diagnostic = "";
+    child.stderr.on("data", (chunk) => {
+      if (diagnostic.length < 512) diagnostic += chunk.toString("utf8").slice(0, 512 - diagnostic.length);
     });
-    request.on("error", reject);
-    request.setTimeout(30_000, () => request.destroy(new Error("Secret injection timed out")));
-    request.end(archive);
-  }).finally(() => archive.fill(0));
+    child.stdin.on("error", () => {}); // A failed exec may close stdin before the key is sent.
+    const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+    child.on("error", (error) => reject(new Error(`Secret injection could not start: ${error.code || "unknown"}`)));
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) return resolve();
+      const safeDiagnostic = diagnostic.replaceAll(value, "[REDACTED]").replace(/[\r\n]+/g, " ").slice(0, 512);
+      reject(new Error(`Secret injection failed (${code}): ${safeDiagnostic}`));
+    });
+    child.stdin.end(secret);
+  }).finally(() => secret.fill(0));
 }
 
 const labels = { "kosmo.opencode-job": "1", "kosmo.stack": stack };
@@ -204,17 +199,26 @@ async function createJob(input) {
   const config = buildJobConfig(input, password);
   const created = await docker("POST", `/containers/create?name=${id}`, JSON.stringify(config));
   if (!validContainerId(created.Id)) throw new Error("Invalid Docker container ID");
+  let stage = "start";
   try {
     await docker("POST", `/containers/${created.Id}/start`);
-    await putArchive(created.Id, "provider-key", input.api_key.trim());
-    await putArchive(created.Id, "ready", "1");
+    stage = "provider-key";
+    await writeSecret(created.Id, "provider-key", input.api_key.trim());
+    stage = "ready";
+    await writeSecret(created.Id, "ready", "1");
     leases.set(created.Id, Date.now());
     console.info(JSON.stringify({ event: "opencode.job_created", job_id: created.Id,
       provider: input.provider, model: input.model, memory_bytes: config.HostConfig.Memory }));
     return { job_id: created.Id, base_url: `http://${id}:4096`, password };
   } catch (error) {
-    await removeJob(created.Id);
-    throw error;
+    console.error(JSON.stringify({ event: "opencode.job_start_failed", stage,
+      detail: String(error).replaceAll(input.api_key.trim(), "[REDACTED]") }));
+    try { await removeJob(created.Id); }
+    catch (cleanupError) { console.error(JSON.stringify({ event: "opencode.job_cleanup_failed", stage,
+      detail: String(cleanupError) })); }
+    const message = stage === "start" ? "No se pudo arrancar el contenedor aislado de OpenCode."
+      : "No se pudieron preparar las credenciales del contenedor aislado de OpenCode.";
+    throw Object.assign(new Error(message), { status: 503 });
   }
 }
 
@@ -285,4 +289,5 @@ if (require.main === module) {
   server.listen(port, "0.0.0.0");
 }
 
-module.exports = { buildJobConfig, tarFile, validId, validModel, validContainerId, ownedJobId, workspaceReadError };
+module.exports = { buildJobConfig, secretExecArgs, validId, validModel, validContainerId,
+  ownedJobId, workspaceReadError };
