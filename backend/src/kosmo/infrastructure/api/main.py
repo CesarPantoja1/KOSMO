@@ -288,7 +288,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             implementation_repo=components.repos.implementations,
             opencode_client=components.codegen.opencode_client,
             workspace_manager=components.codegen.workspace_manager,
+            is_active=components.codegen.implementation_broker.is_running_distributed,
         )
+
+    async def _recover_after_lease_expiry() -> None:
+        while True:
+            await asyncio.sleep(100)
+            with contextlib.suppress(Exception):
+                await recover_zombie_implementations(
+                    implementation_repo=components.repos.implementations,
+                    opencode_client=components.codegen.opencode_client,
+                    workspace_manager=components.codegen.workspace_manager,
+                    is_active=components.codegen.implementation_broker.is_running_distributed,
+                )
+
+    recovery_task = asyncio.create_task(_recover_after_lease_expiry())
 
     # El estado de despliegue persiste en PostgreSQL, pero las tareas de sondeo no.
     # Reanudarlas evita que un reinicio durante una publicación deje la UI en BUILDING.
@@ -303,6 +317,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     try:
         yield
     finally:
+        recovery_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await recovery_task
         outbox_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await outbox_task

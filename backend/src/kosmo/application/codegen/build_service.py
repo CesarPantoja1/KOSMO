@@ -37,7 +37,10 @@ def raise_for_opencode_error(event: OpenCodeEvent) -> None:
     if event.event_type != OpenCodeEventType.ERROR:
         return
     detail = event.data.get("error")
+    extra = event.data.get("detail")
     message = str(detail).strip() if detail is not None else "OpenCode devolvió un error sin detalle."
+    if extra:
+        message = f"{message}: {str(extra).strip()}"
     raise OpenCodeGenerationError(message)
 
 

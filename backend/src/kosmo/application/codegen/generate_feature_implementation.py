@@ -351,7 +351,6 @@ class GenerateFeatureImplementationUseCase:
         feature = await self._feature_repo.by_id(input_data.feature_id)
         req_markdown = await self._requirement_repo.by_feature_id(input_data.feature_id)
         diagram = await self._activity_diagram_repo.by_feature_id(input_data.feature_id)
-        is_healthy = await self._opencode_client.health_check()
 
         # 2. Validar existencia de Feature
         if feature is None:
@@ -368,7 +367,12 @@ class GenerateFeatureImplementationUseCase:
         if diagram is None or not diagram.diagram_syntax.strip():
             raise MissingDiagramError(_DEFAULT_DIAG_MSG)
 
+        validate_config = getattr(self._opencode_client, "validate_user_config", None)
+        if validate_config is not None:
+            await validate_config()
+
         # 5. Verificar disponibilidad de OpenCode antes de adquirir recursos
+        is_healthy = await self._opencode_client.health_check()
         if not is_healthy:
             raise OpenCodeUnavailableError()
 
@@ -393,6 +397,7 @@ class GenerateFeatureImplementationUseCase:
         await self._workspace_manager.acquire_lock(feature.project_id)
         workspace: CodeWorkspace | None = None
         session_id: str | None = None
+        job_started = False
 
         try:
             await _emit(
@@ -425,6 +430,11 @@ class GenerateFeatureImplementationUseCase:
                     updated_at=now,
                 )
             await self._implementation_repo.save(impl)
+
+            start_job = getattr(self._opencode_client, "start_job", None)
+            if start_job is not None:
+                await start_job(workspace_dir)
+                job_started = True
 
             # 6. Crear sesión en OpenCode
             await _emit(
@@ -583,6 +593,11 @@ class GenerateFeatureImplementationUseCase:
             if session_id is not None:
                 with contextlib.suppress(Exception):
                     await self._opencode_client.close_session(session_id)
+            if job_started:
+                stop_job = getattr(self._opencode_client, "stop_job", None)
+                if stop_job is not None:
+                    with contextlib.suppress(Exception):
+                        await stop_job()
             with contextlib.suppress(Exception):
                 await self._workspace_manager.release_lock(feature.project_id)
 

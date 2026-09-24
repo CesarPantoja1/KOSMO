@@ -351,6 +351,9 @@ jobs:
              cat application.env runtime.env > .env
              chmod 600 .env
              rm -f application.env runtime.env
+             if ! grep -q '^OPENCODE_LAUNCHER_TOKEN=.' .env; then
+               printf 'OPENCODE_LAUNCHER_TOKEN=%s\n' "$(openssl rand -hex 32)" >> .env
+             fi
              for key in DATABASE_URL REDIS_URL REDIS_PASSWORD FERNET_MASTER_KEY CORS_ALLOWED_ORIGINS GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET RAILWAY_CLIENT_ID RAILWAY_CLIENT_SECRET NEXT_PUBLIC_GITHUB_CLIENT_ID NEXT_PUBLIC_RAILWAY_CLIENT_ID NEXT_PUBLIC_DOMAIN_APP; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing required authentication variable: ${key}" >&2
@@ -376,7 +379,7 @@ jobs:
                  exit 1
                fi
              done
-             for key in OPENCODE_SERVER_PASSWORD OPENCODE_MODEL DEEPSEEK_API_KEY CODE_RUNNER_TOKEN; do
+             for key in CODE_RUNNER_TOKEN OPENCODE_LAUNCHER_TOKEN; do
                if ! grep -q "^${key}=." .env; then
                  echo "Missing required code-generation variable: ${key}" >&2
                  exit 1
@@ -432,7 +435,7 @@ jobs:
                fi
                sleep 2
              done
-             docker compose -p kosmo -f compose.yaml logs --tail=100 nginx backend opencode
+             docker compose -p kosmo -f compose.yaml logs --tail=100 nginx backend opencode-launcher
              exit 1
              '
 

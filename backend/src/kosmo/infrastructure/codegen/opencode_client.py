@@ -49,7 +49,7 @@ class OpenCodeHttpClient(OpenCodeClientPort):
         model: str | None = None,
         timeout_seconds: float = 900.0,
         connect_timeout_seconds: float = 30.0,
-        read_timeout_seconds: float = 900.0,
+        read_timeout_seconds: float | None = 900.0,
         write_timeout_seconds: float = 60.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -113,6 +113,30 @@ class OpenCodeHttpClient(OpenCodeClientPort):
             return response.is_success
         except Exception:
             return False
+
+    async def validate_model(self, provider: str, model: str) -> None:
+        """Fail before opening a session if the pinned OpenCode catalog lacks the user's model."""
+        try:
+            response = await self._client.get("/provider", headers=self._get_auth_headers(), timeout=30.0)
+            response.raise_for_status()
+            raw_data: object = response.json()
+            data: dict[str, Any] = cast(dict[str, Any], raw_data) if isinstance(raw_data, dict) else {}
+            raw_providers: object = data.get("all", [])
+            providers: list[object] = cast(list[object], raw_providers) if isinstance(raw_providers, list) else []
+        except (httpx.HTTPError, ValueError, AttributeError) as exc:
+            raise OpenCodeClientError("No se pudo consultar el catálogo de modelos de OpenCode.") from exc
+        for entry in providers:
+            if isinstance(entry, dict):
+                provider_entry: dict[str, Any] = cast(dict[str, Any], entry)
+                if provider_entry.get("id") != provider:
+                    continue
+                models: object = provider_entry.get("models")
+                if isinstance(models, dict) and model in models:
+                    return
+        raise OpenCodeClientError(
+            f"El modelo '{model}' de {provider} no está disponible en OpenCode. "
+            "Selecciona otro modelo en Preferencias de IA."
+        )
 
     async def create_session(
         self,
@@ -350,6 +374,8 @@ class OpenCodeHttpClient(OpenCodeClientPort):
                 else (
                     f"Tiempo de espera agotado al comunicar con OpenCode "
                     f"(tiempo límite: {self._read_timeout_seconds:.0f}s)"
+                    if self._read_timeout_seconds is not None
+                    else "Tiempo de espera agotado al comunicar con OpenCode"
                 )
             )
             yield OpenCodeEvent(

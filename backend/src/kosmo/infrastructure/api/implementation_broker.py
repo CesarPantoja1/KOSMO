@@ -149,10 +149,28 @@ class ImplementationEventBroker:
         )
         token = current_user_id.set(user_id) if user_id is not None else None
         current_task = asyncio.current_task()
+        heartbeat_task: asyncio.Task[None] | None = None
+        active_key = f"kosmo:impl:{implementation_id}:active"
         try:
             if self._redis is not None:
                 with contextlib.suppress(Exception):
                     await self._redis.delete(f"kosmo:impl:{implementation_id}:events")
+                    await self._redis.set(active_key, "1", ex=90)
+
+                async def _heartbeat() -> None:
+                    assert self._redis is not None
+                    while True:
+                        await asyncio.sleep(20)
+                        with contextlib.suppress(Exception):
+                            await self._redis.set(active_key, "1", ex=90)
+                            stream_key = f"kosmo:impl:{implementation_id}:events"
+                            if await self._redis.exists(stream_key):
+                                await self._redis.expire(stream_key, int(self._history_ttl_seconds))
+                            project_key = f"kosmo:impl:{implementation_id}:project_id"
+                            if await self._redis.exists(project_key):
+                                await self._redis.expire(project_key, int(self._history_ttl_seconds))
+
+                heartbeat_task = asyncio.create_task(_heartbeat())
 
             _log.info(
                 "codegen.task_started",
@@ -188,6 +206,13 @@ class ImplementationEventBroker:
                 ),
             )
         finally:
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await heartbeat_task
+            if self._redis is not None:
+                with contextlib.suppress(Exception):
+                    await self._redis.delete(active_key)
             if token is not None:
                 current_user_id.reset(token)
             structlog.contextvars.unbind_contextvars("implementation_id", "project_id", "user_id")
@@ -275,6 +300,18 @@ class ImplementationEventBroker:
         task = self._tasks.get(implementation_id)
         return task is not None and not task.done()
 
+    async def is_running_distributed(self, implementation_id: str) -> bool:
+        if self.is_running(implementation_id):
+            return True
+        if self._redis is None:
+            return False
+        try:
+            return bool(await self._redis.exists(f"kosmo:impl:{implementation_id}:active"))
+        except Exception:
+            # A transient Redis failure must not release a workspace lock held
+            # by another worker. The delayed recovery will retry later.
+            return True
+
     def project_id_for(self, implementation_id: str) -> str | None:
         """Returns the project recorded for an active or recently-finished run."""
         return self._project_ids.get(implementation_id)
@@ -327,14 +364,18 @@ class ImplementationEventBroker:
             else:
                 idle_time += 1.0
                 is_active_task = implementation_id in self._tasks and not self._tasks[implementation_id].done()
-                if not is_active_task and idle_time >= self._orphan_idle_timeout_seconds:
+                is_active_elsewhere = False
+                if not is_active_task:
+                    with contextlib.suppress(Exception):
+                        is_active_elsewhere = bool(await self._redis.exists(f"kosmo:impl:{implementation_id}:active"))
+                if not is_active_task and not is_active_elsewhere and idle_time >= self._orphan_idle_timeout_seconds:
                     _log.warning(
                         "implementation_broker.redis_stream_orphan_idle_timeout",
                         implementation_id=implementation_id,
                         idle_seconds=idle_time,
                     )
                     break
-                if idle_time >= idle_timeout:
+                if not is_active_task and not is_active_elsewhere and idle_time >= idle_timeout:
                     _log.warning(
                         "implementation_broker.redis_stream_idle_timeout",
                         implementation_id=implementation_id,
@@ -342,7 +383,7 @@ class ImplementationEventBroker:
                     )
                     break
                 if idle_time >= 30.0:
-                    if is_active_task:
+                    if is_active_task or is_active_elsewhere:
                         continue
                     try:
                         if not await self._redis.exists(stream_key):

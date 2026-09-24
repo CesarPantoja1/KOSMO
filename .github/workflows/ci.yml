@@ -130,6 +130,9 @@ jobs:
       - name: Run actionlint
         uses: raven-actions/actionlint@v2
 
+      - name: Test isolated OpenCode launcher
+        run: node --test docker/opencode/launcher.test.js
+
 
   detect-changes:
     name: Detect changed areas
