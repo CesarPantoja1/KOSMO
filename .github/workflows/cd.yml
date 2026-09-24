@@ -428,6 +428,9 @@ jobs:
                docker compose -p kosmo -f compose.yaml logs --tail=100 backend
                exit 1
              fi
+             # Exercise the full create → secret-stdin → OpenCode health path
+             # with a temporary project and fake key; no prompt is submitted.
+             docker exec kosmo-opencode-launcher node /usr/local/bin/opencode-smoke.js
              for attempt in $(seq 1 15); do
                if docker exec kosmo-nginx wget -q -O /dev/null \
                     --header="Host: kosmo.cespan.dev" http://127.0.0.1/ && \

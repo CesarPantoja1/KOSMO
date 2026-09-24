@@ -22,8 +22,6 @@ node -e '
         options: {
           apiKey: "{file:/run/kosmo-secrets/provider-key}",
           timeout: false,
-          headerTimeout: false,
-          chunkTimeout: false,
         },
       },
     };
