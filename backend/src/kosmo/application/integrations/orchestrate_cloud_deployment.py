@@ -14,6 +14,7 @@ from kosmo.contracts.auth.secrets import EncryptedSecret, SecretCipher
 from kosmo.contracts.integrations.deployment import (
     DeploymentAccountNotLinkedError,
     DeploymentAuthenticationError,
+    DeploymentPreconditionError,
     DeploymentProvider,
     DeploymentProviderPort,
     DeploymentRepositoryMissingError,
@@ -138,7 +139,8 @@ class OrchestrateCloudDeploymentUseCase:
                 "Debes sincronizar el código con GitHub antes de publicar en la nube."
             )
 
-        # Autosincronizar cambios pendientes de infraestructura (ej. Dockerfile, config) antes de disparar el despliegue
+        # La validación y el push deben terminar antes de disparar Railway: de otro
+        # modo Railway compila un commit anterior sin el lockfile generado.
         if self._sync_github_use_case is not None:
             try:
                 sync_cmd = SyncGitHubRepositoryCommand(
@@ -146,13 +148,16 @@ class OrchestrateCloudDeploymentUseCase:
                     commit_message="chore: sync latest project configuration before deployment",
                 )
                 updated_github = await self._sync_github_use_case.execute(sync_cmd, UserId(principal.subject))
-                if updated_github and updated_github.last_commit_hash:
-                    github_integration = updated_github
+                if not updated_github or not updated_github.last_commit_hash:
+                    raise DeploymentPreconditionError(
+                        "La sincronización de GitHub no devolvió un commit para desplegar."
+                    )
+                github_integration = updated_github
             except Exception as sync_err:
-                logger.warning(
-                    "No se pudo autosincronizar el repositorio de GitHub antes de desplegar: %s",
-                    sync_err,
-                )
+                logger.warning("No se pudo sincronizar GitHub antes de desplegar: %s", sync_err)
+                raise DeploymentPreconditionError(
+                    "No se pudo validar y sincronizar el código en GitHub antes de desplegar en Railway."
+                ) from sync_err
 
         # 4. Configurar variables de entorno predeterminadas y personalizadas
         default_env_vars = [
