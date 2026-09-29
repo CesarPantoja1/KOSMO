@@ -10,6 +10,9 @@ from kosmo.application.codegen.delete_feature_code import DeleteFeatureCodeUseCa
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationUseCase,
 )
+from kosmo.application.codegen.get_implementation_record import (
+    GetImplementationRecordUseCase,
+)
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceUseCase
 from kosmo.config import Settings
 from kosmo.contracts.sdd.codegen import CodeRunnerPort, FileSystemReader
@@ -40,6 +43,7 @@ class CodegenComponents:
     opencode_client: OpenCodeHttpClient | IsolatedOpenCodeClient
     code_runner: CodeRunnerPort
     implementation_broker: ImplementationEventBroker
+    get_implementation_record: GetImplementationRecordUseCase | None = None
 
 
 def build_code_runner(settings: Settings) -> CodeRunnerPort:
@@ -137,6 +141,11 @@ def build_codegen_components(
         history_ttl_seconds=settings.implementation_broker_ttl_seconds,
         redis=redis,
     )
+    get_implementation_record = GetImplementationRecordUseCase(
+        implementation_repo=repos.implementations,
+        requirement_repo=repos.requirements,
+        traceability_repo=repos.traceability,
+    )
     return CodegenComponents(
         generate_feature_implementation=use_case,
         validate_workspace=ValidateWorkspaceUseCase(
@@ -153,4 +162,5 @@ def build_codegen_components(
         opencode_client=opencode_client,
         code_runner=runner,
         implementation_broker=implementation_broker,
+        get_implementation_record=get_implementation_record,
     )
