@@ -106,18 +106,21 @@ const ImplementationSummaryPage = () => {
 	const railway = useRailwayOAuth();
 
 	const loadImplementation = useImplementationStore((s) => s.loadImplementation);
+	const currentCharacteristics = useCharacteristicStore((s) => s.currentCharacteristics);
 	const selectedCharacteristic = useCharacteristicStore(
 		(s) => s.currentCharacteristics.find((c) => c.id === s.selectedId) ?? null,
 	);
 
 	useEffect(() => {
-		if (summary || !selectedCharacteristic) return;
+		if (summary) return;
+		const target = selectedCharacteristic ?? currentCharacteristics[0] ?? null;
+		if (!target) return;
 		loadImplementation(
-			selectedCharacteristic.id,
-			selectedCharacteristic.title,
-			selectedCharacteristic.display_id,
+			target.id,
+			target.title,
+			target.display_id,
 		);
-	}, [summary, selectedCharacteristic, loadImplementation]);
+	}, [summary, selectedCharacteristic, currentCharacteristics, loadImplementation]);
 
 	const refreshRailway = railway.refresh;
 	useEffect(() => {
@@ -158,9 +161,10 @@ const ImplementationSummaryPage = () => {
 	}
 
 	const meta = heroMeta[github.viewState] ?? heroMeta.synced;
+	const activeFeatureId = selectedCharacteristic?.id ?? summary.featureId;
 	const isRequiresReview =
 		summary.status === 'requires_review' ||
-		(selectedCharacteristic?.id ? !!requiresReviewByFeature[selectedCharacteristic.id] : false);
+		(activeFeatureId ? !!requiresReviewByFeature[activeFeatureId] : false);
 
 	return (
 		<div className='page-container'>
