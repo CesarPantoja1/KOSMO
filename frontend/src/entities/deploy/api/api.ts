@@ -1,7 +1,5 @@
 import { apiClient } from '@/shared/api';
-import { API_BASE_URL, USE_MOCKS } from '@/shared/api/config';
-import { parseApiError } from '@/shared/api/errors';
-import { authHeaders } from '@/shared/api';
+import { USE_MOCKS } from '@/shared/api/config';
 import type { ProjectDeployStatusResponse, DeployRailwayRequest } from '../model/types';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -69,12 +67,8 @@ export const startDeployRailway = (
 	USE_MOCKS ? mockStartRailway(projectId, body) : realStartRailway(projectId, body);
 
 export const deleteDeployment = async (projectId: string): Promise<void> => {
-	const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/deploy`, {
+	await apiClient<void>(`/api/v1/projects/${projectId}/deploy`, {
 		method: 'DELETE',
-		headers: authHeaders(),
 	});
-	if (!res.ok) {
-		throw parseApiError(res, await res.json().catch(() => null));
-	}
 };
 
