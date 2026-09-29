@@ -131,26 +131,20 @@ async def enrich_impact_items(
     unique_fids = list(dict.fromkeys(result.affected_artifact_ids))
     raw_features = await asyncio.gather(*(feature_repo.by_id(FeatureId(fid)) for fid in unique_fids))
     feature_by_id: dict[str, Feature] = {
-        fid_str: feat
-        for fid_str, feat in zip(unique_fids, raw_features, strict=False)
-        if feat is not None
+        fid_str: feat for fid_str, feat in zip(unique_fids, raw_features, strict=False) if feat is not None
     }
 
     req_md_by_feature_id: dict[FeatureId, str] = {}
     if target_spec == SpecPhase.REQUISITOS and feature_by_id:
         found_features = list(feature_by_id.values())
         raw_reqs = await asyncio.gather(*(requirement_repo.by_feature_id(f.id) for f in found_features))
-        req_md_by_feature_id = {
-            f.id: md for f, md in zip(found_features, raw_reqs, strict=False) if md is not None
-        }
+        req_md_by_feature_id = {f.id: md for f, md in zip(found_features, raw_reqs, strict=False) if md is not None}
 
     diagram_exists_by_feature_id: dict[FeatureId, bool] = {}
     if target_spec == SpecPhase.MODELO and feature_by_id:
         found_features = list(feature_by_id.values())
         raw_exists = await asyncio.gather(*(diagram_repo.exists(f.id) for f in found_features))
-        diagram_exists_by_feature_id = {
-            f.id: exists for f, exists in zip(found_features, raw_exists, strict=False)
-        }
+        diagram_exists_by_feature_id = {f.id: exists for f, exists in zip(found_features, raw_exists, strict=False)}
 
     for fid_str in result.affected_artifact_ids:
         feature = feature_by_id.get(fid_str)

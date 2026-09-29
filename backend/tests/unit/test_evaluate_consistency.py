@@ -1719,4 +1719,3 @@ async def test_enrich_impact_modelo_concurrent_preloading() -> None:
     assert len(items) == 1
     assert items[0].artifact_type == "ActivityDiagram"
     assert items[0].target_id == "feat_m1"
-
