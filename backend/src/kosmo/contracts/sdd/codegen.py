@@ -200,6 +200,18 @@ class FileSystemReader(Protocol):
 FileSystemReaderPort = FileSystemReader
 
 
+@runtime_checkable
+class FileSystemWriter(Protocol):
+    """Protocolo para operaciones de escritura del sistema de archivos desacopladas de infraestructura."""
+
+    def write_text(self, path: str | Path, content: str) -> None:
+        """Escribe contenido de texto en UTF-8 en la ruta indicada creando directorios si es necesario."""
+        ...
+
+
+FileSystemWriterPort = FileSystemWriter
+
+
 class CodeRunnerPort(Protocol):
     async def run_step(
         self,

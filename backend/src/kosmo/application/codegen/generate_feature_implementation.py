@@ -26,6 +26,7 @@ from kosmo.application.codegen.build_service import (
 from kosmo.application.codegen.implementation_context_builder import (
     ImplementationContextBuilder,
     NullFileSystemReader,
+    NullFileSystemWriter,
     collect_workspace_feature_files,
     get_existing_db_schema_context,
     normalize_generated_file_path,
@@ -61,6 +62,7 @@ from kosmo.contracts.sdd.codegen import (
     FeatureImplementationRepository,
     FeatureImplementationStatus,
     FileSystemReader,
+    FileSystemWriter,
     OpenCodeClientPort,
     OpenCodeEvent,
     OpenCodeEventType,
@@ -115,6 +117,7 @@ class OpenCodeUnavailableError(ValueError):
 
 _normalize_generated_file_path = normalize_generated_file_path
 _NullFileSystemReader = NullFileSystemReader
+_NullFileSystemWriter = NullFileSystemWriter
 _collect_workspace_feature_files = collect_workspace_feature_files
 _get_existing_db_schema_context = get_existing_db_schema_context
 _raise_for_opencode_error = raise_for_opencode_error
@@ -180,6 +183,7 @@ class GenerateFeatureImplementationUseCase:
         ux_analyzer: UXAnalyzerUseCase | None = None,
         sync_github_repository: SyncGitHubRepositoryUseCase | None = None,
         fs_reader: FileSystemReader | None = None,
+        fs_writer: FileSystemWriter | None = None,
         context_builder: ImplementationContextBuilder | None = None,
         integration_analyzer: AnalyzeFeatureIntegrationUseCase | None = None,
         orchestrate_cloud_deployment: OrchestrateCloudDeploymentUseCase | None = None,
@@ -211,6 +215,12 @@ class GenerateFeatureImplementationUseCase:
             self._fs_reader = workspace_manager
         else:
             self._fs_reader = _NullFileSystemReader()
+        if fs_writer is not None:
+            self._fs_writer: FileSystemWriter = fs_writer
+        elif isinstance(workspace_manager, FileSystemWriter):
+            self._fs_writer = workspace_manager
+        else:
+            self._fs_writer = _NullFileSystemWriter()
         self._ux_analyzer = ux_analyzer or UXAnalyzerUseCase(
             document_repo=document_repo,
             feature_repo=feature_repo,
@@ -225,6 +235,7 @@ class GenerateFeatureImplementationUseCase:
             implementation_repo=implementation_repo,
             feature_repo=feature_repo,
             fs_reader=self._fs_reader,
+            fs_writer=self._fs_writer,
         )
         self._integration_analyzer = integration_analyzer or AnalyzeFeatureIntegrationUseCase(
             feature_repo=feature_repo,

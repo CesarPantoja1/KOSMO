@@ -22,6 +22,7 @@ from kosmo.contracts.sdd.codegen import (
     CodeRunnerPort,
     CodeWorkspace,
     FileSystemReader,
+    FileSystemWriter,
     WorkspaceManagerPort,
     WorkspaceRepository,
     WorkspaceStatus,
@@ -178,7 +179,16 @@ class LocalFileSystemReader(FileSystemReader):
             return None
 
 
-class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
+class LocalFileSystemWriter(FileSystemWriter):
+    """Adaptador de infraestructura para escritura del sistema de archivos local."""
+
+    def write_text(self, path: str | Path, content: str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+
+class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader, FileSystemWriter):
     """Adaptador de infraestructura para la gestión de workspaces locales."""
 
     def __init__(
@@ -202,6 +212,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         self._code_runner = code_runner
         self._document_repo = document_repo
         self._fs_reader = fs_reader or LocalFileSystemReader()
+        self._fs_writer = LocalFileSystemWriter()
         self._in_memory_locks: set[str] = set()
         # ponytail: guard global del proceso; la carrera multi-worker se cierra con el
         # CAS (UPDATE condicional) de update_lock en el repositorio SQL.
@@ -214,6 +225,10 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
     def read_text(self, path: str | Path) -> str | None:
         """Implementación de FileSystemReader delegada en LocalFileSystemReader."""
         return self._fs_reader.read_text(path)
+
+    def write_text(self, path: str | Path, content: str) -> None:
+        """Implementación de FileSystemWriter delegada en LocalFileSystemWriter."""
+        self._fs_writer.write_text(path, content)
 
     @staticmethod
     def _extract_manifest(workspace_path: Path) -> tuple[str, ...]:
