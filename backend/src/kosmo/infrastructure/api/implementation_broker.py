@@ -401,6 +401,15 @@ class ImplementationEventBroker:
                 yield event
             return
 
+        # Snapshot atómico del historial preexistente
+        history_snapshot = tuple(self._history.get(implementation_id, ()))
+
+        # Si la tarea ya concluyó (o nunca existió), el historial es todo lo que hay
+        if implementation_id not in self._tasks:
+            for event in history_snapshot:
+                yield event
+            return
+
         q: asyncio.Queue[OpenCodeEvent | None] = asyncio.Queue()
 
         if implementation_id not in self._queues:
@@ -408,16 +417,11 @@ class ImplementationEventBroker:
         self._queues[implementation_id].append(q)
 
         try:
-            # 1. Emitir eventos históricos
-            history = self._history.get(implementation_id, [])
-            for event in history:
+            # 1. Emitir eventos históricos congelados en el snapshot
+            for event in history_snapshot:
                 yield event
 
-            # 2. Si la tarea ya terminó (o nunca existió), el historial es todo lo que hay
-            if implementation_id not in self._tasks:
-                return
-
-            # 3. Escuchar nuevos eventos
+            # 2. Escuchar nuevos eventos en tiempo real
             while True:
                 event = await q.get()
                 if event is None:

@@ -505,3 +505,51 @@ async def test_broker_redis_stream_orphan_idle_timeout_defaults_to_60s() -> None
     broker = ImplementationEventBroker()
     assert broker._orphan_idle_timeout_seconds == 60.0
     assert _ORPHAN_IDLE_TIMEOUT_SECONDS == 60.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_broker_subscribe_no_duplica_eventos_con_publicacion_concurrente() -> None:
+    # Arrange
+    broker = ImplementationEventBroker()
+    implementation_id = "impl_concurrent_race"
+
+    step_event_1 = asyncio.Event()
+    step_event_2 = asyncio.Event()
+
+    class StagedUseCase:
+        async def execute_stream(
+            self,
+            input_data: GenerateFeatureImplementationInput,  # noqa: ARG002
+        ) -> AsyncIterator[OpenCodeEvent]:
+            yield OpenCodeEvent(event_type=OpenCodeEventType.PLAN_PROGRESS, session_id="sess_1", data={"step": 1})
+            yield OpenCodeEvent(event_type=OpenCodeEventType.PLAN_PROGRESS, session_id="sess_1", data={"step": 2})
+            step_event_1.set()
+            await step_event_2.wait()
+            yield OpenCodeEvent(event_type=OpenCodeEventType.PLAN_PROGRESS, session_id="sess_1", data={"step": 3})
+            yield OpenCodeEvent(event_type=OpenCodeEventType.DONE, session_id="sess_1", data={"step": 4})
+
+    broker.start_implementation(implementation_id, StagedUseCase(), _input_data())
+
+    # Wait until step 1 and 2 are in history
+    await step_event_1.wait()
+
+    # Act: Subscribe and simulate consumer processing history while step 3 and 4 are published
+    received_events: list[OpenCodeEvent] = []
+    subscriber_started = False
+
+    async def consume() -> None:
+        nonlocal subscriber_started
+        async for event in broker.subscribe(implementation_id):
+            received_events.append(event)
+            if not subscriber_started:
+                subscriber_started = True
+                step_event_2.set()
+                await asyncio.sleep(0.02)
+
+    await consume()
+
+    # Assert: Exactly 4 distinct events, 0 duplicates
+    steps = [e.data.get("step") for e in received_events]
+    assert steps == [1, 2, 3, 4]
+    assert len(received_events) == 4
