@@ -196,5 +196,25 @@ describe('useImplementationStore', () => {
 		expect(state.status).toBe('idle');
 		expect(state.summary).toBeNull();
 	});
+
+	it('clearImplementationStore limpia el almacenamiento persistido y el estado', () => {
+		// Arrange
+		useImplementationStore.setState({
+			status: 'completed',
+			summary: aSummary,
+			implementations: { feat_01: true },
+			requiresReviewByFeature: { feat_01: true },
+		});
+
+		// Act
+		clearImplementationStore();
+
+		// Assert
+		const state = useImplementationStore.getState();
+		expect(state.status).toBe('idle');
+		expect(state.summary).toBeNull();
+		expect(state.implementations).toEqual({});
+		expect(state.requiresReviewByFeature).toEqual({});
+	});
 });
 
