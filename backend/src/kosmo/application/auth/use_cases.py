@@ -8,6 +8,8 @@ from kosmo.contracts.audit import AuditEvent, AuditEventSink, AuditOutcome
 from kosmo.contracts.auth import (
     InvalidTokenError,
     Principal,
+    TokenClaims,
+    TokenExpiredError,
     TokenIssuer,
     TokenPair,
     TokenReusedError,
@@ -150,13 +152,23 @@ class RevokeSession:
 
     @traced("auth.logout")
     async def execute(self, *, access_token: str, refresh_token: str | None = None) -> None:
-        access_claims = await asyncio.to_thread(self.verifier.verify, access_token, expected_type=TokenType.ACCESS)
-        await self.revocation_store.revoke_access(
-            jti=access_claims.jti,
-            ttl_seconds=_seconds_until(access_claims.expires_at),
-        )
-        if access_claims.family_id is not None:
-            await self.revocation_store.revoke_family(family_id=access_claims.family_id)
+        access_claims: TokenClaims | None = None
+        access_token_expired = False
+        if access_token:
+            try:
+                access_claims = await asyncio.to_thread(
+                    self.verifier.verify, access_token, expected_type=TokenType.ACCESS
+                )
+                await self.revocation_store.revoke_access(
+                    jti=access_claims.jti,
+                    ttl_seconds=_seconds_until(access_claims.expires_at),
+                )
+                if access_claims.family_id is not None:
+                    await self.revocation_store.revoke_family(family_id=access_claims.family_id)
+            except TokenExpiredError:
+                access_token_expired = True
+
+        refresh_claims: TokenClaims | None = None
         if refresh_token is not None:
             refresh_claims = await asyncio.to_thread(
                 self.verifier.verify, refresh_token, expected_type=TokenType.REFRESH
@@ -164,12 +176,22 @@ class RevokeSession:
             await self.revocation_store.revoke_refresh(jti=refresh_claims.jti)
             if refresh_claims.family_id is not None:
                 await self.revocation_store.revoke_family(family_id=refresh_claims.family_id)
+        elif access_token_expired:
+            raise TokenExpiredError("Token expired")
+        elif not access_token:
+            raise InvalidTokenError("Missing token")
+
+        subject = (
+            access_claims.subject
+            if access_claims is not None
+            else (refresh_claims.subject if refresh_claims is not None else "unknown")
+        )
         await self.audit_sink.record(
             AuditEvent(
                 event_type="auth.logout",
                 outcome=AuditOutcome.SUCCESS,
                 occurred_at=datetime.now(UTC),
-                actor_id=access_claims.subject,
+                actor_id=subject,
             )
         )
-        record_auth_event("logout", user_id=access_claims.subject)
+        record_auth_event("logout", user_id=subject)
