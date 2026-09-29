@@ -40,12 +40,12 @@ from kosmo.infrastructure.llm.knowledge_tools import (
 )
 from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient
-from kosmo.infrastructure.persistence.memory.sqlalchemy_store import (
+from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
+from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
+from kosmo.infrastructure.persistence.postgres.repositories.agent_memory_repo import (
     SqlAlchemyAgentSessionStore,
     SqlAlchemyKnowledgePatternStore,
 )
-from kosmo.infrastructure.persistence.postgres.outbox import OutboxStore
-from kosmo.infrastructure.persistence.postgres.registry import RepositoryRegistry
 from kosmo.infrastructure.security import FernetSecretCipher
 
 

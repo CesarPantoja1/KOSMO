@@ -414,3 +414,9 @@ def _safe_json_dump(value: object) -> str | None:
         return json.dumps(value, default=str)
     except (TypeError, ValueError):
         return str(value)
+
+
+__all__ = [
+    "SqlAlchemyAgentSessionStore",
+    "SqlAlchemyKnowledgePatternStore",
+]
