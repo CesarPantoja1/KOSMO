@@ -14,7 +14,6 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from ulid import ULID
 
 from kosmo.application.codegen.recover_zombie_implementations import recover_zombie_implementations
 from kosmo.application.integrations.recover_pending_deployments import recover_pending_deployments
@@ -44,7 +43,12 @@ from kosmo.infrastructure.api.routers.schemas import router as schemas_router
 from kosmo.infrastructure.api.routers.traceability import router as traceability_router
 from kosmo.infrastructure.api.schemas import HttpErrorResponse
 from kosmo.infrastructure.persistence.postgres.outbox import OutboxHandler, run_outbox_worker
-from kosmo.infrastructure.telemetry import configure_telemetry, instrument_app, instrument_prometheus
+from kosmo.infrastructure.telemetry import (
+    configure_telemetry,
+    get_current_trace_id,
+    instrument_app,
+    instrument_prometheus,
+)
 
 _log = structlog.get_logger(__name__)
 
@@ -292,17 +296,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
 
     async def _recover_after_lease_expiry() -> None:
+        delay = 100.0
         while True:
-            await asyncio.sleep(100)
-            with contextlib.suppress(Exception):
+            await asyncio.sleep(delay)
+            try:
                 await recover_zombie_implementations(
                     implementation_repo=components.repos.implementations,
                     opencode_client=components.codegen.opencode_client,
                     workspace_manager=components.codegen.workspace_manager,
                     is_active=components.codegen.implementation_broker.is_running_distributed,
                 )
+                delay = 100.0
+            except Exception:
+                _log.warning("codegen.recovery_task_error", exc_info=True)
+                delay = min(delay * 2, 600.0)
 
-    recovery_task = asyncio.create_task(_recover_after_lease_expiry())
+    recovery_task = asyncio.create_task(_recover_after_lease_expiry(), name="codegen_recovery_task")
 
     # El estado de despliegue persiste en PostgreSQL, pero las tareas de sondeo no.
     # Reanudarlas evita que un reinicio durante una publicación deje la UI en BUILDING.
@@ -379,7 +388,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
             "status": status_code,
             "detail": detail,
             "instance": request.url.path,
-            "trace_id": ULID().hex,
+            "trace_id": get_current_trace_id(),
             "violations": [],
         },
         headers=getattr(exc, "headers", None),
@@ -419,7 +428,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "status": status_code,
             "detail": "El formato o contenido de la solicitud es inválido",
             "instance": request.url.path,
-            "trace_id": ULID().hex,
+            "trace_id": get_current_trace_id(),
             "violations": violations,
         },
         media_type="application/problem+json",
