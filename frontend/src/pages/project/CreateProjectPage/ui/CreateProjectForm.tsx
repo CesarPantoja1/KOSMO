@@ -13,6 +13,7 @@ import {
 	Send,
 	toast,
 } from '@/shared/ui';
+import { useAppStore } from '@/features/app-state';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -27,7 +28,6 @@ const CreateProjectForm = () => {
 	const projects = useProjectStore((s) => s.projects);
 	const getProjects = useProjectStore((s) => s.getProjects);
 	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [phase, setPhase] = useState<'creating-project' | 'creating-repo' | null>(null);
 	const createdProjectRef = useRef<Project | null>(null);
 
 	useEffect(() => {
@@ -88,25 +88,39 @@ const CreateProjectForm = () => {
 
 	const doSubmit = async (data: ProjectFormData) => {
 		setIsSubmitting(true);
-		setPhase('creating-project');
 		try {
 			const project =
 				createdProjectRef.current ??
 				(await createProject({ name: data.name, description: data.description }));
 			createdProjectRef.current = project;
 
-			setPhase('creating-repo');
-			await pushProjectToGitHub(project.id, {
+			useProjectStore.getState().addProject(project);
+			useProjectStore.getState().setGithubSyncing(project.id, true);
+			setProjectState(project);
+			void useAppStore.getState().initializeProject(project.id);
+
+			toast.success('Proyecto creado correctamente');
+
+			// Se inicia la creación del repositorio en GitHub en segundo plano
+			// sin bloquear la navegación inmediata del usuario a Descubrimiento.
+			pushProjectToGitHub(project.id, {
 				repo_name: data.repo_name,
 				is_public: data.is_public,
-			});
+			})
+				.then(() => {
+					useProjectStore.getState().setGithubSyncing(project.id, false);
+				})
+				.catch((err) => {
+					console.error('Error al inicializar repositorio en segundo plano:', err);
+					useProjectStore.getState().setGithubSyncing(project.id, false);
+					toast.warning(
+						'No se pudo inicializar el repositorio en GitHub en segundo plano. Podrás reintentarlo desde Implementación.',
+					);
+				});
 
-			useProjectStore.getState().addProject(project);
-			setProjectState(project);
 			router.replace('/proyecto/descubrimiento');
 		} catch (err) {
-			toast.error(formatApiError(err, 'Error al crear el repositorio'));
-			setPhase(null);
+			toast.error(formatApiError(err, 'Error al crear el proyecto'));
 			setIsSubmitting(false);
 		}
 	};
@@ -221,7 +235,7 @@ const CreateProjectForm = () => {
 								</p>
 							) : (
 								<p className='text-neutral-400 text-xs'>
-									Se genera automáticamente a partir del nombre del proyecto.
+									Se creará automáticamente en segundo plano en tu cuenta de GitHub.
 								</p>
 							)}
 						</div>
@@ -239,11 +253,7 @@ const CreateProjectForm = () => {
 						</button>
 						<button type='submit' disabled={isSubmitting} className='btn btn-primary'>
 							<Send color='-rotate-45' size={18} />
-							{phase === 'creating-project'
-								? 'Creando proyecto...'
-								: phase === 'creating-repo'
-									? 'Creando repositorio...'
-									: 'Crear proyecto'}
+							{isSubmitting ? 'Creando proyecto...' : 'Crear proyecto'}
 						</button>
 					</div>
 				</div>
