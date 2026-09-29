@@ -83,7 +83,8 @@ class IsolatedOpenCodeClient:
             raise RuntimeError("Ya existe un trabajo OpenCode activo en esta tarea.")
         provider, model, api_key = await self._credentials()
         project_id = Path(workspace_dir).name
-        while True:
+        max_retries = 60  # 60 × 5s = 5 minutos máximo de espera
+        for _attempt in range(max_retries):
             try:
                 response = await self._launcher.post(
                     "/jobs",
@@ -94,6 +95,11 @@ class IsolatedOpenCodeClient:
             if response.status_code != 429:
                 break
             await asyncio.sleep(5)
+        else:
+            raise RuntimeError(
+                "No se pudo iniciar el trabajo de OpenCode: el lanzador está saturado "
+                f"después de {max_retries * 5 // 60} minutos de espera."
+            )
         if not response.is_success:
             try:
                 data: dict[str, Any] = response.json()

@@ -37,6 +37,7 @@ async def with_heartbeat(
     source: AsyncIterator[str],
     interval: float = _HEARTBEAT_INTERVAL,
     heartbeat: str = _HEARTBEAT_COMMENT,
+    max_duration_seconds: float = 1800.0,
 ) -> AsyncGenerator[str]:
     """Envuelve un iterador asíncrono emitiendo comentarios ping periódicos si no hay actividad.
 
@@ -57,9 +58,13 @@ async def with_heartbeat(
             await queue.put((sentinel, None))
 
     ACTIVE_SSE_CONNECTIONS.inc()
-    producer_task = asyncio.create_task(producer())
+    producer_task = asyncio.create_task(producer(), name="sse_producer_task")
+    start_time = time.monotonic()
     try:
         while True:
+            if time.monotonic() - start_time > max_duration_seconds:
+                _log.warning("sse.max_duration_exceeded", max_duration_seconds=max_duration_seconds)
+                break
             try:
                 item, exc = await asyncio.wait_for(queue.get(), timeout=interval)
             except TimeoutError:
