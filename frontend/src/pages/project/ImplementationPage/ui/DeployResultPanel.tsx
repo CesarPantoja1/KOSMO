@@ -36,29 +36,25 @@ const DeployResultPanel = ({
 	const [copied, setCopied] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-	const [elapsedSeconds, setElapsedSeconds] = useState(0);
+	const [now, setNow] = useState(() => Date.now());
+
+	const isDeploying = status.status === 'building' || status.status === 'pending';
 
 	useEffect(() => {
-		if (status.status !== 'building' && status.status !== 'pending') {
-			setElapsedSeconds(0);
-			return;
-		}
-
-		let initial = 0;
-		if (status.last_deploy_at) {
-			const diff = Math.floor((Date.now() - new Date(status.last_deploy_at).getTime()) / 1000);
-			if (!Number.isNaN(diff) && diff >= 0 && diff < 1800) {
-				initial = diff;
-			}
-		}
-		setElapsedSeconds(initial);
+		if (!isDeploying) return;
 
 		const interval = setInterval(() => {
-			setElapsedSeconds((prev) => prev + 1);
+			setNow(Date.now());
 		}, 1000);
 
 		return () => clearInterval(interval);
-	}, [status.status, status.last_deploy_at]);
+	}, [isDeploying]);
+
+	const elapsedSeconds = (() => {
+		if (!isDeploying || !status.last_deploy_at) return 0;
+		const diff = Math.floor((now - new Date(status.last_deploy_at).getTime()) / 1000);
+		return !Number.isNaN(diff) && diff >= 0 && diff < 1800 ? diff : 0;
+	})();
 
 	const formatElapsed = (seconds: number) => {
 		const mins = Math.floor(seconds / 60);

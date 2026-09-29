@@ -34,8 +34,11 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 	const mountedRef = useRef(true);
 	const statusRef = useRef<ProjectDeployStatusResponse | null>(null);
 	const startTimeRef = useRef<number>(0);
+	const scheduleNextPollRef = useRef<() => void>(() => {});
 
-	statusRef.current = status;
+	useEffect(() => {
+		statusRef.current = status;
+	}, [status]);
 
 	const clearPollTimer = useCallback(() => {
 		if (timerRef.current) {
@@ -49,6 +52,7 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 		try {
 			const data = await getDeployStatus(projectId);
 			if (mountedRef.current) {
+				statusRef.current = data;
 				setStatus(data);
 				setError(null);
 			}
@@ -70,11 +74,16 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 		const isHidden = typeof document !== 'undefined' && document.hidden;
 		const interval = getPollInterval(startTimeRef.current, isHidden);
 
-		timerRef.current = setTimeout(async () => {
-			await fetchStatus();
-			scheduleNextPoll();
+		timerRef.current = setTimeout(() => {
+			void fetchStatus().then(() => {
+				scheduleNextPollRef.current();
+			});
 		}, interval);
 	}, [clearPollTimer, fetchStatus]);
+
+	useEffect(() => {
+		scheduleNextPollRef.current = scheduleNextPoll;
+	}, [scheduleNextPoll]);
 
 	useEffect(() => {
 		mountedRef.current = true;
@@ -88,6 +97,7 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 			try {
 				const data = await getDeployStatus(projectId);
 				if (!cancelled && mountedRef.current) {
+					statusRef.current = data;
 					setStatus(data);
 					setError(null);
 				}
@@ -100,7 +110,7 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 			}
 		}
 
-		init();
+		void init();
 
 		return () => {
 			cancelled = true;
@@ -109,8 +119,10 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 		};
 	}, [projectId, clearPollTimer]);
 
+	const currentStatus = status?.status;
+
 	useEffect(() => {
-		if (!status || TERMINAL_STATUSES.has(status.status)) {
+		if (!currentStatus || TERMINAL_STATUSES.has(currentStatus)) {
 			clearPollTimer();
 			startTimeRef.current = 0;
 			return;
@@ -152,7 +164,7 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 				window.removeEventListener('focus', handleFocus);
 			}
 		};
-	}, [status?.status, clearPollTimer, fetchStatus, scheduleNextPoll]);
+	}, [currentStatus, clearPollTimer, fetchStatus, scheduleNextPoll]);
 
 	const deploy = useCallback(
 		async (body?: DeployRailwayRequest) => {

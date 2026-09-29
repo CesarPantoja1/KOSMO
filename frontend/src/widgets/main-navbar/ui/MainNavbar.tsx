@@ -34,7 +34,7 @@ export function MainNavbar({ children }: MainNavbarProps) {
 				console.error('Failed to load projects', error);
 			}
 		};
-		fetchProjects();
+		void fetchProjects();
 	}, [getProjectsStore]);
 
 	const currentProject = useProjectStore((s) => s.currentProject);

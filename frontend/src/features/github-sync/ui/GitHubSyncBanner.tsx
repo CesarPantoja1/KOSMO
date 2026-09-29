@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
 	pushProjectToGitHub,
 	useProjectStore,
@@ -13,27 +13,34 @@ export function GitHubSyncBanner() {
 	const githubSyncingProjectId = useProjectStore((s) => s.githubSyncingProjectId);
 	const setGithubSyncing = useProjectStore((s) => s.setGithubSyncing);
 
+	const currentProjectId = currentProject?.id ?? null;
+
 	const { status, viewState, error, refresh } = useProjectGithubRepo(
-		currentProject?.id ?? null,
+		currentProjectId,
 	);
 
 	const isCurrentSyncing = Boolean(
-		currentProject?.id &&
-			(githubSyncingProjectId === currentProject.id || viewState === 'syncing'),
+		currentProjectId &&
+			(githubSyncingProjectId === currentProjectId || viewState === 'syncing'),
 	);
 
-	const [wasSyncing, setWasSyncing] = useState(false);
+	const [wasSyncing, setWasSyncing] = useState(isCurrentSyncing);
+	const [prevSyncing, setPrevSyncing] = useState(isCurrentSyncing);
+	const [prevProjectId, setPrevProjectId] = useState<string | null>(currentProjectId);
 	const [isDismissed, setIsDismissed] = useState(false);
 	const [isRetrying, setIsRetrying] = useState(false);
-	const prevProjectIdRef = useRef<string | null>(currentProject?.id ?? null);
 
-	// Detectar inicio de sincronización
-	useEffect(() => {
+	if (currentProjectId !== prevProjectId) {
+		setPrevProjectId(currentProjectId);
+		setIsDismissed(false);
+		setWasSyncing(Boolean(currentProjectId && githubSyncingProjectId === currentProjectId));
+	} else if (isCurrentSyncing !== prevSyncing) {
+		setPrevSyncing(isCurrentSyncing);
 		if (isCurrentSyncing) {
 			setWasSyncing(true);
 			setIsDismissed(false);
 		}
-	}, [isCurrentSyncing]);
+	}
 
 	// Auto-destrucción tras 4 segundos de éxito
 	useEffect(() => {
@@ -45,21 +52,12 @@ export function GitHubSyncBanner() {
 		}
 	}, [wasSyncing, viewState]);
 
-	// Al cambiar de proyecto
-	useEffect(() => {
-		if (prevProjectIdRef.current !== (currentProject?.id ?? null)) {
-			prevProjectIdRef.current = currentProject?.id ?? null;
-			setIsDismissed(false);
-			setWasSyncing(Boolean(currentProject?.id && githubSyncingProjectId === currentProject.id));
-		}
-	}, [currentProject?.id, githubSyncingProjectId]);
-
 	const handleRetry = useCallback(async () => {
-		if (!currentProject?.id) return;
+		if (!currentProjectId) return;
 		setIsRetrying(true);
-		setGithubSyncing(currentProject.id, true);
+		setGithubSyncing(currentProjectId, true);
 		try {
-			await pushProjectToGitHub(currentProject.id, {
+			await pushProjectToGitHub(currentProjectId, {
 				repo_name: status?.suggested_repo_name ?? undefined,
 				is_public: status?.is_public ?? true,
 			});
@@ -69,7 +67,7 @@ export function GitHubSyncBanner() {
 		} finally {
 			setIsRetrying(false);
 		}
-	}, [currentProject?.id, status, setGithubSyncing, refresh]);
+	}, [currentProjectId, status, setGithubSyncing, refresh]);
 
 	if (isDismissed || !currentProject) return null;
 

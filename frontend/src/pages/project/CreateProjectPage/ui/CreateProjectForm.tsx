@@ -31,10 +31,10 @@ const CreateProjectForm = () => {
 	const createdProjectRef = useRef<Project | null>(null);
 
 	useEffect(() => {
-		if (projects.length === 0) getProjects();
+		if (projects.length === 0) void getProjects();
 	}, [projects.length, getProjects]);
 
-	const { control, handleSubmit, setValue, watch } = useForm<ProjectFormData>({
+	const { control, handleSubmit, setValue } = useForm<ProjectFormData>({
 		mode: 'onSubmit',
 		resolver: zodResolver(createProjectSchema(projects)),
 		defaultValues: {
@@ -60,15 +60,6 @@ const CreateProjectForm = () => {
 		fieldState: { error: repoNameError },
 	} = useController({ name: 'repo_name', control });
 
-	const watchedName = watch('name');
-
-	useEffect(() => {
-		const repoName = watchedName.trim()
-			? `kosmo-${watchedName.toLowerCase().replace(/\s+/g, '-')}`
-			: 'kosmo-repositorio';
-		setValue('repo_name', repoName);
-	}, [watchedName, setValue]);
-
 	const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		let value = e.target.value;
 		value = value.replace(alphaRegex, '');
@@ -76,6 +67,10 @@ const CreateProjectForm = () => {
 			value = value.slice(0, 25);
 		}
 		nameOnChange(value);
+		const repoName = value.trim()
+			? `kosmo-${value.toLowerCase().replace(/\s+/g, '-')}`
+			: 'kosmo-repositorio';
+		setValue('repo_name', repoName);
 	};
 
 	const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -126,13 +121,17 @@ const CreateProjectForm = () => {
 	};
 
 	const onSubmit = (data: ProjectFormData) => {
-		doSubmit(data);
+		void doSubmit(data);
+	};
+
+	const handleFormSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+		void handleSubmit(onSubmit)(e);
 	};
 
 	return (
 		<>
 			<form
-				onSubmit={handleSubmit(onSubmit)}
+				onSubmit={handleFormSubmit}
 				className='flex-1 flex flex-col gap-5 px-0.5'
 				noValidate
 			>
