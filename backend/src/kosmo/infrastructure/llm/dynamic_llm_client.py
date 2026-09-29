@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections import OrderedDict
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -18,6 +19,8 @@ from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient, StreamedTypedResult
 
 _log = structlog.get_logger(__name__)
+
+_MAX_CACHED_LLM_CLIENTS = 64
 
 _AUTH_ERROR_KEYWORDS = (
     "unauthorized",
@@ -116,7 +119,7 @@ class DynamicUserLLMClient(LLMClient):
         self._cache_ttl_seconds = cache_ttl_seconds
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._config_cache: dict[str, tuple[float, str, str, str | None]] = {}
-        self._clients: dict[tuple[str, str, str | None], PydanticAILLMClient] = {}
+        self._clients: OrderedDict[tuple[str, str, str | None], PydanticAILLMClient] = OrderedDict()
 
     def invalidate_cache(self, user_id: str) -> None:
         """Invalida la configuración en cache de un usuario para refresco inmediato."""
@@ -175,10 +178,14 @@ class DynamicUserLLMClient(LLMClient):
 
         key_tuple = (provider, model, self._hash_api_key(api_key))
         client = self._clients.get(key_tuple)
-        if client is None:
-            pydantic_model = build_pydantic_ai_model(provider, model, api_key)
-            client = PydanticAILLMClient(model=pydantic_model)
-            self._clients[key_tuple] = client
+        if client is not None:
+            self._clients.move_to_end(key_tuple)
+            return client
+        pydantic_model = build_pydantic_ai_model(provider, model, api_key)
+        client = PydanticAILLMClient(model=pydantic_model)
+        self._clients[key_tuple] = client
+        if len(self._clients) > _MAX_CACHED_LLM_CLIENTS:
+            self._clients.popitem(last=False)
         return client
 
     async def complete(
@@ -270,41 +277,40 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 8192,
     ) -> AsyncGenerator[StreamedTypedResult[T]]:
         client = await self._resolve_client()
-        async with self._semaphore:
-            stream_fn: Any = getattr(client, "stream_typed", None)
-            if callable(stream_fn):
-                try:
-                    async with stream_fn(
-                        prompt=prompt,
-                        output_type=output_type,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                    ) as streamed:  # type: ignore[reportUnknownVariableType]
-                        yield streamed  # type: ignore[reportReturnType]
-                except Exception as exc:
-                    if is_ai_auth_error(exc):
-                        raise AIProviderAuthError() from exc
-                    raise
-            else:
-                result = await client.complete_typed(
+        stream_fn: Any = getattr(client, "stream_typed", None)
+        if callable(stream_fn):
+            try:
+                async with stream_fn(
                     prompt=prompt,
                     output_type=output_type,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                )
+                ) as streamed:  # type: ignore[reportUnknownVariableType]
+                    yield streamed  # type: ignore[reportReturnType]
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
+        else:
+            result = await client.complete_typed(
+                prompt=prompt,
+                output_type=output_type,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
-                class _FallbackStreamed:
-                    def __init__(self, data: T):
-                        self._data = data
+            class _FallbackStreamed:
+                def __init__(self, data: T):
+                    self._data = data
 
-                    async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
-                        content = getattr(self._data, "content", None)
-                        if isinstance(content, str):
-                            yield content
-                        else:
-                            yield str(self._data)
+                async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
+                    content = getattr(self._data, "content", None)
+                    if isinstance(content, str):
+                        yield content
+                    else:
+                        yield str(self._data)
 
-                    async def get_data(self) -> T:
-                        return self._data
+                async def get_data(self) -> T:
+                    return self._data
 
-                yield _FallbackStreamed(result)  # type: ignore[reportReturnType]
+            yield _FallbackStreamed(result)  # type: ignore[reportReturnType]

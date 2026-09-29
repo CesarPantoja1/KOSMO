@@ -286,7 +286,8 @@ async def test_dynamic_client_caches_with_hashed_api_key(dynamic_client, mock_re
 
 
 @pytest.mark.asyncio
-async def test_dynamic_client_stream_typed_resolves_client_before_semaphore(dynamic_client, mock_repo):
+async def test_dynamic_client_stream_typed_does_not_acquire_semaphore(dynamic_client, mock_repo):
+    """stream_typed no adquiere el semáforo para no bloquear llamadas no-streaming."""
     # Arrange
     events: list[str] = []
     original_resolve = dynamic_client._resolve_client
@@ -327,8 +328,8 @@ async def test_dynamic_client_stream_typed_resolves_client_before_semaphore(dyna
             async for _ in streamed.stream_text():
                 pass
 
-    # Assert: client resolution must execute strictly before acquiring the concurrency semaphore
-    assert events == ["resolve", "acquire"]
+    # Assert: client resolves, but semaphore is never acquired for streaming
+    assert events == ["resolve"]
 
 
 def test_mask_user_id():
