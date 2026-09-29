@@ -26,15 +26,32 @@ class UnitOfWork(Protocol):
     explicitamente via ``commit()``. Ante una excepcion se hace rollback.
     """
 
-    projects: ProjectRepository
-    documents: DocumentRepository
-    features: FeatureRepository
-    requirements: RequirementRepository
-    diagrams: ActivityDiagramRepository
-    implementations: FeatureImplementationRepository
-    chat: ChatRepository
-    traceability: TraceabilityRepository
-    outbox: OutboxPort
+    @property
+    def projects(self) -> ProjectRepository: ...
+
+    @property
+    def documents(self) -> DocumentRepository: ...
+
+    @property
+    def features(self) -> FeatureRepository: ...
+
+    @property
+    def requirements(self) -> RequirementRepository: ...
+
+    @property
+    def diagrams(self) -> ActivityDiagramRepository: ...
+
+    @property
+    def implementations(self) -> FeatureImplementationRepository: ...
+
+    @property
+    def chat(self) -> ChatRepository: ...
+
+    @property
+    def traceability(self) -> TraceabilityRepository: ...
+
+    @property
+    def outbox(self) -> OutboxPort: ...
 
     async def __aenter__(self) -> Self: ...
 

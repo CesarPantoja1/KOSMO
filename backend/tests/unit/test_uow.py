@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from types import TracebackType
 
@@ -121,6 +122,12 @@ async def test_uow_creates_fresh_session_per_enter_and_binds_repos() -> None:
         await uow.commit()
     async with uow:
         second_repos = uow.projects
+        docs = uow.documents
+        features = uow.features
+        requirements = uow.requirements
+        diagrams = uow.diagrams
+        chat = uow.chat
+        traceability = uow.traceability
 
     # Assert
     assert len(sessions) == 2
@@ -128,12 +135,42 @@ async def test_uow_creates_fresh_session_per_enter_and_binds_repos() -> None:
     assert sessions[1].closed == 1
     assert first_repos is not second_repos
     assert isinstance(first_repos, SqlAlchemyProjectRepository)
-    assert isinstance(uow.documents, SqlAlchemyDocumentRepository)
-    assert isinstance(uow.features, SqlAlchemyFeatureRepository)
-    assert isinstance(uow.requirements, SqlAlchemyRequirementRepository)
-    assert isinstance(uow.diagrams, SqlAlchemyActivityDiagramRepository)
-    assert isinstance(uow.chat, SqlAlchemyChatRepository)
-    assert isinstance(uow.traceability, SqlAlchemyTraceabilityRepository)
+    assert isinstance(docs, SqlAlchemyDocumentRepository)
+    assert isinstance(features, SqlAlchemyFeatureRepository)
+    assert isinstance(requirements, SqlAlchemyRequirementRepository)
+    assert isinstance(diagrams, SqlAlchemyActivityDiagramRepository)
+    assert isinstance(chat, SqlAlchemyChatRepository)
+    assert isinstance(traceability, SqlAlchemyTraceabilityRepository)
+
+    with pytest.raises(ValueError, match="Unit of Work no activo"):
+        _ = uow.projects
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_uow_concurrent_tasks_isolate_sessions_and_repos() -> None:
+    # Arrange
+    sessions, factory = _make_factory()
+    uow = SqlAlchemyUnitOfWork(session_factory=factory)
+
+    async def worker(worker_id: int) -> tuple[int, SqlAlchemyProjectRepository]:
+        async with uow:
+            repo = uow.projects
+            assert isinstance(repo, SqlAlchemyProjectRepository)
+            await asyncio.sleep(0.01)
+            await uow.commit()
+            return worker_id, repo
+
+    # Act
+    results = await asyncio.gather(worker(1), worker(2), worker(3))
+
+    # Assert
+    assert len(sessions) == 3
+    for s in sessions:
+        assert s.commits == 2
+        assert s.closed == 1
+    repos = [r for _, r in results]
+    assert len(set(repos)) == 3
 
 
 @pytest.mark.unit
