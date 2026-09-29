@@ -244,6 +244,7 @@ async def test_traceability_navigation_endpoint_blocks_cross_tenant_access() -> 
     with TestClient(app) as client:
         res_owner = client.get("/api/v1/traceability/feat_owner/navigation?level=requisitos")
         assert res_owner.status_code == 200
+        assert res_owner.headers.get("deprecation") == "true"
         assert res_owner.json()["permitted"] is False
         assert "Owner Feature" in res_owner.json()["source_entity_name"]
 
