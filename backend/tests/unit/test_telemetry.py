@@ -307,3 +307,41 @@ def test_instrument_prometheus_is_idempotent() -> None:
 
     # Assert
     assert getattr(app.state, "_kosmo_prometheus_instrumented", False) is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_request_logging_middleware_handles_http_request_and_context() -> None:
+    # Arrange
+    from kosmo.infrastructure.api.middlewares.logging import RequestLoggingMiddleware
+
+    invoked_paths: list[str] = []
+
+    async def dummy_app(scope: dict[str, Any], _receive: Any, send: Any) -> None:
+        invoked_paths.append(scope["path"])
+        await send({"type": "http.response.start", "status": 200})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    middleware = RequestLoggingMiddleware(dummy_app)
+    scope: dict[str, Any] = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/v1/health",
+        "headers": [(b"user-agent", b"pytest-agent")],
+    }
+
+    async def dummy_receive() -> dict[str, Any]:
+        return {"type": "http.request"}
+
+    messages: list[dict[str, Any]] = []
+
+    async def dummy_send(message: dict[str, Any]) -> None:
+        messages.append(message)
+
+    # Act
+    await middleware(scope, dummy_receive, dummy_send)
+
+    # Assert
+    assert invoked_paths == ["/api/v1/health"]
+    assert len(messages) == 2
+    assert messages[0]["status"] == 200

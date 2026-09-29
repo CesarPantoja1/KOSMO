@@ -2,7 +2,7 @@
 
 Es el único punto donde se conecta la telemetría: ``configure_telemetry`` se
 invoca en el ``lifespan`` para inicializar structlog y logfire, e
-``instrument_app`` adjunta la auto-instrumentación a FastAPI/SQLAlchemy/Redis
+``instrument_app`` adjunta la auto-instrumentación a SQLAlchemy/Redis
 una vez que los componentes IO están construidos.
 
 Ningún caso de uso depende de este módulo: la telemetría se observa a través
@@ -14,7 +14,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import logfire
 import structlog
@@ -113,13 +113,6 @@ def instrument_app(
     del settings
     if getattr(app.state, "_kosmo_instrumented", False):
         return
-
-    fastapi_kwargs: dict[str, Any] = {"capture_headers": False}
-    try:
-        logfire.instrument_fastapi(app, **fastapi_kwargs)
-    except ValueError as exc:
-        if "already been instrumented" not in str(exc):
-            raise
 
     with contextlib.suppress(Exception):
         logfire.instrument_sqlalchemy(engine=db_engine)
