@@ -359,11 +359,13 @@ async def test_sync_site_config_pure_in_memory() -> None:
         Project(id=project_id, name="Mem Tienda", slug="mem-tienda", description="Mem desc", owner_id=user_id)
     )
 
-    fake_fs = _FakeFsReader({
-        "ws/src/lib/site.ts": "// original",
-        "ws/src/lib/design-tokens.ts": "// tokens",
-        "ws/src/app/globals.css": "/* css */",
-    })
+    fake_fs = _FakeFsReader(
+        {
+            "ws/src/lib/site.ts": "// original",
+            "ws/src/lib/design-tokens.ts": "// tokens",
+            "ws/src/app/globals.css": "/* css */",
+        }
+    )
 
     ux_analysis = UXAnalysisOutput(
         ux_context=UXContext(
