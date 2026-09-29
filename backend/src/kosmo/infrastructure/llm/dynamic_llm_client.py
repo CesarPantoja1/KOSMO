@@ -119,6 +119,7 @@ class DynamicUserLLMClient(LLMClient):
         self._cache_ttl_seconds = cache_ttl_seconds
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._config_cache: dict[str, tuple[float, str, str, str | None]] = {}
+        self._config_locks: dict[str, asyncio.Lock] = {}
         self._clients: OrderedDict[tuple[str, str, str | None], PydanticAILLMClient] = OrderedDict()
 
     def invalidate_cache(self, user_id: str) -> None:
@@ -134,34 +135,48 @@ class DynamicUserLLMClient(LLMClient):
         if cached is not None and (now - cached[0]) < self._cache_ttl_seconds:
             return (cached[1], cached[2], cached[3])
 
-        provider = self._default_provider
-        model = self._default_model
-        api_key = self._default_api_key
+        # Lock por usuario: evita thundering herd cuando el TTL vence con N coroutines
+        # concurrentes del mismo usuario. El primer waiter renueva; los demás leen el valor
+        # ya actualizado en el double-check posterior.
+        if user_id not in self._config_locks:
+            self._config_locks[user_id] = asyncio.Lock()
+        async with self._config_locks[user_id]:
+            # Double-check: otro waiter pudo haber renovado mientras esperábamos el lock.
+            now = asyncio.get_running_loop().time()
+            cached = self._config_cache.get(user_id)
+            if cached is not None and (now - cached[0]) < self._cache_ttl_seconds:
+                return (cached[1], cached[2], cached[3])
 
-        try:
-            user_config = await self._config_repo.by_user_id(user_id)
-            if user_config and user_config.encrypted_api_key is not None:
-                secret = (
-                    user_config.encrypted_api_key
-                    if isinstance(user_config.encrypted_api_key, EncryptedSecret)
-                    else EncryptedSecret(ciphertext=user_config.encrypted_api_key)
-                )
-                raw_key = self._cipher.decrypt(secret)
-                provider_str = (
-                    user_config.provider.value if hasattr(user_config.provider, "value") else str(user_config.provider)
-                )
-                provider = provider_str
-                model = user_config.model
-                api_key = raw_key.decode("utf-8")
-        except Exception:
-            _log.warning(
-                "dynamic_llm_client.resolve_user_config_failed",
-                user_id=mask_user_id(user_id),
-                exc_info=True,
-            )
+            provider = self._default_provider
+            model = self._default_model
+            api_key = self._default_api_key
 
-        self._config_cache[user_id] = (now, provider, model, api_key)
-        return (provider, model, api_key)
+            try:
+                user_config = await self._config_repo.by_user_id(user_id)
+                if user_config and user_config.encrypted_api_key is not None:
+                    secret = (
+                        user_config.encrypted_api_key
+                        if isinstance(user_config.encrypted_api_key, EncryptedSecret)
+                        else EncryptedSecret(ciphertext=user_config.encrypted_api_key)
+                    )
+                    raw_key = self._cipher.decrypt(secret)
+                    provider_str = (
+                        user_config.provider.value
+                        if hasattr(user_config.provider, "value")
+                        else str(user_config.provider)
+                    )
+                    provider = provider_str
+                    model = user_config.model
+                    api_key = raw_key.decode("utf-8")
+            except Exception:
+                _log.warning(
+                    "dynamic_llm_client.resolve_user_config_failed",
+                    user_id=mask_user_id(user_id),
+                    exc_info=True,
+                )
+
+            self._config_cache[user_id] = (now, provider, model, api_key)
+            return (provider, model, api_key)
 
     @staticmethod
     def _hash_api_key(key: str | None) -> str:
