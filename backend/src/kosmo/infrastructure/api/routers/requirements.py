@@ -128,7 +128,12 @@ async def get_requirements(
             detail=exc.problem.detail,
         ) from exc
 
-    return {"document_markdown": output.markdown or "", "total": output.total}
+    return {
+        "feature_id": str(output.feature_id or fid),
+        "feature_number": output.feature_number if output.feature_number is not None else 1,
+        "document_markdown": output.markdown or "",
+        "total": output.total,
+    }
 
 
 @router.put(
