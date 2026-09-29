@@ -3,8 +3,6 @@ import importlib
 from typing import cast
 
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 from kosmo.application.auth import (  # noqa: E402
     IssueTokenPair,
@@ -22,30 +20,14 @@ from kosmo.contracts.auth import (  # noqa: E402
     TokenRevokedError,
     TokenType,
 )
+from tests.conftest import _PRIVATE_KEY_PEM as _PRIVATE_PEM
+from tests.conftest import _PUBLIC_KEY_PEM as _PUBLIC_PEM
 from tests.unit.fakes import InMemoryAuditEventSink, InMemoryStore
 
 security = importlib.import_module("kosmo.infrastructure.security")
 JoseJwtIssuer = security.JoseJwtIssuer
 JoseJwtVerifier = security.JoseJwtVerifier
 JwtSettings = security.JwtSettings
-
-# Genera un par de llaves RSA efímero una vez para toda la sesión de prueba.
-_RSA_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-_PRIVATE_PEM: str = _RSA_PRIVATE_KEY.private_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PrivateFormat.TraditionalOpenSSL,
-    encryption_algorithm=serialization.NoEncryption(),
-).decode()
-
-_PUBLIC_PEM: str = (
-    _RSA_PRIVATE_KEY.public_key()
-    .public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    .decode()
-)
 
 
 def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:

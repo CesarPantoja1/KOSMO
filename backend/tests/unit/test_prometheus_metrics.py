@@ -4,24 +4,24 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from prometheus_client import REGISTRY
 
 from kosmo.contracts.sdd.codegen import ValidationStep
 from kosmo.infrastructure.api.async_generation import with_heartbeat
 from kosmo.infrastructure.api.main import app
 from kosmo.infrastructure.sandbox.code_runner import SubprocessCodeRunner
-from kosmo.infrastructure.telemetry.metrics import ACTIVE_CODE_RUNNERS, ACTIVE_SSE_CONNECTIONS
 
 
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_active_sse_connections_gauge_lifecycle() -> None:
-    # Arrange: snapshot baseline value
-    initial_val = ACTIVE_SSE_CONNECTIONS._value.get()
+    # Arrange: snapshot baseline value via public sample value API
+    initial_val = REGISTRY.get_sample_value("kosmo_active_sse_connections") or 0.0
 
     async def dummy_source():
         yield "data: 1\n\n"
         # Check gauge value inside active stream
-        current = ACTIVE_SSE_CONNECTIONS._value.get()
+        current = REGISTRY.get_sample_value("kosmo_active_sse_connections")
         assert current == initial_val + 1
         yield "data: 2\n\n"
 
@@ -33,14 +33,14 @@ async def test_active_sse_connections_gauge_lifecycle() -> None:
 
     # Assert: items received and gauge returned to baseline
     assert len(items) == 2
-    assert ACTIVE_SSE_CONNECTIONS._value.get() == initial_val
+    assert REGISTRY.get_sample_value("kosmo_active_sse_connections") == initial_val
 
 
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_active_code_runners_gauge_lifecycle(tmp_path) -> None:
-    # Arrange: snapshot baseline value
-    initial_val = ACTIVE_CODE_RUNNERS._value.get()
+    # Arrange: snapshot baseline value via public sample value API
+    initial_val = REGISTRY.get_sample_value("kosmo_active_code_runners") or 0.0
     runner = SubprocessCodeRunner()
 
     mock_proc = AsyncMock()
@@ -49,7 +49,7 @@ async def test_active_code_runners_gauge_lifecycle(tmp_path) -> None:
 
     async def fake_communicate():
         # Inside execution, runner metric must be incremented
-        current = ACTIVE_CODE_RUNNERS._value.get()
+        current = REGISTRY.get_sample_value("kosmo_active_code_runners")
         assert current == initial_val + 1
         return (b"ok", b"")
 
@@ -64,7 +64,7 @@ async def test_active_code_runners_gauge_lifecycle(tmp_path) -> None:
 
     # Assert: runner completed and gauge returned to baseline
     assert result.success is True
-    assert ACTIVE_CODE_RUNNERS._value.get() == initial_val
+    assert REGISTRY.get_sample_value("kosmo_active_code_runners") == initial_val
 
 
 @pytest.mark.unit

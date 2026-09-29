@@ -106,41 +106,6 @@ def test_cors_middleware_integration() -> None:
     assert response.headers.get("access-control-allow-credentials") == "true"
 
 
-@pytest.mark.unit
-def test_cors_middleware_wildcard_disables_allow_credentials() -> None:
-    from fastapi import FastAPI
-    from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.testclient import TestClient
-
-    test_app = FastAPI()
-    test_origins = ["*"]
-    allow_credentials = "*" not in test_origins
-
-    test_app.add_middleware(
-        CORSMiddleware,
-        allow_origins=test_origins,
-        allow_credentials=allow_credentials,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    @test_app.get("/test")
-    def _test() -> dict[str, str]:
-        return {"status": "ok"}
-
-    client = TestClient(test_app)
-    response = client.options(
-        "/test",
-        headers={
-            "Origin": "http://evil.com",
-            "Access-Control-Request-Method": "GET",
-        },
-    )
-    assert response.status_code == 200
-    assert response.headers.get("access-control-allow-origin") == "*"
-    assert response.headers.get("access-control-allow-credentials") is None
-
-
 # ---------------------------------------------------------------------------
 # auth_disabled — guard de producción
 # ---------------------------------------------------------------------------

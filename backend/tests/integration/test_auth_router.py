@@ -4,8 +4,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -30,30 +28,14 @@ from kosmo.infrastructure.security import (  # noqa: E402
     JoseJwtVerifier,
     JwtSettings,
 )
+from tests.conftest import _PRIVATE_KEY_PEM as _PRIVATE_PEM  # noqa: E402
+from tests.conftest import _PUBLIC_KEY_PEM as _PUBLIC_PEM
 from tests.unit.fakes import (  # noqa: E402
     InMemoryAuditEventSink,
     InMemoryAuthorizationCodeStore,
     InMemoryLoginAttemptStore,
     InMemoryStore,
     InMemoryUserRepository,
-)
-
-# Par de llaves RSA efímero — generado una vez para toda la sesión de pruebas
-_RSA_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-_PRIVATE_PEM: str = _RSA_KEY.private_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PrivateFormat.TraditionalOpenSSL,
-    encryption_algorithm=serialization.NoEncryption(),
-).decode()
-
-_PUBLIC_PEM: str = (
-    _RSA_KEY.public_key()
-    .public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    .decode()
 )
 
 _MAX_FAILURES = 10

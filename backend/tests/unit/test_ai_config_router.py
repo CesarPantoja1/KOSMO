@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,6 +9,8 @@ from kosmo.contracts.ai.ai_config import (
     AIProvider,
     TestAIConnectionResult,
 )
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.fixture
