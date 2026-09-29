@@ -5,8 +5,15 @@ import type { ProjectDeployStatusResponse, DeployRailwayRequest } from './types'
 import { getDeployStatus, startDeployRailway } from '../api/api';
 import { formatApiError } from '@/shared/api';
 
-const POLL_INTERVAL_MS = 5_000;
 const TERMINAL_STATUSES = new Set(['ready', 'failed', 'idle']);
+
+function getPollInterval(startTime: number, isHidden: boolean): number {
+	if (isHidden) return 25_000;
+	const elapsed = Date.now() - startTime;
+	if (elapsed < 30_000) return 5_000;
+	if (elapsed < 240_000) return 10_000;
+	return 5_000;
+}
 
 export interface UseDeployStatusReturn {
 	status: ProjectDeployStatusResponse | null;
@@ -22,8 +29,20 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 	const [loading, setLoading] = useState(true);
 	const [deploying, setDeploying] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const mountedRef = useRef(true);
+	const statusRef = useRef<ProjectDeployStatusResponse | null>(null);
+	const startTimeRef = useRef<number>(0);
+
+	statusRef.current = status;
+
+	const clearPollTimer = useCallback(() => {
+		if (timerRef.current) {
+			clearTimeout(timerRef.current);
+			timerRef.current = null;
+		}
+	}, []);
 
 	const fetchStatus = useCallback(async () => {
 		if (!projectId) return;
@@ -41,6 +60,21 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 			if (mountedRef.current) setLoading(false);
 		}
 	}, [projectId]);
+
+	const scheduleNextPoll = useCallback(() => {
+		clearPollTimer();
+		if (!mountedRef.current) return;
+		const current = statusRef.current;
+		if (!current || TERMINAL_STATUSES.has(current.status)) return;
+
+		const isHidden = typeof document !== 'undefined' && document.hidden;
+		const interval = getPollInterval(startTimeRef.current, isHidden);
+
+		timerRef.current = setTimeout(async () => {
+			await fetchStatus();
+			scheduleNextPoll();
+		}, interval);
+	}, [clearPollTimer, fetchStatus]);
 
 	useEffect(() => {
 		mountedRef.current = true;
@@ -71,22 +105,54 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 		return () => {
 			cancelled = true;
 			mountedRef.current = false;
-			if (timerRef.current) clearTimeout(timerRef.current);
+			clearPollTimer();
 		};
-	}, [projectId]);
+	}, [projectId, clearPollTimer]);
 
 	useEffect(() => {
 		if (!status || TERMINAL_STATUSES.has(status.status)) {
-			if (timerRef.current) clearTimeout(timerRef.current);
+			clearPollTimer();
+			startTimeRef.current = 0;
 			return;
 		}
-		timerRef.current = setTimeout(() => {
-			fetchStatus();
-		}, POLL_INTERVAL_MS);
-		return () => {
-			if (timerRef.current) clearTimeout(timerRef.current);
+
+		if (startTimeRef.current === 0) {
+			startTimeRef.current = Date.now();
+		}
+
+		scheduleNextPoll();
+
+		const handleVisibilityChange = () => {
+			if (typeof document !== 'undefined' && !document.hidden) {
+				void fetchStatus().then(() => {
+					scheduleNextPoll();
+				});
+			}
 		};
-	}, [status, fetchStatus]);
+
+		const handleFocus = () => {
+			void fetchStatus().then(() => {
+				scheduleNextPoll();
+			});
+		};
+
+		if (typeof document !== 'undefined') {
+			document.addEventListener('visibilitychange', handleVisibilityChange);
+		}
+		if (typeof window !== 'undefined') {
+			window.addEventListener('focus', handleFocus);
+		}
+
+		return () => {
+			clearPollTimer();
+			if (typeof document !== 'undefined') {
+				document.removeEventListener('visibilitychange', handleVisibilityChange);
+			}
+			if (typeof window !== 'undefined') {
+				window.removeEventListener('focus', handleFocus);
+			}
+		};
+	}, [status?.status, clearPollTimer, fetchStatus, scheduleNextPoll]);
 
 	const deploy = useCallback(
 		async (body?: DeployRailwayRequest) => {
@@ -96,6 +162,7 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 			try {
 				const data = await startDeployRailway(projectId, body);
 				if (mountedRef.current) {
+					startTimeRef.current = Date.now();
 					setStatus(data);
 				}
 			} catch (err) {
@@ -112,7 +179,8 @@ export function useDeployStatus(projectId: string | null): UseDeployStatusReturn
 	const refresh = useCallback(async () => {
 		setLoading(true);
 		await fetchStatus();
-	}, [fetchStatus]);
+		scheduleNextPoll();
+	}, [fetchStatus, scheduleNextPoll]);
 
 	return { status, loading, deploying, error, deploy, refresh };
 }

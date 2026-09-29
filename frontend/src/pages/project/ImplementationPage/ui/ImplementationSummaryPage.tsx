@@ -123,9 +123,11 @@ const ImplementationSummaryPage = () => {
 	}, [summary, selectedCharacteristic, currentCharacteristics, loadImplementation]);
 
 	const refreshRailway = railway.refresh;
+	const refreshDeploy = deploy.refresh;
 	useEffect(() => {
 		const handleFocus = () => {
 			void refreshRailway();
+			void refreshDeploy();
 		};
 		window.addEventListener('focus', handleFocus);
 		document.addEventListener('visibilitychange', handleFocus);
@@ -134,7 +136,7 @@ const ImplementationSummaryPage = () => {
 			window.removeEventListener('focus', handleFocus);
 			document.removeEventListener('visibilitychange', handleFocus);
 		};
-	}, [refreshRailway]);
+	}, [refreshRailway, refreshDeploy]);
 
 	const precondition: PreconditionState = (() => {
 		if (github.loading || railway.loading) return 'loading';
@@ -312,6 +314,8 @@ const ImplementationSummaryPage = () => {
 									onRedeploy={() => deploy.deploy()}
 									deploying={deploy.deploying}
 									onDeleteSuccess={deploy.refresh}
+									onRefresh={deploy.refresh}
+									refreshing={deploy.loading}
 								/>
 							) : (
 								<DeployPreconditionPanel

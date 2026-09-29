@@ -147,4 +147,42 @@ describe('DeployResultPanel', () => {
 			);
 		});
 	});
+
+	it('muestra mensaje informativo durante el estado building y permite cambiar de pestaña', () => {
+		render(
+			<DeployResultPanel
+				projectId='prj_123'
+				status={makeStatus({ status: 'building' })}
+				error={null}
+			/>,
+		);
+
+		expect(
+			screen.getByText('Construyendo y desplegando tu aplicación...'),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				/Los despliegues en Railway suelen tardar entre 4 y 7 minutos. Puedes cambiar de pestaña con tranquilidad/i,
+			),
+		).toBeInTheDocument();
+	});
+
+	it('invoca onRefresh al hacer clic en el botón de actualizar estado', () => {
+		const onRefresh = vi.fn();
+
+		render(
+			<DeployResultPanel
+				projectId='prj_123'
+				status={makeStatus({ status: 'building' })}
+				error={null}
+				onRefresh={onRefresh}
+			/>,
+		);
+
+		const refreshBtn = screen.getByRole('button', { name: /actualizar estado/i });
+		expect(refreshBtn).toBeInTheDocument();
+
+		fireEvent.click(refreshBtn);
+		expect(onRefresh).toHaveBeenCalledTimes(1);
+	});
 });
