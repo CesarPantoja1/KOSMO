@@ -587,10 +587,6 @@ class InMemoryChatRepository:
             messages=tuple(selected[-limit:]),
         )
 
-    async def save_history(self, history: HistorialChat) -> HistorialChat:
-        self.messages = list(history.messages)
-        return history
-
     async def create_session(self, session: ChatSession) -> ChatSession:
         self.sessions.append(session)
         return session

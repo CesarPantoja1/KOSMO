@@ -186,10 +186,6 @@ class FakeChatRepository:
             messages=tuple(self.messages),
         )
 
-    async def save_history(self, history: HistorialChat) -> HistorialChat:
-        self.messages = list(history.messages)
-        return history
-
     async def create_session(self, session: ChatSession) -> ChatSession:
         return session
 
