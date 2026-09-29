@@ -198,6 +198,7 @@ class FakeChatRepository:
         phase: SpecPhase,  # noqa: ARG002
         *,
         context_id: str | None = None,  # noqa: ARG002
+        limit: int = 100,  # noqa: ARG002
     ) -> list[ChatSessionSummary]:
         return []
 

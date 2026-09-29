@@ -183,6 +183,7 @@ class ChatRepository(Protocol):
         phase: SpecPhase,
         *,
         context_id: str | None = None,
+        limit: int = 100,
     ) -> list[ChatSessionSummary]: ...
 
 

@@ -166,6 +166,7 @@ class SqlAlchemyChatRepository(ChatRepository):
         phase: SpecPhase,
         *,
         context_id: str | None = None,
+        limit: int = 100,
     ) -> list[ChatSessionSummary]:
         stmt = (
             select(
@@ -180,6 +181,7 @@ class SqlAlchemyChatRepository(ChatRepository):
             )
             .group_by(ChatSessionModel.id)
             .order_by(ChatSessionModel.created_at.desc())
+            .limit(limit)
         )
         if context_id is not None:
             stmt = stmt.where(ChatSessionModel.context_id == context_id)
