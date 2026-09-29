@@ -75,11 +75,19 @@ def idor_client() -> Generator[TestClient]:
         updated_at=now,
     )
 
+    from kosmo.application.codegen.get_implementation_record import GetImplementationRecordUseCase
+
     container = MagicMock()
     container.repos = MagicMock()
     container.repos.projects = _FakeProjectRepo({"prj_alice": alice_project})
     container.repos.features = _FakeFeatureRepo({"feat_alice": alice_feature})
     container.repos.implementations = _FakeImplementationRepo({"impl_alice": alice_impl})
+    container.codegen = MagicMock()
+    container.codegen.get_implementation_record = GetImplementationRecordUseCase(
+        implementation_repo=container.repos.implementations,
+        requirement_repo=None,
+        traceability_repo=None,
+    )
 
     # Intruso con token autenticado valido pero diferente identidad
     intruder = Principal(subject="usr_bob", scopes=frozenset({"*"}))

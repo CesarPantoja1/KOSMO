@@ -227,12 +227,27 @@ class FakeValidateUseCase:
 
 
 class FakeCodegen:
-    def __init__(self, validate_workspace: FakeValidateUseCase, broker: object | None = None) -> None:
+    def __init__(
+        self,
+        validate_workspace: FakeValidateUseCase,
+        broker: object | None = None,
+        repos: FakeRepos | None = None,
+    ) -> None:
         from unittest.mock import MagicMock
+
+        from kosmo.application.codegen.get_implementation_record import GetImplementationRecordUseCase
 
         self.validate_workspace = validate_workspace
         self.generate_feature_implementation = object()
         self.implementation_broker = broker or MagicMock()
+        if repos is not None:
+            self.get_implementation_record = GetImplementationRecordUseCase(
+                implementation_repo=repos.implementations,
+                requirement_repo=repos.requirements,
+                traceability_repo=repos.traceability,
+            )
+        else:
+            self.get_implementation_record = MagicMock()
 
 
 class FakeContainer:
@@ -245,7 +260,7 @@ class FakeContainer:
         self.repos = FakeRepos(workspace_dir)
         if validate_workspace is None:
             validate_workspace = FakeValidateUseCase(_validation_output())
-        self.codegen = FakeCodegen(validate_workspace, broker=broker)
+        self.codegen = FakeCodegen(validate_workspace, broker=broker, repos=self.repos)
 
 
 def _validation_output(all_passed: bool = True) -> ValidateWorkspaceOutput:

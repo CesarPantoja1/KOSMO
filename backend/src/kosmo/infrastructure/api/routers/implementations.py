@@ -1,4 +1,3 @@
-import inspect
 import json
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
@@ -9,9 +8,6 @@ from sse_starlette.sse import EventSourceResponse
 
 from kosmo.application.codegen.generate_feature_implementation import (
     GenerateFeatureImplementationInput,
-)
-from kosmo.application.codegen.get_implementation_record import (
-    GetImplementationRecordUseCase,
 )
 from kosmo.application.codegen.validate_workspace import ValidateWorkspaceInput, WorkspaceNotFoundError
 from kosmo.contracts.auth import Principal
@@ -116,17 +112,11 @@ async def get_implementation_by_feature(
     principal: Annotated[Principal, Depends(get_principal)],
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> ImplementationRecordResponse:
-    codegen = getattr(container, "codegen", None)
-    raw_uc = getattr(codegen, "get_implementation_record", None)
-    if isinstance(raw_uc, GetImplementationRecordUseCase):
-        uc: Any = raw_uc
-    elif raw_uc is not None and hasattr(raw_uc, "execute") and inspect.iscoroutinefunction(raw_uc.execute):
-        uc = raw_uc
-    else:
-        uc = GetImplementationRecordUseCase(
-            implementation_repo=container.repos.implementations,
-            requirement_repo=getattr(container.repos, "requirements", None),
-            traceability_repo=getattr(container.repos, "traceability", None),
+    uc = container.codegen.get_implementation_record
+    if uc is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="El servicio de consulta de implementación no está disponible",
         )
     result = await uc.execute(FeatureId(feature_id))
     if result is None:
