@@ -59,8 +59,9 @@ class InMemoryProjectRepository:
     async def find_by_slug(self, slug: str) -> Project | None:
         return next((p for p in self.projects.values() if p.slug == slug), None)
 
-    async def list_by_owner(self, owner_id: str) -> list[Project]:
-        return [p for p in self.projects.values() if str(p.owner_id) == owner_id]
+    async def list_by_owner(self, owner_id: str, *, limit: int = 100) -> list[Project]:
+        projects = [p for p in self.projects.values() if str(p.owner_id) == owner_id]
+        return projects[:limit]
 
     async def save(self, project: Project) -> Project:  # type: ignore[override]
         self.projects[str(project.id)] = project
@@ -621,6 +622,7 @@ class InMemoryChatRepository:
         phase: SpecPhase,
         *,
         context_id: str | None = None,
+        limit: int = 100,
     ) -> list[ChatSessionSummary]:
         summaries: list[ChatSessionSummary] = []
         for s in self.sessions:
@@ -638,7 +640,7 @@ class InMemoryChatRepository:
                     message_count=count,
                 )
             )
-        return summaries
+        return summaries[:limit]
 
 
 class FakeConsistencyEvaluator:
@@ -1059,6 +1061,23 @@ class InMemoryAgentSessionStore(AgentMemoryPort):
         for session_id in list(self._store):
             if self._store[session_id].project_id == project_id:
                 del self._store[session_id]
+
+    async def purge_stale_sessions(
+        self,
+        *,
+        older_than_days: int = 7,
+        incomplete_only: bool = True,
+    ) -> int:
+        from datetime import UTC, datetime, timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+        to_delete: list[str] = []
+        for sid, sess in self._store.items():
+            if sess.updated_at < cutoff and (not incomplete_only or not sess.is_completed):
+                to_delete.append(sid)
+        for sid in to_delete:
+            del self._store[sid]
+        return len(to_delete)
 
 
 class InMemoryKnowledgePatternStore:

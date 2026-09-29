@@ -294,6 +294,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             workspace_manager=components.codegen.workspace_manager,
             is_active=components.codegen.implementation_broker.is_running_distributed,
         )
+    with contextlib.suppress(Exception):
+        await components.pipeline.agent_memory.purge_stale_sessions(older_than_days=7, incomplete_only=True)
 
     async def _recover_after_lease_expiry() -> None:
         delay = 100.0
@@ -306,6 +308,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     workspace_manager=components.codegen.workspace_manager,
                     is_active=components.codegen.implementation_broker.is_running_distributed,
                 )
+                with contextlib.suppress(Exception):
+                    await components.pipeline.agent_memory.purge_stale_sessions(older_than_days=7, incomplete_only=True)
                 delay = 100.0
             except Exception:
                 _log.warning("codegen.recovery_task_error", exc_info=True)

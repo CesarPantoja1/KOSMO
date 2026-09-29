@@ -169,6 +169,24 @@ async def test_delete_by_project_executes_delete() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_purge_stale_sessions_executes_delete_with_conditions() -> None:
+    mock_session = MagicMock(spec=AsyncSession)
+    mock_result = MagicMock()
+    mock_result.rowcount = 5
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.commit = AsyncMock()
+    factory = _make_mock_session_factory(mock_session)
+
+    store = SqlAlchemyAgentSessionStore(factory)
+    deleted = await store.purge_stale_sessions(older_than_days=14, incomplete_only=True)
+
+    assert deleted == 5
+    assert mock_session.execute.await_count == 1
+    assert mock_session.commit.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_knowledge_pattern_store_replace_and_list() -> None:
     mock_session = MagicMock(spec=AsyncSession)
     mock_session.execute = AsyncMock()
