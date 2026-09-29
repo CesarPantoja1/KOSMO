@@ -884,7 +884,7 @@ async def test_commit_workspace_propaga_error_de_git_add() -> None:
         # Act & Assert
         with (
             patch(
-                "kosmo.infrastructure.codegen.workspace.git_add",
+                "kosmo.infrastructure.codegen.workspace.git_add_async",
                 side_effect=GitError("fallo de git add"),
             ),
             pytest.raises(GitError, match="fallo de git add"),
@@ -904,7 +904,7 @@ async def test_commit_workspace_propaga_error_de_git_commit() -> None:
         # Act & Assert
         with (
             patch(
-                "kosmo.infrastructure.codegen.workspace.git_commit",
+                "kosmo.infrastructure.codegen.workspace.git_commit_async",
                 side_effect=GitError("fallo de git commit"),
             ),
             pytest.raises(GitError, match="fallo de git commit"),
@@ -924,7 +924,7 @@ async def test_rollback_workspace_propaga_error_de_git() -> None:
         # Act & Assert
         with (
             patch(
-                "kosmo.infrastructure.codegen.workspace.git_rollback",
+                "kosmo.infrastructure.codegen.workspace.git_rollback_async",
                 side_effect=GitError("fallo de git reset"),
             ),
             pytest.raises(GitError, match="fallo de git reset"),

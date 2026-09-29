@@ -31,13 +31,13 @@ from kosmo.contracts.sdd.repositories import DocumentRepository, ProjectReposito
 from kosmo.domain.codegen.site_config import format_site_config
 from kosmo.domain.sdd.document_converters import document_to_markdown
 from kosmo.infrastructure.git import (
-    git_add,
-    git_commit,
-    git_has_commits,
-    git_head_hash,
-    git_init,
-    git_revert_commit,
-    git_rollback,
+    git_add_async,
+    git_commit_async,
+    git_has_commits_async,
+    git_head_hash_async,
+    git_init_async,
+    git_revert_commit_async,
+    git_rollback_async,
 )
 from kosmo.infrastructure.sandbox.code_runner import INSTALL_COMMAND, INSTALL_TIMEOUT_SECONDS
 
@@ -289,9 +289,6 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
                 target_dir.mkdir(parents=True, exist_ok=True)
                 if self._template_dir and self._template_dir.exists():
                     shutil.copytree(self._template_dir, target_dir, dirs_exist_ok=True)
-                if self._git_init:
-                    with contextlib.suppress(Exception):
-                        git_init(target_dir)
 
             # Generar AGENTS.md y opencode.json si no existen
             agents_file = target_dir / "AGENTS.md"
@@ -374,16 +371,17 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
                     skill_file.parent.mkdir(parents=True, exist_ok=True)
                     skill_file.write_text(skill_content, encoding="utf-8")
 
-            if self._git_init:
-                with contextlib.suppress(Exception):
-                    git_init(target_dir)
-                    git_add(target_dir)
-                    if not git_has_commits(target_dir):
-                        git_commit(target_dir, "chore: initialize workspace template and configurations")
-                    else:
-                        git_commit(target_dir, "chore: update build and database deployment configuration")
-
         await asyncio.to_thread(_init_disk_workspace)
+
+        if self._git_init:
+            with contextlib.suppress(Exception):
+                await git_init_async(target_dir)
+                await git_add_async(target_dir)
+                has_commits = await git_has_commits_async(target_dir)
+                if not has_commits:
+                    await git_commit_async(target_dir, "chore: initialize workspace template and configurations")
+                else:
+                    await git_commit_async(target_dir, "chore: update build and database deployment configuration")
 
         # Pre-instalar dependencias al crear el workspace para que la primera
         # validación no consuma el timeout de npm install dentro del pipeline.
@@ -505,7 +503,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         if not target_dir.exists():
             return
 
-        await asyncio.to_thread(git_rollback, target_dir)
+        await git_rollback_async(target_dir)
 
         manifest = await asyncio.to_thread(self._extract_manifest, target_dir)
         if self._workspace_repo:
@@ -543,11 +541,8 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         if not target_dir.exists():
             return None
 
-        def _sync_git_commit() -> bool:
-            git_add(target_dir)
-            return git_commit(target_dir, message)
-
-        committed = await asyncio.to_thread(_sync_git_commit)
+        await git_add_async(target_dir)
+        committed = await git_commit_async(target_dir, message)
 
         manifest = await asyncio.to_thread(self._extract_manifest, target_dir)
         if self._workspace_repo:
@@ -558,7 +553,7 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
 
         if not committed:
             return None
-        return await asyncio.to_thread(git_head_hash, target_dir)
+        return await git_head_hash_async(target_dir)
 
     async def remove_feature_paths(self, project_id: ProjectId, slug: str) -> tuple[str, ...]:
         """Elimina los archivos del código generado de una feature.
@@ -624,4 +619,4 @@ class LocalWorkspaceManager(WorkspaceManagerPort, FileSystemReader):
         if not target_dir.exists():
             return
         with contextlib.suppress(Exception):
-            await asyncio.to_thread(git_revert_commit, target_dir, commit)
+            await git_revert_commit_async(target_dir, commit)
