@@ -36,7 +36,8 @@ class OutboxStore:
         if self._session is not None:
             yield self._session
             return
-        assert self._session_factory is not None
+        if self._session_factory is None:
+            raise RuntimeError("OutboxStore._session_ctx requiere session_factory o session")
         async with self._session_factory() as session:
             yield session
 
@@ -56,7 +57,8 @@ class OutboxStore:
             await self._commit(session)
 
     async def dequeue(self, *, max_attempts: int = _MAX_ATTEMPTS) -> OutboxJobModel | None:
-        assert self._session_factory is not None
+        if self._session_factory is None:
+            raise RuntimeError("OutboxStore.dequeue requiere session_factory, no session directa")
         async with self._session_factory() as session:
             stmt = (
                 select(OutboxJobModel)
@@ -83,7 +85,8 @@ class OutboxStore:
             return model
 
     async def mark_done(self, job_id: str) -> None:
-        assert self._session_factory is not None
+        if self._session_factory is None:
+            raise RuntimeError("OutboxStore.mark_done requiere session_factory, no session directa")
         async with self._session_factory() as session:
             await session.execute(update(OutboxJobModel).where(OutboxJobModel.id == job_id).values(status="done"))
             await session.commit()
@@ -95,7 +98,8 @@ class OutboxStore:
         error: str | None = None,
         max_attempts: int = _MAX_ATTEMPTS,
     ) -> None:
-        assert self._session_factory is not None
+        if self._session_factory is None:
+            raise RuntimeError("OutboxStore.mark_failed requiere session_factory, no session directa")
         async with self._session_factory() as session:
             stmt = select(OutboxJobModel).where(OutboxJobModel.id == job_id).with_for_update()
             result = await session.execute(stmt)
