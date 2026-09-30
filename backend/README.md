@@ -2,6 +2,9 @@
 
 Documentación técnica y guía de arquitectura del backend de KOSMO.
 
+**Autor:** Gianfranco Pupiales  
+**Fecha:** 29 de Septiembre de 2026
+
 ---
 
 ## 1. Descripción del backend
