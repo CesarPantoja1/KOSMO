@@ -187,17 +187,9 @@ export const fetchImplementationFile = async (
 	implementationId: string,
 	path: string,
 ): Promise<string> => {
-	const res = await fetch(
-		`${API_BASE_URL}/api/v1/implementations/${implementationId}/files/content?path=${encodeURIComponent(path)}`,
-		{
-			headers: authHeaders(),
-			cache: 'no-store',
-		},
+	const data = await apiClient<{ content: string }>(
+		`/api/v1/implementations/${implementationId}/files/content?path=${encodeURIComponent(path)}`,
 	);
-	if (!res.ok) {
-		throw parseApiError(res, await res.json().catch(() => null));
-	}
-	const data = (await res.json()) as { content: string };
 	return data.content;
 };
 
@@ -251,20 +243,22 @@ const toRecord = (data: {
 export const fetchImplementation = async (
 	featureId: string,
 ): Promise<ImplementationRecord | null> => {
-	const res = await fetch(
-		`${API_BASE_URL}/api/v1/implementations?feature_id=${encodeURIComponent(featureId)}`,
-		{
-			headers: authHeaders(),
-			cache: 'no-store',
-		},
-	);
-	if (res.status === 404) {
-		return null;
+	try {
+		const data = await apiClient<Parameters<typeof toRecord>[0]>(
+			`/api/v1/implementations?feature_id=${encodeURIComponent(featureId)}`,
+		);
+		return toRecord(data);
+	} catch (err: unknown) {
+		if (
+			typeof err === 'object' &&
+			err !== null &&
+			'status' in err &&
+			(err as { status: number }).status === 404
+		) {
+			return null;
+		}
+		throw err;
 	}
-	if (!res.ok) {
-		throw parseApiError(res, await res.json().catch(() => null));
-	}
-	return toRecord((await res.json()) as Parameters<typeof toRecord>[0]);
 };
 
 export const generateImplementation = async (

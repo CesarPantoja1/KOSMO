@@ -11,6 +11,7 @@ from kosmo.contracts.sdd.codegen import (
     FileAction,
     FileOperation,
     FileSystemReader,
+    FileSystemWriter,
     ValidationRunResult,
 )
 from kosmo.contracts.sdd.feature import Feature
@@ -47,6 +48,13 @@ class NullFileSystemReader(FileSystemReader):
     def read_text(self, path: str | Path) -> str | None:
         del path
         return None
+
+
+class NullFileSystemWriter(FileSystemWriter):
+    """Implementación nula de FileSystemWriter por defecto cuando no se suministra escritor."""
+
+    def write_text(self, path: str | Path, content: str) -> None:
+        del path, content
 
 
 def normalize_generated_file_path(raw_path: str, workspace_dir: str) -> str | None:
@@ -120,12 +128,18 @@ class ImplementationContextBuilder:
         implementation_repo: FeatureImplementationRepository | None = None,
         feature_repo: FeatureRepository | None = None,
         fs_reader: FileSystemReader | None = None,
+        fs_writer: FileSystemWriter | None = None,
     ) -> None:
         self._project_repo = project_repo
         self._document_repo = document_repo
         self._implementation_repo = implementation_repo
         self._feature_repo = feature_repo
         self._fs_reader = fs_reader or NullFileSystemReader()
+        self._fs_writer = (
+            fs_writer
+            if fs_writer is not None
+            else (fs_reader if isinstance(fs_reader, FileSystemWriter) else NullFileSystemWriter())
+        )
 
     def normalize_file_path(self, raw_path: str, workspace_dir: str) -> str | None:
         """Normaliza una ruta usando la función de seguridad."""
@@ -311,36 +325,36 @@ class ImplementationContextBuilder:
     ) -> None:
         """Sincroniza site.ts, design-tokens.ts y globals.css con los tokens del análisis UX."""
         site_file = Path(workspace_dir) / "src" / "lib" / "site.ts"
-        if not site_file.exists() or self._project_repo is None:
+        if self._fs_reader.read_text(site_file) is None or self._project_repo is None:
             return
 
         with contextlib.suppress(Exception):
             proj = await self._project_repo.by_id(project_id)
             p_name = proj.name if proj and proj.name else "KOSMO App"
             p_desc = (proj.description if proj and proj.description else "") or "Aplicación generada con KOSMO."
-            site_file.write_text(
+            self._fs_writer.write_text(
+                site_file,
                 format_site_config(
                     name=p_name,
                     description=p_desc,
                     archetype=ux_analysis.ux_context.archetype.value,
                     primary_color=ux_analysis.ux_context.tokens.primary_color,
                 ),
-                encoding="utf-8",
             )
             tokens_file = Path(workspace_dir) / "src" / "lib" / "design-tokens.ts"
-            if tokens_file.exists():
-                tokens_file.write_text(
+            if self._fs_reader.read_text(tokens_file) is not None:
+                self._fs_writer.write_text(
+                    tokens_file,
                     format_design_tokens_ts(
                         tokens=ux_analysis.ux_context.tokens,
                         domain=ux_analysis.ux_context.archetype.value,
                     ),
-                    encoding="utf-8",
                 )
             globals_file = Path(workspace_dir) / "src" / "app" / "globals.css"
-            if globals_file.exists():
-                globals_file.write_text(
+            if self._fs_reader.read_text(globals_file) is not None:
+                self._fs_writer.write_text(
+                    globals_file,
                     format_globals_css(tokens=ux_analysis.ux_context.tokens),
-                    encoding="utf-8",
                 )
 
     def build_plan_prompt(

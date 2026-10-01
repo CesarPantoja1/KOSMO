@@ -4,8 +4,6 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 from kosmo.application.auth import IssueTokenPair, RefreshTokenPair
 from kosmo.contracts.auth import (
@@ -16,22 +14,9 @@ from kosmo.contracts.auth import (
 from kosmo.contracts.sdd.ids import ProjectId
 from kosmo.infrastructure.codegen.workspace import LocalWorkspaceManager, WorkspaceLockedError
 from kosmo.infrastructure.security import JoseJwtIssuer, JoseJwtVerifier, JwtSettings
+from tests.conftest import _PRIVATE_KEY_PEM as _PRIVATE_PEM
+from tests.conftest import _PUBLIC_KEY_PEM as _PUBLIC_PEM
 from tests.unit.fakes import InMemoryAuditEventSink, InMemoryStore
-
-_RSA_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-_PRIVATE_PEM = _RSA_KEY.private_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PrivateFormat.TraditionalOpenSSL,
-    encryption_algorithm=serialization.NoEncryption(),
-).decode()
-_PUBLIC_PEM = (
-    _RSA_KEY.public_key()
-    .public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    .decode()
-)
 
 
 def _make_codecs() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:

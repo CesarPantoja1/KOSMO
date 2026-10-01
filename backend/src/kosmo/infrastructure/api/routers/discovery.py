@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -92,6 +92,7 @@ def _get_discovery_chat_history(request: Request) -> GetDiscoveryChatHistoryUseC
     description=(
         "Genera un documento de visión de producto estructurado en 8 secciones, utilizando inteligencia artificial."
     ),
+    response_model=DiscoveryResponse,
     status_code=status.HTTP_200_OK,
     responses={
         status.HTTP_200_OK: {"description": "Documento de descubrimiento generado exitosamente."},
@@ -103,12 +104,13 @@ async def generate_discovery(
     _principal: Annotated[Principal, Depends(get_principal)],
     _rate: Annotated[None, Depends(_generation_rate_limiter)],
     use_case: Annotated[GenerateDiscoveryUseCase, Depends(_generate_discovery)],
-) -> dict[str, Any]:
+) -> DiscoveryResponse:
     output = await use_case.execute(GenerateDiscoveryInput(project_id=ProjectId(project_id)))
-    return {
-        "project_id": str(output.project_id),
-        "content": _document_to_markdown(output.document),
-    }
+    return DiscoveryResponse(
+        id=str(output.project_id),
+        project_id=str(output.project_id),
+        content=_document_to_markdown(output.document),
+    )
 
 
 @router.get(

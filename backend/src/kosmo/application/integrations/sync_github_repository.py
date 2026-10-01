@@ -84,32 +84,35 @@ class SyncGitHubRepositoryUseCase:
             if not user_integration:
                 raise ValueError("El usuario no tiene su cuenta vinculada con GitHub.")
 
-            workspace = await self._workspace_manager.ensure_workspace(cmd.project_id)
-            if not workspace or not workspace.workspace_dir:
-                raise ValueError("No se encontró el directorio físico del workspace para el proyecto.")
-
+            # Marcar inmediatamente como SYNCING y persistir para que cualquier consulta
+            # concurrente (GET /projects/{id}/github) sepa que el proceso ya arrancó.
+            now = datetime.now(UTC)
             project_integration = await self._project_repo.get_by_project_id(cmd.project_id)
-            if project_integration is None:
+            if not isinstance(project_integration, ProjectGitHubIntegration):
                 project_integration = ProjectGitHubIntegration(
                     project_id=cmd.project_id,
                     repo_name=cmd.repo_name,
                     is_public=True,
-                    sync_status=GitHubSyncStatus.NOT_CREATED,
+                    sync_status=GitHubSyncStatus.SYNCING,
+                    created_at=now,
+                    updated_at=now,
                 )
+            else:
+                project_integration = replace(
+                    project_integration,
+                    sync_status=GitHubSyncStatus.SYNCING,
+                    updated_at=now,
+                )
+            await self._project_repo.save(project_integration)
+
+            workspace = await self._workspace_manager.ensure_workspace(cmd.project_id)
+            if not workspace or not workspace.workspace_dir:
+                raise ValueError("No se encontró el directorio físico del workspace para el proyecto.")
 
             # Desencriptar token
             encrypted_bytes = base64.b64decode(user_integration.encrypted_token)
             decrypted_bytes = self._cipher.decrypt(EncryptedSecret(ciphertext=encrypted_bytes))
             token = decrypted_bytes.decode("utf-8")
-
-            # Marcar como SYNCING
-            now = datetime.now(UTC)
-            project_integration = replace(
-                project_integration,
-                sync_status=GitHubSyncStatus.SYNCING,
-                updated_at=now,
-            )
-            await self._project_repo.save(project_integration)
 
             try:
                 # El workspace debe ser válido antes de provocar efectos externos. De este

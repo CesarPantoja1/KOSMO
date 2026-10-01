@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { fetchImplementation, generateImplementation } from '../api/api';
 import { buildSummary } from '../api/api';
 import type { ImplementationLog, ImplementationStatus, ImplementationSummary } from './types';
@@ -25,7 +26,9 @@ interface ImplementationStore {
 	reset: () => void;
 }
 
-export const useImplementationStore = create<ImplementationStore>()((set) => ({
+export const useImplementationStore = create<ImplementationStore>()(
+	persist(
+		(set) => ({
 	status: 'idle',
 	summary: null,
 	progress: null,
@@ -153,9 +156,20 @@ export const useImplementationStore = create<ImplementationStore>()((set) => ({
 			errorMessage: null,
 			requiresReviewByFeature: {},
 		}),
-}));
+		}),
+		{
+			name: 'kosmo-implementation-store',
+			partialize: (state) => ({
+				summary: state.summary,
+				implementations: state.implementations,
+				requiresReviewByFeature: state.requiresReviewByFeature,
+			}),
+		},
+	),
+);
 
 export const clearImplementationStore = () => {
+	useImplementationStore.persist?.clearStorage?.();
 	useImplementationStore.setState({
 		status: 'idle',
 		summary: null,

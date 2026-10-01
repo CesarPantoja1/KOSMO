@@ -12,7 +12,7 @@ import {
 	WarningIcon,
 } from '@/shared/ui';
 import { toast } from '@/shared/ui';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const DeployResultPanel = ({
 	projectId,
@@ -21,6 +21,8 @@ const DeployResultPanel = ({
 	onRedeploy,
 	deploying = false,
 	onDeleteSuccess,
+	onRefresh,
+	refreshing = false,
 }: {
 	projectId: string;
 	status: ProjectDeployStatusResponse;
@@ -28,10 +30,38 @@ const DeployResultPanel = ({
 	onRedeploy?: () => void;
 	deploying?: boolean;
 	onDeleteSuccess?: () => void;
+	onRefresh?: () => void;
+	refreshing?: boolean;
 }) => {
 	const [copied, setCopied] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+	const [now, setNow] = useState(() => Date.now());
+
+	const isDeploying = status.status === 'building' || status.status === 'pending';
+
+	useEffect(() => {
+		if (!isDeploying) return;
+
+		const interval = setInterval(() => {
+			setNow(Date.now());
+		}, 1000);
+
+		return () => clearInterval(interval);
+	}, [isDeploying]);
+
+	const elapsedSeconds = (() => {
+		if (!isDeploying || !status.last_deploy_at) return 0;
+		const diff = Math.floor((now - new Date(status.last_deploy_at).getTime()) / 1000);
+		return !Number.isNaN(diff) && diff >= 0 && diff < 1800 ? diff : 0;
+	})();
+
+	const formatElapsed = (seconds: number) => {
+		const mins = Math.floor(seconds / 60);
+		const secs = seconds % 60;
+		if (mins === 0) return `${secs}s`;
+		return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+	};
 
 	const handleConfirmDelete = async () => {
 		setShowConfirmDelete(false);
@@ -81,6 +111,18 @@ const DeployResultPanel = ({
 				<h3 className='text-lg font-semibold text-neutral-800'>
 					Estado del despliegue
 				</h3>
+				{onRefresh && (
+					<button
+						type='button'
+						onClick={onRefresh}
+						disabled={refreshing || deploying}
+						className='inline-flex items-center justify-center p-1 rounded-md text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors'
+						title='Actualizar estado'
+						aria-label='Actualizar estado'
+					>
+						<Load size={14} color={refreshing ? 'animate-spin text-primary-600' : 'text-neutral-500'} />
+					</button>
+				)}
 				{status.status === 'ready' && (
 					<span className='ml-auto inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-success-50 text-success-700 border border-success-500/20'>
 						<SuccessCheckIcon size={14} />
@@ -108,11 +150,23 @@ const DeployResultPanel = ({
 			</div>
 
 			{(status.status === 'building' || status.status === 'pending') && (
-				<div className='flex items-center gap-3 py-4 text-neutral-500 text-sm'>
-					<Load size={18} />
-					{status.status === 'building'
-						? 'Construyendo y desplegando tu aplicación...'
-						: 'Esperando inicio del despliegue...'}
+				<div className='flex flex-col gap-2 py-4'>
+					<div className='flex items-center gap-3 text-neutral-600 text-sm font-medium'>
+						<span className='inline-flex animate-spin h-4 w-4 shrink-0 rounded-full border-2 border-neutral-300 border-t-primary-600' />
+						<span>
+							{status.status === 'building'
+								? 'Construyendo y desplegando tu aplicación...'
+								: 'Esperando inicio del despliegue...'}
+						</span>
+						{elapsedSeconds > 0 && (
+							<span className='text-xs text-neutral-400 font-normal'>
+								({formatElapsed(elapsedSeconds)} transcurridos)
+							</span>
+						)}
+					</div>
+					<p className='text-xs text-neutral-400 pl-7'>
+						Los despliegues en Railway suelen tardar entre 4 y 7 minutos. Puedes cambiar de pestaña con tranquilidad, el estado se actualizará automáticamente.
+					</p>
 				</div>
 			)}
 

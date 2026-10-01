@@ -7,6 +7,36 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def normalize_postgres_url(raw: str) -> str:
+    """Normaliza una URL de PostgreSQL para asyncpg, incluyendo Supabase Pooler.
+
+    - Reemplaza el scheme ``postgresql://`` por ``postgresql+asyncpg://``.
+    - En conexiones pooler (Supabase o puerto 6543) desactiva el statement cache,
+      que es incompatible con PgBouncer en modo transaction.
+    """
+    if raw.startswith("postgresql://"):
+        raw = raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    parsed = urlsplit(raw)
+    if parsed.scheme == "postgresql+asyncpg" and (
+        (
+            parsed.hostname is not None
+            and (
+                parsed.hostname.endswith(".pooler.supabase.com")
+                or parsed.hostname.endswith(".supabase.co")
+                or "pooler" in parsed.hostname
+            )
+        )
+        or parsed.port == 6543
+    ):
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.pop("statement_cache_size", None)
+        query.setdefault("prepared_statement_cache_size", "0")
+        raw = urlunsplit(parsed._replace(query=urlencode(query)))
+
+    return raw
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env", "backend/.env", "../.env"),
@@ -100,33 +130,10 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_async_postgres_url(cls, value: object) -> object:
         if isinstance(value, SecretStr):
-            raw_value = value.get_secret_value()
-        elif isinstance(value, str):
-            raw_value = value
-        else:
-            return value
-
-        if raw_value.startswith("postgresql://"):
-            raw_value = raw_value.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-        parsed = urlsplit(raw_value)
-        if parsed.scheme == "postgresql+asyncpg" and (
-            (
-                parsed.hostname is not None
-                and (
-                    parsed.hostname.endswith(".pooler.supabase.com")
-                    or parsed.hostname.endswith(".supabase.co")
-                    or "pooler" in parsed.hostname
-                )
-            )
-            or parsed.port == 6543
-        ):
-            query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-            query.pop("statement_cache_size", None)
-            query.setdefault("prepared_statement_cache_size", "0")
-            raw_value = urlunsplit(parsed._replace(query=urlencode(query)))
-
-        return raw_value
+            return normalize_postgres_url(value.get_secret_value())
+        if isinstance(value, str):
+            return normalize_postgres_url(value)
+        return value
 
     @model_validator(mode="after")
     def _resolve_signing_keys(self) -> Self:

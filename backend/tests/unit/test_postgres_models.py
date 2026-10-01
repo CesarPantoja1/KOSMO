@@ -1,5 +1,6 @@
 """Tests de verificación de Foreign Keys y Unique Constraints en SQLAlchemy models."""
 
+import pytest
 from sqlalchemy import UniqueConstraint
 
 from kosmo.infrastructure.persistence.postgres.models import (
@@ -12,6 +13,8 @@ from kosmo.infrastructure.persistence.postgres.models import (
     KnowledgePatternModel,
     RequirementModel,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_feature_model_has_fk_and_unique_constraint() -> None:

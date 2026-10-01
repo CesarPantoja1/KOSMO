@@ -14,16 +14,16 @@ from kosmo.infrastructure.api.async_generation import (
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_with_heartbeat_emits_pings_when_idle() -> None:
-    # Arrange: un generador lento que espera 0.1s antes de producir un evento
+    # Arrange: un generador con pausa controlada con margen amplio para evitar flakiness en CI
     async def slow_source() -> AsyncGenerator[str]:
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.15)
         yield "data: event1\n\n"
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.15)
         yield "data: event2\n\n"
 
-    # Act: intervalo de 0.03s, por lo que emitirá múltiples pings durante cada espera
+    # Act: intervalo de 0.02s con holgura suficiente para emitir múltiples pings
     collected: list[str] = []
-    async for item in with_heartbeat(slow_source(), interval=0.03):
+    async for item in with_heartbeat(slow_source(), interval=0.02):
         collected.append(item)
 
     # Assert

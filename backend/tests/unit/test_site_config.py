@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from kosmo.domain.codegen.site_config import format_site_config
+
+pytestmark = pytest.mark.unit
 
 
 def test_format_site_config_default() -> None:

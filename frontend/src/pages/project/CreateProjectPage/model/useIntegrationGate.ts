@@ -10,7 +10,7 @@ export function useIntegrationGate() {
 	const [isReady, setIsReady] = useState(false);
 	const [githubConnected, setGithubConnected] = useState(false);
 	const [railwayConnected, setRailwayConnected] = useState(false);
-	const { config, fetchConfig } = useAiConfigStore();
+	const fetchConfig = useAiConfigStore((s) => s.fetchConfig);
 
 	useEffect(() => {
 		let cancelled = false;

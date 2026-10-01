@@ -297,6 +297,28 @@ class SqlAlchemyAgentSessionStore(AgentMemoryPort):
             await db.execute(stmt)
             await db.commit()
 
+    async def purge_stale_sessions(
+        self,
+        *,
+        older_than_days: int = 7,
+        incomplete_only: bool = True,
+    ) -> int:
+        from datetime import UTC, datetime, timedelta
+        from typing import cast
+
+        from sqlalchemy import and_, delete
+        from sqlalchemy.engine import CursorResult
+
+        cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+        async with self._session_factory() as db:
+            conditions = [AgentSessionModel.updated_at < cutoff]
+            if incomplete_only:
+                conditions.append(AgentSessionModel.is_completed == False)  # noqa: E712
+            stmt = delete(AgentSessionModel).where(and_(*conditions))
+            result = cast(CursorResult[Any], await db.execute(stmt))
+            await db.commit()
+            return int(result.rowcount)
+
 
 class SqlAlchemyKnowledgePatternStore:  # type: ignore[reportUnusedClass]
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -414,3 +436,9 @@ def _safe_json_dump(value: object) -> str | None:
         return json.dumps(value, default=str)
     except (TypeError, ValueError):
         return str(value)
+
+
+__all__ = [
+    "SqlAlchemyAgentSessionStore",
+    "SqlAlchemyKnowledgePatternStore",
+]

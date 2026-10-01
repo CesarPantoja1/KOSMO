@@ -128,7 +128,7 @@ class ImplementationEventBroker:
             except asyncio.CancelledError:
                 raise
 
-        task = asyncio.create_task(_purge())
+        task = asyncio.create_task(_purge(), name=f"impl_purge_{implementation_id}")
         self._cleanup_tasks.add(task)
         self._purge_tasks[implementation_id] = task
         task.add_done_callback(lambda _: self._cleanup_tasks.discard(task))
@@ -170,7 +170,7 @@ class ImplementationEventBroker:
                             if await redis.exists(project_key):
                                 await redis.expire(project_key, int(self._history_ttl_seconds))
 
-                heartbeat_task = asyncio.create_task(_heartbeat())
+                heartbeat_task = asyncio.create_task(_heartbeat(), name=f"impl_heartbeat_{implementation_id}")
 
             _log.info(
                 "codegen.task_started",
@@ -280,7 +280,7 @@ class ImplementationEventBroker:
                             "implementation_broker.redis_set_project_id_failed", implementation_id=implementation_id
                         )
 
-                pid_task = asyncio.create_task(_persist_project_id())
+                pid_task = asyncio.create_task(_persist_project_id(), name=f"impl_pid_{implementation_id}")
                 self._cleanup_tasks.add(pid_task)
                 pid_task.add_done_callback(lambda _: self._cleanup_tasks.discard(pid_task))
 
@@ -291,7 +291,8 @@ class ImplementationEventBroker:
                 input_data,
                 project_id=project_id,
                 user_id=effective_user_id,
-            )
+            ),
+            name=f"impl_run_{implementation_id}",
         )
         self._tasks[implementation_id] = task
 
@@ -401,6 +402,15 @@ class ImplementationEventBroker:
                 yield event
             return
 
+        # Snapshot atómico del historial preexistente
+        history_snapshot = tuple(self._history.get(implementation_id, ()))
+
+        # Si la tarea ya concluyó (o nunca existió), el historial es todo lo que hay
+        if implementation_id not in self._tasks:
+            for event in history_snapshot:
+                yield event
+            return
+
         q: asyncio.Queue[OpenCodeEvent | None] = asyncio.Queue()
 
         if implementation_id not in self._queues:
@@ -408,16 +418,11 @@ class ImplementationEventBroker:
         self._queues[implementation_id].append(q)
 
         try:
-            # 1. Emitir eventos históricos
-            history = self._history.get(implementation_id, [])
-            for event in history:
+            # 1. Emitir eventos históricos congelados en el snapshot
+            for event in history_snapshot:
                 yield event
 
-            # 2. Si la tarea ya terminó (o nunca existió), el historial es todo lo que hay
-            if implementation_id not in self._tasks:
-                return
-
-            # 3. Escuchar nuevos eventos
+            # 2. Escuchar nuevos eventos en tiempo real
             while True:
                 event = await q.get()
                 if event is None:

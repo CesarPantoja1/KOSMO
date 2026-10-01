@@ -18,9 +18,60 @@ from kosmo.infrastructure.api.routers.documents import modify_document_direct
 from kosmo.infrastructure.api.schemas import DocumentModifyRequestView
 
 
-def _dummy_request() -> MagicMock:
+class _FakeProjectRepo:
+    def __init__(self, projects: dict[str, Project]) -> None:
+        self._projects = projects
+
+    async def by_id(self, project_id: ProjectId) -> Project | None:
+        return self._projects.get(str(project_id))
+
+
+class _FakeFeatureRepo:
+    def __init__(self, features: dict[str, Feature]) -> None:
+        self._features = features
+
+    async def by_id(self, feature_id: FeatureId) -> Feature | None:
+        return self._features.get(str(feature_id))
+
+
+def _make_container(projects: dict[str, Project], features: dict[str, Feature] | None = None) -> MagicMock:
+    container = MagicMock()
+    container.repos = MagicMock()
+    container.repos.projects = _FakeProjectRepo(projects)
+    if features is not None:
+        container.repos.features = _FakeFeatureRepo(features)
+    return container
+
+
+def _dummy_request(
+    projects: dict[str, Project] | None = None,
+    features: dict[str, Feature] | None = None,
+) -> MagicMock:
     req = MagicMock(spec=Request)
-    req.app = None
+    if projects is None:
+        projects = {
+            "prj_01": Project(
+                id=ProjectId("prj_01"),
+                name="Prj 01",
+                slug="prj-01",
+                description="Desc",
+                owner_id=UserId("usr_test123"),
+            )
+        }
+    if features is None:
+        features = {
+            "feat_01": Feature(
+                id=FeatureId("feat_01"),
+                number=1,
+                title="Feat 01",
+                slug="feat-01",
+                description="Desc",
+                project_id=ProjectId("prj_01"),
+            )
+        }
+    req.app = MagicMock()
+    req.app.state.container = _make_container(projects, features)
+    req.state.project_id = None
     return req
 
 
@@ -185,29 +236,40 @@ async def test_revert_document_enqueues_downstream_evaluation() -> None:
     assert payload["source_phase"] == "descubrimiento"
 
 
-class _FakeProjectRepo:
-    def __init__(self, projects: dict[str, Project]) -> None:
-        self._projects = projects
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_modify_direct_raises_500_when_app_is_none() -> None:
+    req = MagicMock(spec=Request)
+    req.app = None
+    body = DocumentModifyRequestView(
+        document_type="discovery",
+        document_id="prj_01",
+        instruction="Actualiza la vision",
+    )
+    uc = _make_mock_uc()
+    with pytest.raises(HTTPException) as exc_info:
+        await modify_document_direct(req, _principal(), body, uc)
 
-    async def by_id(self, project_id: ProjectId) -> Project | None:
-        return self._projects.get(str(project_id))
+    assert exc_info.value.status_code == 500
+    assert "contenedor de dependencias no disponible" in exc_info.value.detail
 
 
-class _FakeFeatureRepo:
-    def __init__(self, features: dict[str, Feature]) -> None:
-        self._features = features
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_modify_direct_raises_500_when_container_is_none() -> None:
+    req = MagicMock(spec=Request)
+    req.app.state.container = None
+    body = DocumentModifyRequestView(
+        document_type="discovery",
+        document_id="prj_01",
+        instruction="Actualiza la vision",
+    )
+    uc = _make_mock_uc()
+    with pytest.raises(HTTPException) as exc_info:
+        await modify_document_direct(req, _principal(), body, uc)
 
-    async def by_id(self, feature_id: FeatureId) -> Feature | None:
-        return self._features.get(str(feature_id))
-
-
-def _make_container(projects: dict[str, Project], features: dict[str, Feature] | None = None) -> MagicMock:
-    container = MagicMock()
-    container.repos = MagicMock()
-    container.repos.projects = _FakeProjectRepo(projects)
-    if features is not None:
-        container.repos.features = _FakeFeatureRepo(features)
-    return container
+    assert exc_info.value.status_code == 500
+    assert "contenedor de dependencias no disponible" in exc_info.value.detail
 
 
 @pytest.mark.unit

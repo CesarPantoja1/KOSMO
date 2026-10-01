@@ -7,12 +7,14 @@ import { useCharacteristicStore } from '@/entities/characteristic';
 import { useImplementationStore } from '@/entities/implementation';
 import { useModelingStore } from '@/entities/modeling';
 import { useProjectStore } from '@/entities/project';
+import { useProjectGithubRepo } from '@/features/github-sync';
 import { formatApiError } from '@/shared/api';
 import {
 	Ai,
 	ArrowLeft,
 	CursorClickFill,
 	Implementation,
+	Load,
 	Loading,
 	SuccessCheckIcon,
 	toast,
@@ -27,6 +29,14 @@ const ImplementationPage = () => {
 	const getCharacteristics = useCharacteristicStore((s) => s.getCharacteristics);
 	const currentProject = useProjectStore((s) => s.currentProject);
 	const currentProjectId = currentProject?.id;
+
+	const {
+		viewState: githubViewState,
+		status: githubStatus,
+		loading: githubLoading,
+		error: githubError,
+		createRepo: retryCreateRepo,
+	} = useProjectGithubRepo(currentProjectId ?? null);
 
 	const status = useImplementationStore((s) => s.status);
 	const progress = useImplementationStore((s) => s.progress);
@@ -91,6 +101,77 @@ const ImplementationPage = () => {
 			selectedId,
 			selectedCharacteristic.title,
 			selectedCharacteristic.display_id,
+		);
+	};
+
+	const renderGenerateAction = (buttonLabel: string) => {
+		if (githubViewState === 'syncing') {
+			return (
+				<div className='flex flex-col items-center gap-2'>
+					<button disabled className='btn btn-secondary cursor-not-allowed opacity-80'>
+						<span className='inline-flex animate-spin text-primary-500'>
+							<Load size={16} color='text-current' />
+						</span>
+						Preparando repositorio en GitHub...
+					</button>
+					<p className='text-xs text-neutral-400'>
+						El repositorio se está inicializando en segundo plano. Estará listo en un momento.
+					</p>
+				</div>
+			);
+		}
+
+		if (githubViewState === 'failed') {
+			return (
+				<div className='flex flex-col items-center gap-3 p-4 rounded-xl border border-error-200 bg-error-50 max-w-md text-center'>
+					<div className='flex items-center gap-2 text-error-700 font-semibold text-sm'>
+						<WarningIcon size={18} color='text-error-600' />
+						Error al preparar repositorio de GitHub
+					</div>
+					<p className='text-xs text-error-600'>
+						{githubStatus?.error_message ??
+							githubError ??
+							'No se pudo crear el repositorio en GitHub. Se requiere tener el repositorio listo antes de implementar.'}
+					</p>
+					<button
+						type='button'
+						onClick={async () => {
+							const repoName =
+								githubStatus?.suggested_repo_name || `kosmo-${currentProject?.slug || 'app'}`;
+							try {
+								await retryCreateRepo({ repo_name: repoName, is_public: true });
+								toast.success('Repositorio creado exitosamente en GitHub');
+							} catch {
+								toast.error('No se pudo crear el repositorio. Verifica tu conexión.');
+							}
+						}}
+						disabled={githubLoading}
+						className='btn btn-primary btn-sm'
+					>
+						{githubLoading ? 'Reintentando...' : 'Reintentar creación de repositorio'}
+					</button>
+				</div>
+			);
+		}
+
+		if (githubViewState === 'not-linked') {
+			return (
+				<div className='flex flex-col items-center gap-2 p-4 rounded-xl border border-warning-200 bg-warning-50 max-w-md text-center'>
+					<p className='text-xs text-warning-700 font-medium'>
+						Debes conectar tu cuenta de GitHub antes de generar la implementación.
+					</p>
+					<Link href='/perfil' className='btn btn-secondary btn-sm'>
+						Conectar GitHub en Perfil
+					</Link>
+				</div>
+			);
+		}
+
+		return (
+			<button onClick={handleGenerate} className='btn btn-ai'>
+				<Ai color='' size={18} />
+				{buttonLabel}
+			</button>
 		);
 	};
 
@@ -233,10 +314,7 @@ const ImplementationPage = () => {
 														creará la estructura de implementación automáticamente.
 													</p>
 												</div>
-												<button onClick={handleGenerate} className='btn btn-ai'>
-													<Ai color='' size={18} />
-													Generar implementación
-												</button>
+												{renderGenerateAction('Generar implementación')}
 											</div>
 										)}
 									</div>
@@ -279,11 +357,8 @@ const ImplementationPage = () => {
 														Haz clic en «Regenerar implementación» para actualizar el código automáticamente con las nuevas reglas.
 													</p>
 												</div>
-												<div className='flex items-center gap-3 mt-2'>
-													<button onClick={handleGenerate} className='btn btn-ai'>
-														<Ai color='' size={18} />
-														Regenerar implementación
-													</button>
+												<div className='flex items-center gap-3 mt-2 flex-wrap justify-center'>
+													{renderGenerateAction('Regenerar implementación')}
 													<Link href='/proyecto/codigo/resumen' className='btn btn-secondary'>
 														Ver código actual
 													</Link>

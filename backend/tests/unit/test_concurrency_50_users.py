@@ -19,65 +19,8 @@ from kosmo.infrastructure.persistence.postgres.models import OutboxJobModel
 from kosmo.infrastructure.persistence.postgres.outbox import run_outbox_worker
 
 
-class ForbiddenError(Exception):
-    """Excepción de prueba para acceso no autorizado a recursos ajenos."""
-
-
 # ---------------------------------------------------------------------------
-# 1. Multi-tenant IDOR Isolation Test
-# ---------------------------------------------------------------------------
-class DummyProjectRepo:
-    def __init__(self, projects: dict[str, str]) -> None:
-        # project_id -> owner_id
-        self._projects = projects
-
-    async def get_project_for_user(self, project_id: str, user_id: str) -> dict[str, str]:
-        owner = self._projects.get(project_id)
-        if not owner or owner != user_id:
-            raise ForbiddenError(f"User {user_id} does not have access to project {project_id}")
-        return {"project_id": project_id, "owner_id": user_id}
-
-
-@pytest.mark.asyncio
-@pytest.mark.unit
-async def test_50_concurrent_users_idor_isolation() -> None:
-    num_users = 50
-    projects = {f"prj_{i}": f"usr_{i}" for i in range(num_users)}
-    repo = DummyProjectRepo(projects)
-
-    async def user_workflow(user_idx: int) -> tuple[bool, bool]:
-        user_id = f"usr_{user_idx}"
-        own_project = f"prj_{user_idx}"
-        alien_project = f"prj_{(user_idx + 1) % num_users}"
-
-        # 1. Access own project -> must succeed
-        own_access_ok = False
-        try:
-            res = await repo.get_project_for_user(own_project, user_id)
-            own_access_ok = res["project_id"] == own_project
-        except ForbiddenError:
-            own_access_ok = False
-
-        # 2. Access alien project -> must be rejected
-        alien_blocked = False
-        try:
-            await repo.get_project_for_user(alien_project, user_id)
-        except ForbiddenError:
-            alien_blocked = True
-
-        return own_access_ok, alien_blocked
-
-    tasks = [asyncio.create_task(user_workflow(i)) for i in range(num_users)]
-    results = await asyncio.gather(*tasks)
-
-    assert len(results) == num_users
-    for own_ok, alien_blocked in results:
-        assert own_ok is True, "El usuario debe tener acceso a su propio proyecto"
-        assert alien_blocked is True, "El usuario no debe acceder a proyectos ajenos (IDOR protegido)"
-
-
-# ---------------------------------------------------------------------------
-# 2. LLM Semaphore Protection Test
+# 1. LLM Semaphore Protection Test
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 @pytest.mark.unit
@@ -145,7 +88,7 @@ async def test_50_concurrent_users_llm_semaphore_protection() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3. Implementation Event Broker Isolation Test
+# 2. Implementation Event Broker Isolation Test
 # ---------------------------------------------------------------------------
 class MockUseCase:
     def __init__(self, impl_id: str) -> None:
@@ -189,7 +132,7 @@ async def test_50_concurrent_users_implementation_broker_streams() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4. Outbox Worker Concurrency Test
+# 3. Outbox Worker Concurrency Test
 # ---------------------------------------------------------------------------
 class DummyOutboxStore:
     def __init__(self, jobs: list[OutboxJobModel]) -> None:

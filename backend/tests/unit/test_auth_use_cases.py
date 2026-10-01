@@ -3,8 +3,6 @@ import importlib
 from typing import cast
 
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 from kosmo.application.auth import (  # noqa: E402
     IssueTokenPair,
@@ -22,30 +20,14 @@ from kosmo.contracts.auth import (  # noqa: E402
     TokenRevokedError,
     TokenType,
 )
+from tests.conftest import _PRIVATE_KEY_PEM as _PRIVATE_PEM
+from tests.conftest import _PUBLIC_KEY_PEM as _PUBLIC_PEM
 from tests.unit.fakes import InMemoryAuditEventSink, InMemoryStore
 
 security = importlib.import_module("kosmo.infrastructure.security")
 JoseJwtIssuer = security.JoseJwtIssuer
 JoseJwtVerifier = security.JoseJwtVerifier
 JwtSettings = security.JwtSettings
-
-# Genera un par de llaves RSA efímero una vez para toda la sesión de prueba.
-_RSA_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-_PRIVATE_PEM: str = _RSA_PRIVATE_KEY.private_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PrivateFormat.TraditionalOpenSSL,
-    encryption_algorithm=serialization.NoEncryption(),
-).decode()
-
-_PUBLIC_PEM: str = (
-    _RSA_PRIVATE_KEY.public_key()
-    .public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    .decode()
-)
 
 
 def _build_codec() -> tuple[JoseJwtIssuer, JoseJwtVerifier]:
@@ -263,3 +245,91 @@ async def test_verify_access_token_detects_family_revocation_immediately() -> No
     # Segunda verificación: debe rechazar la sesión revocada inmediatamente
     with pytest.raises(TokenRevokedError, match="Session revoked"):
         await verify.execute(pair.access.token)
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_revoke_session_with_valid_access_and_refresh_token() -> None:
+    # Arrange
+    issuer, verifier = _build_codec()
+    store = InMemoryStore()
+    audit_sink = InMemoryAuditEventSink()
+    issue = IssueTokenPair(issuer=issuer, revocation_store=store)
+    revoke_uc = RevokeSession(verifier=verifier, revocation_store=store, audit_sink=audit_sink)
+
+    pair = await issue.execute(subject="user-logout", scopes=frozenset({"read"}))
+
+    # Act
+    await revoke_uc.execute(access_token=pair.access.token, refresh_token=pair.refresh.token)
+
+    # Assert
+    assert await store.is_access_revoked(jti=pair.access.jti) is True
+    assert await store.is_family_alive(family_id=pair.access.family_id) is False  # type: ignore[arg-type]
+    assert len(audit_sink.events) == 1
+    assert audit_sink.events[0].event_type == "auth.logout"
+    assert audit_sink.events[0].actor_id == "user-logout"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_revoke_session_with_expired_access_token_and_valid_refresh_token() -> None:
+    # Arrange
+    issuer, verifier = _build_codec()
+    store = InMemoryStore()
+    audit_sink = InMemoryAuditEventSink()
+    issue = IssueTokenPair(issuer=issuer, revocation_store=store)
+    revoke_uc = RevokeSession(verifier=verifier, revocation_store=store, audit_sink=audit_sink)
+
+    pair = await issue.execute(subject="user-expired-logout", scopes=frozenset({"read"}))
+
+    expired_settings = JwtSettings(
+        algorithm="RS256",
+        issuer="kosmo-test",
+        audience="kosmo-test",
+        access_ttl_seconds=-10,
+        refresh_ttl_seconds=300,
+    )
+    expired_issuer = JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=expired_settings)
+    expired_access = expired_issuer.issue(
+        subject="user-expired-logout",
+        scopes=frozenset({"read"}),
+        token_type=TokenType.ACCESS,
+        family_id=pair.refresh.family_id,
+    )
+
+    # Act: logout con access token expirado y refresh token válido debe proceder
+    await revoke_uc.execute(access_token=expired_access.token, refresh_token=pair.refresh.token)
+
+    # Assert: el refresh token y la familia de la sesión deben quedar revocados
+    assert await store.is_family_alive(family_id=pair.refresh.family_id) is False  # type: ignore[arg-type]
+    assert len(audit_sink.events) == 1
+    assert audit_sink.events[0].event_type == "auth.logout"
+    assert audit_sink.events[0].actor_id == "user-expired-logout"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_revoke_session_with_expired_access_token_and_no_refresh_token_raises() -> None:
+    # Arrange
+    _, verifier = _build_codec()
+    store = InMemoryStore()
+    audit_sink = InMemoryAuditEventSink()
+    revoke_uc = RevokeSession(verifier=verifier, revocation_store=store, audit_sink=audit_sink)
+
+    expired_settings = JwtSettings(
+        algorithm="RS256",
+        issuer="kosmo-test",
+        audience="kosmo-test",
+        access_ttl_seconds=-10,
+        refresh_ttl_seconds=300,
+    )
+    expired_issuer = JoseJwtIssuer(private_key_pem=_PRIVATE_PEM, settings=expired_settings)
+    expired_access = expired_issuer.issue(
+        subject="user-expired-logout",
+        scopes=frozenset({"read"}),
+        token_type=TokenType.ACCESS,
+    )
+
+    # Act & Assert: sin refresh token para limpiar, el access token expirado lanza TokenExpiredError
+    with pytest.raises(TokenExpiredError):
+        await revoke_uc.execute(access_token=expired_access.token, refresh_token=None)

@@ -11,6 +11,7 @@ from kosmo.application.auth import (
     RegisterUser,
     RevokeSession,
 )
+from kosmo.config import settings
 from kosmo.contracts.auth import (
     AccountLockedError,
     AuthorizationCodeError,
@@ -557,13 +558,22 @@ async def me(
 )
 async def logout(
     payload: Annotated[LogoutRequest, Body(...)],
-    principal: Annotated[Principal, Depends(get_principal)],
     use_case: Annotated[RevokeSession, Depends(_revoke)],
     request: Request,
 ) -> Response:
-    _ = principal
+    if settings.auth_disabled:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     bearer = request.headers.get("authorization", "")
-    access_token = bearer.removeprefix("Bearer ").strip()
+    access_token = bearer.removeprefix("Bearer ").strip() if bearer.startswith("Bearer ") else bearer.strip()
+
+    if not access_token and not payload.refresh_token:
+        return _oauth_error(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            error="invalid_token",
+            description="Token ausente o inválido",
+        )
+
     try:
         await use_case.execute(access_token=access_token, refresh_token=payload.refresh_token)
     except (InvalidTokenError, TokenExpiredError, TokenRevokedError) as exc:

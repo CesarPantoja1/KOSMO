@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from kosmo.application.traceability.manage_traceability_navigation import (
     ManageTraceabilityNavigationUseCase,
@@ -86,8 +86,10 @@ async def check_traceability_navigation(
     use_case: Annotated[ManageTraceabilityNavigationUseCase, Depends(_manage_traceability_navigation)],
     principal: Annotated[Principal, Depends(get_principal)],
     request: Request,
+    response: Response,
 ) -> TraceabilityNavigationOutputView:
     """Verifica si la edición está permitida en este nivel o sugiere redirección."""
+    response.headers["Deprecation"] = "true"
     container = get_container(request)
     if hasattr(container, "repos"):
         project_id = None

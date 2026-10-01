@@ -7,6 +7,7 @@ import pytest
 from kosmo.application.codegen.implementation_context_builder import (
     ImplementationContextBuilder,
     NullFileSystemReader,
+    NullFileSystemWriter,
     collect_workspace_feature_files,
     get_existing_db_schema_context,
     normalize_generated_file_path,
@@ -15,6 +16,7 @@ from kosmo.contracts.sdd.codegen import (
     FeatureImplementation,
     FeatureImplementationStatus,
     FileAction,
+    FileSystemWriter,
     ValidationErrorDetail,
     ValidationRunResult,
     ValidationSeverity,
@@ -40,6 +42,10 @@ from kosmo.contracts.sdd.ux_context import (
     UXContext,
 )
 from kosmo.domain.sdd.document_converters import markdown_to_document
+from kosmo.infrastructure.codegen.workspace import (
+    LocalFileSystemReader,
+    LocalFileSystemWriter,
+)
 from tests.unit.fakes import (
     InMemoryDocumentRepository,
     InMemoryFeatureImplementationRepository,
@@ -48,7 +54,7 @@ from tests.unit.fakes import (
 )
 
 
-class _FakeFsReader:
+class _FakeFsReader(FileSystemWriter):
     def __init__(self, files: dict[str, str]) -> None:
         self.files = files
 
@@ -63,12 +69,22 @@ class _FakeFsReader:
                 return v
         return None
 
+    def write_text(self, path: str | Path, content: str) -> None:
+        p_str = str(path).replace("\\", "/").strip("./")
+        self.files[p_str] = content
+
 
 @pytest.mark.unit
 def test_null_file_system_reader() -> None:
     reader = NullFileSystemReader()
     assert reader.list_files("/any/path") == ()
     assert reader.read_text("/any/file") is None
+
+
+@pytest.mark.unit
+def test_null_file_system_writer() -> None:
+    writer = NullFileSystemWriter()
+    writer.write_text("/any/path", "content")
 
 
 @pytest.mark.unit
@@ -319,7 +335,11 @@ async def test_sync_site_config(tmp_path: Path) -> None:
         prompt_block="",
     )
 
-    builder = ImplementationContextBuilder(project_repo=project_repo)
+    builder = ImplementationContextBuilder(
+        project_repo=project_repo,
+        fs_reader=LocalFileSystemReader(),
+        fs_writer=LocalFileSystemWriter(),
+    )
     await builder.sync_site_config(str(ws_dir), project_id, ux_analysis)
 
     content = site_file.read_text(encoding="utf-8")
@@ -327,6 +347,54 @@ async def test_sync_site_config(tmp_path: Path) -> None:
     assert "Tienda online" in content
     assert "#ff5500" in content
     assert "storefront" in content
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_site_config_pure_in_memory() -> None:
+    project_id = ProjectId("prj_mem")
+    user_id = UserId("usr_mem")
+    project_repo = InMemoryProjectRepository()
+    await project_repo.save(
+        Project(id=project_id, name="Mem Tienda", slug="mem-tienda", description="Mem desc", owner_id=user_id)
+    )
+
+    fake_fs = _FakeFsReader(
+        {
+            "ws/src/lib/site.ts": "// original",
+            "ws/src/lib/design-tokens.ts": "// tokens",
+            "ws/src/app/globals.css": "/* css */",
+        }
+    )
+
+    ux_analysis = UXAnalysisOutput(
+        ux_context=UXContext(
+            archetype=BusinessArchetype.STOREFRONT,
+            shell_pattern=ShellPattern.SIDEBAR,
+            data_density=DataDensity.MEDIUM,
+            tokens=BootstrapDesignTokens(primary_color="#112233"),
+        ),
+        prompt_block="",
+    )
+
+    builder = ImplementationContextBuilder(
+        project_repo=project_repo,
+        fs_reader=fake_fs,
+        fs_writer=fake_fs,
+    )
+    await builder.sync_site_config("ws", project_id, ux_analysis)
+
+    site_content = fake_fs.read_text("ws/src/lib/site.ts")
+    assert site_content is not None
+    assert "Mem Tienda" in site_content
+    assert "#112233" in site_content
+
+    tokens_content = fake_fs.read_text("ws/src/lib/design-tokens.ts")
+    assert tokens_content is not None
+    assert "#112233" in tokens_content
+
+    css_content = fake_fs.read_text("ws/src/app/globals.css")
+    assert css_content is not None
 
 
 @pytest.mark.unit

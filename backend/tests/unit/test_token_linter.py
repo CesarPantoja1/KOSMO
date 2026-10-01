@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from kosmo.domain.codegen.token_linter import (
     lint_source_for_token_compliance,
     validate_token_compliance,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_lint_compliant_code():

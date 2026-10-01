@@ -13,6 +13,7 @@ import {
 	Send,
 	toast,
 } from '@/shared/ui';
+import { useAppStore } from '@/features/app-state';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -27,14 +28,13 @@ const CreateProjectForm = () => {
 	const projects = useProjectStore((s) => s.projects);
 	const getProjects = useProjectStore((s) => s.getProjects);
 	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [phase, setPhase] = useState<'creating-project' | 'creating-repo' | null>(null);
 	const createdProjectRef = useRef<Project | null>(null);
 
 	useEffect(() => {
-		if (projects.length === 0) getProjects();
+		if (projects.length === 0) void getProjects();
 	}, [projects.length, getProjects]);
 
-	const { control, handleSubmit, setValue, watch } = useForm<ProjectFormData>({
+	const { control, handleSubmit, setValue } = useForm<ProjectFormData>({
 		mode: 'onSubmit',
 		resolver: zodResolver(createProjectSchema(projects)),
 		defaultValues: {
@@ -60,15 +60,6 @@ const CreateProjectForm = () => {
 		fieldState: { error: repoNameError },
 	} = useController({ name: 'repo_name', control });
 
-	const watchedName = watch('name');
-
-	useEffect(() => {
-		const repoName = watchedName.trim()
-			? `kosmo-${watchedName.toLowerCase().replace(/\s+/g, '-')}`
-			: 'kosmo-repositorio';
-		setValue('repo_name', repoName);
-	}, [watchedName, setValue]);
-
 	const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		let value = e.target.value;
 		value = value.replace(alphaRegex, '');
@@ -76,6 +67,10 @@ const CreateProjectForm = () => {
 			value = value.slice(0, 25);
 		}
 		nameOnChange(value);
+		const repoName = value.trim()
+			? `kosmo-${value.toLowerCase().replace(/\s+/g, '-')}`
+			: 'kosmo-repositorio';
+		setValue('repo_name', repoName);
 	};
 
 	const handleDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -88,37 +83,55 @@ const CreateProjectForm = () => {
 
 	const doSubmit = async (data: ProjectFormData) => {
 		setIsSubmitting(true);
-		setPhase('creating-project');
 		try {
 			const project =
 				createdProjectRef.current ??
 				(await createProject({ name: data.name, description: data.description }));
 			createdProjectRef.current = project;
 
-			setPhase('creating-repo');
-			await pushProjectToGitHub(project.id, {
+			useProjectStore.getState().addProject(project);
+			useProjectStore.getState().setGithubSyncing(project.id, true);
+			setProjectState(project);
+			void useAppStore.getState().initializeProject(project.id);
+
+			toast.success('Proyecto creado correctamente');
+
+			// Se inicia la creación del repositorio en GitHub en segundo plano
+			// sin bloquear la navegación inmediata del usuario a Descubrimiento.
+			pushProjectToGitHub(project.id, {
 				repo_name: data.repo_name,
 				is_public: data.is_public,
-			});
+			})
+				.then(() => {
+					useProjectStore.getState().setGithubSyncing(project.id, false);
+				})
+				.catch((err) => {
+					console.error('Error al inicializar repositorio en segundo plano:', err);
+					useProjectStore.getState().setGithubSyncing(project.id, false);
+					toast.warning(
+						'No se pudo inicializar el repositorio en GitHub en segundo plano. Podrás reintentarlo desde Implementación.',
+					);
+				});
 
-			useProjectStore.getState().addProject(project);
-			setProjectState(project);
 			router.replace('/proyecto/descubrimiento');
 		} catch (err) {
-			toast.error(formatApiError(err, 'Error al crear el repositorio'));
-			setPhase(null);
+			toast.error(formatApiError(err, 'Error al crear el proyecto'));
 			setIsSubmitting(false);
 		}
 	};
 
 	const onSubmit = (data: ProjectFormData) => {
-		doSubmit(data);
+		void doSubmit(data);
+	};
+
+	const handleFormSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+		void handleSubmit(onSubmit)(e);
 	};
 
 	return (
 		<>
 			<form
-				onSubmit={handleSubmit(onSubmit)}
+				onSubmit={handleFormSubmit}
 				className='flex-1 flex flex-col gap-5 px-0.5'
 				noValidate
 			>
@@ -221,7 +234,7 @@ const CreateProjectForm = () => {
 								</p>
 							) : (
 								<p className='text-neutral-400 text-xs'>
-									Se genera automáticamente a partir del nombre del proyecto.
+									Se creará automáticamente en segundo plano en tu cuenta de GitHub.
 								</p>
 							)}
 						</div>
@@ -239,11 +252,7 @@ const CreateProjectForm = () => {
 						</button>
 						<button type='submit' disabled={isSubmitting} className='btn btn-primary'>
 							<Send color='-rotate-45' size={18} />
-							{phase === 'creating-project'
-								? 'Creando proyecto...'
-								: phase === 'creating-repo'
-									? 'Creando repositorio...'
-									: 'Crear proyecto'}
+							{isSubmitting ? 'Creando proyecto...' : 'Crear proyecto'}
 						</button>
 					</div>
 				</div>

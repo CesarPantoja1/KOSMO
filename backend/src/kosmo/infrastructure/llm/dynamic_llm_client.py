@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections import OrderedDict
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -18,6 +19,8 @@ from kosmo.infrastructure.llm.noop_adapter import NoopLLMClient
 from kosmo.infrastructure.llm.pydantic_ai_adapter import PydanticAILLMClient, StreamedTypedResult
 
 _log = structlog.get_logger(__name__)
+
+_MAX_CACHED_LLM_CLIENTS = 64
 
 _AUTH_ERROR_KEYWORDS = (
     "unauthorized",
@@ -116,7 +119,8 @@ class DynamicUserLLMClient(LLMClient):
         self._cache_ttl_seconds = cache_ttl_seconds
         self._semaphore = asyncio.Semaphore(max_concurrency)
         self._config_cache: dict[str, tuple[float, str, str, str | None]] = {}
-        self._clients: dict[tuple[str, str, str | None], PydanticAILLMClient] = {}
+        self._config_locks: dict[str, asyncio.Lock] = {}
+        self._clients: OrderedDict[tuple[str, str, str | None], PydanticAILLMClient] = OrderedDict()
 
     def invalidate_cache(self, user_id: str) -> None:
         """Invalida la configuración en cache de un usuario para refresco inmediato."""
@@ -131,34 +135,48 @@ class DynamicUserLLMClient(LLMClient):
         if cached is not None and (now - cached[0]) < self._cache_ttl_seconds:
             return (cached[1], cached[2], cached[3])
 
-        provider = self._default_provider
-        model = self._default_model
-        api_key = self._default_api_key
+        # Lock por usuario: evita thundering herd cuando el TTL vence con N coroutines
+        # concurrentes del mismo usuario. El primer waiter renueva; los demás leen el valor
+        # ya actualizado en el double-check posterior.
+        if user_id not in self._config_locks:
+            self._config_locks[user_id] = asyncio.Lock()
+        async with self._config_locks[user_id]:
+            # Double-check: otro waiter pudo haber renovado mientras esperábamos el lock.
+            now = asyncio.get_running_loop().time()
+            cached = self._config_cache.get(user_id)
+            if cached is not None and (now - cached[0]) < self._cache_ttl_seconds:
+                return (cached[1], cached[2], cached[3])
 
-        try:
-            user_config = await self._config_repo.by_user_id(user_id)
-            if user_config and user_config.encrypted_api_key is not None:
-                secret = (
-                    user_config.encrypted_api_key
-                    if isinstance(user_config.encrypted_api_key, EncryptedSecret)
-                    else EncryptedSecret(ciphertext=user_config.encrypted_api_key)
-                )
-                raw_key = self._cipher.decrypt(secret)
-                provider_str = (
-                    user_config.provider.value if hasattr(user_config.provider, "value") else str(user_config.provider)
-                )
-                provider = provider_str
-                model = user_config.model
-                api_key = raw_key.decode("utf-8")
-        except Exception:
-            _log.warning(
-                "dynamic_llm_client.resolve_user_config_failed",
-                user_id=mask_user_id(user_id),
-                exc_info=True,
-            )
+            provider = self._default_provider
+            model = self._default_model
+            api_key = self._default_api_key
 
-        self._config_cache[user_id] = (now, provider, model, api_key)
-        return (provider, model, api_key)
+            try:
+                user_config = await self._config_repo.by_user_id(user_id)
+                if user_config and user_config.encrypted_api_key is not None:
+                    secret = (
+                        user_config.encrypted_api_key
+                        if isinstance(user_config.encrypted_api_key, EncryptedSecret)
+                        else EncryptedSecret(ciphertext=user_config.encrypted_api_key)
+                    )
+                    raw_key = self._cipher.decrypt(secret)
+                    provider_str = (
+                        user_config.provider.value
+                        if hasattr(user_config.provider, "value")
+                        else str(user_config.provider)
+                    )
+                    provider = provider_str
+                    model = user_config.model
+                    api_key = raw_key.decode("utf-8")
+            except Exception:
+                _log.warning(
+                    "dynamic_llm_client.resolve_user_config_failed",
+                    user_id=mask_user_id(user_id),
+                    exc_info=True,
+                )
+
+            self._config_cache[user_id] = (now, provider, model, api_key)
+            return (provider, model, api_key)
 
     @staticmethod
     def _hash_api_key(key: str | None) -> str:
@@ -175,10 +193,14 @@ class DynamicUserLLMClient(LLMClient):
 
         key_tuple = (provider, model, self._hash_api_key(api_key))
         client = self._clients.get(key_tuple)
-        if client is None:
-            pydantic_model = build_pydantic_ai_model(provider, model, api_key)
-            client = PydanticAILLMClient(model=pydantic_model)
-            self._clients[key_tuple] = client
+        if client is not None:
+            self._clients.move_to_end(key_tuple)
+            return client
+        pydantic_model = build_pydantic_ai_model(provider, model, api_key)
+        client = PydanticAILLMClient(model=pydantic_model)
+        self._clients[key_tuple] = client
+        if len(self._clients) > _MAX_CACHED_LLM_CLIENTS:
+            self._clients.popitem(last=False)
         return client
 
     async def complete(
@@ -270,41 +292,40 @@ class DynamicUserLLMClient(LLMClient):
         max_tokens: int = 8192,
     ) -> AsyncGenerator[StreamedTypedResult[T]]:
         client = await self._resolve_client()
-        async with self._semaphore:
-            stream_fn: Any = getattr(client, "stream_typed", None)
-            if callable(stream_fn):
-                try:
-                    async with stream_fn(
-                        prompt=prompt,
-                        output_type=output_type,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                    ) as streamed:  # type: ignore[reportUnknownVariableType]
-                        yield streamed  # type: ignore[reportReturnType]
-                except Exception as exc:
-                    if is_ai_auth_error(exc):
-                        raise AIProviderAuthError() from exc
-                    raise
-            else:
-                result = await client.complete_typed(
+        stream_fn: Any = getattr(client, "stream_typed", None)
+        if callable(stream_fn):
+            try:
+                async with stream_fn(
                     prompt=prompt,
                     output_type=output_type,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                )
+                ) as streamed:  # type: ignore[reportUnknownVariableType]
+                    yield streamed  # type: ignore[reportReturnType]
+            except Exception as exc:
+                if is_ai_auth_error(exc):
+                    raise AIProviderAuthError() from exc
+                raise
+        else:
+            result = await client.complete_typed(
+                prompt=prompt,
+                output_type=output_type,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
-                class _FallbackStreamed:
-                    def __init__(self, data: T):
-                        self._data = data
+            class _FallbackStreamed:
+                def __init__(self, data: T):
+                    self._data = data
 
-                    async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
-                        content = getattr(self._data, "content", None)
-                        if isinstance(content, str):
-                            yield content
-                        else:
-                            yield str(self._data)
+                async def stream_text(self, *, delta: bool = False) -> AsyncIterator[str]:  # noqa: ARG002
+                    content = getattr(self._data, "content", None)
+                    if isinstance(content, str):
+                        yield content
+                    else:
+                        yield str(self._data)
 
-                    async def get_data(self) -> T:
-                        return self._data
+                async def get_data(self) -> T:
+                    return self._data
 
-                yield _FallbackStreamed(result)  # type: ignore[reportReturnType]
+            yield _FallbackStreamed(result)  # type: ignore[reportReturnType]

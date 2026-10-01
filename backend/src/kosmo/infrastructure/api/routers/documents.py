@@ -61,7 +61,10 @@ async def _verify_document_ownership(
     state = getattr(app, "state", None) if app is not None else None
     container = getattr(state, "container", None) if state is not None else None
     if container is None:
-        return
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno de configuración: contenedor de dependencias no disponible.",
+        )
     if document_type == "discovery":
         await require_project_owner(container, document_id, principal)
     elif document_type in ("features", "requirements", "model"):

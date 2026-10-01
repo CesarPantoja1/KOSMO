@@ -182,7 +182,23 @@ class SubprocessCodeRunner(CodeRunnerPort):
 
         executable = shutil.which(tokens[0]) or tokens[0]
 
-        async with self._semaphore:
+        queue_timeout = float(os.getenv("KOSMO_RUNNER_QUEUE_TIMEOUT_SECONDS", "180.0"))
+        try:
+            await asyncio.wait_for(self._semaphore.acquire(), timeout=queue_timeout)
+        except TimeoutError:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            timeout_msg = f"Runner queue timeout: wait exceeded {queue_timeout} seconds."
+            return ValidationStepResult(
+                step=step or ValidationStep.TESTS,
+                success=False,
+                duration_ms=duration_ms,
+                exit_code=-1,
+                raw_output=timeout_msg,
+                errors=(),
+                error_messages=(timeout_msg,),
+            )
+
+        try:
             ACTIVE_CODE_RUNNERS.inc()
             try:
                 try:
@@ -232,6 +248,8 @@ class SubprocessCodeRunner(CodeRunnerPort):
                 exit_code = proc.returncode if proc.returncode is not None else 0
             finally:
                 ACTIVE_CODE_RUNNERS.dec()
+        finally:
+            self._semaphore.release()
 
         if step is not None:
             return parse_step_output(

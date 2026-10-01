@@ -1600,3 +1600,122 @@ async def test_fetch_downstream_artifacts_does_not_truncate_large_documents() ->
     source_content = await uc._fetch_source_content(SpecPhase.REQUISITOS, project.id)
     assert "[…contenido truncado…]" not in source_content
     assert len(source_content) > 25000
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_impact_concurrent_preloading_and_deduplication() -> None:
+    """Verifica que enrich_impact_items precargue features y requisitos concurrentemente y deduplique llamadas."""
+    from kosmo.application.consistency.enrich_impact import enrich_impact_items
+    from kosmo.contracts.ai.consistency import (
+        ArtifactAction,
+        ConsistencyEvaluationOutput,
+        ConsistencyStatus,
+    )
+
+    feature_repo = InMemoryFeatureRepository()
+    feat1 = _make_feature("feat_batch_1", "prj_batch", "Característica 1", number=1)
+    feat2 = _make_feature("feat_batch_2", "prj_batch", "Característica 2", number=2)
+    await feature_repo.save(feat1)
+    await feature_repo.save(feat2)
+
+    req_md1 = "### REQ-1.1 Paso 1\n\nEl sistema debe ejecutar paso 1.\n"
+    req_md2 = "### REQ-2.1 Paso 2\n\nEl sistema debe ejecutar paso 2.\n"
+
+    requirement_repo = InMemoryRequirementRepository()
+    await requirement_repo.save(FeatureId("feat_batch_1"), req_md1)
+    await requirement_repo.save(FeatureId("feat_batch_2"), req_md2)
+    diagram_repo = InMemoryActivityDiagramRepository()
+
+    original_by_id = feature_repo.by_id
+    by_id_calls: list[str] = []
+
+    async def spied_by_id(fid: FeatureId, *, for_update: bool = False):
+        by_id_calls.append(str(fid))
+        return await original_by_id(fid, for_update=for_update)
+
+    feature_repo.by_id = spied_by_id  # type: ignore[assignment]
+
+    result = ConsistencyEvaluationOutput(
+        report_id="cnr_batch",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["feat_batch_1", "feat_batch_2", "feat_batch_1"],
+        actions=[
+            ArtifactAction(
+                artifact_id="feat_batch_1",
+                action="update",
+                rationale="Cambio 1",
+            ),
+            ArtifactAction(
+                artifact_id="feat_batch_2",
+                action="update",
+                rationale="Cambio 2",
+            ),
+        ],
+    )
+
+    items = await enrich_impact_items(
+        result,
+        SpecPhase.REQUISITOS,
+        SpecPhase.DESCUBRIMIENTO,
+        feature_repo,
+        requirement_repo,
+        diagram_repo,
+    )
+
+    # Solo debe haber consultado 2 veces por ID único a pesar de tener 3 IDs en affected_artifact_ids
+    assert len(by_id_calls) == 2
+    assert set(by_id_calls) == {"feat_batch_1", "feat_batch_2"}
+    # Los items enriquecidos preservan el orden y multiplicidad de affected_artifact_ids
+    assert len(items) == 3
+    assert items[0].target_id == "feat_batch_1"
+    assert items[1].target_id == "feat_batch_2"
+    assert items[2].target_id == "feat_batch_1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_enrich_impact_modelo_concurrent_preloading() -> None:
+    """Verifica que enrich_impact_items para modelo verifique existencia concurrentemente."""
+    from kosmo.application.consistency.enrich_impact import enrich_impact_items
+    from kosmo.contracts.ai.consistency import (
+        ArtifactAction,
+        ConsistencyEvaluationOutput,
+        ConsistencyStatus,
+    )
+    from kosmo.contracts.sdd.activity_diagram import DiagramaActividad
+    from kosmo.contracts.sdd.ids import ActivityDiagramId
+
+    feature_repo = InMemoryFeatureRepository()
+    feat = _make_feature("feat_m1", "prj_m", "Modelo Feature", number=1)
+    await feature_repo.save(feat)
+
+    diagram_repo = InMemoryActivityDiagramRepository()
+    await diagram_repo.save(
+        DiagramaActividad(
+            id=ActivityDiagramId("feat_m1"),
+            feature_id=FeatureId("feat_m1"),
+            diagram_syntax="@startuml\nstart\nstop\n@enduml",
+        )
+    )
+    requirement_repo = InMemoryRequirementRepository()
+
+    result = ConsistencyEvaluationOutput(
+        report_id="cnr_m",
+        status=ConsistencyStatus.ANALIZADO_CON_IMPACTO,
+        affected_artifact_ids=["feat_m1"],
+        actions=[ArtifactAction(artifact_id="feat_m1", action="update", rationale="Cambio UML")],
+    )
+
+    items = await enrich_impact_items(
+        result,
+        SpecPhase.MODELO,
+        SpecPhase.REQUISITOS,
+        feature_repo,
+        requirement_repo,
+        diagram_repo,
+    )
+
+    assert len(items) == 1
+    assert items[0].artifact_type == "ActivityDiagram"
+    assert items[0].target_id == "feat_m1"

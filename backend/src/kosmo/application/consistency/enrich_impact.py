@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import re
+from typing import TYPE_CHECKING
 
 import structlog
 from ulid import ULID
@@ -20,6 +22,9 @@ from kosmo.contracts.sdd.repositories import (
 )
 from kosmo.domain.sdd.requirements_markdown import parse_requirements_markdown
 from kosmo.domain.sdd.text_normalizer import normalize_for_match, strip_origin_line
+
+if TYPE_CHECKING:
+    from kosmo.contracts.sdd.feature import Feature
 
 _log = structlog.get_logger(__name__)
 
@@ -123,8 +128,26 @@ async def enrich_impact_items(
             )
         return items
 
+    unique_fids = list(dict.fromkeys(result.affected_artifact_ids))
+    raw_features = await asyncio.gather(*(feature_repo.by_id(FeatureId(fid)) for fid in unique_fids))
+    feature_by_id: dict[str, Feature] = {
+        fid_str: feat for fid_str, feat in zip(unique_fids, raw_features, strict=False) if feat is not None
+    }
+
+    req_md_by_feature_id: dict[FeatureId, str] = {}
+    if target_spec == SpecPhase.REQUISITOS and feature_by_id:
+        found_features = list(feature_by_id.values())
+        raw_reqs = await asyncio.gather(*(requirement_repo.by_feature_id(f.id) for f in found_features))
+        req_md_by_feature_id = {f.id: md for f, md in zip(found_features, raw_reqs, strict=False) if md is not None}
+
+    diagram_exists_by_feature_id: dict[FeatureId, bool] = {}
+    if target_spec == SpecPhase.MODELO and feature_by_id:
+        found_features = list(feature_by_id.values())
+        raw_exists = await asyncio.gather(*(diagram_repo.exists(f.id) for f in found_features))
+        diagram_exists_by_feature_id = {f.id: exists for f, exists in zip(found_features, raw_exists, strict=False)}
+
     for fid_str in result.affected_artifact_ids:
-        feature = await feature_repo.by_id(FeatureId(fid_str))
+        feature = feature_by_id.get(fid_str)
         if feature is None:
             continue
 
@@ -166,7 +189,7 @@ async def enrich_impact_items(
                 )
             )
         elif target_spec == SpecPhase.REQUISITOS:
-            req_md = await requirement_repo.by_feature_id(feature.id)
+            req_md = req_md_by_feature_id.get(feature.id)
             if req_md is None:
                 continue
 
@@ -365,7 +388,7 @@ async def enrich_impact_items(
                         )
                     )
         elif target_spec == SpecPhase.MODELO:
-            exists = await diagram_repo.exists(feature.id)
+            exists = diagram_exists_by_feature_id.get(feature.id, False)
             if exists:
                 items.append(
                     ImpactItem(
